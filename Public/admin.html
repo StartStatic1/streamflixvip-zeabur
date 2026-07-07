@@ -1023,165 +1023,117 @@
   const SUPABASE_URL  = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
   const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
 
-  // Limpa apenas chaves quebradas do PKCE que podem ter ficado no localStorage
-  (() => {
-    try {
-      Object.keys(localStorage).forEach(k => {
-        if (k.includes('code_verifier') || k.includes('pkce') || k === 'sfv_auth_session') {
-          localStorage.removeItem(k);
-        }
-      });
-    } catch(e) {}
-  })();
+  // ════════════════════════════════════════════════════════════
+  // AUTENTICAÇÃO DO ADMIN — versão simplificada.
+  //
+  // Design consciente, depois de vários problemas com a versão anterior
+  // (PKCE, hash de URL, retries silenciosos, watchdog de reload): menos
+  // "esperteza" automática, mais previsibilidade. Cada ação (login,
+  // logout, checagem de admin) tem um timeout explícito — se o Supabase
+  // não responder a tempo, o usuário VÊ uma mensagem de erro clara, em
+  // vez de a tela ficar presa em "Entrando..." sem fim. Preferimos um
+  // erro visível e acionável a uma trava silenciosa.
+  // ════════════════════════════════════════════════════════════
 
   const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      // Precisa ser true pra conseguir ler o #access_token=...&type=recovery
-      // que o link de "esqueci minha senha" do Supabase manda na URL. Estava
-      // false (achando que não tinha mais OAuth aqui), mas o link de
-      // recuperação também depende disso — por isso caía direto na tela de
-      // login normal, sem processar nada.
-      detectSessionInUrl: true,
-      storageKey: 'sfv-admin-auth-token', // chave própria, separada da sessão do site
-      storage: window.localStorage
-    }
+      detectSessionInUrl: true, // ainda necessário para o link de recuperação de senha funcionar
+      storageKey: 'sfv-admin-auth-token',
+      storage: window.localStorage,
+    },
   });
 
   let _session = null;
   let _allCodes = [];
   let _filter   = 'todos';
 
-  // ── WATCHDOG: sessão travada/corrompida ──
-  // Se o navegador tiver um localStorage sujo/quebrado para este site
-  // (ex: Chrome guardando um token corrompido depois de algum comportamento
-  // estranho de cache), o Supabase pode nunca disparar onAuthStateChange
-  // corretamente — a tela fica presa em branco ou não sai do carregando.
-  // Em vez de o usuário precisar limpar dados do site manualmente, este
-  // watchdog espera alguns segundos por qualquer resposta de auth (login
-  // OU logout são ambos sinais de "funcionou"); se nada acontecer, assume
-  // que o storage está corrompido, limpa e recarrega automaticamente —
-  // uma única vez, para não entrar em loop de reload infinito.
-  (function setupAuthWatchdog() {
-    const RELOAD_FLAG = 'sfv_admin_watchdog_reloaded';
-    let resolved = false;
-    const markResolved = () => { resolved = true; };
-    window.addEventListener('sfv-auth-resolved', markResolved, { once: true });
+  // Envolve qualquer Promise com um limite de tempo. Se estourar, rejeita
+  // com um erro claro em vez de deixar quem chamou esperando pra sempre —
+  // é a peça central que resolve o "Entrando..." infinito.
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Tempo esgotado (${label}). Verifique sua conexão e tente novamente.`)), ms)
+      ),
+    ]);
+  }
 
-    setTimeout(() => {
-      if (resolved) return;
-      // Só permite 1 auto-reload por sessão de navegador — se limpar e
-      // ainda assim travar de novo, é outro problema (rede, Supabase fora
-      // do ar, etc), e forçar reload em loop só pioraria a experiência.
-      if (sessionStorage.getItem(RELOAD_FLAG)) return;
-      sessionStorage.setItem(RELOAD_FLAG, '1');
-      console.warn('Watchdog: sessão não resolveu a tempo, limpando storage local e recarregando.');
-      try {
-        Object.keys(localStorage).forEach(k => {
-          if (k.startsWith('sfv-') || k.startsWith('sb-') || k.includes('supabase')) {
-            localStorage.removeItem(k);
-          }
-        });
-      } catch (e) { /* segue mesmo se falhar */ }
-      window.location.reload();
-    }, 6000);
-  })();
+  function showLoginScreen() {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('appScreen').style.display = 'none';
+  }
+  function showAppScreen(label) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    document.getElementById('userEmail').textContent = label;
+  }
 
-  // ── AUTH ──
-  // Se a URL tem #access_token (retorno do OAuth redirect), força o Supabase
-  // a processar o token do hash explicitamente antes de qualquer outra coisa.
-  // O onAuthStateChange sozinho não é suficiente quando a página é carregada
-  // diretamente com o token na URL.
-  (async () => {
-    if (window.location.hash && window.location.hash.includes('access_token')) {
-      await db.auth.getSession();
+  // ── Checa se já existe uma sessão salva ao carregar a página ──
+  // Isso substitui o antigo "watchdog": em vez de ficar esperando um
+  // evento que talvez nunca chegue, fazemos UMA verificação direta, com
+  // timeout, e decidimos o estado da tela imediatamente a partir dela.
+  async function checkExistingSession() {
+    try {
+      const { data, error } = await withTimeout(db.auth.getSession(), 8000, 'verificar sessão');
+      if (error || !data?.session?.user) {
+        showLoginScreen();
+        return;
+      }
+      await handleAuthenticatedUser(data.session);
+    } catch (e) {
+      console.error('checkExistingSession:', e);
+      // Não trava a tela — assume deslogado e deixa o usuário logar de novo.
+      showLoginScreen();
     }
-  })();
+  }
 
-  db.auth.onAuthStateChange(async (event, session) => {
+  // ── Confirma que o usuário logado está autorizado (vip_panel_admins) ──
+  async function handleAuthenticatedUser(session) {
     _session = session;
-    // Qualquer evento de auth (login, logout, refresh) prova que o
-    // Supabase client está respondendo normalmente — desarma o watchdog.
-    window.dispatchEvent(new Event('sfv-auth-resolved'));
-
-    // Link de recuperação de senha: precisa ser tratado ANTES da checagem
-    // normal de admin abaixo, porque a sessão de recuperação também tem
-    // session.user preenchido — sem esse "return" aqui, o código genérico
-    // logo abaixo autorizaria o admin e pularia direto pro painel sem
-    // nunca pedir a senha nova.
-    if (event === 'PASSWORD_RECOVERY') {
-      if (window.location.hash && window.location.hash.includes('access_token')) {
-        history.replaceState(null, '', window.location.pathname);
-      }
-      document.getElementById('resetPassModal').classList.add('open');
-      return;
-    }
-
-    if (session?.user) {
-      // Limpa o hash da URL: o Supabase deixa #access_token=... visível depois
-      // do redirect. Isso é um problema de segurança (token exposto no histórico
-      // do navegador) e causa o bug do ## duplo se o usuário clicar em "Entrar"
-      // novamente sem recarregar — o href já teria o token antigo no hash, e o
-      // novo token seria concatenado depois formando ##access_token=VELHO#access_token=NOVO.
-      if (window.location.hash && window.location.hash.includes('access_token')) {
-        history.replaceState(null, '', window.location.pathname);
-      }
-
-      // Retry leve: se a consulta falhar (rede instável, token ainda
-      // renovando logo após reload, etc), tenta mais uma vez antes de
-      // decidir qualquer coisa. Isso evita deslogar o admin por causa de
-      // uma falha passageira em vez de uma resposta real do banco.
-      let adminRow = null, adminErr = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const res = await db
-          .from('vip_panel_admins')
-          .select('id, display_name, role')
-          .eq('id', session.user.id)
-          .maybeSingle();
-        adminRow = res.data;
-        adminErr = res.error;
-        if (!adminErr) break;
-        if (attempt === 0) await new Promise(r => setTimeout(r, 800));
-      }
+    try {
+      const { data: adminRow, error: adminErr } = await withTimeout(
+        db.from('vip_panel_admins').select('id, display_name, role').eq('id', session.user.id).maybeSingle(),
+        8000,
+        'verificar permissão de admin'
+      );
 
       if (adminErr) {
-        // Erro de verdade (rede, servidor, etc) mesmo após retry — NÃO
-        // desloga. Mantém a sessão salva e deixa o admin tentar de novo
-        // (ex: recarregando a página) sem precisar pedir código por email
-        // outra vez. Só distingue de "não autorizado" (ver abaixo).
-        showToast('⚠️ Falha ao verificar acesso. Tente recarregar a página.');
+        setAdminAuthMsg('⚠️ Falha ao verificar seu acesso. Tente novamente.', 'error');
+        showLoginScreen();
         return;
       }
-
       if (!adminRow) {
-        // Aqui sim: consulta funcionou e confirmou que a conta não está
-        // cadastrada como admin. Esse caso justifica deslogar.
-        await db.auth.signOut();
-        showToast('❌ Esta conta não está autorizada a acessar o painel');
+        await db.auth.signOut().catch(() => {});
+        setAdminAuthMsg('❌ Esta conta não está autorizada a acessar o painel.', 'error');
+        showLoginScreen();
         return;
       }
 
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('appScreen').style.display   = 'block';
-      document.getElementById('userEmail').textContent = adminRow.display_name || session.user.email;
-      // Login funcionou de ponta a ponta — reseta a flag do watchdog pra
-      // que, se um dia acontecer travamento de novo, ele possa agir de novo
-      // (sem isso, o watchdog só dispararia uma vez por instalação do navegador).
-      try { sessionStorage.removeItem('sfv_admin_watchdog_reloaded'); } catch (e) {}
+      showAppScreen(adminRow.display_name || session.user.email);
       loadCodes();
-    } else {
-      document.getElementById('loginScreen').style.display = 'flex';
-      document.getElementById('appScreen').style.display   = 'none';
+    } catch (e) {
+      console.error('handleAuthenticatedUser:', e);
+      setAdminAuthMsg('⚠️ ' + e.message, 'error');
+      showLoginScreen();
+    }
+  }
+
+  // Link de recuperação de senha (#access_token=...&type=recovery) chega
+  // via evento PASSWORD_RECOVERY do próprio SDK — tratado à parte do
+  // fluxo normal de login, sempre que o Supabase disparar esse evento.
+  db.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      if (window.location.hash) history.replaceState(null, '', window.location.pathname);
+      document.getElementById('resetPassModal').classList.add('open');
     }
   });
 
-  // ── LOGIN POR EMAIL (OTP) ──
-  // Login simples com email + senha. Trocado de OTP pra isso porque o
-  // painel é usado só por administradores de confiança (não pelo público
-  // geral), então senha é mais prática aqui: não depende de email chegar
-  // toda vez, entra na hora, e não sofre com timing de token/rede que
-  // causava a instabilidade do fluxo por código.
+  checkExistingSession();
+
+  // ── LOGIN POR EMAIL + SENHA ──
   function setAdminAuthMsg(text, kind) {
     const el = document.getElementById('adminAuthMsg');
     el.textContent = text || '';
@@ -1197,14 +1149,23 @@
     btn.disabled = true;
     btn.textContent = 'Entrando...';
     setAdminAuthMsg('');
+
     try {
-      const { error } = await db.auth.signInWithPassword({ email, password });
+      const { data, error } = await withTimeout(
+        db.auth.signInWithPassword({ email, password }),
+        10000,
+        'fazer login'
+      );
       if (error) throw error;
-      // onAuthStateChange cuida da checagem de vip_panel_admins e do resto
       document.getElementById('adminPasswordInput').value = '';
-    } catch(e) {
-      console.error('Admin password sign-in error:', e);
-      setAdminAuthMsg('❌ E-mail ou senha incorretos.', 'error');
+      await handleAuthenticatedUser(data.session);
+    } catch (e) {
+      console.error('Admin sign-in error:', e);
+      // Distingue "credenciais erradas" (mensagem clara do Supabase) de
+      // qualquer outro erro (rede, timeout) — texto diferente ajuda a
+      // saber se o problema é a senha ou a conexão.
+      const isBadCredentials = /invalid.*credential|invalid.*login/i.test(e.message || '');
+      setAdminAuthMsg(isBadCredentials ? '❌ E-mail ou senha incorretos.' : '⚠️ ' + e.message, 'error');
     } finally {
       btn.disabled = false;
       btn.textContent = 'Entrar';
@@ -1212,7 +1173,17 @@
   }
 
   async function doSignOut() {
-    await db.auth.signOut();
+    try {
+      await withTimeout(db.auth.signOut(), 5000, 'sair');
+    } catch (e) {
+      console.error('signOut:', e);
+    } finally {
+      // Mesmo se a chamada de rede falhar/travar, força o estado local de
+      // deslogado — o usuário não deveria ficar preso na tela do painel
+      // só porque o signOut remoto demorou.
+      _session = null;
+      showLoginScreen();
+    }
   }
 
   // ── MODAL NOVA SENHA (recuperação) ──
@@ -1231,27 +1202,19 @@
     btn.disabled = true;
     btn.textContent = 'Salvando...';
     try {
-      const { error } = await db.auth.updateUser({ password: newPassword });
-      if (error) {
-        msg.textContent = '❌ ' + error.message;
-        msg.className = 'auth-msg error';
-        btn.disabled = false;
-        btn.textContent = 'Salvar nova senha';
-        return;
-      }
+      const { error } = await withTimeout(db.auth.updateUser({ password: newPassword }), 8000, 'salvar senha');
+      if (error) throw error;
       msg.textContent = '✅ Senha salva! Faça login novamente com ela.';
       msg.className = 'auth-msg success';
       input.value = '';
-      // Desloga a sessão de recuperação (temporária) pra forçar login normal
-      // já com a senha nova, em vez de tentar reaproveitar essa sessão.
-      await db.auth.signOut();
+      await db.auth.signOut().catch(() => {});
       setTimeout(() => {
         document.getElementById('resetPassModal').classList.remove('open');
         btn.disabled = false;
         btn.textContent = 'Salvar nova senha';
       }, 1800);
     } catch (e) {
-      msg.textContent = '❌ Erro inesperado: ' + e.message;
+      msg.textContent = '❌ ' + e.message;
       msg.className = 'auth-msg error';
       btn.disabled = false;
       btn.textContent = 'Salvar nova senha';
