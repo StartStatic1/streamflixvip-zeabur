@@ -107,14 +107,6 @@
     .auth-msg.error { color: #ff6b6b; }
     .auth-msg.success { color: #4ade80; }
 
-    /* ── MODAL NOVA SENHA (recuperação) ── */
-    .reset-pass-overlay {
-      display: block; position: fixed; inset: 0; z-index: 9999;
-      background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
-      align-items: center; justify-content: center; padding: 24px;
-    }
-    .reset-pass-overlay.open { display: flex; }
-
     /* ── APP ── */
     #appScreen { display: block; }
 
@@ -599,19 +591,7 @@
   </div>
 </div>
 
-<!-- ── MODAL NOVA SENHA (link de recuperação) ── -->
-<div class="reset-pass-overlay" id="resetPassModal">
-  <div class="login-card">
-    <div class="login-badge">🔑 Recuperação</div>
-    <div class="login-title">Definir nova senha</div>
-    <div class="login-sub">Você abriu um link de recuperação de senha. Digite a nova senha para continuar.</div>
-    <form class="auth-email-form" id="resetPassForm" style="width:100%" onsubmit="event.preventDefault();submitNewPassword();">
-      <input type="password" id="resetPassInput" class="auth-email-input" placeholder="Nova senha (mínimo 6 caracteres)" autocomplete="new-password" minlength="6" required />
-      <button type="submit" class="auth-email-btn" id="resetPassBtn">Salvar nova senha</button>
-    </form>
-    <div class="auth-msg" id="resetPassMsg"></div>
-  </div>
-</div>
+
 
 <!-- ── APP ── -->
 <div id="appScreen" style="display:block;">
@@ -1141,15 +1121,7 @@
     }
   }
 
-  // Link de recuperação de senha (#access_token=...&type=recovery) chega
-  // via evento PASSWORD_RECOVERY do próprio SDK — tratado à parte do
-  // fluxo normal de login, sempre que o Supabase disparar esse evento.
-  db.auth.onAuthStateChange((event) => {
-    if (event === 'PASSWORD_RECOVERY') {
-      if (window.location.hash) history.replaceState(null, '', window.location.pathname);
-      document.getElementById('resetPassModal').classList.add('open');
-    }
-  });
+
 
   checkExistingSession();
 
@@ -1207,39 +1179,7 @@
   }
 
   // ── MODAL NOVA SENHA (recuperação) ──
-  async function submitNewPassword() {
-    const input = document.getElementById('resetPassInput');
-    const btn = document.getElementById('resetPassBtn');
-    const msg = document.getElementById('resetPassMsg');
-    const newPassword = input.value;
-    msg.textContent = '';
-    msg.className = 'auth-msg';
-    if (!newPassword || newPassword.length < 6) {
-      msg.textContent = 'A senha precisa ter pelo menos 6 caracteres.';
-      msg.className = 'auth-msg error';
-      return;
-    }
-    btn.disabled = true;
-    btn.textContent = 'Salvando...';
-    try {
-      const { error } = await withTimeout(db.auth.updateUser({ password: newPassword }), 8000, 'salvar senha');
-      if (error) throw error;
-      msg.textContent = '✅ Senha salva! Faça login novamente com ela.';
-      msg.className = 'auth-msg success';
-      input.value = '';
-      await db.auth.signOut().catch(() => {});
-      setTimeout(() => {
-        document.getElementById('resetPassModal').classList.remove('open');
-        btn.disabled = false;
-        btn.textContent = 'Salvar nova senha';
-      }, 1800);
-    } catch (e) {
-      msg.textContent = '❌ ' + e.message;
-      msg.className = 'auth-msg error';
-      btn.disabled = false;
-      btn.textContent = 'Salvar nova senha';
-    }
-  }
+
 
   // ── API CALL ──
   async function api(action, extra = {}) {
