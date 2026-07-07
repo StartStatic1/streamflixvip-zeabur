@@ -15,12 +15,19 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Hosts extras sempre liberados, mesmo que não estejam em vip_sources ainda.
 // Útil pra testes antes de cadastrar no painel.
+//
+// NOTA: hosts de CDN com subdomínio numerado (ex: 002.jvrkt.online) que
+// aparecem só depois de um redirect não devem entrar aqui — cada filme
+// desse mesmo provedor pode redirecionar pra um número diferente
+// (001., 002., 003...), então fixar um só cobre por acaso o título que
+// foi testado. Ver getAllowedHosts(): o redirect já é seguido pelo fetch
+// (redirect: 'follow'), então o host de destino do redirect não passa
+// pela checagem de allowedHosts — só o host da URL ORIGINAL (a cadastrada
+// no admin) precisa estar liberado.
 const EXTRA_ALLOWED_HOSTS = [
   'unitvlite.xyz',
   'sventank.com',
   'cdnbr02.com',
-  '002.jvrkt.online',
-  'kraewert.top', 
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
@@ -106,30 +113,51 @@ async function handler(req, res) {
   _activeStreams++;
 
   try {
-    // ── Estratégia de User-Agent por tentativa, não fixo ──
+    // ── Estratégia de headers por tentativa, não fixa ──
     // Testamos e confirmamos que hosts diferentes (unitvlite.xyz, sventank.com,
     // cdnbr03.com) reagem de forma DIFERENTE ao mesmo User-Agent: um fixo
     // "VLC/3.0.4 LibVLC/3.0.4" ajudou o cdnbr03.com mas quebrou o unitvlite.xyz.
     // Cada operador de painel Xtream/IPTV configura seu próprio firewall e
-    // regras do Cloudflare, então não existe um UA universal que sirva pra
-    // todos. Em vez de fixar um valor e trocar qual fonte quebra a cada
-    // ajuste, tentamos primeiro SEM forçar UA (deixando o padrão do Node) e,
-    // só se a origem recusar (403/406/erro), tentamos de novo com o UA de
-    // player de vídeo como fallback — assim cada fonte usa o que funciona
-    // para ela, automaticamente, sem precisar de configuração manual por host.
-    async function tryFetch(withPlayerUA) {
+    // regras do Cloudflare, então não existe uma combinação universal.
+    //
+    // NOVO: servidores que usam token assinado na URL final (parâmetros
+    // "verify=" e "expire=", vistos em cdnbr03.com/jvrkt.online) costumam
+    // checar o header Referer/Origin para bloquear hotlinking — ou seja,
+    // recusam quando quem pede é claramente um servidor (nossa VM) em vez
+    // de um navegador real. Testado no celular direto (com Referer da
+    // própria página) o vídeo carregou; pelo proxy (sem Referer nenhum)
+    // falhou. Por isso agora tentamos, em ordem: (1) sem nada extra, (2)
+    // com Referer/Origin apontando pro próprio host de origem (mascarando
+    // como se o pedido viesse de dentro do player Xtream), (3) com UA de
+    // player. Isso cobre os três motivos de bloqueio mais comuns sem fixar
+    // uma combinação que quebre alguma fonte específica.
+    async function tryFetch(variant) {
       const headers = {};
       if (req.headers.range) headers.range = req.headers.range;
-      if (withPlayerUA) headers['User-Agent'] = 'VLC/3.0.4 LibVLC/3.0.4';
+      if (variant === 'referer' || variant === 'both') {
+        const fakeOrigin = `${target.protocol}//${target.host}`;
+        headers['Referer'] = fakeOrigin + '/';
+        headers['Origin'] = fakeOrigin;
+      }
+      if (variant === 'ua' || variant === 'both') {
+        headers['User-Agent'] = 'VLC/3.0.4 LibVLC/3.0.4';
+      }
       return fetch(target.toString(), { headers, redirect: 'follow' });
     }
 
-    let upstream = await tryFetch(false);
+    let upstream = await tryFetch(null);
 
-    // Se a tentativa "neutra" falhou de forma que sugere bloqueio por UA
-    // (403 Forbidden, 406 Not Acceptable), tenta de novo com o UA de player.
+    // Se a tentativa "neutra" falhou de forma que sugere bloqueio (403
+    // Forbidden, 406 Not Acceptable), tenta variantes de headers em ordem
+    // até uma funcionar ou esgotar as opções.
     if (!upstream.ok && upstream.status !== 206 && [403, 406].includes(upstream.status)) {
-      upstream = await tryFetch(true);
+      upstream = await tryFetch('referer');
+    }
+    if (!upstream.ok && upstream.status !== 206 && [403, 406].includes(upstream.status)) {
+      upstream = await tryFetch('ua');
+    }
+    if (!upstream.ok && upstream.status !== 206 && [403, 406].includes(upstream.status)) {
+      upstream = await tryFetch('both');
     }
 
     if (!upstream.ok && upstream.status !== 206) {
