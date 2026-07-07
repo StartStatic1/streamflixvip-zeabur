@@ -187,12 +187,18 @@ module.exports = async function handler(req, res) {
 
   // ── FILMES/SÉRIES: atualiza fonte existente ──
   if (action === 'update-source') {
-    const { sourceId, season, episode, source_url, source_label, priority } = body;
+    const { sourceId, season, episode, source_url, source_label, priority, title, poster_path } = body;
     if (!sourceId) { res.status(400).json({ error: 'Informe sourceId' }); return; }
+    const patchBody = { season, episode, source_url, source_label, priority };
+    // Só sobrescreve título/poster se vier preenchido — assim uma edição
+    // nunca APAGA um título que já estava certo, só reforça/conserta um
+    // que estivesse em branco.
+    if (title) patchBody.title = title;
+    if (poster_path) patchBody.poster_path = poster_path;
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(sourceId)}`, {
       method: 'PATCH',
       headers: { ...svcHeaders, 'Prefer': 'return=representation' },
-      body: JSON.stringify({ season, episode, source_url, source_label, priority }),
+      body: JSON.stringify(patchBody),
     });
     const result = await r.json();
     if (!r.ok) { res.status(502).json({ error: 'Erro ao atualizar fonte', detail: result }); return; }
