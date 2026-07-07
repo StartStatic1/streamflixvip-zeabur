@@ -17,9 +17,30 @@
 
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+// ── Detecção do nome real da pasta de arquivos estáticos ──
+// O GitHub (e Windows/Mac) não fazem diferença entre maiúsculas e
+// minúsculas em nomes de pasta, mas o Linux (usado pelo Zeabur) faz.
+// Se a pasta foi commitada como "Public" em vez de "public" (ou
+// vice-versa), o caminho fixo quebraria com ENOENT. Aqui detectamos
+// qual nome existe de verdade no filesystem do container, na hora que
+// o servidor sobe, e usamos esse — funciona com qualquer capitalização.
+function resolveStaticDir() {
+  const candidates = ['public', 'Public', 'PUBLIC'];
+  for (const name of candidates) {
+    const fullPath = path.join(__dirname, name);
+    if (fs.existsSync(fullPath)) return fullPath;
+  }
+  // Nenhuma bateu — assume 'public' mesmo (vai dar erro claro se faltar,
+  // mais fácil de diagnosticar do que um caminho errado silencioso).
+  return path.join(__dirname, 'public');
+}
+const STATIC_DIR = resolveStaticDir();
+console.log('Servindo arquivos estáticos de:', STATIC_DIR);
 
 // ── Middlewares ──
 // express.json() popula req.body (equivalente ao que a Vercel já fazia
@@ -66,9 +87,8 @@ app.all('/api/track-login',   wrap(trackLogin));
 app.all('/api/vip-status',    wrap(vipStatus));
 
 // ── Arquivos estáticos (site, admin, embed) ──
-// A pasta public/ contém uma cópia do index.html, admin.html, embed/,
-// manifest.json, sw.js, etc — tudo que na Vercel ficava solto na raiz.
-app.use(express.static(path.join(__dirname, 'public'), {
+// STATIC_DIR já resolve automaticamente entre 'public'/'Public' (ver acima).
+app.use(express.static(STATIC_DIR, {
   extensions: ['html'], // permite acessar /admin em vez de /admin.html, se preciso
 }));
 
@@ -80,7 +100,7 @@ app.get('*', (req, res) => {
     res.status(404).json({ error: 'Rota de API não encontrada' });
     return;
   }
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(STATIC_DIR, 'index.html'));
 });
 
 app.listen(PORT, () => {
