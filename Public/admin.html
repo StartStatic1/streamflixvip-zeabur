@@ -500,6 +500,39 @@
       font-weight: 700; font-size: 0.86rem; padding: 11px 18px; border-radius: 9px; cursor: pointer;
       flex: 0 0 auto;
     }
+    .search-box button:hover { opacity: 0.88; }
+    .search-box button:active { transform: scale(0.97); }
+    .search-box button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── BARRA DE FILTROS DE FILMES ── */
+    .movies-filter-bar {
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px;
+    }
+    .movies-filter-bar .filter-group { display: flex; gap: 6px; flex-wrap: wrap; }
+    .movies-filter-sep { width: 1px; height: 24px; background: var(--border); flex-shrink: 0; align-self: center; }
+    .movies-sort-select {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+      font-family: 'Outfit', sans-serif; font-size: 0.78rem; font-weight: 600;
+      padding: 6px 10px; border-radius: 100px; cursor: pointer; outline: none;
+      transition: all .2s; margin-left: auto;
+    }
+    .movies-sort-select:focus { border-color: var(--gold); color: var(--text); }
+
+    /* ── MELHORIAS NOS GRUPOS ── */
+    .title-group-stats { display: flex; gap: 6px; align-items: center; flex-shrink: 0; margin-right: 4px; }
+    .tg-pill {
+      font-size: 0.65rem; font-weight: 700; padding: 2px 7px; border-radius: 5px;
+    }
+    .tg-pill.active-count { background: rgba(34,197,94,0.15); color: var(--green); }
+    .tg-pill.inactive-count { background: rgba(136,136,170,0.12); color: var(--muted); }
+    .tg-pill.type-movie { background: rgba(124,58,237,0.15); color: var(--accent); }
+    .tg-pill.type-tv { background: rgba(245,197,24,0.12); color: var(--gold); }
+
+    /* ── LOADING SPINNER ── */
+    .search-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 32px; color: var(--muted); font-size: 0.9rem; }
+    .search-spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (min-width: 480px) { .row-actions { width: auto; } }
 
     .results-grid {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap: 11px;
@@ -809,13 +842,32 @@
           <option value="tv">Série</option>
         </select>
         <input type="text" id="movieSearchInput" placeholder="Buscar título no TMDB..." />
-        <button onclick="doMovieSearch()">Buscar</button>
+        <button onclick="doMovieSearch()" id="btnMovieSearch">🔍 Buscar</button>
       </div>
       <div class="results-grid" id="resultsGrid"></div>
 
       <div class="card" style="margin-top:24px">
-        <div class="card-title">🎬 Fontes cadastradas</div>
-        <input type="text" class="search-input" placeholder="Filtrar por título..." id="filterInput" oninput="renderGroupedSources()" style="margin-bottom:14px"/>
+        <div class="card-title">🎬 Fontes cadastradas <span id="moviesTitleCount" style="font-size:0.72rem;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:3px 10px;border-radius:100px">0 títulos</span></div>
+        <input type="text" class="search-input" placeholder="🔎 Filtrar por título..." id="filterInput" oninput="renderGroupedSources()" style="margin-bottom:12px"/>
+        <div class="movies-filter-bar">
+          <div class="filter-group">
+            <button class="filter-btn active" data-type-filter="all" onclick="setMovieTypeFilter('all', this)">Todos</button>
+            <button class="filter-btn" data-type-filter="movie" onclick="setMovieTypeFilter('movie', this)">🎬 Filmes</button>
+            <button class="filter-btn" data-type-filter="tv" onclick="setMovieTypeFilter('tv', this)">📺 Séries</button>
+          </div>
+          <div class="movies-filter-sep"></div>
+          <div class="filter-group">
+            <button class="filter-btn active" data-status-filter="all" onclick="setMovieStatusFilter('all', this)">Qualquer status</button>
+            <button class="filter-btn" data-status-filter="active" onclick="setMovieStatusFilter('active', this)">✅ Com ativo</button>
+            <button class="filter-btn" data-status-filter="inactive" onclick="setMovieStatusFilter('inactive', this)">⏸️ Só inativos</button>
+          </div>
+          <select class="movies-sort-select" id="moviesSortSelect" onchange="renderGroupedSources()">
+            <option value="recent">↓ Mais recente</option>
+            <option value="az">A → Z</option>
+            <option value="za">Z → A</option>
+            <option value="sources">Mais fontes</option>
+          </select>
+        </div>
         <div id="recentSourcesWrap"></div>
       </div>
     </section>
@@ -1558,6 +1610,8 @@
   let _currentMovieItem = null;
   let _editingSourceId = null;
   let _allMovieSources = [];
+  let _movieTypeFilter = 'all';   // 'all' | 'movie' | 'tv'
+  let _movieStatusFilter = 'all'; // 'all' | 'active' | 'inactive'
 
   async function tmdbFetch(path, params = {}) {
     const qs = new URLSearchParams(params).toString();
@@ -1572,7 +1626,9 @@
     const grid = document.getElementById('resultsGrid');
     if (!q) return;
 
-    grid.innerHTML = '<div class="empty-state">Buscando...</div>';
+    const btn = document.getElementById('btnMovieSearch');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Buscando...'; }
+    grid.innerHTML = '<div class="search-loading"><div class="search-spinner"></div> Buscando no TMDB...</div>';
     try {
       const data = await tmdbFetch(`/search/${type}`, { query: q });
       const results = data.results || [];
@@ -1598,6 +1654,9 @@
       sessionStorage.setItem('adminLastSearch', JSON.stringify({ q, type }));
     } catch (e) {
       grid.innerHTML = '<div class="empty-state">Erro ao buscar. Tente novamente.</div>';
+    } finally {
+      const btn = document.getElementById('btnMovieSearch');
+      if (btn) { btn.disabled = false; btn.textContent = '🔍 Buscar'; }
     }
   }
 
@@ -1867,14 +1926,31 @@
     renderGroupedSources();
   }
 
+  // ── Funções de filtro por tipo e status ──
+  function setMovieTypeFilter(val, el) {
+    _movieTypeFilter = val;
+    document.querySelectorAll('[data-type-filter]').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    renderGroupedSources();
+  }
+
+  function setMovieStatusFilter(val, el) {
+    _movieStatusFilter = val;
+    document.querySelectorAll('[data-status-filter]').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    renderGroupedSources();
+  }
+
   function renderGroupedSources() {
     const wrap = document.getElementById('recentSourcesWrap');
     const filter = (document.getElementById('filterInput')?.value || '').trim().toLowerCase();
+    const sortMode = document.getElementById('moviesSortSelect')?.value || 'recent';
 
-    // Agrupa PRIMEIRO, sem filtrar ainda. Filtrar linha-a-linha antes de
-    // agrupar era o bug: se uma fonte específica tivesse o título em
-    // branco (cadastrada por um fluxo que não preencheu esse campo), ela
-    // sumia da busca mesmo o filme tendo outras fontes com título certo.
+    // ── PASSO 1: Agrupa PRIMEIRO, sem filtrar ainda ──
+    // Filtrar linha-a-linha antes de agrupar era o bug original: se uma
+    // fonte específica tivesse o título em branco (cadastrada por um fluxo
+    // que não preencheu esse campo), ela sumia da busca mesmo o filme tendo
+    // outras fontes com título certo.
     const groups = new Map();
     _allMovieSources.forEach(s => {
       const key = s.media_type + ':' + s.tmdb_id;
@@ -1882,30 +1958,72 @@
       groups.get(key).push(s);
     });
 
-    // Resolve um título "canônico" por grupo: usa a primeira fonte do
-    // grupo que tiver título preenchido, não necessariamente a primeira
-    // da lista (que pode ser justamente a com título em branco).
+    // ── PASSO 2: Resolve título canônico por grupo ──
+    // Usa a primeira fonte do grupo que tiver título preenchido,
+    // não necessariamente a primeira da lista.
     let groupList = [...groups.entries()].map(([key, items]) => {
       const resolvedTitle = (items.find(s => s.title && s.title.trim())?.title) || '(sem título)';
-      return { key, items, resolvedTitle };
+      const activeCount   = items.filter(s => s.is_active).length;
+      const inactiveCount = items.length - activeCount;
+      return { key, items, resolvedTitle, activeCount, inactiveCount };
     });
 
+    // ── PASSO 3: Aplica filtros (APÓS agrupar) ──
+    // Filtro por texto — compara contra o título canônico do grupo
     if (filter) {
       groupList = groupList.filter(g => g.resolvedTitle.toLowerCase().includes(filter));
     }
 
+    // Filtro por tipo (Filme / Série)
+    if (_movieTypeFilter === 'movie') {
+      groupList = groupList.filter(g => g.items[0].media_type === 'movie');
+    } else if (_movieTypeFilter === 'tv') {
+      groupList = groupList.filter(g => g.items[0].media_type === 'tv');
+    }
+
+    // Filtro por status
+    if (_movieStatusFilter === 'active') {
+      // Mantém grupos que têm pelo menos uma fonte ativa
+      groupList = groupList.filter(g => g.activeCount > 0);
+    } else if (_movieStatusFilter === 'inactive') {
+      // Mantém grupos onde TODAS as fontes estão inativas
+      groupList = groupList.filter(g => g.activeCount === 0);
+    }
+
+    // ── PASSO 4: Atualiza o contador de títulos ──
+    const countEl = document.getElementById('moviesTitleCount');
+    if (countEl) {
+      const total = [...groups.keys()].length;
+      const shown = groupList.length;
+      countEl.textContent = (filter || _movieTypeFilter !== 'all' || _movieStatusFilter !== 'all')
+        ? `${shown} de ${total} títulos`
+        : `${total} título${total !== 1 ? 's' : ''}`;
+    }
+
     if (groupList.length === 0) {
-      wrap.innerHTML = `<div class="empty-state">${filter ? 'Nenhum título encontrado com esse filtro.' : 'Nenhuma fonte cadastrada ainda. Busque um título acima para começar.'}</div>`;
+      const hasFilters = filter || _movieTypeFilter !== 'all' || _movieStatusFilter !== 'all';
+      wrap.innerHTML = `<div class="empty-state">${hasFilters ? 'Nenhum título encontrado com esses filtros.' : 'Nenhuma fonte cadastrada ainda. Busque um título acima para começar.'}</div>`;
       return;
     }
 
-    groupList.sort((a, b) => {
-      const latestA = Math.max(...a.items.map(s => new Date(s.created_at).getTime()));
-      const latestB = Math.max(...b.items.map(s => new Date(s.created_at).getTime()));
-      return latestB - latestA;
-    });
+    // ── PASSO 5: Ordena conforme seleção ──
+    if (sortMode === 'az') {
+      groupList.sort((a, b) => a.resolvedTitle.localeCompare(b.resolvedTitle, 'pt-BR'));
+    } else if (sortMode === 'za') {
+      groupList.sort((a, b) => b.resolvedTitle.localeCompare(a.resolvedTitle, 'pt-BR'));
+    } else if (sortMode === 'sources') {
+      groupList.sort((a, b) => b.items.length - a.items.length);
+    } else {
+      // 'recent' — ordena pela fonte mais recente do grupo
+      groupList.sort((a, b) => {
+        const latestA = Math.max(...a.items.map(s => new Date(s.created_at).getTime()));
+        const latestB = Math.max(...b.items.map(s => new Date(s.created_at).getTime()));
+        return latestB - latestA;
+      });
+    }
 
-    wrap.innerHTML = groupList.map(({ key, items, resolvedTitle }) => {
+    // ── PASSO 6: Renderiza os grupos ──
+    wrap.innerHTML = groupList.map(({ key, items, resolvedTitle, activeCount, inactiveCount }) => {
       const first = items[0];
       const isTv = first.media_type === 'tv';
       const poster = first.poster_path
@@ -1914,7 +2032,8 @@
 
       const sorted = [...items].sort((a, b) => {
         if ((a.season || 0) !== (b.season || 0)) return (a.season || 0) - (b.season || 0);
-        return (a.episode || 0) - (b.episode || 0);
+        if ((a.episode || 0) !== (b.episode || 0)) return (a.episode || 0) - (b.episode || 0);
+        return (b.priority || 0) - (a.priority || 0);
       });
 
       const rowsHtml = sorted.map(s => {
@@ -1936,9 +2055,18 @@
         `;
       }).join('');
 
-      const metaText = isTv
-        ? `Série · ${items.length} fonte${items.length > 1 ? 's' : ''} cadastrada${items.length > 1 ? 's' : ''}`
-        : `Filme · ${items.length} fonte${items.length > 1 ? 's' : ''}`;
+      // Monta os pills de estatísticas do grupo
+      const typePill = isTv
+        ? `<span class="tg-pill type-tv">Série</span>`
+        : `<span class="tg-pill type-movie">Filme</span>`;
+      const activePill = activeCount > 0
+        ? `<span class="tg-pill active-count">${activeCount} ativa${activeCount > 1 ? 's' : ''}</span>`
+        : '';
+      const inactivePill = inactiveCount > 0
+        ? `<span class="tg-pill inactive-count">${inactiveCount} inativa${inactiveCount > 1 ? 's' : ''}</span>`
+        : '';
+
+      const metaText = `${items.length} fonte${items.length > 1 ? 's' : ''}`;
 
       return `
         <div class="title-group" id="group-${key.replace(':','-')}">
@@ -1947,6 +2075,9 @@
             <div class="title-group-info">
               <div class="name">${resolvedTitle}</div>
               <div class="meta">${metaText}</div>
+            </div>
+            <div class="title-group-stats">
+              ${typePill}${activePill}${inactivePill}
             </div>
             <div class="title-group-chevron">▾</div>
           </div>
