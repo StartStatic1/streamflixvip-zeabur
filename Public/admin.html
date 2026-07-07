@@ -1,1071 +1,1025 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Admin — StreamFlixVIP</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:       #08080f;
-      --surface:  #111119;
+      --bg: #08080f;
+      --surface: #111119;
       --surface2: #1a1a26;
-      --border:   rgba(255,255,255,0.08);
-      --text:     #f0f0f8;
-      --muted:    #8888aa;
-      --gold:     #f5c518;
-      --gold2:    #e6a800;
-      --green:    #22c55e;
-      --red:      #ef4444;
-      --accent:   #7c3aed;
+      --text: #f0f0f8;
+      --muted: #8e8e9e;
+      --gold: #f5c518;
+      --green: #22c55e;
+      --red: #ef4444;
+      --accent: #7c3aed;
+      --sidebar-w: 240px;
     }
 
-    body {
-      font-family: 'Outfit', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); display: flex; min-height: 100vh; overflow-x: hidden; }
 
-    /* ── LAYOUT PRINCIPAL ── */
-    #appScreen {
-      display: flex;
-      flex-direction: column;
-      height: 100dvh;
-    }
-
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(8,8,15,0.95);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border);
-      padding: 14px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .header-logo { font-size: 1.1rem; font-weight: 800; }
-    .header-logo em { font-style: italic; color: var(--gold); }
-    .header-badge {
-      background: rgba(245,197,24,0.15);
-      border: 1px solid var(--gold);
-      color: var(--gold);
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      padding: 3px 10px;
-      border-radius: 100px;
-    }
-    .header-right { display: flex; align-items: center; gap: 10px; }
-    .user-info { font-size: 0.8rem; color: var(--muted); display: none; }
-    @media(min-width:480px){ .user-info { display: block; } }
-    .btn-signout {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-size: 0.8rem;
-      font-weight: 600;
-      padding: 6px 14px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-family: 'Outfit', sans-serif;
-      transition: color .2s;
-    }
-    .btn-signout:hover { color: var(--text); }
-
-    /* ── CONTAINER PRINCIPAL ── */
-    .app-container {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    /* ── SIDEBAR ── */
+    /* Layout Structure */
     .sidebar {
-      width: 240px;
-      background: rgba(17,17,25,0.8);
-      border-right: 1px solid var(--border);
-      padding: 20px 0;
-      overflow-y: auto;
+      width: var(--sidebar-w);
+      background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
+      border-right: 1px solid var(--surface2);
+      height: 100vh;
+      position: fixed;
+      left: 0;
+      top: 0;
+      padding: 24px 16px;
       display: flex;
       flex-direction: column;
+      z-index: 100;
     }
 
-    .sidebar-section {
-      padding: 0 12px;
-      margin-bottom: 20px;
-    }
-
-    .sidebar-label {
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      color: var(--muted);
-      padding: 8px 12px;
-      margin-bottom: 8px;
-    }
-
-    .sidebar-btn {
-      width: 100%;
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--muted);
-      font-size: 0.85rem;
-      font-weight: 500;
-      padding: 10px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-family: 'Outfit', sans-serif;
-      transition: all .2s;
-      text-align: left;
-      margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .sidebar-btn:hover {
-      background: rgba(255,255,255,0.05);
-      color: var(--text);
-    }
-
-    .sidebar-btn.active {
-      background: linear-gradient(135deg, rgba(245,197,24,0.2), rgba(230,168,0,0.1));
-      border-color: var(--gold);
-      color: var(--gold);
-    }
-
-    /* ── CONTEÚDO PRINCIPAL ── */
     .main-content {
+      margin-left: var(--sidebar-w);
       flex: 1;
-      overflow-y: auto;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      gap: 24px;
+      padding: 32px;
+      max-width: 1200px;
+      width: 100%;
     }
 
-    /* ── BREADCRUMB ── */
-    .breadcrumb {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.85rem;
-      color: var(--muted);
-      margin-bottom: 12px;
-    }
-
-    .breadcrumb-item { display: flex; align-items: center; gap: 8px; }
-    .breadcrumb-item.active { color: var(--text); font-weight: 600; }
-    .breadcrumb-sep { color: var(--muted); }
-
-    /* ── BOTÃO VOLTAR ── */
-    .btn-back {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-size: 0.8rem;
-      font-weight: 600;
-      padding: 8px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-family: 'Outfit', sans-serif;
-      transition: all .2s;
-      margin-bottom: 16px;
-    }
-
-    .btn-back:hover {
-      border-color: var(--gold);
-      color: var(--gold);
-    }
-
-    /* ── CARDS ── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 20px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-
-    .card-header {
+    /* Sidebar Navigation */
+    .logo { font-size: 1.2rem; font-weight: 800; color: var(--gold); margin-bottom: 40px; display: flex; align-items: center; gap: 8px; }
+    .logo span { color: var(--text); font-style: italic; }
+    .nav-group { margin-bottom: 24px; }
+    .nav-label { font-size: 0.7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-left: 12px; }
+    .nav-item {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
       gap: 12px;
-    }
-
-    .card-title {
-      font-size: 1rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .card-title span {
-      font-size: 0.72rem;
-      font-weight: 600;
-      color: var(--muted);
-      background: var(--surface2);
-      padding: 3px 8px;
-      border-radius: 6px;
-    }
-
-    /* ── STATS ROW ── */
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 12px;
-    }
-
-    .stat-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      transition: all .2s;
-    }
-
-    .stat-card:hover {
-      border-color: var(--gold);
-      transform: translateY(-2px);
-    }
-
-    .stat-value {
-      font-size: 1.8rem;
-      font-weight: 800;
-      line-height: 1;
-    }
-
-    .stat-value.gold { color: var(--gold); }
-    .stat-value.green { color: var(--green); }
-    .stat-value.red { color: var(--red); }
-    .stat-label { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
-
-    /* ── SEARCH BAR ── */
-    .search-container {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-      flex-wrap: wrap;
-    }
-
-    .search-input {
-      flex: 1;
-      min-width: 200px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
+      padding: 12px;
       border-radius: 10px;
       color: var(--text);
-      padding: 10px 14px;
+      text-decoration: none;
       font-size: 0.9rem;
-      font-family: 'Outfit', sans-serif;
-      outline: none;
-      transition: border-color .2s;
-    }
-
-    .search-input:focus {
-      border-color: var(--gold);
-    }
-
-    /* ── TABELA ── */
-    .table-wrap {
-      overflow-x: auto;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-    }
-
-    table {
+      font-weight: 500;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+      background: none;
       width: 100%;
-      border-collapse: collapse;
-      font-size: 0.83rem;
-    }
-
-    th {
       text-align: left;
-      padding: 12px;
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: .8px;
-      text-transform: uppercase;
-      color: var(--muted);
-      border-bottom: 1px solid var(--border);
-      background: rgba(0,0,0,0.2);
     }
+    .nav-item:hover { background: var(--surface2); }
+    .nav-item.active { background: var(--accent); color: white; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3); }
 
-    td {
-      padding: 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-      vertical-align: middle;
+    /* Header & Top Bar */
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+    .page-title h1 { font-size: 1.8rem; font-weight: 800; }
+    .page-title p { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
+    .user-actions { display: flex; align-items: center; gap: 16px; }
+    .btn-signout { background: var(--surface2); border: 1px solid var(--red); color: var(--red); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+    .btn-signout:hover { background: var(--red); color: white; }
+
+    /* Components */
+    .card { background: var(--surface); border: 1px solid var(--surface2); border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); transition: transform 0.2s; }
+    .card:hover { transform: translateY(-2px); }
+    .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+    
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .stat-card { background: var(--surface2); padding: 20px; border-radius: 12px; border-left: 4px solid var(--accent); }
+    .stat-card.gold { border-left-color: var(--gold); }
+    .stat-card.green { border-left-color: var(--green); }
+    .stat-card.red { border-left-color: var(--red); }
+    .stat-val { font-size: 1.5rem; font-weight: 800; margin-bottom: 4px; }
+    .stat-label { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+
+    /* Forms & Inputs */
+    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: var(--muted); }
+    input, select, textarea {
+      width: 100%; background: var(--surface2); border: 1px solid #2a2a3a; border-radius: 8px;
+      padding: 12px; color: white; font-size: 0.9rem; transition: 0.2s; outline: none;
     }
+    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2); }
+    .btn-primary { background: var(--gold); color: black; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+    .btn-primary:hover { opacity: 0.9; transform: scale(1.02); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid #2a2a3a; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .btn-secondary:hover { background: #2a2a3a; }
 
-    tr:last-child td { border-bottom: none; }
+    /* Tables */
+    .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--surface2); }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { background: var(--surface2); padding: 14px 16px; font-size: 0.8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; }
+    td { padding: 14px 16px; border-top: 1px solid var(--surface2); font-size: 0.9rem; }
     tr:hover td { background: rgba(255,255,255,0.02); }
-
-    /* ── BOTÕES ── */
-    .btn-primary {
-      background: linear-gradient(135deg, var(--gold), var(--gold2));
-      color: #000;
-      border: none;
-      border-radius: 10px;
-      padding: 10px 20px;
-      font-size: 0.9rem;
-      font-weight: 700;
-      cursor: pointer;
-      font-family: 'Outfit', sans-serif;
-      transition: opacity .2s, transform .15s;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .btn-primary:hover { opacity: .88; }
-    .btn-primary:active { transform: scale(0.97); }
-    .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
-
-    .btn-secondary {
-      background: var(--surface2);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 14px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      font-family: 'Outfit', sans-serif;
-      transition: all .2s;
-    }
-
-    .btn-secondary:hover {
-      background: var(--surface);
-      border-color: var(--gold);
-      color: var(--gold);
-    }
-
-    .btn-action {
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 6px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-family: 'Outfit', sans-serif;
-      transition: all .2s;
-    }
-
-    .btn-action:hover {
-      border-color: var(--text);
-      color: var(--text);
-    }
-
-    .btn-action.danger:hover {
-      border-color: var(--red);
-      color: var(--red);
-    }
-
-    /* ── BADGES ── */
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 0.72rem;
-      font-weight: 700;
-    }
-
+    .badge { padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; }
     .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
-    .badge-gold  { background: rgba(245,197,24,0.15); color: var(--gold); }
-    .badge-red   { background: rgba(239,68,68,0.15);  color: var(--red); }
-    .badge-gray  { background: rgba(136,136,170,0.12); color: var(--muted); }
+    .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+    .badge-gray { background: rgba(142,142,158,0.15); color: var(--muted); }
 
-    /* ── EMPTY STATE ── */
-    .empty-state {
-      text-align: center;
-      padding: 48px 32px;
-      color: var(--muted);
-      font-size: 0.9rem;
+    /* Login Screen */
+    #loginScreen { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+    .login-card { width: 100%; max-width: 400px; padding: 40px; background: var(--surface); border-radius: 24px; border: 1px solid var(--surface2); box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+    .auth-msg { margin-top: 16px; font-size: 0.85rem; text-align: center; }
+    .auth-msg.error { color: var(--red); }
+    .auth-msg.success { color: var(--green); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { width: 100%; height: auto; position: relative; padding: 16px; flex-direction: row; overflow-x: auto; gap: 8px; }
+      .main-content { margin-left: 0; padding: 16px; }
+      .nav-group { margin: 0; display: flex; gap: 8px; }
+      .nav-label { display: none; }
+      .nav-item { white-space: nowrap; padding: 8px 12px; }
+      .header { flex-direction: column; align-items: flex-start; gap: 16px; }
+      .user-actions { width: 100%; justify-content: space-between; }
     }
 
-    /* ── TOAST ── */
-    #toast {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 12px 20px;
-      border-radius: 10px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity .25s, transform .25s;
-      z-index: 999;
-      white-space: nowrap;
-    }
+    /* Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); width: 100%; max-width: 500px; border-radius: 20px; padding: 32px; border: 1px solid var(--surface2); position: relative; max-height: 90vh; overflow-y: auto; }
 
-    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    /* Movie Results */
+    .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; margin-top: 20px; }
+    .result-card { background: var(--surface2); border-radius: 12px; overflow: hidden; cursor: pointer; transition: 0.2s; border: 1px solid transparent; position: relative; }
+    .result-card:hover { transform: scale(1.05); border-color: var(--accent); }
+    .result-card img { width: 100%; height: 200px; object-fit: cover; }
+    .result-card .info { padding: 10px; }
+    .result-card .t { font-size: 0.85rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result-card .y { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+    .result-card .status-pill { position: absolute; top: 8px; right: 8px; font-size: 0.65rem; padding: 4px 8px; border-radius: 4px; font-weight: 800; text-transform: uppercase; }
 
-    /* ── RESPONSIVE ── */
-    @media(max-width: 768px) {
-      .sidebar {
-        width: 200px;
-        padding: 16px 0;
-      }
+    /* Toast */
+    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--accent); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; transform: translateY(100px); transition: 0.3s; z-index: 2000; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    #toast.show { transform: translateY(0); }
 
-      .main-content {
-        padding: 16px;
-      }
+    /* Search Containers */
+    .search-row { display: flex; gap: 12px; margin-bottom: 20px; }
+    .search-row input { flex: 1; }
+    .search-row select { width: 120px; }
+    .search-row button { width: auto; }
 
-      .stats-row {
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      }
-
-      .card {
-        padding: 16px;
-      }
-    }
-
-    @media(max-width: 480px) {
-      .app-container {
-        flex-direction: column;
-      }
-
-      .sidebar {
-        width: 100%;
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-        padding: 12px;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-        gap: 8px;
-      }
-
-      .sidebar-section {
-        padding: 0;
-        margin-bottom: 0;
-      }
-
-      .sidebar-label {
-        display: none;
-      }
-
-      .sidebar-btn {
-        padding: 8px;
-        font-size: 0.75rem;
-        margin-bottom: 0;
-      }
-
-      .main-content {
-        padding: 12px;
-        gap: 16px;
-      }
-
-      .stats-row {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* ── MODAL ── */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 1000;
-      background: rgba(0,0,0,0.75);
-      backdrop-filter: blur(8px);
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-
-    .modal-overlay.open {
-      display: flex;
-    }
-
-    .modal-content {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 24px;
-      max-width: 500px;
-      width: 100%;
-      max-height: 90dvh;
-      overflow-y: auto;
-      position: relative;
-    }
-
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .modal-title {
-      font-size: 1.1rem;
-      font-weight: 700;
-    }
-
-    .modal-close {
-      background: none;
-      border: none;
-      color: var(--muted);
-      font-size: 1.5rem;
-      cursor: pointer;
-      transition: color .2s;
-    }
-
-    .modal-close:hover {
-      color: var(--text);
-    }
-
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    .form-group label {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--muted);
-      display: block;
-      margin-bottom: 6px;
-    }
-
-    .form-group input,
-    .form-group select,
-    .form-group textarea {
-      width: 100%;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      padding: 10px 12px;
-      font-size: 0.9rem;
-      font-family: 'Outfit', sans-serif;
-      outline: none;
-      transition: border-color .2s;
-    }
-
-    .form-group input:focus,
-    .form-group select:focus,
-    .form-group textarea:focus {
-      border-color: var(--gold);
-    }
-
-    .form-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 20px;
-    }
-
-    .form-actions button {
-      flex: 1;
-    }
+    /* Grouped Sources */
+    .title-group { background: var(--surface2); border-radius: 12px; margin-bottom: 12px; overflow: hidden; border: 1px solid #2a2a3a; }
+    .title-group-head { padding: 16px; display: flex; align-items: center; gap: 16px; cursor: pointer; }
+    .title-group-head:hover { background: rgba(255,255,255,0.03); }
+    .title-group-head img { width: 40px; height: 60px; object-fit: cover; border-radius: 4px; }
+    .title-group-info { flex: 1; }
+    .title-group-info .name { font-weight: 700; font-size: 1rem; }
+    .title-group-info .meta { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+    .title-group-chevron { font-size: 1.2rem; color: var(--muted); transition: 0.2s; }
+    .title-group.open .title-group-chevron { transform: rotate(180deg); }
+    .title-group-body { display: none; padding: 0 16px 16px; border-top: 1px solid #2a2a3a; }
+    .title-group.open .title-group-body { display: block; }
+    .source-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #2a2a3a; }
+    .source-row:last-child { border-bottom: none; }
+    .source-ep-tag { background: var(--surface); padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; color: var(--gold); }
+    .source-row-main { flex: 1; min-width: 0; }
+    .source-label-text { font-size: 0.85rem; font-weight: 600; }
+    .source-url-text { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+    .row-actions { display: flex; gap: 8px; }
+    .row-actions button { background: none; border: 1px solid var(--surface2); color: var(--text); padding: 4px 10px; border-radius: 6px; font-size: 0.7rem; cursor: pointer; transition: 0.2s; }
+    .row-actions button:hover { background: var(--surface); }
+    .row-actions button.danger:hover { color: var(--red); border-color: var(--red); }
   </style>
 </head>
 <body>
 
-  <!-- LOGIN SCREEN -->
-  <div id="loginScreen" style="display: none;">
-    <div style="min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; gap: 32px;">
-      <div style="font-size: 1.6rem; font-weight: 800; letter-spacing: -0.5px;">
-        Stream<em style="font-style: italic; color: var(--gold);">Flix</em>VIP
-      </div>
-      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 36px 28px; width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 20px; align-items: center;">
-        <div style="background: linear-gradient(135deg, var(--gold), var(--gold2)); color: #000; font-size: 0.72rem; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; padding: 4px 12px; border-radius: 100px;">Admin</div>
-        <div style="font-size: 1.3rem; font-weight: 700; text-align: center;">Painel de Administração</div>
-        <div style="font-size: 0.85rem; color: var(--muted); text-align: center; line-height: 1.5;">Acesso restrito. Entre com seu e-mail de administrador.</div>
-        <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
-          <input type="email" id="adminEmailInput" placeholder="Seu e-mail" style="width: 100%; padding: 13px 16px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: #fff; font-size: 0.95rem; outline: none; font-family: 'Outfit', sans-serif;"/>
-          <input type="password" id="adminPasswordInput" placeholder="Sua senha" style="width: 100%; padding: 13px 16px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); color: #fff; font-size: 0.95rem; outline: none; font-family: 'Outfit', sans-serif;"/>
-          <button id="adminPasswordBtn" style="width: 100%; padding: 13px 20px; background: #fff; color: #111; border: none; border-radius: 12px; font-size: 0.95rem; font-weight: 600; cursor: pointer; font-family: 'Outfit', sans-serif;">Entrar</button>
-        </div>
-      </div>
+  <div id="loginScreen">
+    <div class="login-card">
+      <div class="logo" style="justify-content: center; margin-bottom: 30px;">Stream<span>Flix</span>VIP</div>
+      <h2 style="text-align: center; margin-bottom: 24px;">Painel Admin</h2>
+      <label>E-mail</label>
+      <input type="email" id="adminEmailInput" placeholder="admin@exemplo.com" style="margin-bottom: 16px;">
+      <label>Senha</label>
+      <input type="password" id="adminPasswordInput" placeholder="••••••••" style="margin-bottom: 24px;">
+      <button class="btn-primary" id="adminPasswordBtn" onclick="signInAdminPassword()" style="width: 100%;">Entrar</button>
+      <div id="adminAuthMsg" class="auth-msg"></div>
     </div>
   </div>
 
-  <!-- APP SCREEN -->
-  <div id="appScreen" style="display: none;">
-    <header>
-      <div class="header-logo">Stream<em>Flix</em>VIP</div>
-      <div class="header-badge">Admin</div>
-      <div style="flex: 1;"></div>
-      <div class="header-right">
-        <div class="user-info" id="userEmail"></div>
+  <aside class="sidebar">
+    <div class="logo">Stream<span>Flix</span>VIP</div>
+    
+    <div class="nav-group">
+      <div class="nav-label">Menu</div>
+      <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
+      <button class="nav-item" data-tab="codes" onclick="switchTab('codes')">🎟️ Códigos VIP</button>
+      <button class="nav-item" data-tab="users" onclick="switchTab('users')">👥 Usuários</button>
+      <button class="nav-item" data-tab="movies" onclick="switchTab('movies')">🎬 Filmes & Séries</button>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Configuração</div>
+      <button class="nav-item" data-tab="ads" onclick="switchTab('ads')">📢 Anúncios</button>
+      <button class="nav-item" data-tab="iptv" onclick="switchTab('iptv')">📡 IPTV</button>
+      <button class="nav-item" data-tab="embeds" onclick="switchTab('embeds')">🔗 Embeds</button>
+    </div>
+  </aside>
+
+  <main class="main-content" id="appScreen" style="display:none">
+    <header class="header">
+      <div class="page-title">
+        <h1 id="pageHeading">Dashboard</h1>
+        <p id="pageSubHeading">Visão geral do sistema</p>
+      </div>
+      <div class="user-actions">
+        <span id="userEmail" style="font-size: 0.9rem; font-weight: 600;"></span>
         <button class="btn-signout" onclick="doSignOut()">Sair</button>
       </div>
     </header>
 
-    <div class="app-container">
-      <!-- SIDEBAR -->
-      <aside class="sidebar">
-        <div class="sidebar-section">
-          <div class="sidebar-label">Menu</div>
-          <button class="sidebar-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
-          <button class="sidebar-btn" data-tab="codes" onclick="switchTab('codes')">🎟️ Códigos VIP</button>
-          <button class="sidebar-btn" data-tab="users" onclick="switchTab('users')">👥 Usuários</button>
-          <button class="sidebar-btn" data-tab="movies" onclick="switchTab('movies')">🎬 Filmes & Séries</button>
+    <!-- DASHBOARD -->
+    <section id="tab-dashboard" class="tab-panel">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val" id="dashTotalSources">0</div><div class="stat-label">Filmes/Séries</div></div>
+        <div class="stat-card gold"><div class="stat-val" id="dashActiveCodes">0</div><div class="stat-label">Códigos Ativos</div></div>
+        <div class="stat-card green"><div class="stat-val" id="dashTotalUsers">0</div><div class="stat-label">Usuários</div></div>
+        <div class="stat-card red"><div class="stat-val" id="dashActiveAds">0</div><div class="stat-label">Anúncios Ativos</div></div>
+      </div>
+      
+      <div class="card">
+        <div class="card-title">🚀 Ações Rápidas</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+          <button class="btn-secondary" onclick="switchTab('movies')">🎬 Cadastrar Filme</button>
+          <button class="btn-secondary" onclick="switchTab('codes')">🎟️ Gerar VIPs</button>
+          <button class="btn-secondary" onclick="switchTab('ads')">📢 Novo Anúncio</button>
+          <button class="btn-secondary" onclick="switchTab('iptv')">📡 Sincronizar IPTV</button>
         </div>
-        <div class="sidebar-section">
-          <div class="sidebar-label">Configuração</div>
-          <button class="sidebar-btn" data-tab="ads" onclick="switchTab('ads')">📢 Anúncios</button>
-          <button class="sidebar-btn" data-tab="iptv" onclick="switchTab('iptv')">📡 IPTV</button>
-          <button class="sidebar-btn" data-tab="embeds" onclick="switchTab('embeds')">🔗 Embeds</button>
+      </div>
+    </section>
+
+    <!-- CÓDIGOS VIP -->
+    <section id="tab-codes" class="tab-panel" style="display:none">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val" id="statTotal">0</div><div class="stat-label">Total</div></div>
+        <div class="stat-card green"><div class="stat-val" id="statAvailable">0</div><div class="stat-label">Disponíveis</div></div>
+        <div class="stat-card red"><div class="stat-val" id="statUsed">0</div><div class="stat-label">Usados</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">✨ Gerar Novos Códigos</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px;">
+          <div>
+            <label>Plano</label>
+            <select id="genPlan" onchange="onPlanChange()">
+              <option value="1">Teste 1h</option>
+              <option value="48">48 horas</option>
+              <option value="720" selected>30 dias</option>
+              <option value="876000">Vitalício</option>
+              <option value="custom">Personalizado...</option>
+            </select>
+          </div>
+          <div id="customDurationWrap" style="display:none">
+            <label>Horas</label>
+            <input type="number" id="genCustomHours" value="48">
+          </div>
+          <div>
+            <label>Quantidade</label>
+            <input type="number" id="genQty" value="10" min="1" max="500">
+          </div>
+          <div>
+            <label>Prefixo (opcional)</label>
+            <input type="text" id="genPrefix" placeholder="ex: PROMO">
+          </div>
+          <div style="display: flex; align-items: flex-end;">
+            <button class="btn-primary" id="btnGerar" onclick="gerarCodigos()" style="width: 100%;">Gerar</button>
+          </div>
         </div>
-      </aside>
+        <div id="genResult" style="display:none; margin-top: 20px;">
+          <label id="genResultTitle" style="color: var(--green);">✅ Códigos gerados:</label>
+          <textarea id="codesTextarea" rows="4" readonly style="font-family: monospace; font-size: 0.8rem;"></textarea>
+          <button class="btn-secondary" onclick="copyAll()" style="margin-top: 8px;">Copiar Tudo</button>
+        </div>
+      </div>
 
-      <!-- MAIN CONTENT -->
-      <main class="main-content">
-        <!-- DASHBOARD -->
-        <section id="tab-dashboard" style="display: block;">
-          <div style="margin-bottom: 24px;">
-            <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;">Dashboard</h2>
-            <p style="color: var(--muted); font-size: 0.9rem;">Visão geral do seu painel de administração</p>
+      <div class="card">
+        <div class="card-title">📋 Lista de Códigos (<span id="listCount">0</span>)</div>
+        <div class="search-row">
+          <input type="text" id="searchInput" placeholder="Filtrar código..." oninput="renderTable()">
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary filter-btn active" onclick="setFilter('todos', this)">Todos</button>
+            <button class="btn-secondary filter-btn" onclick="setFilter('disponivel', this)">Disponíveis</button>
+            <button class="btn-secondary filter-btn" onclick="setFilter('usado', this)">Usados</button>
           </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Código</th><th>Plano</th><th>Status</th><th>Criado em</th><th>Ações</th></tr></thead>
+            <tbody id="codesTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-          <div class="stats-row" id="dashboardStatsRow">
-            <div class="stat-card">
-              <div class="stat-value gold" id="dashTotalSources">—</div>
-              <div class="stat-label">Filmes/Séries com fonte</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value" id="dashTotalIptv">—</div>
-              <div class="stat-label">Fontes IPTV ativas</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value" id="dashActiveCodes">—</div>
-              <div class="stat-label">Códigos VIP ativos</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value" id="dashTotalUsers">—</div>
-              <div class="stat-label">Usuários registrados</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value" id="dashActiveAds">—</div>
-              <div class="stat-label">Anúncios ativos</div>
-            </div>
-            <div class="stat-card" id="dashUnmatchedCard">
-              <div class="stat-value" id="dashUnmatched">—</div>
-              <div class="stat-label">IPTV não identificados</div>
-            </div>
+    <!-- USUÁRIOS -->
+    <section id="tab-users" class="tab-panel" style="display:none">
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-val" id="statUsersTotal">0</div><div class="stat-label">Total</div></div>
+        <div class="stat-card green"><div class="stat-val" id="statUsersVip">0</div><div class="stat-label">VIPs Ativos</div></div>
+        <div class="stat-card red"><div class="stat-val" id="statUsersFree">0</div><div class="stat-label">Contas Grátis</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">👥 Usuários Cadastrados (<span id="usersListCount">0</span>)</div>
+        <div class="search-row">
+          <input type="text" id="userSearchInput" placeholder="Buscar por email ou nome..." oninput="renderUsersTable()">
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary filter-btn active" onclick="setUserFilter('todos', this)">Todos</button>
+            <button class="btn-secondary filter-btn" onclick="setUserFilter('vip', this)">VIP</button>
+            <button class="btn-secondary filter-btn" onclick="setUserFilter('gratis', this)">Grátis</button>
           </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Usuário</th><th>Status</th><th>Expira em</th><th>Último Código</th><th>Login</th><th>Ações</th></tr></thead>
+            <tbody id="usersTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-          <div class="card" style="margin-top: 24px;">
-            <div class="card-header">
-              <div class="card-title">🏆 Atalhos rápidos</div>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-              <button class="btn-secondary" onclick="switchTab('movies')" style="width: 100%; text-align: left;">🎬 Cadastrar filme/série manualmente</button>
-              <button class="btn-secondary" onclick="switchTab('iptv')" style="width: 100%; text-align: left;">📡 Gerenciar fontes IPTV</button>
-              <button class="btn-secondary" onclick="switchTab('codes')" style="width: 100%; text-align: left;">🎟️ Gerar códigos VIP</button>
-            </div>
+    <!-- FILMES & SÉRIES -->
+    <section id="tab-movies" class="tab-panel" style="display:none">
+      <div class="card">
+        <div class="card-title">🔍 Pesquisa Inteligente (TMDB + Banco de Dados)</div>
+        <p style="color:var(--muted); font-size:0.8rem; margin-bottom: 16px;">Pesquise um título. Se ele já estiver cadastrado, você poderá gerenciar as fontes diretamente.</p>
+        <div class="search-row">
+          <select id="searchType">
+            <option value="movie">Filme</option>
+            <option value="tv">Série</option>
+          </select>
+          <input type="text" id="movieSearchInput" placeholder="Buscar título no TMDB ou cadastrados...">
+          <button class="btn-primary" onclick="doUnifiedSearch()">Buscar</button>
+        </div>
+        <div class="results-grid" id="resultsGrid"></div>
+      </div>
+
+      <div class="card" id="recentSourcesCard">
+        <div class="card-title">🎬 Títulos Cadastrados</div>
+        <div class="search-row">
+          <input type="text" id="filterInput" placeholder="Filtrar títulos na lista abaixo..." oninput="renderGroupedSources()">
+        </div>
+        <div id="recentSourcesWrap"></div>
+      </div>
+    </section>
+
+    <!-- ANÚNCIOS -->
+    <section id="tab-ads" class="tab-panel" style="display:none">
+      <div class="card">
+        <div class="card-title">📢 Novo Anúncio</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div>
+            <label>Nome identificador</label>
+            <input type="text" id="adNameInput" placeholder="ex: Monetag Pop-under">
           </div>
-        </section>
-
-        <!-- CÓDIGOS VIP -->
-        <section id="tab-codes" style="display: none;">
-          <div style="margin-bottom: 24px;">
-            <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;">🎟️ Códigos VIP</h2>
-            <p style="color: var(--muted); font-size: 0.9rem;">Gerar e gerenciar códigos de acesso VIP</p>
+          <div>
+            <label>Tipo</label>
+            <select id="adTypeInput">
+              <option value="popunder">Pop-under</option>
+              <option value="direct_link">Link Direto</option>
+              <option value="banner_mobile">Banner Mobile</option>
+              <option value="banner_desktop">Banner Desktop</option>
+            </select>
           </div>
+        </div>
+        <div style="margin-top: 16px;">
+          <label>Posicionamento</label>
+          <select id="adPlacementInput">
+            <option value="watch">Só na página de assistir</option>
+            <option value="global">Todo o site</option>
+          </select>
+        </div>
+        <div style="margin-top: 16px;">
+          <label>Conteúdo (Script ou URL)</label>
+          <textarea id="adContentInput" rows="4" placeholder="Cole o código <script> ou URL aqui..."></textarea>
+        </div>
+        <button class="btn-primary" id="saveAdBtn" onclick="saveAd()" style="margin-top: 20px;">Salvar Anúncio</button>
+      </div>
 
-          <div class="stats-row">
-            <div class="stat-card">
-              <div class="stat-value gold" id="statTotal">—</div>
-              <div class="stat-label">Total de códigos</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value green" id="statAvailable">—</div>
-              <div class="stat-label">Disponíveis</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value red" id="statUsed">—</div>
-              <div class="stat-label">Utilizados</div>
-            </div>
+      <div class="card">
+        <div class="card-title">📋 Anúncios Cadastrados</div>
+        <div class="table-wrap" id="adsListWrap"></div>
+      </div>
+    </section>
+
+    <!-- IPTV -->
+    <section id="tab-iptv" class="tab-panel" style="display:none">
+      <div class="card">
+        <div class="card-title">📡 Fonte IPTV (Xtream)</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div><label>Nome do Servidor</label><input type="text" id="iptvNameInput" placeholder="ex: UniTV"></div>
+          <div><label>Host</label><input type="text" id="iptvHostInput" placeholder="http://host.com"></div>
+          <div><label>Usuário</label><input type="text" id="iptvUserInput"></div>
+          <div><label>Senha</label><input type="password" id="iptvPassInput"></div>
+        </div>
+        <button class="btn-primary" onclick="saveIptvSource()" style="margin-top: 20px;">Salvar e Sincronizar</button>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 Fontes IPTV</div>
+        <div class="table-wrap" id="iptvListWrap"></div>
+      </div>
+    </section>
+
+    <!-- EMBEDS -->
+    <section id="tab-embeds" class="tab-panel" style="display:none">
+      <div class="card">
+        <div class="card-title">🔗 Novo Parceiro Embed</div>
+        <label>Nome do Parceiro</label>
+        <input type="text" id="embedLabelInput" placeholder="ex: Site do João">
+        <label style="margin-top:14px">Domínio Autorizado (opcional)</label>
+        <input type="text" id="embedDomainInput" placeholder="ex: parceiro.com">
+        <button class="btn-primary" onclick="saveEmbedPartner()" style="margin-top: 20px;">Gerar Key</button>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 Parceiros</div>
+        <div class="table-wrap" id="embedListWrap"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL FILME -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div style="display:flex; gap:16px;">
+          <img id="modalPoster" style="width:60px; height:90px; border-radius:8px; object-fit:cover; display:none;">
+          <div id="modalPosterPh" style="width:60px; height:90px; border-radius:8px; background:var(--surface2); display:flex; align-items:center; justify-content:center; font-size:1.5rem;">🎬</div>
+          <div>
+            <h3 id="modalTitle" style="margin-bottom: 4px;"></h3>
+            <p id="modalSub" style="font-size: 0.8rem; color: var(--muted);"></p>
           </div>
+        </div>
+        <button onclick="closeMovieModal()" style="background:none; border:none; color:var(--muted); font-size:1.5rem; cursor:pointer;">×</button>
+      </div>
 
-          <div class="card" style="margin-top: 24px;">
-            <div class="card-header">
-              <div class="card-title">Gerar novos códigos</div>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-              <div class="form-group">
-                <label>Plano</label>
-                <select id="genPlan" onchange="onPlanChange()">
-                  <option value="720">30 dias — R$5,99</option>
-                  <option value="876000">Vitalício — R$49,90</option>
-                  <option value="1">Teste 1 hora</option>
-                  <option value="custom">Personalizado...</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Quantidade</label>
-                <input type="number" id="genQty" value="1" min="1" max="500"/>
-              </div>
-              <div class="form-group" id="customDurationWrap" style="display: none;">
-                <label>Horas personalizadas</label>
-                <input type="number" id="genCustomHours" value="48" min="1"/>
-              </div>
-              <div class="form-group">
-                <label>Prefixo (opcional)</label>
-                <input type="text" id="genPrefix" placeholder="ex: JULHO, AMIGO" maxlength="12"/>
-              </div>
-            </div>
-            <button class="btn-primary" onclick="gerarCodigos()" id="btnGerar" style="margin-top: 16px;">✨ Gerar</button>
+      <div id="episodeFields" style="display:none; margin-bottom: 16px;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          <div><label>Temporada</label><input type="number" id="seasonInput" value="1" min="1"></div>
+          <div><label>Episódio</label><input type="number" id="episodeInput" value="1" min="1"></div>
+        </div>
+      </div>
 
-            <div id="genResult" style="margin-top: 20px; display: none;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <div id="genResultTitle" style="font-size: 0.9rem; font-weight: 700; color: var(--green);"></div>
-                <button class="btn-secondary" onclick="copyAll()" style="padding: 6px 12px; font-size: 0.8rem;">📋 Copiar todos</button>
-              </div>
-              <textarea id="codesTextarea" readonly style="width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); padding: 12px; font-size: 0.82rem; font-family: 'Courier New', monospace; resize: vertical; min-height: 120px; outline: none;"></textarea>
-            </div>
-          </div>
+      <label>URL do Player</label>
+      <input type="text" id="sourceUrlInput" placeholder="https://..." oninput="previewMovieUrl(this.value)">
+      
+      <div id="urlPreviewBox" style="display:none; margin-top: 16px;">
+        <div id="urlTypePill" style="display:inline-block; font-size:0.7rem; font-weight:800; padding:4px 8px; border-radius:4px; margin-bottom:8px;"></div>
+        <div id="urlPreviewFrame" style="width:100%; height:180px; background:black; border-radius:8px; overflow:hidden;"></div>
+      </div>
 
-          <div class="card" style="margin-top: 24px;">
-            <div class="card-header">
-              <div class="card-title">📋 Códigos <span id="listCount">0</span></div>
-            </div>
-            <div class="search-container">
-              <input type="text" class="search-input" placeholder="Buscar código..." oninput="renderTable()" id="searchInput"/>
-            </div>
-            <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
-              <button class="btn-secondary" onclick="setFilter('todos', this)" style="padding: 6px 14px; font-size: 0.8rem;">Todos</button>
-              <button class="btn-secondary" onclick="setFilter('disponivel', this)" style="padding: 6px 14px; font-size: 0.8rem;">Disponíveis</button>
-              <button class="btn-secondary" onclick="setFilter('usado', this)" style="padding: 6px 14px; font-size: 0.8rem;">Usados</button>
-              <button class="btn-secondary" onclick="setFilter('inativo', this)" style="padding: 6px 14px; font-size: 0.8rem;">Inativos</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Plano</th>
-                    <th>Status</th>
-                    <th>Criado</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="codesTableBody">
-                  <tr><td colspan="5" style="text-align: center; padding: 32px; color: var(--muted);">Carregando...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top: 16px;">
+        <div><label>Nome do Servidor</label><input type="text" id="sourceLabelInput" placeholder="ex: Player VIP"></div>
+        <div><label>Prioridade</label><input type="number" id="sourcePriorityInput" value="10"></div>
+      </div>
 
-        <!-- USUÁRIOS -->
-        <section id="tab-users" style="display: none;">
-          <div style="margin-bottom: 24px;">
-            <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;">👥 Usuários</h2>
-            <p style="color: var(--muted); font-size: 0.9rem;">Gerenciar usuários e seus acessos VIP</p>
-          </div>
-
-          <div class="stats-row">
-            <div class="stat-card">
-              <div class="stat-value gold" id="statUsersTotal">—</div>
-              <div class="stat-label">Total de usuários</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value green" id="statUsersVip">—</div>
-              <div class="stat-label">VIP ativo agora</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value red" id="statUsersFree">—</div>
-              <div class="stat-label">Sem plano (grátis)</div>
-            </div>
-          </div>
-
-          <div class="card" style="margin-top: 24px;">
-            <div class="card-header">
-              <div class="card-title">👥 Usuários <span id="usersListCount">0</span></div>
-            </div>
-            <div class="search-container">
-              <input type="text" class="search-input" placeholder="Buscar por email ou nome..." oninput="renderUsersTable()" id="userSearchInput"/>
-            </div>
-            <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;">
-              <button class="btn-secondary" onclick="setUserFilter('todos', this)" style="padding: 6px 14px; font-size: 0.8rem;">Todos</button>
-              <button class="btn-secondary" onclick="setUserFilter('vip', this)" style="padding: 6px 14px; font-size: 0.8rem;">VIP ativo</button>
-              <button class="btn-secondary" onclick="setUserFilter('expirado', this)" style="padding: 6px 14px; font-size: 0.8rem;">Expirado</button>
-              <button class="btn-secondary" onclick="setUserFilter('gratis', this)" style="padding: 6px 14px; font-size: 0.8rem;">Grátis</button>
-            </div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Usuário</th>
-                    <th>Status</th>
-                    <th>Expira em</th>
-                    <th>Último código</th>
-                    <th>1º login</th>
-                    <th>Último login</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody id="usersTableBody">
-                  <tr><td colspan="7" style="text-align: center; padding: 32px; color: var(--muted);">Carregando...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <!-- FILMES & SÉRIES -->
-        <section id="tab-movies" style="display: none;">
-          <div style="margin-bottom: 24px;">
-            <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;">🎬 Filmes & Séries</h2>
-            <p style="color: var(--muted); font-size: 0.9rem;">Cadastrar e gerenciar conteúdo</p>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Buscar no TMDB</div>
-            </div>
-            <div class="search-container">
-              <select id="searchType" style="flex: 0 0 auto; width: auto;">
-                <option value="movie">Filme</option>
-                <option value="tv">Série</option>
-              </select>
-              <input type="text" id="movieSearchInput" placeholder="Buscar título no TMDB..." class="search-input"/>
-              <button class="btn-primary" onclick="doMovieSearch()" style="flex: 0 0 auto;">Buscar</button>
-            </div>
-            <div id="resultsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 16px;"></div>
-          </div>
-
-          <div class="card" style="margin-top: 24px;">
-            <div class="card-header">
-              <div class="card-title">🎬 Fontes cadastradas</div>
-            </div>
-            <div class="search-container">
-              <input type="text" class="search-input" placeholder="Filtrar por título..." id="filterInput" oninput="renderGroupedSources()"/>
-            </div>
-            <div id="recentSourcesWrap"></div>
-          </div>
-        </section>
-
-        <!-- ANÚNCIOS -->
-        <section id="tab-ads" style="display: none;">
-          <div style="margin-bottom: 24px;">
-            <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;">📢 Anúncios</h2>
-            <p style="color: var(--muted); font-size: 0.9rem;">Gerenciar anúncios do site</p>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Novo anúncio</div>
-            </div>
-            <p style="color: var(--muted); font-size: 0.82rem; margin-bottom: 16px;">Cole aqui um script (ex: <code>&lt;script async src="..."&gt;&lt;/script&gt;</code>) ou uma URL direta de pop-under.</p>
-            
-            <div class="form-group">
-              <label>Nome (só pra você identificar)</label>
-              <input type="text" id="adNameInput" placeholder="ex: Monetag Pop-under"/>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <div class="form-group">
-                <label>Tipo de anúncio</label>
-                <select id="adTypeInput">
-                  <option value="popunder">Pop-under</option>
-                  <option value="direct_link">Link Direto</option>
-                  <option value="banner_mobile">Banner Mobile</option>
-                  <option value="banner_desktop">Banner Desktop</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label>Onde aparece</label>
-                <select id="adPlacementInput">
-                  <option value="watch">Só na página de assistir</option>
-                  <option value="global">Todo o site</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Conteúdo (script ou URL)</label>
-              <textarea id="adContentInput" placeholder="Cole o código aqui..." style="min-height: 100px;"></textarea>
-            </div>
-
-            <button class="btn-primary" onclick="saveAd()" id="saveAdBtn" style="margin-top: 16px;">Salvar anúncio</button>
-          </div>
-
-          <div class="card" style="margin-top: 24px;">
-            <div class="card-header">
-              <div class="card-title">📋 Anúncios cadastrados</div>
-            </div>
-            <div id="adsListWrap"></div>
-          </div>
-        </section>
-
-        <!-- IPTV -->
-        <section id="tab-iptv" style="display: none;">
-          <div style="margin-bottom: 24px;">
-            <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;">📡 Fontes IPTV</h2>
-            <p style="color: var(--muted); font-size: 0.9rem;">Gerenciar fontes M3U e Xtream</p>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Adicionar nova fonte</div>
-            </div>
-            
-            <div class="form-group">
-              <label>Nome da fonte</label>
-              <input type="text" id="iptvNameInput" placeholder="ex: Minha IPTV"/>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <div class="form-group">
-                <label>Host Xtream</label>
-                <input type="text" id="iptvHostInput" placeholder="https://..."/>
-              </div>
-              <div class="form-group">
-                <label>Usuário</label>
-                <input type="text" id="iptvUserInput" placeholder="username"/>
-              </div>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <div class="form-group">
-                <label>Senha</label>
-                <input type="password" id="iptvPassInput" placeholder="password"/>
-              </div>
-              <div class="form-group">
-                <label>Prioridade</label>
-                <input type="number" id="iptvPriorityInput" value="5"/>
-              </div>
-            </div>
-
-            <button class="btn-primary" onclick="saveIptvSource()" id="saveIptvBtn" style="margin-top: 16px;">Salvar fonte</button>
-          </div>
-
-          <div class="card" style="margin-top: 24px;">
-            <div class="card-header">
-              <div class="card-title">📡 Fontes cadastradas</div>
-            </div>
-            <div id="iptvListWrap"></div>
-          </div>
-        </section>
-
-        <!-- EMBEDS -->
-        <section id="tab-embeds" style="display: none;">
-          <div style="margin-bottom: 24px;">
-            <h2 style="font-size: 1.4rem; font-weight: 700; margin-bottom: 8px;">🔗 Embeds</h2>
-            <p style="color: var(--muted); font-size: 0.9rem;">Gerenciar parceiros de embed</p>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Novo parceiro</div>
-            </div>
-            
-            <div class="form-group">
-              <label>Nome do parceiro</label>
-              <input type="text" id="embedLabelInput" placeholder="ex: StreamFlix.Play"/>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-              <div class="form-group">
-                <label>Domínio (opcional)</label>
-                <input type="text" id="embedDomainInput" placeholder="exemplo.com"/>
-              </div>
-              <div class="form-group">
-                <label>Ads habilitados</label>
-                <select id="embedAdsInput">
-                  <option value="true">Sim</option>
-                  <option value="false">Não</option>
-                </select>
-              </div>
-            </div>
-
-            <button class="btn-primary" onclick="saveEmbedPartner()" id="saveEmbedBtn" style="margin-top: 16px;">Salvar parceiro</button>
-          </div>
-
-          <div class="card" style="margin-top: 24px;">
-            <div class="card-header">
-              <div class="card-title">🔗 Parceiros cadastrados</div>
-            </div>
-            <div id="embedListWrap"></div>
-          </div>
-        </section>
-      </main>
+      <div style="display:flex; gap:12px; margin-top: 24px;">
+        <button class="btn-primary" id="saveSourceBtn" onclick="saveMovieSource()" style="flex:1;">Salvar Fonte</button>
+        <button class="btn-signout" id="deleteInlineBtn" onclick="deleteMovieSourceFromModal()" style="display:none;">Excluir</button>
+      </div>
     </div>
   </div>
 
-  <!-- TOAST -->
   <div id="toast"></div>
 
   <script>
-    // Funções básicas para navegação
-    function switchTab(tabName) {
-      // Ocultar todas as seções
-      document.querySelectorAll('main > section').forEach(s => s.style.display = 'none');
+    const SUPABASE_URL  = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
+
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: { persistSession: true, storageKey: 'sfv-admin-auth-token' }
+    });
+
+    let _session = null;
+    let _allCodes = [];
+    let _filter = 'todos';
+    let _allUsers = [];
+    let _userFilter = 'todos';
+    let _allMovieSources = [];
+    let _currentMovieItem = null;
+    let _editingSourceId = null;
+    const IMG_BASE = 'https://image.tmdb.org/t/p/';
+
+    // --- AUTH ---
+    async function checkExistingSession() {
+      const { data } = await db.auth.getSession();
+      if (data?.session) handleAuthenticatedUser(data.session);
+      else showLoginScreen();
+    }
+
+    async function handleAuthenticatedUser(session) {
+      _session = session;
+      const { data: admin } = await db.from('vip_panel_admins').select('*').eq('id', session.user.id).maybeSingle();
+      if (!admin) {
+        await db.auth.signOut();
+        alert('Acesso negado.');
+        showLoginScreen();
+        return;
+      }
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appScreen').style.display = 'block';
+      document.getElementById('userEmail').textContent = admin.display_name || session.user.email;
+      loadDashboard();
+    }
+
+    async function signInAdminPassword() {
+      const email = document.getElementById('adminEmailInput').value;
+      const password = document.getElementById('adminPasswordInput').value;
+      const { data, error } = await db.auth.signInWithPassword({ email, password });
+      if (error) alert(error.message);
+      else handleAuthenticatedUser(data.session);
+    }
+
+    async function doSignOut() {
+      await db.auth.signOut();
+      window.location.reload();
+    }
+
+    // --- UTILS ---
+    async function api(action, extra = {}) {
+      const res = await fetch('/api/admin-vip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_session?.access_token}` },
+        body: JSON.stringify({ action, ...extra })
+      });
+      return res.json();
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // --- TABS ---
+    function switchTab(tab) {
+      document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.tab === tab));
+      document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+      document.getElementById('tab-' + tab).style.display = 'block';
       
-      // Mostrar a seção selecionada
-      const tab = document.getElementById('tab-' + tabName);
-      if (tab) tab.style.display = 'block';
+      const titles = { dashboard: 'Dashboard', codes: 'Códigos VIP', users: 'Usuários', movies: 'Filmes & Séries', ads: 'Anúncios', iptv: 'IPTV', embeds: 'Embeds' };
+      const subs = { dashboard: 'Visão geral do sistema', codes: 'Gerenciar acesso VIP', users: 'Lista de clientes', movies: 'Catálogo de mídia', ads: 'Monetização', iptv: 'Canais e Playlists', embeds: 'Parceiros externos' };
       
-      // Atualizar botões da sidebar
-      document.querySelectorAll('.sidebar-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.getAttribute('data-tab') === tabName) {
-          btn.classList.add('active');
-        }
+      document.getElementById('pageHeading').textContent = titles[tab];
+      document.getElementById('pageSubHeading').textContent = subs[tab];
+
+      if (tab === 'dashboard') loadDashboard();
+      if (tab === 'codes') loadCodes();
+      if (tab === 'users') loadUsers();
+      if (tab === 'movies') loadMovieSources();
+      if (tab === 'ads') loadAds();
+      if (tab === 'iptv') loadIptvSources();
+      if (tab === 'embeds') loadEmbedPartners();
+    }
+
+    // --- DASHBOARD ---
+    async function loadDashboard() {
+      const data = await api('dashboard-stats');
+      document.getElementById('dashTotalSources').textContent = data.totalVipSources || 0;
+      document.getElementById('dashActiveCodes').textContent = data.activeVipCodes || 0;
+      document.getElementById('dashTotalUsers').textContent = data.totalUsers || 0;
+      document.getElementById('dashActiveAds').textContent = data.activeAds || 0;
+    }
+
+    // --- CODES ---
+    async function loadCodes() {
+      const data = await api('list');
+      _allCodes = data.codes || [];
+      updateStats();
+      renderTable();
+    }
+
+    function updateStats() {
+      document.getElementById('statTotal').textContent = _allCodes.length;
+      document.getElementById('statAvailable').textContent = _allCodes.filter(c => !c.used_by && c.is_active).length;
+      document.getElementById('statUsed').textContent = _allCodes.filter(c => c.used_by).length;
+    }
+
+    function setFilter(f, el) {
+      _filter = f;
+      el.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      renderTable();
+    }
+
+    function renderTable() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      let rows = _allCodes;
+      if (_filter === 'disponivel') rows = rows.filter(c => !c.used_by && c.is_active);
+      if (_filter === 'usado') rows = rows.filter(c => c.used_by);
+      if (search) rows = rows.filter(c => c.code.toLowerCase().includes(search));
+
+      document.getElementById('listCount').textContent = rows.length;
+      document.getElementById('codesTableBody').innerHTML = rows.map(c => `
+        <tr>
+          <td style="font-weight:700">${c.code}</td>
+          <td>${c.plan_label || c.duration_hours + 'h'}</td>
+          <td><span class="badge ${c.used_by ? 'badge-red' : (c.is_active ? 'badge-green' : 'badge-gray')}">${c.used_by ? 'Usado' : (c.is_active ? 'Disponível' : 'Inativo')}</span></td>
+          <td style="color:var(--muted)">${new Date(c.created_at).toLocaleDateString()}</td>
+          <td>
+            <button class="btn-secondary" style="padding:4px 8px; font-size:0.7rem;" onclick="copyCode('${c.code}')">Copiar</button>
+            ${!c.used_by ? `<button class="btn-secondary" style="padding:4px 8px; font-size:0.7rem;" onclick="toggleCode('${c.code}', ${!c.is_active})">${c.is_active ? 'Desativar' : 'Ativar'}</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function toggleCode(code, activate) {
+      await api(activate ? 'reactivate' : 'deactivate', { code });
+      showToast(activate ? 'Código ativado' : 'Código desativado');
+      loadCodes();
+    }
+
+    function copyCode(c) { navigator.clipboard.writeText(c); showToast('Copiado!'); }
+    function copyAll() { navigator.clipboard.writeText(document.getElementById('codesTextarea').value); showToast('Tudo copiado!'); }
+
+    function onPlanChange() {
+      document.getElementById('customDurationWrap').style.display = document.getElementById('genPlan').value === 'custom' ? 'block' : 'none';
+    }
+
+    async function gerarCodigos() {
+      const plan = document.getElementById('genPlan').value;
+      const qty = parseInt(document.getElementById('genQty').value);
+      const prefix = document.getElementById('genPrefix').value.trim();
+      const hours = plan === 'custom' ? parseInt(document.getElementById('genCustomHours').value) : parseInt(plan);
+      
+      const newCodes = [];
+      for(let i=0; i<qty; i++) {
+        const code = (prefix ? prefix + '-' : 'VIP-') + Math.random().toString(36).substring(2, 8).toUpperCase();
+        newCodes.push({ code, duration_hours: hours, plan_label: plan === '720' ? '30 dias' : (plan === '876000' ? 'Vitalício' : hours + 'h') });
+      }
+      
+      const res = await api('create', { codes: newCodes });
+      if (res.error) alert(res.error);
+      else {
+        document.getElementById('genResult').style.display = 'block';
+        document.getElementById('codesTextarea').value = newCodes.map(c => c.code).join('\n');
+        showToast(qty + ' códigos gerados');
+        loadCodes();
+      }
+    }
+
+    // --- USERS ---
+    async function loadUsers() {
+      const data = await api('list-users');
+      _allUsers = data.users || [];
+      document.getElementById('statUsersTotal').textContent = _allUsers.length;
+      document.getElementById('statUsersVip').textContent = _allUsers.filter(u => u.expires_at && new Date(u.expires_at) > new Date()).length;
+      document.getElementById('statUsersFree').textContent = _allUsers.filter(u => !u.expires_at).length;
+      renderUsersTable();
+    }
+
+    function setUserFilter(f, el) {
+      _userFilter = f;
+      el.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      renderUsersTable();
+    }
+
+    function renderUsersTable() {
+      const search = document.getElementById('userSearchInput').value.toLowerCase();
+      let rows = _allUsers;
+      const now = new Date();
+      if (_userFilter === 'vip') rows = rows.filter(u => u.expires_at && new Date(u.expires_at) > now);
+      if (_userFilter === 'gratis') rows = rows.filter(u => !u.expires_at);
+      if (search) rows = rows.filter(u => (u.email||'').toLowerCase().includes(search) || (u.name||'').toLowerCase().includes(search));
+
+      document.getElementById('usersListCount').textContent = rows.length;
+      document.getElementById('usersTableBody').innerHTML = rows.map(u => {
+        const isVip = u.expires_at && new Date(u.expires_at) > now;
+        return `
+          <tr>
+            <td>
+              <div style="font-weight:700">${u.name || 'Sem nome'}</div>
+              <div style="font-size:0.75rem; color:var(--muted)">${u.email}</div>
+            </td>
+            <td><span class="badge ${isVip ? 'badge-green' : 'badge-gray'}">${isVip ? 'VIP' : 'Grátis'}</span></td>
+            <td>${u.expires_at ? new Date(u.expires_at).toLocaleDateString() : '—'}</td>
+            <td>${u.last_code_used || '—'}</td>
+            <td style="font-size:0.75rem; color:var(--muted)">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : '—'}</td>
+            <td><button class="btn-secondary" style="padding:4px 8px; font-size:0.7rem;" onclick="alert('ID: ${u.user_id}')">Detalhes</button></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // --- MOVIES ---
+    async function tmdbFetch(path, params = {}) {
+      const qs = new URLSearchParams(params).toString();
+      const r = await fetch(`/api/tmdb?path=${encodeURIComponent(path)}${qs ? '&' + qs : ''}`);
+      return r.json();
+    }
+
+    // NOVA LÓGICA: Busca Unificada
+    async function doUnifiedSearch() {
+      const q = document.getElementById('movieSearchInput').value.trim();
+      const type = document.getElementById('searchType').value;
+      if (!q) return;
+      
+      const grid = document.getElementById('resultsGrid');
+      grid.innerHTML = '<div class="empty-state">Buscando em TMDB e Banco de Dados...</div>';
+      
+      try {
+        // 1. Buscar no TMDB
+        const tmdbData = await tmdbFetch(`/search/${type}`, { query: q });
+        const results = tmdbData.results || [];
+        
+        // 2. Verificar quais já estão cadastrados
+        const ids = results.map(r => r.id);
+        const existing = await api('list-sources-for', { mediaType: type, ids });
+        const existingSet = new Set(existing.ids || []);
+
+        // 3. Renderizar com lógica inteligente
+        grid.innerHTML = results.map(r => {
+          const hasSource = existingSet.has(r.id);
+          const title = r.title || r.name;
+          const year = (r.release_date || r.first_air_date || '').slice(0,4);
+          
+          return `
+            <div class="result-card" onclick='handleMovieClick(${JSON.stringify({id:r.id, title, type, poster_path:r.poster_path}).replace(/'/g, "&#39;")}, ${hasSource})'>
+              ${r.poster_path ? `<img src="${IMG_BASE}w200${r.poster_path}">` : '<div style="height:200px; background:var(--surface2); display:flex; align-items:center; justify-content:center;">🎬</div>'}
+              <div class="status-pill ${hasSource ? 'badge-green' : 'badge-gray'}" style="background:${hasSource ? 'var(--green)' : 'var(--muted)'}; color:white;">
+                ${hasSource ? 'Cadastrado' : 'Novo'}
+              </div>
+              <div class="info">
+                <div class="t">${title}</div>
+                <div class="y">${year}</div>
+                <div style="margin-top:8px; font-size:0.7rem; color:${hasSource ? 'var(--green)' : 'var(--muted)'}; font-weight:700;">
+                  ${hasSource ? '📂 Clique para gerenciar fontes' : '➕ Clique para cadastrar'}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        grid.innerHTML = '<div class="empty-state">Erro na busca.</div>';
+      }
+    }
+
+    // Ação ao clicar no card: Se cadastrado, foca na lista; se novo, abre modal.
+    function handleMovieClick(item, hasSource) {
+      if (hasSource) {
+        // Se já existe, filtra a lista de cadastrados e rola até lá
+        document.getElementById('filterInput').value = item.title;
+        renderGroupedSources();
+        document.getElementById('recentSourcesCard').scrollIntoView({ behavior: 'smooth' });
+        showToast('Mostrando fontes de: ' + item.title);
+      } else {
+        // Se é novo, abre o modal de cadastro
+        openMovieModal(item);
+      }
+    }
+
+    function openMovieModal(item) {
+      _currentMovieItem = item;
+      _editingSourceId = null;
+      document.getElementById('modalTitle').textContent = item.title;
+      document.getElementById('modalSub').textContent = (item.type==='movie'?'Filme':'Série') + ' · TMDB #' + item.id;
+      if(item.poster_path) {
+        document.getElementById('modalPoster').src = IMG_BASE + 'w200' + item.poster_path;
+        document.getElementById('modalPoster').style.display = 'block';
+        document.getElementById('modalPosterPh').style.display = 'none';
+      } else {
+        document.getElementById('modalPoster').style.display = 'none';
+        document.getElementById('modalPosterPh').style.display = 'flex';
+      }
+      document.getElementById('episodeFields').style.display = item.type === 'tv' ? 'block' : 'none';
+      document.getElementById('sourceUrlInput').value = '';
+      document.getElementById('sourceLabelInput').value = '';
+      document.getElementById('deleteInlineBtn').style.display = 'none';
+      document.getElementById('modalOverlay').classList.add('open');
+    }
+
+    function closeMovieModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+
+    function previewMovieUrl(url) {
+      if(!url) { document.getElementById('urlPreviewBox').style.display = 'none'; return; }
+      document.getElementById('urlPreviewBox').style.display = 'block';
+      const isDirect = /\.(mp4|m3u8|mkv|webm)/i.test(url);
+      const pill = document.getElementById('urlTypePill');
+      pill.textContent = isDirect ? 'Arquivo Direto' : 'Link Embed';
+      pill.style.background = isDirect ? 'var(--green)' : 'var(--accent)';
+      document.getElementById('urlPreviewFrame').innerHTML = isDirect ? `<video src="${url}" controls style="width:100%; height:100%;"></video>` : `<iframe src="${url}" style="width:100%; height:100%; border:none;"></iframe>`;
+    }
+
+    async function saveMovieSource() {
+      const url = document.getElementById('sourceUrlInput').value.trim();
+      const label = document.getElementById('sourceLabelInput').value.trim() || 'Player';
+      const priority = parseInt(document.getElementById('sourcePriorityInput').value);
+      const isTv = _currentMovieItem.type === 'tv';
+      
+      const res = await api(_editingSourceId ? 'update-source' : 'create-source', {
+        sourceId: _editingSourceId,
+        tmdb_id: _currentMovieItem.id,
+        media_type: _currentMovieItem.type,
+        title: _currentMovieItem.title,
+        poster_path: _currentMovieItem.poster_path,
+        season: isTv ? parseInt(document.getElementById('seasonInput').value) : null,
+        episode: isTv ? parseInt(document.getElementById('episodeInput').value) : null,
+        source_url: url,
+        source_label: label,
+        priority
+      });
+      
+      if(res.error) alert(res.error);
+      else { showToast('Salvo com sucesso'); closeMovieModal(); loadMovieSources(); }
+    }
+
+    async function loadMovieSources() {
+      const data = await api('list-sources');
+      _allMovieSources = data.sources || [];
+      renderGroupedSources();
+    }
+
+    function renderGroupedSources() {
+      const filter = document.getElementById('filterInput').value.toLowerCase();
+      const groups = new Map();
+      _allMovieSources.forEach(s => {
+        const key = s.media_type + ':' + s.tmdb_id;
+        if(!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(s);
       });
 
-      // Scroll para o topo
-      document.querySelector('.main-content').scrollTop = 0;
+      let list = [...groups.entries()].map(([key, items]) => {
+        const title = (items.find(i => i.title)?.title) || 'Sem título';
+        return { key, items, title };
+      });
+
+      if(filter) list = list.filter(l => l.title.toLowerCase().includes(filter));
+
+      document.getElementById('recentSourcesWrap').innerHTML = list.map(g => `
+        <div class="title-group" id="group-${g.key.replace(':','-')}">
+          <div class="title-group-head" onclick="this.parentElement.classList.toggle('open')">
+            ${g.items[0].poster_path ? `<img src="${IMG_BASE}w92${g.items[0].poster_path}">` : '<div style="width:40px; height:60px; background:var(--surface); display:flex; align-items:center; justify-content:center;">🎬</div>'}
+            <div class="title-group-info">
+              <div class="name">${g.title}</div>
+              <div class="meta">${g.items.length} fonte(s) cadastrada(s)</div>
+            </div>
+            <div class="title-group-chevron">▾</div>
+          </div>
+          <div class="title-group-body">
+            ${g.items.map(s => `
+              <div class="source-row">
+                <div class="source-ep-tag">${s.season ? 'T'+s.season+'E'+s.episode : 'Filme'}</div>
+                <div class="source-row-main">
+                  <div class="source-label-text">${s.source_label}</div>
+                  <div class="source-url-text">${s.source_url}</div>
+                </div>
+                <div class="row-actions">
+                  <button onclick="event.stopPropagation(); openEditSource(${s.id})">Editar</button>
+                  <button class="danger" onclick="event.stopPropagation(); deleteSource(${s.id})">Excluir</button>
+                </div>
+              </div>
+            `).join('')}
+            <button class="btn-secondary" style="width:100%; margin-top:12px; font-size:0.75rem;" onclick="event.stopPropagation(); openMovieModal(${JSON.stringify({id:g.items[0].tmdb_id, title:g.title, type:g.items[0].media_type, poster_path:g.items[0].poster_path}).replace(/'/g, "&#39;")})">+ Adicionar Servidor / Episódio</button>
+          </div>
+        </div>
+      `).join('');
     }
 
-    function showToast(message) {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3000);
+    function openEditSource(id) {
+      const s = _allMovieSources.find(x => x.id === id);
+      _currentMovieItem = { id: s.tmdb_id, title: s.title, type: s.media_type, poster_path: s.poster_path };
+      _editingSourceId = s.id;
+      document.getElementById('modalTitle').textContent = s.title;
+      document.getElementById('modalSub').textContent = 'Editando fonte #' + s.id;
+      document.getElementById('episodeFields').style.display = s.media_type === 'tv' ? 'block' : 'none';
+      if(s.media_type === 'tv') {
+        document.getElementById('seasonInput').value = s.season;
+        document.getElementById('episodeInput').value = s.episode;
+      }
+      document.getElementById('sourceUrlInput').value = s.source_url;
+      document.getElementById('sourceLabelInput').value = s.source_label;
+      document.getElementById('sourcePriorityInput').value = s.priority;
+      document.getElementById('deleteInlineBtn').style.display = 'block';
+      previewMovieUrl(s.source_url);
+      document.getElementById('modalOverlay').classList.add('open');
     }
 
-    // Placeholder para funções que serão implementadas
-    function gerarCodigos() { showToast('Função em desenvolvimento'); }
-    function copyAll() { showToast('Copiado!'); }
-    function renderTable() { console.log('renderTable'); }
-    function setFilter() { console.log('setFilter'); }
-    function renderUsersTable() { console.log('renderUsersTable'); }
-    function setUserFilter() { console.log('setUserFilter'); }
-    function doMovieSearch() { showToast('Buscando...'); }
-    function renderGroupedSources() { console.log('renderGroupedSources'); }
-    function saveAd() { showToast('Anúncio salvo!'); }
-    function saveIptvSource() { showToast('Fonte IPTV salva!'); }
-    function saveEmbedPartner() { showToast('Parceiro salvo!'); }
-    function doSignOut() { showToast('Saindo...'); }
-    function onPlanChange() { console.log('onPlanChange'); }
+    async function deleteSource(id) {
+      if(!confirm('Excluir fonte?')) return;
+      await api('delete-source', { sourceId: id });
+      showToast('Excluído');
+      loadMovieSources();
+    }
+    
+    async function deleteMovieSourceFromModal() {
+      if(_editingSourceId) deleteSource(_editingSourceId);
+      closeMovieModal();
+    }
+
+    // --- ADS ---
+    async function loadAds() {
+      const data = await api('list-ads');
+      const ads = data.ads || [];
+      document.getElementById('adsListWrap').innerHTML = `
+        <table>
+          <thead><tr><th>Nome</th><th>Tipo</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${ads.map(ad => `
+              <tr>
+                <td>${ad.name}</td>
+                <td>${ad.ad_type}</td>
+                <td><span class="badge ${ad.is_active ? 'badge-green' : 'badge-gray'}">${ad.is_active ? 'Ativo' : 'Pausado'}</span></td>
+                <td><button class="btn-secondary" style="padding:4px 8px;" onclick="deleteAd(${ad.id})">Excluir</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function saveAd() {
+      const name = document.getElementById('adNameInput').value;
+      const type = document.getElementById('adTypeInput').value;
+      const placement = document.getElementById('adPlacementInput').value;
+      const content = document.getElementById('adContentInput').value;
+      await api('create-ad', { name, ad_type: type, placement, content, is_active: true });
+      showToast('Anúncio salvo');
+      loadAds();
+    }
+
+    async function deleteAd(id) {
+      await api('delete-ad', { adId: id });
+      loadAds();
+    }
+
+    // --- IPTV ---
+    async function loadIptvSources() {
+      const data = await api('list-iptv-sources');
+      const sources = data.sources || [];
+      document.getElementById('iptvListWrap').innerHTML = `
+        <table>
+          <thead><tr><th>Nome</th><th>Host</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${sources.map(s => `
+              <tr>
+                <td>${s.name}</td>
+                <td>${s.xtream_host}</td>
+                <td><span class="badge ${s.is_active ? 'badge-green' : 'badge-gray'}">${s.is_active ? 'Sincronizado' : 'Pausado'}</span></td>
+                <td><button class="btn-secondary" style="padding:4px 8px;" onclick="deleteIptv(${s.id})">Excluir</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function saveIptvSource() {
+      const name = document.getElementById('iptvNameInput').value;
+      const xtreamHost = document.getElementById('iptvHostInput').value;
+      const xtreamUser = document.getElementById('iptvUserInput').value;
+      const xtreamPass = document.getElementById('iptvPassInput').value;
+      await api('create-iptv-source', { name, xtreamHost, xtreamUser, xtreamPass });
+      showToast('Fonte IPTV salva');
+      loadIptvSources();
+    }
+
+    async function deleteIptv(id) {
+      await api('delete-iptv-source', { sourceId: id });
+      loadIptvSources();
+    }
+
+    // --- EMBEDS ---
+    async function loadEmbedPartners() {
+      const data = await api('list-embed-partners');
+      const partners = data.partners || [];
+      document.getElementById('embedListWrap').innerHTML = `
+        <table>
+          <thead><tr><th>Nome</th><th>Domínio</th><th>Key</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${partners.map(p => `
+              <tr>
+                <td>${p.label}</td>
+                <td>${p.authorized_domain || 'Qualquer'}</td>
+                <td style="font-family:monospace; font-size:0.7rem;">${p.api_key.slice(0,8)}...</td>
+                <td><button class="btn-secondary" style="padding:4px 8px;" onclick="deleteEmbed(${p.id})">Excluir</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function saveEmbedPartner() {
+      const label = document.getElementById('embedLabelInput').value;
+      const domain = document.getElementById('embedDomainInput').value;
+      await api('create-embed-partner', { label, authorizedDomain: domain });
+      showToast('Parceiro criado');
+      loadEmbedPartners();
+    }
+
+    async function deleteEmbed(id) {
+      await api('delete-embed-partner', { partnerId: id });
+      loadEmbedPartners();
+    }
+
+    checkExistingSession();
   </script>
 </body>
 </html>
