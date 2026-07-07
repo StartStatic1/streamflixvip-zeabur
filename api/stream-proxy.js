@@ -46,7 +46,7 @@ async function getAllowedHosts() {
   return _hostsCache.hosts;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { url } = req.query;
 
   if (!url) {
@@ -125,7 +125,9 @@ export default async function handler(req, res) {
   }
 }
 
-export const config = {
+module.exports = handler;
+
+module.exports.config = {
   api: {
     responseLimit: false, // vídeos costumam passar do limite padrão de resposta da Vercel
   },
