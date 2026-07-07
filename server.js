@@ -106,3 +106,20 @@ app.get('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`StreamFlixVIP (espelho Zeabur) rodando na porta ${PORT}`);
 });
+
+// ── Watchdog de memória ──
+// Numa VM de 2GB com stream de vídeo passando pelo Node (stream-proxy.js),
+// cada requisição simultânea de vídeo consome um buffer de chunks na RAM.
+// Se vários usuários assistem ao mesmo tempo, a memória do processo sobe
+// (visto no painel: 72% de uso mesmo com CPU em 6% — típico de memória
+// presa em requisições de stream, não de CPU travada). Isso loga o uso
+// pra você acompanhar nos Runtime logs e identificar quando está perto
+// do limite, ANTES de a Zeabur matar e reiniciar o processo (o que gera
+// aquele monte de instâncias em "Starting" que você viu no painel).
+setInterval(() => {
+  const used = process.memoryUsage();
+  const rssMB = Math.round(used.rss / 1024 / 1024);
+  if (rssMB > 1200) { // ~60% dos 1967MB disponíveis — alerta cedo
+    console.warn(`⚠️ Memória alta: ${rssMB}MB em uso (RSS). Considere reiniciar ou investigar streams presos.`);
+  }
+}, 30000);
