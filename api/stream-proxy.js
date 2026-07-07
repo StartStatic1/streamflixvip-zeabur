@@ -89,25 +89,31 @@ async function handler(req, res) {
   _activeStreams++;
 
   try {
-    // repassa o header Range, essencial para permitir avançar/retroceder no player
-    //
-    // USER-AGENT: descoberto via packet capture que o servidor de origem
-    // (protegido por Cloudflare) responde rápido e sem enrolação quando o
-    // User-Agent é de um player de vídeo conhecido (VLC/3.0.4 LibVLC/3.0.4).
-    // Sem isso, o fetch() do Node manda um UA genérico que o Cloudflare
-    // trata como tráfego suspeito/desconhecido — provável causa da demora
-    // e travamentos observados nos servidores que passam por este proxy
-    // (StreamFlix.svent, UniTV Lite), mas não nos embeds de terceiros
-    // (MegaEmbed, Vidstack) que não passam pela nossa VM.
-    const forwardHeaders = {
-      'User-Agent': 'VLC/3.0.4 LibVLC/3.0.4',
-    };
-    if (req.headers.range) forwardHeaders.range = req.headers.range;
+    // ── Estratégia de User-Agent por tentativa, não fixo ──
+    // Testamos e confirmamos que hosts diferentes (unitvlite.xyz, sventank.com,
+    // cdnbr03.com) reagem de forma DIFERENTE ao mesmo User-Agent: um fixo
+    // "VLC/3.0.4 LibVLC/3.0.4" ajudou o cdnbr03.com mas quebrou o unitvlite.xyz.
+    // Cada operador de painel Xtream/IPTV configura seu próprio firewall e
+    // regras do Cloudflare, então não existe um UA universal que sirva pra
+    // todos. Em vez de fixar um valor e trocar qual fonte quebra a cada
+    // ajuste, tentamos primeiro SEM forçar UA (deixando o padrão do Node) e,
+    // só se a origem recusar (403/406/erro), tentamos de novo com o UA de
+    // player de vídeo como fallback — assim cada fonte usa o que funciona
+    // para ela, automaticamente, sem precisar de configuração manual por host.
+    async function tryFetch(withPlayerUA) {
+      const headers = {};
+      if (req.headers.range) headers.range = req.headers.range;
+      if (withPlayerUA) headers['User-Agent'] = 'VLC/3.0.4 LibVLC/3.0.4';
+      return fetch(target.toString(), { headers, redirect: 'follow' });
+    }
 
-    // redirect: 'follow' é o padrão do fetch, mas deixamos explícito aqui
-    // porque a cadeia observada tem 2 redirecionamentos (302 → 302 → mp4)
-    // antes de chegar no arquivo real — importante que o Node siga todos.
-    const upstream = await fetch(target.toString(), { headers: forwardHeaders, redirect: 'follow' });
+    let upstream = await tryFetch(false);
+
+    // Se a tentativa "neutra" falhou de forma que sugere bloqueio por UA
+    // (403 Forbidden, 406 Not Acceptable), tenta de novo com o UA de player.
+    if (!upstream.ok && upstream.status !== 206 && [403, 406].includes(upstream.status)) {
+      upstream = await tryFetch(true);
+    }
 
     if (!upstream.ok && upstream.status !== 206) {
       res.status(upstream.status).json({ error: 'Servidor de origem retornou erro: ' + upstream.status });
