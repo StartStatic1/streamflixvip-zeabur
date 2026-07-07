@@ -149,14 +149,34 @@ module.exports = async function handler(req, res) {
   }
 
   // ── FILMES/SÉRIES: lista todas as fontes cadastradas (pro painel) ──
+  // Antes tinha limit=300 fixo: qualquer fonte além das 300 mais recentes
+  // nunca aparecia no card "Fontes cadastradas" do admin, mesmo existindo
+  // no banco (por isso a busca TMDB dizia "✓ Cadastrado" mas o filtro da
+  // lista não achava o título). Agora pagina em blocos de 1000 usando o
+  // header Range do PostgREST até trazer tudo.
   if (action === 'list-sources') {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/vip_sources?select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at&order=created_at.desc&limit=300`,
-      { headers: svcHeaders }
-    );
-    const rows = await r.json();
-    if (!r.ok) { res.status(502).json({ error: 'Erro ao listar fontes', detail: rows }); return; }
-    res.status(200).json({ sources: rows });
+    const PAGE_SIZE = 1000;
+    let allRows = [];
+    let offset = 0;
+    while (true) {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/vip_sources?select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at&order=created_at.desc`,
+        {
+          headers: {
+            ...svcHeaders,
+            'Range-Unit': 'items',
+            'Range': `${offset}-${offset + PAGE_SIZE - 1}`,
+          },
+        }
+      );
+      const rows = await r.json();
+      if (!r.ok) { res.status(502).json({ error: 'Erro ao listar fontes', detail: rows }); return; }
+      if (!Array.isArray(rows) || rows.length === 0) break;
+      allRows = allRows.concat(rows);
+      if (rows.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+    res.status(200).json({ sources: allRows });
     return;
   }
 
