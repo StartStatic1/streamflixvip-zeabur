@@ -843,8 +843,11 @@
         </select>
         <input type="text" id="movieSearchInput" placeholder="Buscar título no TMDB..." />
         <button onclick="doMovieSearch()" id="btnMovieSearch">🔍 Buscar</button>
+        <button onclick="clearMovieSearch()" id="btnClearMovieSearch" style="display:none;background:var(--surface2);color:var(--muted);border:1px solid var(--border)">✕ Limpar busca</button>
       </div>
-      <div class="results-grid" id="resultsGrid"></div>
+      <div id="resultsSection" style="display:none">
+        <div class="results-grid" id="resultsGrid"></div>
+      </div>
 
       <div class="card" style="margin-top:24px">
         <div class="card-title">🎬 Fontes cadastradas <span id="moviesTitleCount" style="font-size:0.72rem;font-weight:600;color:var(--muted);background:var(--surface2);border:1px solid var(--border);padding:3px 10px;border-radius:100px">0 títulos</span></div>
@@ -1454,10 +1457,16 @@
     document.querySelectorAll('.tab-panel').forEach(s => s.style.display = 'none');
     document.getElementById('tab-' + tab).style.display = 'block';
     if (tab === 'users') loadUsers();
-    if (tab === 'movies' && !_moviesLoadedOnce) {
-      _moviesLoadedOnce = true;
+    if (tab === 'movies') {
+      // A lista de fontes cadastradas recarrega toda vez que a aba é
+      // aberta (dados podem ter mudado). A busca TMDB só é restaurada na
+      // primeira abertura da sessão — reabrir a aba depois não deve
+      // reexecutar uma busca antiga sozinho.
       loadMovieSources();
-      restoreLastMovieSearch();
+      if (!_moviesLoadedOnce) {
+        _moviesLoadedOnce = true;
+        restoreLastMovieSearch();
+      }
     }
     if (tab === 'ads') loadAds();
     if (tab === 'iptv') loadIptvSources();
@@ -1626,6 +1635,9 @@
     const grid = document.getElementById('resultsGrid');
     if (!q) return;
 
+    document.getElementById('resultsSection').style.display = 'block';
+    document.getElementById('btnClearMovieSearch').style.display = 'inline-block';
+
     const btn = document.getElementById('btnMovieSearch');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Buscando...'; }
     grid.innerHTML = '<div class="search-loading"><div class="search-spinner"></div> Buscando no TMDB...</div>';
@@ -1684,12 +1696,29 @@
     }).join('');
   }
 
+  // Limpa a busca TMDB e volta a mostrar só a lista de fontes cadastradas.
+  // É o botão "✕ Limpar busca" — resolve a sensação de tela "presa" no
+  // resultado de uma busca antiga.
+  function clearMovieSearch() {
+    document.getElementById('movieSearchInput').value = '';
+    document.getElementById('resultsGrid').innerHTML = '';
+    document.getElementById('resultsSection').style.display = 'none';
+    document.getElementById('btnClearMovieSearch').style.display = 'none';
+    sessionStorage.removeItem('adminLastSearch');
+  }
+
   // Ao reabrir a aba de filmes (voltando de outro lugar do site, ou depois
   // de editar um filme e fechar o modal), restaura a última busca feita
   // nesta sessão do navegador, em vez de mostrar a tela vazia de novo.
+  // Se não houver nada salvo, garante que a seção de resultados fique
+  // escondida (evita ficar com um grid vazio ocupando espaço).
   function restoreLastMovieSearch() {
     const saved = sessionStorage.getItem('adminLastSearch');
-    if (!saved) return;
+    if (!saved) {
+      document.getElementById('resultsSection').style.display = 'none';
+      document.getElementById('btnClearMovieSearch').style.display = 'none';
+      return;
+    }
     try {
       const { q, type } = JSON.parse(saved);
       document.getElementById('movieSearchInput').value = q;
