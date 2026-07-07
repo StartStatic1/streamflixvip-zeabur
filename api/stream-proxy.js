@@ -90,10 +90,24 @@ async function handler(req, res) {
 
   try {
     // repassa o header Range, essencial para permitir avançar/retroceder no player
-    const forwardHeaders = {};
+    //
+    // USER-AGENT: descoberto via packet capture que o servidor de origem
+    // (protegido por Cloudflare) responde rápido e sem enrolação quando o
+    // User-Agent é de um player de vídeo conhecido (VLC/3.0.4 LibVLC/3.0.4).
+    // Sem isso, o fetch() do Node manda um UA genérico que o Cloudflare
+    // trata como tráfego suspeito/desconhecido — provável causa da demora
+    // e travamentos observados nos servidores que passam por este proxy
+    // (StreamFlix.svent, UniTV Lite), mas não nos embeds de terceiros
+    // (MegaEmbed, Vidstack) que não passam pela nossa VM.
+    const forwardHeaders = {
+      'User-Agent': 'VLC/3.0.4 LibVLC/3.0.4',
+    };
     if (req.headers.range) forwardHeaders.range = req.headers.range;
 
-    const upstream = await fetch(target.toString(), { headers: forwardHeaders });
+    // redirect: 'follow' é o padrão do fetch, mas deixamos explícito aqui
+    // porque a cadeia observada tem 2 redirecionamentos (302 → 302 → mp4)
+    // antes de chegar no arquivo real — importante que o Node siga todos.
+    const upstream = await fetch(target.toString(), { headers: forwardHeaders, redirect: 'follow' });
 
     if (!upstream.ok && upstream.status !== 206) {
       res.status(upstream.status).json({ error: 'Servidor de origem retornou erro: ' + upstream.status });
