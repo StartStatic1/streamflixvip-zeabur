@@ -1053,6 +1053,41 @@
   let _allCodes = [];
   let _filter   = 'todos';
 
+  // ── WATCHDOG: sessão travada/corrompida ──
+  // Se o navegador tiver um localStorage sujo/quebrado para este site
+  // (ex: Chrome guardando um token corrompido depois de algum comportamento
+  // estranho de cache), o Supabase pode nunca disparar onAuthStateChange
+  // corretamente — a tela fica presa em branco ou não sai do carregando.
+  // Em vez de o usuário precisar limpar dados do site manualmente, este
+  // watchdog espera alguns segundos por qualquer resposta de auth (login
+  // OU logout são ambos sinais de "funcionou"); se nada acontecer, assume
+  // que o storage está corrompido, limpa e recarrega automaticamente —
+  // uma única vez, para não entrar em loop de reload infinito.
+  (function setupAuthWatchdog() {
+    const RELOAD_FLAG = 'sfv_admin_watchdog_reloaded';
+    let resolved = false;
+    const markResolved = () => { resolved = true; };
+    window.addEventListener('sfv-auth-resolved', markResolved, { once: true });
+
+    setTimeout(() => {
+      if (resolved) return;
+      // Só permite 1 auto-reload por sessão de navegador — se limpar e
+      // ainda assim travar de novo, é outro problema (rede, Supabase fora
+      // do ar, etc), e forçar reload em loop só pioraria a experiência.
+      if (sessionStorage.getItem(RELOAD_FLAG)) return;
+      sessionStorage.setItem(RELOAD_FLAG, '1');
+      console.warn('Watchdog: sessão não resolveu a tempo, limpando storage local e recarregando.');
+      try {
+        Object.keys(localStorage).forEach(k => {
+          if (k.startsWith('sfv-') || k.startsWith('sb-') || k.includes('supabase')) {
+            localStorage.removeItem(k);
+          }
+        });
+      } catch (e) { /* segue mesmo se falhar */ }
+      window.location.reload();
+    }, 6000);
+  })();
+
   // ── AUTH ──
   // Se a URL tem #access_token (retorno do OAuth redirect), força o Supabase
   // a processar o token do hash explicitamente antes de qualquer outra coisa.
@@ -1066,6 +1101,9 @@
 
   db.auth.onAuthStateChange(async (event, session) => {
     _session = session;
+    // Qualquer evento de auth (login, logout, refresh) prova que o
+    // Supabase client está respondendo normalmente — desarma o watchdog.
+    window.dispatchEvent(new Event('sfv-auth-resolved'));
 
     // Link de recuperação de senha: precisa ser tratado ANTES da checagem
     // normal de admin abaixo, porque a sessão de recuperação também tem
@@ -1127,6 +1165,10 @@
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('appScreen').style.display   = 'block';
       document.getElementById('userEmail').textContent = adminRow.display_name || session.user.email;
+      // Login funcionou de ponta a ponta — reseta a flag do watchdog pra
+      // que, se um dia acontecer travamento de novo, ele possa agir de novo
+      // (sem isso, o watchdog só dispararia uma vez por instalação do navegador).
+      try { sessionStorage.removeItem('sfv_admin_watchdog_reloaded'); } catch (e) {}
       loadCodes();
     } else {
       document.getElementById('loginScreen').style.display = 'flex';
