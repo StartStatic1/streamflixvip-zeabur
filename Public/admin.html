@@ -1,622 +1,2510 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin — StreamFlixVIP</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     :root {
-      --bg: #08080f;
-      --surface: #111119;
+      --bg:       #08080f;
+      --surface:  #111119;
       --surface2: #1a1a26;
-      --text: #f0f0f8;
-      --muted: #8e8e9e;
-      --gold: #f5c518;
-      --green: #22c55e;
-      --red: #ef4444;
-      --accent: #7c3aed;
-      --sidebar-w: 240px;
-      --header-h: 70px;
+      --border:   rgba(255,255,255,0.08);
+      --text:     #f0f0f8;
+      --muted:    #8888aa;
+      --gold:     #f5c518;
+      --gold2:    #e6a800;
+      --green:    #22c55e;
+      --red:      #ef4444;
+      --accent:   #7c3aed;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-    body { background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+    }
 
-    /* Layout Structure */
-    .sidebar {
-      width: var(--sidebar-w);
-      background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
-      border-right: 1px solid var(--surface2);
-      height: 100vh;
-      position: fixed;
-      left: 0;
-      top: 0;
-      padding: 24px 16px;
+    /* ── LOGIN ── */
+    #loginScreen {
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
-      z-index: 1000;
-      transition: transform 0.3s ease;
-    }
-
-    .main-content {
-      margin-left: var(--sidebar-w);
-      flex: 1;
-      padding: 32px;
-      max-width: 1200px;
-      width: calc(100% - var(--sidebar-w));
-      min-height: 100vh;
-    }
-
-    /* Sidebar Navigation */
-    .logo { font-size: 1.2rem; font-weight: 800; color: var(--gold); margin-bottom: 40px; display: flex; align-items: center; gap: 8px; }
-    .logo span { color: var(--text); font-style: italic; }
-    .nav-group { margin-bottom: 24px; }
-    .nav-label { font-size: 0.7rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; padding-left: 12px; }
-    .nav-item {
-      display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 12px;
-      border-radius: 10px;
-      color: var(--text);
-      text-decoration: none;
-      font-size: 0.9rem;
-      font-weight: 500;
-      transition: all 0.2s;
-      cursor: pointer;
-      border: none;
-      background: none;
-      width: 100%;
-      text-align: left;
-      margin-bottom: 4px;
+      justify-content: center;
+      padding: 24px;
+      gap: 32px;
     }
-    .nav-item:hover { background: var(--surface2); }
-    .nav-item.active { background: var(--accent); color: white; box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3); }
+    .login-logo {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+    .login-logo em { font-style: italic; color: var(--gold); }
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 36px 28px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      align-items: center;
+    }
+    .login-badge {
+      background: linear-gradient(135deg, var(--gold), var(--gold2));
+      color: #000;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 100px;
+    }
+    .login-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      text-align: center;
+    }
+    .login-sub {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.5;
+    }
+    .auth-email-form { display: flex; flex-direction: column; gap: 10px; }
+    .auth-email-input, .auth-code-input {
+      width: 100%; padding: 13px 16px; border-radius: 12px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14);
+      color: #fff; font-size: 0.95rem; outline: none; transition: border-color .2s;
+      box-sizing: border-box; font-family: 'Outfit', sans-serif;
+    }
+    .auth-email-input:focus, .auth-code-input:focus { border-color: var(--accent, #8b5cf6); }
+    .auth-code-input { text-align: center; letter-spacing: 4px; font-weight: 700; }
+    .auth-email-btn {
+      width: 100%; padding: 13px 20px;
+      background: #fff; color: #111; border: none; border-radius: 12px;
+      font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      transition: opacity .2s; font-family: 'Outfit', sans-serif;
+    }
+    .auth-email-btn:hover { opacity: .88; }
+    .auth-email-btn:active { opacity: .75; }
+    .auth-email-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .auth-linkbtn {
+      background: none; border: none; color: var(--muted); font-size: 0.8rem;
+      text-decoration: underline; cursor: pointer; padding: 4px; margin: 0 auto;
+      font-family: 'Outfit', sans-serif;
+    }
+    .auth-msg { font-size: 0.82rem; text-align: center; min-height: 18px; }
+    .auth-msg.error { color: #ff6b6b; }
+    .auth-msg.success { color: #4ade80; }
 
-    /* Mobile Header */
-    .mobile-top-bar {
-      display: none;
+    /* ── MODAL NOVA SENHA (recuperação) ── */
+    .reset-pass-overlay {
+      display: block; position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
+      align-items: center; justify-content: center; padding: 24px;
+    }
+    .reset-pass-overlay.open { display: flex; }
+
+    /* ── APP ── */
+    #appScreen { display: block; }
+
+    /* ── BOTÃO VOLTAR (ADICIONADO) ── */
+    .btn-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: all 0.2s;
+      font-family: 'Outfit', sans-serif;
+    }
+    .btn-back:hover { color: var(--text); border-color: var(--gold); }
+
+    header {
       position: sticky;
       top: 0;
-      width: 100%;
-      height: var(--header-h);
-      background: var(--surface);
-      border-bottom: 1px solid var(--surface2);
-      z-index: 900;
-      padding: 0 20px;
+      z-index: 100;
+      background: rgba(8,8,15,0.92);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
     }
-    .menu-toggle {
-      background: none;
-      border: none;
-      color: var(--text);
-      font-size: 1.5rem;
+    .header-logo { font-size: 1.1rem; font-weight: 800; }
+    .header-logo em { font-style: italic; color: var(--gold); }
+    .header-badge {
+      background: rgba(245,197,24,0.15);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 100px;
+    }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .user-info { font-size: 0.8rem; color: var(--muted); display: block; }
+    @media(min-width:480px){ .user-info { display: block; } }
+    .btn-signout {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 8px;
       cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      transition: color .2s;
+    }
+    .btn-signout:hover { color: var(--text); }
+
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
     }
 
-    /* Header & Top Bar */
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; flex-wrap: wrap; gap: 16px; }
-    .page-title h1 { font-size: 1.8rem; font-weight: 800; }
-    .page-title p { color: var(--muted); font-size: 0.9rem; margin-top: 4px; }
-    .user-actions { display: flex; align-items: center; gap: 16px; }
-    .btn-signout { background: var(--surface2); border: 1px solid var(--red); color: var(--red); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; }
-    .btn-signout:hover { background: var(--red); color: white; }
-
-    /* Components */
-    .card { background: var(--surface); border: 1px solid var(--surface2); border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); transition: transform 0.2s; }
-    .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
-    
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
-    .stat-card { background: var(--surface2); padding: 24px; border-radius: 16px; border-left: 4px solid var(--accent); }
-    .stat-card.gold { border-left-color: var(--gold); }
-    .stat-card.green { border-left-color: var(--green); }
-    .stat-card.red { border-left-color: var(--red); }
-    .stat-val { font-size: 2rem; font-weight: 800; margin-bottom: 4px; }
-    .stat-label { font-size: 0.85rem; color: var(--muted); font-weight: 600; }
-
-    /* Forms & Inputs */
-    label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: var(--muted); }
-    input, select, textarea {
-      width: 100%; background: var(--surface2); border: 1px solid #2a2a3a; border-radius: 8px;
-      padding: 12px; color: white; font-size: 0.9rem; transition: 0.2s; outline: none;
+    /* ── STATS ROW ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
     }
-    input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2); }
-    .btn-primary { background: var(--gold); color: black; border: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; }
-    .btn-primary:hover { opacity: 0.9; transform: scale(1.02); }
-    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid #2a2a3a; padding: 12px 24px; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; }
-    .btn-secondary:hover { background: #2a2a3a; }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .stat-value.gold { color: var(--gold); }
+    .stat-value.green { color: var(--green); }
+    .stat-value.red { color: var(--red); }
+    .stat-label { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
 
-    /* Tables */
-    .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid var(--surface2); }
-    table { width: 100%; border-collapse: collapse; text-align: left; min-width: 600px; }
-    th { background: var(--surface2); padding: 14px 16px; font-size: 0.8rem; font-weight: 700; color: var(--muted); text-transform: uppercase; }
-    td { padding: 14px 16px; border-top: 1px solid var(--surface2); font-size: 0.9rem; }
+    /* ── CARD ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-title span {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      background: var(--surface2);
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    /* ── GERADOR ── */
+    .gen-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media(max-width:480px){ .gen-grid { grid-template-columns: 1fr; } }
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+    select, input[type="number"], input[type="text"] {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: 0.9rem;
+      font-family: 'Outfit', sans-serif;
+      outline: none;
+      transition: border-color .2s;
+    }
+    select:focus, input:focus { border-color: var(--gold); }
+
+    .prefix-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .prefix-row input { flex: 1; }
+    .prefix-hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--gold), var(--gold2));
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 24px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      transition: opacity .2s, transform .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary:hover { opacity: .88; }
+    .btn-primary:active { transform: scale(0.97); }
+    .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 11px 24px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      width: 100%;
+    }
+    .btn-secondary:hover { background: var(--surface3, var(--surface2)); }
+
+    /* ── RESULTADO GERAÇÃO ── */
+    #genResult { display: block; }
+    .gen-result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .gen-result-title { font-size: 0.9rem; font-weight: 700; color: var(--green); }
+    .btn-copy-all {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 7px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      transition: border-color .2s;
+    }
+    .btn-copy-all:hover { border-color: var(--gold); }
+    .codes-textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 12px;
+      font-size: 0.82rem;
+      font-family: 'Courier New', monospace;
+      resize: vertical;
+      min-height: 120px;
+      outline: none;
+    }
+
+    /* ── FILTROS LISTA ── */
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .filter-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 100px;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      transition: all .2s;
+    }
+    .filter-btn.active {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: #000;
+    }
+    .search-input {
+      flex: 1;
+      min-width: 160px;
+    }
+
+    /* ── TABELA ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.83rem; }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: .8px;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
     tr:hover td { background: rgba(255,255,255,0.02); }
 
-    /* Badges */
-    .badge { padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; }
+    .code-cell {
+      font-family: 'Courier New', monospace;
+      font-weight: 700;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .copy-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: color .15s;
+      flex-shrink: 0;
+    }
+    .copy-btn:hover { color: var(--gold); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
     .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
-    .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
-    .badge-gray { background: rgba(142,142,158,0.15); color: var(--muted); }
+    .badge-gold  { background: rgba(245,197,24,0.15); color: var(--gold); }
+    .badge-red   { background: rgba(239,68,68,0.15);  color: var(--red); }
+    .badge-gray  { background: rgba(136,136,170,0.12); color: var(--muted); }
 
-    /* Results Grid */
-    .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; margin-top: 20px; }
-    .result-card { background: var(--surface2); border-radius: 12px; overflow: hidden; cursor: pointer; transition: 0.2s; border: 1px solid transparent; position: relative; }
-    .result-card img { width: 100%; height: 200px; object-fit: cover; }
-    .result-card .info { padding: 10px; }
-    .result-card .t { font-size: 0.85rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .status-pill { position: absolute; top: 8px; right: 8px; font-size: 0.65rem; padding: 4px 8px; border-radius: 4px; font-weight: 800; }
+    .action-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'Outfit', sans-serif;
+      transition: all .2s;
+    }
+    .action-btn:hover { border-color: var(--red); color: var(--red); }
+    .action-btn.reactivate:hover { border-color: var(--green); color: var(--green); }
 
-    /* Overlay for mobile sidebar */
-    .sidebar-overlay {
-      display: none;
+    .empty-state {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* toast */
+    #toast {
       position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.7);
-      z-index: 950;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 20px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .25s, transform .25s;
+      z-index: 999;
+      white-space: nowrap;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── TABS DO PAINEL ── */
+    .panel-tabs {
+      display: flex; gap: 8px; padding: 14px 24px 0;
+      overflow-x: auto; border-bottom: 1px solid var(--border);
+    }
+    .panel-tab {
+      background: none; border: none; color: var(--muted);
+      font-family: 'Outfit', sans-serif; font-size: 0.88rem; font-weight: 600;
+      padding: 10px 16px; cursor: pointer; white-space: nowrap;
+      border-bottom: 2px solid transparent; transition: all .2s;
+    }
+    .panel-tab:hover { color: var(--text); }
+    .panel-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+    .tab-panel { padding-top: 20px; }
+
+    /* ── ABA USUÁRIOS / FILMES: tabela compartilha estilo com .table-wrap já existente ── */
+    .table-wrap table th { text-align: left; }
+
+    /* ── BUSCA TMDB (aba Filmes) ── */
+    .search-box { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .search-box select {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      font-family: 'Outfit', sans-serif; font-size: 0.86rem; padding: 11px 12px;
+      border-radius: 9px; outline: none; flex: 0 0 auto;
+    }
+    .search-box input {
+      flex: 1 1 200px; min-width: 0; background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text); font-family: 'Outfit', sans-serif; font-size: 0.9rem;
+      padding: 11px 14px; border-radius: 9px; outline: none;
+    }
+    .search-box button {
+      background: var(--accent); border: none; color: #fff; font-family: 'Outfit', sans-serif;
+      font-weight: 700; font-size: 0.86rem; padding: 11px 18px; border-radius: 9px; cursor: pointer;
+      flex: 0 0 auto;
     }
 
-    /* RESPONSIVE BREAKPOINTS */
-    @media (max-width: 1024px) {
-      .sidebar { transform: translateX(-100%); }
-      .sidebar.open { transform: translateX(0); }
-      .main-content { margin-left: 0; width: 100%; padding: 20px; }
-      .mobile-top-bar { display: flex; }
-      .sidebar-overlay.open { display: block; }
+    .results-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap: 11px;
     }
-
-    @media (max-width: 640px) {
-      .stats-grid { grid-template-columns: 1fr; }
-      .header { flex-direction: column; align-items: flex-start; }
-      .user-actions { width: 100%; justify-content: space-between; }
-      .page-title h1 { font-size: 1.5rem; }
-      .search-row { flex-direction: column; }
-      .search-row select, .search-row button { width: 100%; }
+    .result-card {
+      background: var(--surface2); border: 1px solid var(--border); border-radius: 11px;
+      overflow: hidden; cursor: pointer; transition: all .2s;
     }
+    .result-card:hover { border-color: var(--accent); }
+    .result-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; background: var(--surface); }
+    .result-card .ph { width: 100%; aspect-ratio: 2/3; display: flex; align-items: center; justify-content: center; font-size: 2rem; background: var(--surface); }
+    .result-card .info { padding: 8px 9px; }
+    .result-card .info .t { font-size: 0.78rem; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result-card .info .y { font-size: 0.7rem; color: var(--muted); margin-top: 3px; }
+    .result-card .badge { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 2px 7px; border-radius: 5px; background: rgba(245,197,24,0.15); color: var(--gold); margin-top: 5px; }
+    .result-card .badge.has-sources { background: rgba(34,197,94,0.15); color: var(--green); }
 
-    /* Login Screen */
-    #loginScreen { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-    .login-card { width: 90%; max-width: 400px; padding: 32px; background: var(--surface); border-radius: 24px; border: 1px solid var(--surface2); }
-
-    /* Modal */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
-    .modal-overlay.open { display: flex; }
-    .modal { background: var(--surface); width: 100%; max-width: 500px; border-radius: 20px; padding: 24px; border: 1px solid var(--surface2); position: relative; max-height: 90vh; overflow-y: auto; }
-
-    /* Toast */
-    #toast { position: fixed; bottom: 24px; right: 24px; background: var(--accent); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; transform: translateY(100px); transition: 0.3s; z-index: 3000; }
-    #toast.show { transform: translateY(0); }
-
-    /* Grouped Sources */
-    .title-group { background: var(--surface2); border-radius: 12px; margin-bottom: 12px; overflow: hidden; border: 1px solid #2a2a3a; }
-    .title-group-head { padding: 16px; display: flex; align-items: center; gap: 16px; cursor: pointer; }
-    .title-group-head img { width: 40px; height: 60px; object-fit: cover; border-radius: 4px; }
-    .title-group-info { flex: 1; }
-    .title-group-chevron { font-size: 1.2rem; color: var(--muted); transition: 0.2s; }
+    /* ── GRUPOS DE TÍTULO (fontes cadastradas) ── */
+    .title-group { background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+    .title-group-head { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+    .title-group-head:hover { background: rgba(255,255,255,0.03); }
+    .title-group-head img { width: 40px; height: 60px; object-fit: cover; border-radius: 6px; background: var(--surface); flex-shrink: 0; }
+    .title-group-head .ph { width: 40px; height: 60px; border-radius: 6px; background: var(--surface); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+    .title-group-info { flex: 1; min-width: 0; }
+    .title-group-info .name { font-size: 0.92rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .title-group-info .meta { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
+    .title-group-chevron { color: var(--muted); font-size: 0.9rem; transition: transform .2s; flex-shrink: 0; }
     .title-group.open .title-group-chevron { transform: rotate(180deg); }
-    .title-group-body { display: none; padding: 16px; border-top: 1px solid #2a2a3a; }
+    .title-group-body { display: block; border-top: 1px solid var(--border); }
     .title-group.open .title-group-body { display: block; }
-    .source-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #2a2a3a; }
-    .source-row:last-child { border-bottom: none; }
-    .source-row-main { flex: 1; min-width: 0; }
-    .source-label-text { font-size: 0.85rem; font-weight: 600; }
-    .source-url-text { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-    .row-actions { display: flex; gap: 8px; }
-    .row-actions button { background: none; border: 1px solid var(--surface2); color: var(--text); padding: 6px 10px; border-radius: 6px; font-size: 0.7rem; cursor: pointer; }
+    .title-group-add { display: block; width: 100%; text-align: left; background: none; border: none; color: var(--gold); font-family: 'Outfit', sans-serif; font-size: 0.8rem; font-weight: 600; padding: 11px 14px; cursor: pointer; border-top: 1px solid var(--border); }
+
+    .source-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+    .source-row:first-child { border-top: none; }
+    .source-row-main { flex: 1; min-width: 120px; }
+    .source-ep-tag { font-size: 0.72rem; font-weight: 700; color: var(--muted); min-width: 42px; }
+    .source-label-text { font-size: 0.84rem; font-weight: 600; }
+    .source-url-text { font-size: 0.72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: block; }
+    .pill { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; flex-shrink: 0; }
+    .pill.active { background: rgba(34,197,94,0.15); color: var(--green); }
+    .pill.inactive { background: rgba(136,136,170,0.15); color: var(--muted); }
+    .row-actions { display: flex; gap: 6px; flex-shrink: 0; width: 100%; justify-content: flex-end; }
+    .row-actions button { background: var(--surface); border: 1px solid var(--border); color: var(--muted); font-family: 'Outfit', sans-serif; font-size: 0.7rem; font-weight: 600; padding: 6px 9px; border-radius: 6px; cursor: pointer; }
+    .row-actions button:hover { color: var(--text); border-color: var(--accent); }
+    .row-actions button.danger:hover { color: var(--red); border-color: var(--red); }
+
+    /* ── MODAL: cadastrar/editar fonte de filme ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(4,4,8,0.92); z-index: 200; display: block; align-items: center; justify-content: center; padding: 18px; overflow-y: auto; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; padding: 24px; }
+    .modal-head { display: flex; gap: 14px; margin-bottom: 18px; align-items: flex-start; }
+    .modal label { display: block; font-size: 0.76rem; color: var(--muted); font-weight: 600; margin-bottom: 6px; margin-top: 14px; }
+    .modal input, .modal select { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: 'Outfit', sans-serif; font-size: 0.88rem; padding: 11px 12px; border-radius: 8px; outline: none; }
+    #sourceUrlInput { font-size: 0.78rem; font-family: 'Courier New', monospace; }
+    @media (max-width: 640px) {
+      .panel-tabs { padding: 14px 14px 0; }
+      .search-box input { flex-basis: 140px; }
+    }
   </style>
 </head>
 <body>
 
-  <div id="loginScreen">
-    <div class="login-card">
-      <div class="logo" style="justify-content: center; margin-bottom: 30px;">Stream<span>Flix</span>VIP</div>
-      <h2 style="text-align: center; margin-bottom: 24px;">Painel Admin</h2>
-      <label>E-mail</label>
-      <input type="email" id="adminEmailInput" placeholder="admin@exemplo.com" style="margin-bottom: 16px;">
-      <label>Senha</label>
-      <input type="password" id="adminPasswordInput" placeholder="••••••••" style="margin-bottom: 24px;">
-      <button class="btn-primary" id="adminPasswordBtn" onclick="signInAdminPassword()" style="width: 100%;">Entrar</button>
-      <div id="adminAuthMsg" class="auth-msg"></div>
-    </div>
+<!-- ── LOGIN ── -->
+<div id="loginScreen" style="display:none;">
+  <div class="login-logo">Stream<em>Flix</em>VIP</div>
+  <div class="login-card">
+    <div class="login-badge">⚙️ Admin</div>
+    <div class="login-title">Painel de Administração</div>
+    <div class="login-sub">Acesso restrito. Entre com seu e-mail de administrador.</div>
+
+    <form class="auth-email-form" id="adminPasswordStep" onsubmit="event.preventDefault();signInAdminPassword();">
+      <input type="email" id="adminEmailInput" class="auth-email-input" placeholder="Seu e-mail" autocomplete="email" required />
+      <input type="password" id="adminPasswordInput" class="auth-email-input" placeholder="Sua senha" autocomplete="current-password" required />
+      <button type="submit" class="auth-email-btn" id="adminPasswordBtn">Entrar</button>
+    </form>
+
+    <div class="auth-msg" id="adminAuthMsg"></div>
   </div>
+</div>
 
-  <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-
-  <div class="mobile-top-bar">
-    <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-    <div class="logo" style="margin-bottom:0">Stream<span>Flix</span>VIP</div>
-    <div style="width: 24px;"></div>
+<!-- ── MODAL NOVA SENHA (link de recuperação) ── -->
+<div class="reset-pass-overlay" id="resetPassModal">
+  <div class="login-card">
+    <div class="login-badge">🔑 Recuperação</div>
+    <div class="login-title">Definir nova senha</div>
+    <div class="login-sub">Você abriu um link de recuperação de senha. Digite a nova senha para continuar.</div>
+    <form class="auth-email-form" id="resetPassForm" style="width:100%" onsubmit="event.preventDefault();submitNewPassword();">
+      <input type="password" id="resetPassInput" class="auth-email-input" placeholder="Nova senha (mínimo 6 caracteres)" autocomplete="new-password" minlength="6" required />
+      <button type="submit" class="auth-email-btn" id="resetPassBtn">Salvar nova senha</button>
+    </form>
+    <div class="auth-msg" id="resetPassMsg"></div>
   </div>
+</div>
 
-  <aside class="sidebar" id="sidebar">
-    <div class="logo">Stream<span>Flix</span>VIP</div>
-    
-    <div class="nav-group">
-      <div class="nav-label">Menu</div>
-      <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
-      <button class="nav-item" data-tab="codes" onclick="switchTab('codes')">🎟️ Códigos VIP</button>
-      <button class="nav-item" data-tab="users" onclick="switchTab('users')">👥 Usuários</button>
-      <button class="nav-item" data-tab="movies" onclick="switchTab('movies')">🎬 Filmes & Séries</button>
+<!-- ── APP ── -->
+<div id="appScreen" style="display:block;">
+  <header>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="header-logo">Stream<em>Flix</em>VIP</div>
+      <div class="header-badge">Admin</div>
     </div>
-
-    <div class="nav-group">
-      <div class="nav-label">Configuração</div>
-      <button class="nav-item" data-tab="ads" onclick="switchTab('ads')">📢 Anúncios</button>
-      <button class="nav-item" data-tab="iptv" onclick="switchTab('iptv')">📡 IPTV</button>
-      <button class="nav-item" data-tab="embeds" onclick="switchTab('embeds')">🔗 Embeds</button>
+    <div class="header-right">
+      <div class="user-info" id="userEmail"></div>
+      <button class="btn-signout" onclick="doSignOut()">Sair</button>
     </div>
+  </header>
 
-    <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--surface2);">
-      <button class="btn-signout" style="width:100%" onclick="doSignOut()">Sair da Conta</button>
-    </div>
-  </aside>
+  <nav class="panel-tabs">
+    <button class="panel-tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 Dashboard</button>
+    <button class="panel-tab" data-tab="codes" onclick="switchTab('codes')">🎟️ Códigos VIP</button>
+    <button class="panel-tab" data-tab="users" onclick="switchTab('users')">👥 Usuários</button>
+    <button class="panel-tab" data-tab="movies" onclick="switchTab('movies')">🎬 Filmes &amp; Séries</button>
+    <button class="panel-tab" data-tab="ads" onclick="switchTab('ads')">📢 Anúncios</button>
+    <button class="panel-tab" data-tab="iptv" onclick="switchTab('iptv')">📡 IPTV</button>
+    <button class="panel-tab" data-tab="embeds" onclick="switchTab('embeds')">🔗 Embeds</button>
+  </nav>
 
-  <main class="main-content" id="appScreen" style="display:none">
-    <header class="header">
-      <div class="page-title">
-        <h1 id="pageHeading">Dashboard</h1>
-        <p id="pageSubHeading">Visão geral do sistema</p>
-      </div>
-      <div class="user-actions" id="desktopUserActions">
-        <span id="userEmail" style="font-size: 0.9rem; font-weight: 600; color: var(--gold);"></span>
-      </div>
-    </header>
-
-    <!-- DASHBOARD -->
+  <main>
+    <button class="btn-back" onclick="window.history.back()">← Voltar</button>
+    <!-- ════════════ ABA: DASHBOARD ════════════ -->
     <section id="tab-dashboard" class="tab-panel">
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-val" id="dashTotalSources">0</div><div class="stat-label">Filmes/Séries</div></div>
-        <div class="stat-card gold"><div class="stat-val" id="dashActiveCodes">0</div><div class="stat-label">Códigos Ativos</div></div>
-        <div class="stat-card green"><div class="stat-val" id="dashTotalUsers">0</div><div class="stat-label">Usuários</div></div>
-        <div class="stat-card red"><div class="stat-val" id="dashActiveAds">0</div><div class="stat-label">Anúncios Ativos</div></div>
+      <div class="stats-row" id="dashboardStatsRow">
+        <div class="stat-card">
+          <div class="stat-value gold" id="dashTotalSources">—</div>
+          <div class="stat-label">Filmes/Séries com fonte</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="dashTotalIptv">—</div>
+          <div class="stat-label">Fontes IPTV ativas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="dashActiveCodes">—</div>
+          <div class="stat-label">Códigos VIP ativos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="dashTotalUsers">—</div>
+          <div class="stat-label">Usuários registrados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="dashActiveAds">—</div>
+          <div class="stat-label">Anúncios ativos</div>
+        </div>
+        <div class="stat-card" id="dashUnmatchedCard">
+          <div class="stat-value" id="dashUnmatched">—</div>
+          <div class="stat-label">IPTV não identificados</div>
+        </div>
       </div>
-      
-      <div class="card">
-        <div class="card-title">🚀 Ações Rápidas</div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
-          <button class="btn-secondary" onclick="switchTab('movies')">🎬 Cadastrar Filme</button>
-          <button class="btn-secondary" onclick="switchTab('codes')">🎟️ Gerar VIPs</button>
-          <button class="btn-secondary" onclick="switchTab('ads')">📢 Novo Anúncio</button>
-          <button class="btn-secondary" onclick="switchTab('embeds')">🔗 Gerenciar Embeds</button>
+
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">🏆 Top fontes por quantidade de filmes</div>
+        <div class="table-wrap" id="dashTopSourcesWrap">
+          <p style="color:var(--muted);font-size:0.85rem;padding:20px 0;text-align:center">Carregando...</p>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">⚡ Atalhos rápidos</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">
+          <button class="btn-secondary" onclick="switchTab('movies')">🎬 Cadastrar filme/série manualmente</button>
+          <button class="btn-secondary" onclick="switchTab('iptv')">📡 Gerenciar fontes IPTV</button>
+          <button class="btn-secondary" onclick="switchTab('codes')">🎟️ Gerar códigos VIP</button>
         </div>
       </div>
     </section>
 
-    <!-- CÓDIGOS VIP -->
+    <!-- ════════════ ABA: CÓDIGOS VIP ════════════ -->
     <section id="tab-codes" class="tab-panel" style="display:none">
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-val" id="statTotal">0</div><div class="stat-label">Total</div></div>
-        <div class="stat-card green"><div class="stat-val" id="statAvailable">0</div><div class="stat-label">Disponíveis</div></div>
-        <div class="stat-card red"><div class="stat-val" id="statUsed">0</div><div class="stat-label">Usados</div></div>
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value gold" id="statTotal">—</div>
+        <div class="stat-label">Total de códigos</div>
       </div>
-      <div class="card">
-        <div class="card-title">✨ Gerar Novos Códigos</div>
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px;">
-          <div><label>Plano</label><select id="genPlan" onchange="onPlanChange()"><option value="1">Teste 1h</option><option value="48">48 horas</option><option value="720" selected>30 dias</option><option value="876000">Vitalício</option><option value="custom">Personalizado...</option></select></div>
-          <div id="customDurationWrap" style="display:none"><label>Horas</label><input type="number" id="genCustomHours" value="48"></div>
-          <div><label>Quantidade</label><input type="number" id="genQty" value="10" min="1" max="500"></div>
-          <div><label>Prefixo</label><input type="text" id="genPrefix" placeholder="ex: PROMO"></div>
-          <div style="display: flex; align-items: flex-end;"><button class="btn-primary" id="btnGerar" onclick="gerarCodigos()" style="width: 100%;">Gerar</button></div>
+      <div class="stat-card">
+        <div class="stat-value green" id="statAvailable">—</div>
+        <div class="stat-label">Disponíveis</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value red" id="statUsed">—</div>
+        <div class="stat-label">Utilizados</div>
+      </div>
+    </div>
+
+    <!-- Gerador -->
+    <div class="card">
+      <div class="card-title">🎟️ Gerar códigos VIP</div>
+      <div class="gen-grid">
+        <div>
+          <label>Plano</label>
+          <select id="genPlan" onchange="onPlanChange()">
+            <option value="720">30 dias — R$5,99</option>
+            <option value="876000">Vitalício — R$49,90</option>
+            <option value="1">Teste 1 hora</option>
+            <option value="custom">Personalizado...</option>
+          </select>
         </div>
-        <div id="genResult" style="display:none; margin-top: 20px;"><label id="genResultTitle" style="color: var(--green);">✅ Códigos gerados:</label><textarea id="codesTextarea" rows="4" readonly style="font-family: monospace; font-size: 0.8rem;"></textarea><button class="btn-secondary" onclick="copyAll()" style="margin-top: 8px;">Copiar Tudo</button></div>
+        <div>
+          <label>Quantidade</label>
+          <input type="number" id="genQty" value="1" min="1" max="500"/>
+        </div>
+        <div id="customDurationWrap" style="display:none">
+          <label>Horas personalizadas</label>
+          <input type="number" id="genCustomHours" value="48" min="1"/>
+        </div>
+        <div>
+          <label>Prefixo (opcional)</label>
+          <input type="text" id="genPrefix" placeholder="ex: JULHO, AMIGO" maxlength="12"/>
+          <div class="prefix-hint">Código final: JULHO-A3F2K1</div>
+        </div>
       </div>
-      <div class="card">
-        <div class="card-title">📋 Lista de Códigos (<span id="listCount">0</span>)</div>
-        <div class="search-row"><input type="text" id="searchInput" placeholder="Filtrar código..." oninput="renderTable()"><div style="display: flex; gap: 8px;"><button class="btn-secondary filter-btn active" onclick="setFilter('todos', this)">Todos</button><button class="btn-secondary filter-btn" onclick="setFilter('disponivel', this)">Disponíveis</button></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Código</th><th>Plano</th><th>Status</th><th>Ações</th></tr></thead><tbody id="codesTableBody"></tbody></table></div>
+      <div style="margin-top:16px">
+        <button class="btn-primary" onclick="gerarCodigos()" id="btnGerar">
+          ✨ Gerar
+        </button>
       </div>
+
+      <!-- Resultado -->
+      <div id="genResult" style="margin-top:20px">
+        <div class="gen-result-header">
+          <div class="gen-result-title" id="genResultTitle"></div>
+          <button class="btn-copy-all" onclick="copyAll()">📋 Copiar todos</button>
+        </div>
+        <textarea class="codes-textarea" id="codesTextarea" readonly></textarea>
+      </div>
+    </div>
+
+    <!-- Lista -->
+    <div class="card">
+      <div class="card-title">📋 Códigos <span id="listCount">0</span></div>
+      <div class="filter-row">
+        <button class="filter-btn active" onclick="setFilter('todos', this)">Todos</button>
+        <button class="filter-btn" onclick="setFilter('disponivel', this)">Disponíveis</button>
+        <button class="filter-btn" onclick="setFilter('usado', this)">Usados</button>
+        <button class="filter-btn" onclick="setFilter('inativo', this)">Inativos</button>
+        <input type="text" class="search-input" placeholder="Buscar código..." oninput="renderTable()" id="searchInput"/>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Plano</th>
+              <th>Status</th>
+              <th>Criado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="codesTableBody">
+            <tr><td colspan="5" class="loading">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
     </section>
 
-    <!-- USUÁRIOS -->
+    <!-- ════════════ ABA: USUÁRIOS ════════════ -->
     <section id="tab-users" class="tab-panel" style="display:none">
-      <div class="stats-grid">
-        <div class="stat-card"><div class="stat-val" id="statUsersTotal">0</div><div class="stat-label">Total</div></div>
-        <div class="stat-card green"><div class="stat-val" id="statUsersVip">0</div><div class="stat-label">VIPs Ativos</div></div>
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-value gold" id="statUsersTotal">—</div>
+          <div class="stat-label">Total de usuários</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value green" id="statUsersVip">—</div>
+          <div class="stat-label">VIP ativo agora</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value red" id="statUsersFree">—</div>
+          <div class="stat-label">Sem plano (grátis)</div>
+        </div>
       </div>
+
       <div class="card">
-        <div class="card-title">👥 Usuários Cadastrados (<span id="usersListCount">0</span>)</div>
-        <div class="search-row"><input type="text" id="userSearchInput" placeholder="Buscar email..." oninput="renderUsersTable()"></div>
-        <div class="table-wrap"><table><thead><tr><th>Usuário</th><th>Status</th><th>Expira em</th><th>Ações</th></tr></thead><tbody id="usersTableBody"></tbody></table></div>
+        <div class="card-title">👥 Usuários <span id="usersListCount">0</span></div>
+        <div class="filter-row">
+          <button class="filter-btn active" onclick="setUserFilter('todos', this)">Todos</button>
+          <button class="filter-btn" onclick="setUserFilter('vip', this)">VIP ativo</button>
+          <button class="filter-btn" onclick="setUserFilter('expirado', this)">Expirado</button>
+          <button class="filter-btn" onclick="setUserFilter('gratis', this)">Grátis</button>
+          <input type="text" class="search-input" placeholder="Buscar por email ou nome..." oninput="renderUsersTable()" id="userSearchInput"/>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Usuário</th>
+                <th>Status</th>
+                <th>Expira em</th>
+                <th>Último código</th>
+                <th>1º login</th>
+                <th>Último login</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr><td colspan="7" class="loading">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
-    <!-- FILMES & SÉRIES -->
+    <!-- ════════════ ABA: FILMES & SÉRIES ════════════ -->
     <section id="tab-movies" class="tab-panel" style="display:none">
-      <div class="card">
-        <div class="card-title">🔍 Pesquisa Inteligente (TMDB + Banco)</div>
-        <div class="search-row">
-          <select id="searchType"><option value="movie">Filme</option><option value="tv">Série</option></select>
-          <input type="text" id="movieSearchInput" placeholder="Buscar título...">
-          <button class="btn-primary" onclick="doUnifiedSearch()">Buscar</button>
-        </div>
-        <div class="results-grid" id="resultsGrid"></div>
+      <div class="search-box">
+        <select id="searchType">
+          <option value="movie">Filme</option>
+          <option value="tv">Série</option>
+        </select>
+        <input type="text" id="movieSearchInput" placeholder="Buscar título no TMDB..." />
+        <button onclick="doMovieSearch()">Buscar</button>
       </div>
-      <div class="card" id="recentSourcesCard">
-        <div class="card-title">🎬 Títulos Cadastrados</div>
-        <div class="search-row"><input type="text" id="filterInput" placeholder="Filtrar cadastrados..." oninput="renderGroupedSources()"></div>
+      <div class="results-grid" id="resultsGrid"></div>
+
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">🎬 Fontes cadastradas</div>
+        <input type="text" class="search-input" placeholder="Filtrar por título..." id="filterInput" oninput="renderGroupedSources()" style="margin-bottom:14px"/>
         <div id="recentSourcesWrap"></div>
       </div>
     </section>
 
-    <!-- ANÚNCIOS -->
+    <!-- ════════════ ABA: ANÚNCIOS ════════════ -->
     <section id="tab-ads" class="tab-panel" style="display:none">
       <div class="card">
-        <div class="card-title">📢 Novo Anúncio</div>
-        <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
-          <div><label>Nome</label><input type="text" id="adNameInput"></div>
-          <div><label>Tipo</label><select id="adTypeInput"><option value="popunder">Pop-under</option><option value="banner">Banner</option></select></div>
-          <div><label>Conteúdo</label><textarea id="adContentInput" rows="4"></textarea></div>
+        <div class="card-title">📢 Novo anúncio</div>
+        <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">
+          Cole aqui um script (ex: <code>&lt;script async src="..."&gt;&lt;/script&gt;</code>) ou uma URL direta
+          de pop-under. VIP nunca vê nenhum anúncio, independente do que estiver cadastrado aqui.
+        </p>
+
+        <label>Nome (só pra você identificar)</label>
+        <input type="text" id="adNameInput" placeholder="ex: Monetag Pop-under"/>
+
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <div style="flex:1">
+            <label>Tipo de anúncio</label>
+            <select id="adTypeInput">
+              <option value="popunder">Pop-under</option>
+              <option value="direct_link">Link Direto</option>
+              <option value="banner_mobile">Banner Mobile</option>
+              <option value="banner_desktop">Banner Desktop</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label>Onde aparece</label>
+            <select id="adPlacementInput">
+              <option value="watch">Só na página de assistir</option>
+              <option value="global">Todo o site</option>
+            </select>
+          </div>
         </div>
-        <button class="btn-primary" onclick="saveAd()" style="margin-top: 20px;">Salvar Anúncio</button>
+
+        <div style="margin-top:14px">
+          <label>Formato do conteúdo</label>
+          <select id="adContentTypeInput" onchange="updateAdContentPlaceholder()">
+            <option value="script">Script (tag &lt;script&gt; completa)</option>
+            <option value="url">URL direta (link do pop-under/banner)</option>
+          </select>
+        </div>
+
+        <label style="margin-top:14px">Código ou link do anúncio</label>
+        <textarea id="adContentInput" rows="4" placeholder='Cole a tag <script> ou o link direto aqui...' style="width:100%;font-family:'Courier New',monospace;font-size:0.78rem;resize:vertical"></textarea>
+
+        <label style="margin-top:14px">Prioridade (maior = aparece primeiro se houver mais de um do mesmo tipo)</label>
+        <input type="number" id="adPriorityInput" value="0"/>
+
+        <button class="btn-primary" style="margin-top:16px" id="saveAdBtn" onclick="saveAd()">Salvar anúncio</button>
+        <button class="btn-secondary" style="margin-top:8px;display:none" id="cancelEditAdBtn" onclick="resetAdForm()">Cancelar edição</button>
       </div>
-      <div class="card"><div class="card-title">📋 Anúncios</div><div class="table-wrap" id="adsListWrap"></div></div>
+
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">📋 Anúncios cadastrados</div>
+        <div class="table-wrap" id="adsListWrap"></div>
+      </div>
     </section>
 
-    <!-- IPTV -->
+    <!-- ════════════ ABA: IPTV (playlists M3U/Xtream) ════════════ -->
     <section id="tab-iptv" class="tab-panel" style="display:none">
       <div class="card">
-        <div class="card-title">📡 Fonte IPTV</div>
-        <div style="display: grid; grid-template-columns: 1fr; gap: 16px;">
-          <div><label>Nome</label><input type="text" id="iptvNameInput"></div>
-          <div><label>Host</label><input type="text" id="iptvHostInput"></div>
-          <div><label>Usuário</label><input type="text" id="iptvUserInput"></div>
-          <div><label>Senha</label><input type="password" id="iptvPassInput"></div>
+        <div class="card-title">📡 Nova fonte IPTV</div>
+        <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">
+          Cadastre uma playlist Xtream. O sistema sincroniza automaticamente todo dia,
+          casando os filmes com o TMDB e adicionando como um servidor separado
+          (nome = o que você colocar abaixo) na tela de cada filme.
+        </p>
+
+        <label>Nome (aparece como nome do servidor pro usuário)</label>
+        <input type="text" id="iptvNameInput" placeholder="ex: UniTV Lite"/>
+
+        <label style="margin-top:14px">Host (sem /get.php, sem usuário/senha)</label>
+        <input type="text" id="iptvHostInput" placeholder="ex: http://sventank.com"/>
+
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <div style="flex:1">
+            <label>Usuário</label>
+            <input type="text" id="iptvUserInput" placeholder="usuário Xtream"/>
+          </div>
+          <div style="flex:1">
+            <label>Senha</label>
+            <input type="text" id="iptvPassInput" placeholder="senha Xtream"/>
+          </div>
         </div>
-        <button class="btn-primary" onclick="saveIptvSource()" style="margin-top: 20px;">Salvar</button>
+
+        <label style="margin-top:14px">Prioridade (menor número aparece primeiro)</label>
+        <input type="number" id="iptvPriorityInput" value="5"/>
+
+        <button class="btn-primary" style="margin-top:16px" id="saveIptvBtn" onclick="saveIptvSource()">Salvar fonte</button>
       </div>
-      <div class="card"><div class="card-title">📋 Fontes IPTV</div><div class="table-wrap" id="iptvListWrap"></div></div>
+
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">📋 Fontes cadastradas</div>
+        <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">
+          O progresso avança sozinho (cron diário). "Pausar" impede novas sincronizações
+          sem apagar os filmes já cadastrados. "Excluir" remove a fonte E todos os
+          filmes que vieram dela — use quando a assinatura vencer de vez.
+        </p>
+        <div class="table-wrap" id="iptvListWrap"></div>
+      </div>
     </section>
 
-    <!-- EMBEDS -->
     <section id="tab-embeds" class="tab-panel" style="display:none">
       <div class="card">
-        <div class="card-title">🔗 Novo Parceiro Embed</div>
-        <label>Nome do Parceiro</label>
-        <input type="text" id="embedLabelInput" placeholder="ex: Site do João">
-        <label style="margin-top:14px">Domínio Autorizado</label>
-        <input type="text" id="embedDomainInput" placeholder="ex: parceiro.com">
-        <button class="btn-primary" onclick="saveEmbedPartner()" style="margin-top: 20px;">Gerar Key</button>
+        <div class="card-title">🔗 Novo parceiro de embed</div>
+        <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">
+          Gera uma key única pra distribuir o player (/embed) num site de terceiro via iframe.
+          Domínio é opcional — se preenchido, o player só toca naquele site; se vazio, funciona em qualquer lugar
+          (útil pra testar, mas recomendado travar depois). Desativar aqui derruba o player na hora,
+          em qualquer site que esteja usando essa key.
+        </p>
+
+        <label>Nome do parceiro (só pra você identificar no painel)</label>
+        <input type="text" id="embedLabelInput" placeholder="ex: Site do João"/>
+
+        <label style="margin-top:14px">Domínio autorizado (opcional)</label>
+        <input type="text" id="embedDomainInput" placeholder="ex: sitedoparceiro.com"/>
+
+        <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
+          <label style="margin:0;display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="embedAdsInput" checked style="width:auto"/> Ads ativados
+          </label>
+        </div>
+
+        <label style="margin-top:14px">Ad Zone ID do Monetag (opcional — deixe vazio pra usar a padrão)</label>
+        <input type="text" id="embedAdZoneInput" placeholder="ex: 123456"/>
+
+        <label style="margin-top:14px">Notas (opcional)</label>
+        <input type="text" id="embedNotesInput" placeholder="observações livres"/>
+
+        <button class="btn-primary" style="margin-top:16px" id="saveEmbedBtn" onclick="saveEmbedPartner()">Gerar key</button>
       </div>
-      <div class="card"><div class="card-title">📋 Parceiros</div><div class="table-wrap" id="embedListWrap"></div></div>
+
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">📋 Parceiros cadastrados</div>
+        <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">
+          A key completa aparece só na criação (copie e guarde). Depois disso, o painel mostra
+          só os primeiros caracteres pra você identificar qual é qual.
+        </p>
+        <div class="table-wrap" id="embedListWrap"></div>
+      </div>
     </section>
   </main>
+</div>
 
-  <!-- MODAL FILME -->
-  <div class="modal-overlay" id="modalOverlay">
-    <div class="modal">
-      <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
-        <div style="display:flex; gap:16px;">
-          <img id="modalPoster" style="width:60px; height:90px; border-radius:8px; object-fit:cover; display:none;">
-          <div><h3 id="modalTitle"></h3><p id="modalSub" style="font-size: 0.8rem; color: var(--muted);"></p></div>
-        </div>
-        <button onclick="closeMovieModal()" style="background:none; border:none; color:var(--muted); font-size:1.5rem; cursor:pointer;">×</button>
-      </div>
-      <div id="episodeFields" style="display:none; margin-bottom: 16px;">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-          <div><label>Temporada</label><input type="number" id="seasonInput" value="1"></div>
-          <div><label>Episódio</label><input type="number" id="episodeInput" value="1"></div>
+<!-- ════════════ MODAL: cadastrar/editar fonte de filme/série ════════════ -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div style="display:flex;gap:12px;align-items:center;flex:1;min-width:0">
+        <img id="modalPoster" style="width:50px;height:75px;object-fit:cover;border-radius:8px;display:none" />
+        <div id="modalPosterPh" style="width:50px;height:75px;border-radius:8px;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:1.3rem">🎬</div>
+        <div style="flex:1;min-width:0">
+          <div id="modalTitle" style="font-weight:700;font-size:1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+          <div id="modalSub" style="font-size:0.78rem;color:var(--muted)"></div>
         </div>
       </div>
-      <label>URL do Player</label><input type="text" id="sourceUrlInput">
-      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top: 16px;">
-        <div><label>Nome Servidor</label><input type="text" id="sourceLabelInput"></div>
-        <div><label>Prioridade</label><input type="number" id="sourcePriorityInput" value="10"></div>
-      </div>
-      <div style="display:flex; gap:12px; margin-top: 24px;">
-        <button class="btn-primary" onclick="saveMovieSource()" style="flex:1;">Salvar</button>
-        <button class="btn-signout" id="deleteInlineBtn" onclick="deleteMovieSourceFromModal()" style="display:none;">Excluir</button>
+      <button onclick="closeMovieModal()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;padding:4px 8px">×</button>
+    </div>
+
+    <div id="episodeFields" style="display:none">
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <div style="flex:1">
+          <label>Temporada</label>
+          <input type="number" id="seasonInput" min="1" value="1"/>
+        </div>
+        <div style="flex:1">
+          <label>Episódio</label>
+          <input type="number" id="episodeInput" min="1" value="1"/>
+        </div>
       </div>
     </div>
+
+    <label style="margin-top:14px">URL do player</label>
+    <input type="text" id="sourceUrlInput" placeholder="https://..." oninput="previewMovieUrl(this.value)"/>
+
+    <div id="urlPreviewBox" style="display:none;margin-top:10px">
+      <div id="urlTypePill" style="display:inline-block;font-size:0.75rem;font-weight:700;padding:4px 10px;border-radius:7px;margin-bottom:8px"></div>
+      <div id="urlPreviewFrame" style="width:100%;height:200px;background:#000;border-radius:8px;overflow:hidden"></div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <div style="flex:1">
+        <label>Nome do servidor</label>
+        <input type="text" id="sourceLabelInput" placeholder="ex: StreamFlix.Play"/>
+      </div>
+      <div style="flex:1">
+        <label>Prioridade</label>
+        <input type="number" id="sourcePriorityInput" value="10"/>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:20px">
+      <button class="btn-primary" id="saveSourceBtn" onclick="saveMovieSource()" style="flex:1">Salvar fonte</button>
+      <button class="btn-signout" id="deleteInlineBtn" onclick="deleteMovieSourceFromModal()" style="display:none">Excluir</button>
+    </div>
   </div>
+</div>
 
-  <div id="toast"></div>
+<div id="toast"></div>
 
-  <script>
-    const SUPABASE_URL  = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
-    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: true, storageKey: 'sfv-admin-auth-token' } });
-    
-    let _session = null, _allCodes = [], _filter = 'todos', _allUsers = [], _allMovieSources = [], _currentMovieItem = null, _editingSourceId = null;
-    const IMG_BASE = 'https://image.tmdb.org/t/p/';
 
-    function toggleSidebar() {
-      const sidebar = document.getElementById('sidebar');
-      const overlay = document.getElementById('sidebarOverlay');
-      sidebar.classList.toggle('open');
-      overlay.classList.toggle('open');
+<script>
+  const SUPABASE_URL  = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+  const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
+
+  // ════════════════════════════════════════════════════════════
+  // AUTENTICAÇÃO DO ADMIN — versão simplificada.
+  //
+  // Design consciente, depois de vários problemas com a versão anterior
+  // (PKCE, hash de URL, retries silenciosos, watchdog de reload): menos
+  // "esperteza" automática, mais previsibilidade. Cada ação (login,
+  // logout, checagem de admin) tem um timeout explícito — se o Supabase
+  // não responder a tempo, o usuário VÊ uma mensagem de erro clara, em
+  // vez de a tela ficar presa em "Entrando..." sem fim. Preferimos um
+  // erro visível e acionável a uma trava silenciosa.
+  // ════════════════════════════════════════════════════════════
+
+  const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true, // ainda necessário para o link de recuperação de senha funcionar
+      storageKey: 'sfv-admin-auth-token',
+      storage: window.localStorage,
+    },
+  });
+
+  let _session = null;
+  let _allCodes = [];
+  let _filter   = 'todos';
+
+  // Envolve qualquer Promise com um limite de tempo. Se estourar, rejeita
+  // com um erro claro em vez de deixar quem chamou esperando pra sempre —
+  // é a peça central que resolve o "Entrando..." infinito.
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Tempo esgotado (${label}). Verifique sua conexão e tente novamente.`)), ms)
+      ),
+    ]);
+  }
+
+  function showLoginScreen() {
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('appScreen').style.display = 'none';
+  }
+  function showAppScreen(label) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display = 'block';
+    document.getElementById('userEmail').textContent = label;
+  }
+
+  // ── Checa se já existe uma sessão salva ao carregar a página ──
+  // Isso substitui o antigo "watchdog": em vez de ficar esperando um
+  // evento que talvez nunca chegue, fazemos UMA verificação direta, com
+  // timeout, e decidimos o estado da tela imediatamente a partir dela.
+  async function checkExistingSession() {
+    try {
+      const { data, error } = await withTimeout(db.auth.getSession(), 8000, 'verificar sessão');
+      if (error || !data?.session?.user) {
+        showLoginScreen();
+        return;
+      }
+      await handleAuthenticatedUser(data.session);
+    } catch (e) {
+      console.error('checkExistingSession:', e);
+      // Não trava a tela — assume deslogado e deixa o usuário logar de novo.
+      showLoginScreen();
+    }
+  }
+
+  // ── Confirma que o usuário logado está autorizado (vip_panel_admins) ──
+  async function handleAuthenticatedUser(session) {
+    _session = session;
+    try {
+      const { data: adminRow, error: adminErr } = await withTimeout(
+        db.from('vip_panel_admins').select('id, display_name, role').eq('id', session.user.id).maybeSingle(),
+        8000,
+        'verificar permissão de admin'
+      );
+
+      if (adminErr) {
+        setAdminAuthMsg('⚠️ Falha ao verificar seu acesso. Tente novamente.', 'error');
+        showLoginScreen();
+        return;
+      }
+      if (!adminRow) {
+        await db.auth.signOut().catch(() => {});
+        setAdminAuthMsg('❌ Esta conta não está autorizada a acessar o painel.', 'error');
+        showLoginScreen();
+        return;
+      }
+
+      showAppScreen(adminRow.display_name || session.user.email);
+      loadCodes();
+    } catch (e) {
+      console.error('handleAuthenticatedUser:', e);
+      setAdminAuthMsg('⚠️ ' + e.message, 'error');
+      showLoginScreen();
+    }
+  }
+
+  // Link de recuperação de senha (#access_token=...&type=recovery) chega
+  // via evento PASSWORD_RECOVERY do próprio SDK — tratado à parte do
+  // fluxo normal de login, sempre que o Supabase disparar esse evento.
+  db.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      if (window.location.hash) history.replaceState(null, '', window.location.pathname);
+      document.getElementById('resetPassModal').classList.add('open');
+    }
+  });
+
+  checkExistingSession();
+
+  // ── LOGIN POR EMAIL + SENHA ──
+  function setAdminAuthMsg(text, kind) {
+    const el = document.getElementById('adminAuthMsg');
+    el.textContent = text || '';
+    el.className = 'auth-msg' + (kind ? ' ' + kind : '');
+  }
+
+  async function signInAdminPassword() {
+    const email = document.getElementById('adminEmailInput').value.trim().toLowerCase();
+    const password = document.getElementById('adminPasswordInput').value;
+    if (!email || !password) return;
+
+    const btn = document.getElementById('adminPasswordBtn');
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+    setAdminAuthMsg('');
+
+    try {
+      const { data, error } = await withTimeout(
+        db.auth.signInWithPassword({ email, password }),
+        10000,
+        'fazer login'
+      );
+      if (error) throw error;
+      document.getElementById('adminPasswordInput').value = '';
+      await handleAuthenticatedUser(data.session);
+    } catch (e) {
+      console.error('Admin sign-in error:', e);
+      // Distingue "credenciais erradas" (mensagem clara do Supabase) de
+      // qualquer outro erro (rede, timeout) — texto diferente ajuda a
+      // saber se o problema é a senha ou a conexão.
+      const isBadCredentials = /invalid.*credential|invalid.*login/i.test(e.message || '');
+      setAdminAuthMsg(isBadCredentials ? '❌ E-mail ou senha incorretos.' : '⚠️ ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+    }
+  }
+
+  async function doSignOut() {
+    try {
+      await withTimeout(db.auth.signOut(), 5000, 'sair');
+    } catch (e) {
+      console.error('signOut:', e);
+    } finally {
+      // Mesmo se a chamada de rede falhar/travar, força o estado local de
+      // deslogado — o usuário não deveria ficar preso na tela do painel
+      // só porque o signOut remoto demorou.
+      _session = null;
+      showLoginScreen();
+    }
+  }
+
+  // ── MODAL NOVA SENHA (recuperação) ──
+  async function submitNewPassword() {
+    const input = document.getElementById('resetPassInput');
+    const btn = document.getElementById('resetPassBtn');
+    const msg = document.getElementById('resetPassMsg');
+    const newPassword = input.value;
+    msg.textContent = '';
+    msg.className = 'auth-msg';
+    if (!newPassword || newPassword.length < 6) {
+      msg.textContent = 'A senha precisa ter pelo menos 6 caracteres.';
+      msg.className = 'auth-msg error';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+    try {
+      const { error } = await withTimeout(db.auth.updateUser({ password: newPassword }), 8000, 'salvar senha');
+      if (error) throw error;
+      msg.textContent = '✅ Senha salva! Faça login novamente com ela.';
+      msg.className = 'auth-msg success';
+      input.value = '';
+      await db.auth.signOut().catch(() => {});
+      setTimeout(() => {
+        document.getElementById('resetPassModal').classList.remove('open');
+        btn.disabled = false;
+        btn.textContent = 'Salvar nova senha';
+      }, 1800);
+    } catch (e) {
+      msg.textContent = '❌ ' + e.message;
+      msg.className = 'auth-msg error';
+      btn.disabled = false;
+      btn.textContent = 'Salvar nova senha';
+    }
+  }
+
+  // ── API CALL ──
+  async function api(action, extra = {}) {
+    const token = _session?.access_token;
+    const res = await fetch('/api/admin-vip', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ action, ...extra })
+    });
+    return res.json();
+  }
+
+  // ── LOAD ──
+  async function loadCodes() {
+    const data = await api('list');
+    _allCodes = data.codes || [];
+    updateStats();
+    renderTable();
+  }
+
+  function updateStats() {
+    const total     = _allCodes.length;
+    const used      = _allCodes.filter(c => c.used_by).length;
+    const available = _allCodes.filter(c => !c.used_by && c.is_active).length;
+    document.getElementById('statTotal').textContent     = total;
+    document.getElementById('statAvailable').textContent = available;
+    document.getElementById('statUsed').textContent      = used;
+  }
+
+  // ── FILTRO ──
+  function setFilter(f, el) {
+    _filter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    renderTable();
+  }
+
+  function renderTable() {
+    const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
+    let rows = _allCodes;
+
+    if (_filter === 'disponivel') rows = rows.filter(c => !c.used_by && c.is_active);
+    if (_filter === 'usado')      rows = rows.filter(c => c.used_by);
+    if (_filter === 'inativo')    rows = rows.filter(c => !c.is_active);
+    if (search) rows = rows.filter(c => c.code.toLowerCase().includes(search));
+
+    document.getElementById('listCount').textContent = rows.length;
+    const tbody = document.getElementById('codesTableBody');
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum código encontrado</td></tr>';
+      return;
     }
 
-    async function checkExistingSession() {
-      const { data } = await db.auth.getSession();
-      if (data?.session) handleAuthenticatedUser(data.session);
-      else document.getElementById('loginScreen').style.display = 'flex';
+    tbody.innerHTML = rows.map(c => {
+      const isUsed     = !!c.used_by;
+      const isInactive = !c.is_active;
+      let badge = '';
+      if (isInactive) badge = '<span class="badge badge-gray">Inativo</span>';
+      else if (isUsed) badge = '<span class="badge badge-red">Usado</span>';
+      else             badge = '<span class="badge badge-green">Disponível</span>';
+
+      const plan = c.plan_label || hoursToLabel(c.duration_hours);
+      const date = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '—';
+
+      const actionBtn = isInactive
+        ? `<button class="action-btn reactivate" onclick="toggleCode('${c.code}', true)">Reativar</button>`
+        : (!isUsed ? `<button class="action-btn" onclick="toggleCode('${c.code}', false)">Desativar</button>` : '');
+
+      return `<tr>
+        <td>
+          <div class="code-cell">
+            ${c.code}
+            <button class="copy-btn" onclick="copyCode('${c.code}')" title="Copiar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            </button>
+          </div>
+        </td>
+        <td style="color:var(--muted)">${plan}</td>
+        <td>${badge}</td>
+        <td style="color:var(--muted)">${date}</td>
+        <td>${actionBtn}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function hoursToLabel(h) {
+    if (!h) return '—';
+    if (h >= 876000) return 'Vitalício';
+    if (h >= 720)    return `${Math.round(h/720)} mês(es)`;
+    if (h >= 24)     return `${Math.round(h/24)} dia(s)`;
+    return `${h}h`;
+  }
+
+  // ── AÇÕES ──
+  async function toggleCode(code, activate) {
+    const action = activate ? 'reactivate' : 'deactivate';
+    await api(action, { code });
+    showToast(activate ? '✅ Código reativado' : '🚫 Código desativado');
+    loadCodes();
+  }
+
+  function copyCode(code) {
+    navigator.clipboard.writeText(code).then(() => showToast('📋 Copiado!'));
+  }
+
+  function copyAll() {
+    const ta = document.getElementById('codesTextarea');
+    navigator.clipboard.writeText(ta.value).then(() => showToast('📋 Todos copiados!'));
+  }
+
+  // ── GERADOR ──
+  function onPlanChange() {
+    const v = document.getElementById('genPlan').value;
+    document.getElementById('customDurationWrap').style.display = v === 'custom' ? 'block' : 'none';
+  }
+
+  function randSuffix(len = 6) {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let s = '';
+    for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+  }
+
+  async function gerarCodigos() {
+    const planVal  = document.getElementById('genPlan').value;
+    const qty      = Math.min(500, Math.max(1, parseInt(document.getElementById('genQty').value) || 1));
+    const prefix   = (document.getElementById('genPrefix').value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const hours    = planVal === 'custom'
+      ? parseInt(document.getElementById('genCustomHours').value) || 48
+      : parseInt(planVal);
+    const planLabel = planVal === '720' ? '30 dias' : planVal === '876000' ? 'Vitalício' : planVal === '1' ? 'Teste 1h' : `${hours}h`;
+
+    const btn = document.getElementById('btnGerar');
+    btn.disabled = true;
+    btn.textContent = 'Gerando...';
+
+    // Gerar códigos únicos localmente
+    const existingCodes = new Set(_allCodes.map(c => c.code));
+    const newCodes = [];
+    let attempts = 0;
+    while (newCodes.length < qty && attempts < qty * 10) {
+      attempts++;
+      const suffix = randSuffix(6);
+      const code   = prefix ? `${prefix}-${suffix}` : `VIP-${suffix}`;
+      if (!existingCodes.has(code)) {
+        existingCodes.add(code);
+        newCodes.push({ code, duration_hours: hours, plan_label: planLabel });
+      }
     }
 
-    async function handleAuthenticatedUser(session) {
-      _session = session;
-      const { data: admin } = await db.from('vip_panel_admins').select('*').eq('id', session.user.id).maybeSingle();
-      if (!admin) { await db.auth.signOut(); alert('Acesso negado.'); return; }
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('appScreen').style.display = 'block';
-      document.getElementById('userEmail').textContent = admin.display_name || session.user.email;
-      loadDashboard();
+    const result = await api('create', { codes: newCodes });
+
+    btn.disabled = false;
+    btn.textContent = '✨ Gerar';
+
+    if (result.error) {
+      showToast('❌ Erro: ' + result.error);
+      return;
     }
 
-    async function signInAdminPassword() {
-      const email = document.getElementById('adminEmailInput').value;
-      const password = document.getElementById('adminPasswordInput').value;
-      const { data, error } = await db.auth.signInWithPassword({ email, password });
-      if (error) alert(error.message); else handleAuthenticatedUser(data.session);
+    const created = result.created || newCodes;
+    document.getElementById('genResult').style.display = 'block';
+    document.getElementById('genResultTitle').textContent = `✅ ${created.length} código(s) criado(s)`;
+    document.getElementById('codesTextarea').value = created.map(c => c.code).join('\n');
+
+    showToast(`✅ ${created.length} código(s) gerado(s)!`);
+    loadCodes();
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // TABS
+  // ════════════════════════════════════════════════════════════
+  let _moviesLoadedOnce = false;
+  function switchTab(tab, opts = {}) {
+    document.querySelectorAll('.panel-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-panel').forEach(s => s.style.display = 'none');
+    document.getElementById('tab-' + tab).style.display = 'block';
+    if (tab === 'users') loadUsers();
+    if (tab === 'movies' && !_moviesLoadedOnce) {
+      _moviesLoadedOnce = true;
+      loadMovieSources();
+      restoreLastMovieSearch();
+    }
+    if (tab === 'ads') loadAds();
+    if (tab === 'iptv') loadIptvSources();
+    if (tab === 'embeds') loadEmbedPartners();
+    if (tab === 'dashboard') loadDashboard();
+
+    // Registra a aba atual na URL, pra "voltar" do navegador funcionar de
+    // verdade dentro do admin, em vez de sair do site direto. opts.skipPush
+    // evita loop quando a troca já veio de um evento popstate (voltar).
+    if (!opts.skipPush) {
+      const url = new URL(window.location);
+      url.hash = tab;
+      history.pushState({ adminTab: tab }, '', url);
+    }
+  }
+
+  // Restaura a aba certa quando o usuário usa voltar/avançar do navegador
+  window.addEventListener('popstate', (e) => {
+    const tab = e.state?.adminTab || window.location.hash.replace('#', '') || 'codes';
+    switchTab(tab, { skipPush: true });
+  });
+
+  // Ao carregar a página pela primeira vez, se a URL já tiver uma aba
+  // marcada (ex: alguém voltou pro admin com #movies na URL), abre nela
+  // direto em vez de sempre cair na primeira aba.
+  (function restoreInitialTab() {
+    const initialTab = window.location.hash.replace('#', '');
+    if (initialTab && document.getElementById('tab-' + initialTab)) {
+      switchTab(initialTab, { skipPush: true });
+    } else {
+      loadDashboard(); // primeira visita, sem hash na URL: carrega os dados da aba padrão (dashboard)
+    }
+  })();
+
+  // ════════════════════════════════════════════════════════════
+  // ABA: USUÁRIOS
+  // ════════════════════════════════════════════════════════════
+  let _allUsers = [];
+  let _userFilter = 'todos';
+
+  async function loadUsers() {
+    const data = await api('list-users');
+    if (data.error) { showToast('❌ ' + data.error); return; }
+    _allUsers = data.users || [];
+    updateUserStats();
+    renderUsersTable();
+  }
+
+  function updateUserStats() {
+    const now = Date.now();
+    const total = _allUsers.length;
+    const vip   = _allUsers.filter(u => u.expires_at && new Date(u.expires_at).getTime() > now).length;
+    const free  = total - vip;
+    document.getElementById('statUsersTotal').textContent = total;
+    document.getElementById('statUsersVip').textContent   = vip;
+    document.getElementById('statUsersFree').textContent  = free;
+  }
+
+  function setUserFilter(f, el) {
+    _userFilter = f;
+    document.querySelectorAll('#tab-users .filter-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    renderUsersTable();
+  }
+
+  // Formata o tempo restante até expires_at de forma legível (ex: "2d 4h",
+  // "0h 38min"). Recalculado sempre que a tabela é renderizada (ao abrir a
+  // aba ou recarregar) — sem relógio ao vivo, como definido no projeto.
+  function formatCountdown(expiresAt) {
+    if (!expiresAt) return null;
+    const diffMs = new Date(expiresAt).getTime() - Date.now();
+    if (diffMs <= 0) return null;
+    const totalMinutes = Math.floor(diffMs / 60000);
+    const days  = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const mins  = totalMinutes % 60;
+    if (days > 0)  return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}min`;
+    return `${mins}min`;
+  }
+
+  function userStatusInfo(u) {
+    if (!u.expires_at) return { label: 'Grátis', cls: 'badge-gray' };
+    const isActive = new Date(u.expires_at).getTime() > Date.now();
+    return isActive
+      ? { label: 'VIP ativo', cls: 'badge-green' }
+      : { label: 'Expirado', cls: 'badge-red' };
+  }
+
+  function renderUsersTable() {
+    const search = (document.getElementById('userSearchInput')?.value || '').toLowerCase();
+    let rows = _allUsers;
+    const now = Date.now();
+
+    if (_userFilter === 'vip')      rows = rows.filter(u => u.expires_at && new Date(u.expires_at).getTime() > now);
+    if (_userFilter === 'expirado') rows = rows.filter(u => u.expires_at && new Date(u.expires_at).getTime() <= now);
+    if (_userFilter === 'gratis')   rows = rows.filter(u => !u.expires_at);
+    if (search) rows = rows.filter(u =>
+      (u.email || '').toLowerCase().includes(search) || (u.name || '').toLowerCase().includes(search)
+    );
+
+    document.getElementById('usersListCount').textContent = rows.length;
+    const tbody = document.getElementById('usersTableBody');
+
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum usuário encontrado</td></tr>';
+      return;
     }
 
-    async function doSignOut() { await db.auth.signOut(); window.location.reload(); }
+    tbody.innerHTML = rows.map(u => {
+      const status = userStatusInfo(u);
+      const countdown = formatCountdown(u.expires_at);
+      const expiresText = u.expires_at
+        ? (countdown ? `⏳ ${countdown}` : new Date(u.expires_at).toLocaleDateString('pt-BR'))
+        : '—';
+      const firstLogin = u.first_login_at ? new Date(u.first_login_at).toLocaleDateString('pt-BR') : '—';
+      const lastLogin   = u.last_login_at  ? new Date(u.last_login_at).toLocaleDateString('pt-BR')  : '—';
+      return `
+        <tr>
+          <td>
+            <div style="font-weight:600">${u.name || '(sem nome)'}</div>
+            <div style="font-size:0.76rem;color:var(--muted)">${u.email || '—'}</div>
+          </td>
+          <td><span class="badge ${status.cls}">${status.label}</span></td>
+          <td>${expiresText}</td>
+          <td style="font-size:0.78rem">${u.last_code_used || '—'}</td>
+          <td style="font-size:0.78rem">${firstLogin}</td>
+          <td style="font-size:0.78rem">${lastLogin}</td>
+          <td><button class="btn-signout" style="padding:6px 10px;font-size:0.75rem" onclick="viewUserHistory('${u.user_id}', '${(u.email||'').replace(/'/g,"")}')">Histórico</button></td>
+        </tr>
+      `;
+    }).join('');
+  }
 
-    async function api(action, extra = {}) {
-      const res = await fetch('/api/admin-vip', {
+  async function viewUserHistory(userId, email) {
+    const data = await api('list-redemptions', { userId });
+    if (data.error) { showToast('❌ ' + data.error); return; }
+    const items = data.redemptions || [];
+    if (!items.length) { showToast(`Sem histórico de códigos pra ${email || 'esse usuário'}.`); return; }
+    const lines = items.map(r =>
+      `${r.code} — ${r.plan_label || r.duration_hours + 'h'} — ${new Date(r.redeemed_at).toLocaleString('pt-BR')}`
+    );
+    alert(`Histórico de códigos — ${email || userId}\n\n` + lines.join('\n'));
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // ABA: FILMES & SÉRIES (migrado do painel separado)
+  // ════════════════════════════════════════════════════════════
+  const IMG_BASE = 'https://image.tmdb.org/t/p/';
+  let _currentMovieItem = null;
+  let _editingSourceId = null;
+  let _allMovieSources = [];
+
+  async function tmdbFetch(path, params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const r = await fetch(`/api/tmdb?path=${encodeURIComponent(path)}${qs ? '&' + qs : ''}`);
+    if (!r.ok) throw new Error('Falha na busca TMDB');
+    return r.json();
+  }
+
+  async function doMovieSearch() {
+    const q = document.getElementById('movieSearchInput').value.trim();
+    const type = document.getElementById('searchType').value;
+    const grid = document.getElementById('resultsGrid');
+    if (!q) return;
+
+    grid.innerHTML = '<div class="empty-state">Buscando...</div>';
+    try {
+      const data = await tmdbFetch(`/search/${type}`, { query: q });
+      const results = data.results || [];
+      if (results.length === 0) {
+        grid.innerHTML = '<div class="empty-state">Nenhum resultado encontrado.</div>';
+        sessionStorage.removeItem('adminLastSearch');
+        return;
+      }
+
+      const ids = results.map(r => r.id);
+      const existing = await fetch('/api/admin-vip', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_session?.access_token}` },
-        body: JSON.stringify({ action, ...extra })
-      });
-      return res.json();
-    }
-
-    function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg; t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 3000);
-    }
-
-    function switchTab(tab) {
-      document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.tab === tab));
-      document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
-      document.getElementById('tab-' + tab).style.display = 'block';
-      const titles = { dashboard: 'Dashboard', codes: 'Códigos VIP', users: 'Usuários', movies: 'Filmes & Séries', ads: 'Anúncios', iptv: 'IPTV', embeds: 'Embeds' };
-      document.getElementById('pageHeading').textContent = titles[tab];
-      if (window.innerWidth <= 1024) toggleSidebar();
-      if (tab === 'dashboard') loadDashboard();
-      if (tab === 'codes') loadCodes();
-      if (tab === 'users') loadUsers();
-      if (tab === 'movies') loadMovieSources();
-      if (tab === 'ads') loadAds();
-      if (tab === 'iptv') loadIptvSources();
-      if (tab === 'embeds') loadEmbedPartners();
-    }
-
-    async function loadDashboard() {
-      const data = await api('dashboard-stats');
-      document.getElementById('dashTotalSources').textContent = data.totalVipSources || 0;
-      document.getElementById('dashActiveCodes').textContent = data.activeVipCodes || 0;
-      document.getElementById('dashTotalUsers').textContent = data.totalUsers || 0;
-      document.getElementById('dashActiveAds').textContent = data.activeAds || 0;
-    }
-
-    async function loadCodes() { const data = await api('list'); _allCodes = data.codes || []; renderTable(); }
-    function renderTable() {
-      const rows = _filter === 'disponivel' ? _allCodes.filter(c => !c.used_by && c.is_active) : _allCodes;
-      document.getElementById('listCount').textContent = rows.length;
-      document.getElementById('codesTableBody').innerHTML = rows.map(c => `
-        <tr>
-          <td style="font-weight:700">${c.code}</td>
-          <td>${c.plan_label || c.duration_hours + 'h'}</td>
-          <td><span class="badge ${c.used_by ? 'badge-red' : 'badge-green'}">${c.used_by ? 'Usado' : 'Livre'}</span></td>
-          <td><button class="btn-secondary" style="padding:4px 8px;" onclick="navigator.clipboard.writeText('${c.code}'); showToast('Copiado!')">Copiar</button></td>
-        </tr>
-      `).join('');
-    }
-
-    async function loadUsers() { const data = await api('list-users'); _allUsers = data.users || []; renderUsersTable(); }
-    function renderUsersTable() {
-      const rows = _allUsers;
-      document.getElementById('usersListCount').textContent = rows.length;
-      document.getElementById('usersTableBody').innerHTML = rows.map(u => `
-        <tr>
-          <td><div style="font-weight:700">${u.name || 'Sem nome'}</div><div style="font-size:0.7rem; color:var(--muted)">${u.email}</div></td>
-          <td><span class="badge ${u.expires_at && new Date(u.expires_at) > new Date() ? 'badge-green' : 'badge-gray'}">VIP</span></td>
-          <td>${u.expires_at ? new Date(u.expires_at).toLocaleDateString() : '—'}</td>
-          <td><button class="btn-secondary" style="padding:4px 8px;" onclick="alert('ID: ${u.user_id}')">Info</button></td>
-        </tr>
-      `).join('');
-    }
-
-    async function tmdbFetch(path, params = {}) {
-      const qs = new URLSearchParams(params).toString();
-      const r = await fetch(`/api/tmdb?path=${encodeURIComponent(path)}${qs ? '&' + qs : ''}`);
-      return r.json();
-    }
-
-    async function doUnifiedSearch() {
-      const q = document.getElementById('movieSearchInput').value.trim();
-      const type = document.getElementById('searchType').value;
-      if (!q) return;
-      const grid = document.getElementById('resultsGrid');
-      grid.innerHTML = 'Buscando...';
-      const tmdbData = await tmdbFetch(`/search/${type}`, { query: q });
-      const results = tmdbData.results || [];
-      const ids = results.map(r => r.id);
-      const existing = await api('list-sources-for', { mediaType: type, ids });
+        body: JSON.stringify({ action: 'list-sources-for', mediaType: type, ids })
+      }).then(r => r.json()).catch(() => ({ ids: [] }));
       const existingSet = new Set(existing.ids || []);
-      grid.innerHTML = results.map(r => {
-        const has = existingSet.has(r.id);
+
+      renderMovieResults(results, type, existingSet);
+
+      // Salva a busca (não o resultado, que pode ficar desatualizado —
+      // salvamos os parâmetros e refazemos a consulta ao restaurar) pra
+      // sobreviver a fechar/reabrir o site na mesma sessão do navegador.
+      sessionStorage.setItem('adminLastSearch', JSON.stringify({ q, type }));
+    } catch (e) {
+      grid.innerHTML = '<div class="empty-state">Erro ao buscar. Tente novamente.</div>';
+    }
+  }
+
+  function renderMovieResults(results, type, existingSet) {
+    const grid = document.getElementById('resultsGrid');
+    grid.innerHTML = results.map(r => {
+      const title = r.title || r.name || 'Sem título';
+      const year = (r.release_date || r.first_air_date || '').slice(0, 4);
+      const hasSource = existingSet.has(r.id);
+      const poster = r.poster_path
+        ? `<img src="${IMG_BASE}w200${r.poster_path}" alt="" loading="lazy" />`
+        : `<div class="ph">🎬</div>`;
+      return `
+        <div class="result-card" onclick='handleMovieClick(${JSON.stringify({
+          id: r.id, title, year, type, poster_path: r.poster_path
+        }).replace(/'/g, "&#39;")}, ${hasSource})'>
+          ${poster}
+          <div class="info">
+            <div class="t">${title}</div>
+            <div class="y">${year || '—'}</div>
+            <span class="badge ${hasSource ? 'has-sources' : ''}">${hasSource ? '✓ Cadastrado' : 'Sem fonte'}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Ao reabrir a aba de filmes (voltando de outro lugar do site, ou depois
+  // de editar um filme e fechar o modal), restaura a última busca feita
+  // nesta sessão do navegador, em vez de mostrar a tela vazia de novo.
+  function restoreLastMovieSearch() {
+    const saved = sessionStorage.getItem('adminLastSearch');
+    if (!saved) return;
+    try {
+      const { q, type } = JSON.parse(saved);
+      document.getElementById('movieSearchInput').value = q;
+      document.getElementById('searchType').value = type;
+      doMovieSearch();
+    } catch { /* dado salvo inválido, ignora */ }
+  }
+  document.getElementById('movieSearchInput')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doMovieSearch();
+  });
+
+  function handleMovieClick(item, hasSource) {
+    if (hasSource) {
+      // Se já tem fonte, filtra a lista de cadastrados e rola até lá
+      const filterInput = document.getElementById('filterInput');
+      if (filterInput) {
+        filterInput.value = item.title;
+        renderGroupedSources();
+        document.getElementById('recentSourcesWrap')?.scrollIntoView({ behavior: 'smooth' });
+        showToast('Filtrado nos cadastrados!');
+      }
+    } else {
+      openMovieModal(item);
+    }
+  }
+
+  function openMovieModal(item) {
+    _currentMovieItem = item;
+    _editingSourceId = null;
+    document.getElementById('modalTitle').textContent = item.title;
+    document.getElementById('modalSub').textContent =
+      `${item.type === 'movie' ? 'Filme' : 'Série'} · ${item.year || '—'} · TMDB #${item.id}`;
+    setMovieModalPoster(item.poster_path);
+    document.getElementById('episodeFields').style.display = item.type === 'tv' ? 'block' : 'none';
+    document.getElementById('seasonInput').value = 1;
+    document.getElementById('episodeInput').value = 1;
+    document.getElementById('sourceUrlInput').value = '';
+    document.getElementById('sourceLabelInput').value = '';
+    document.getElementById('sourcePriorityInput').value = 10;
+    document.getElementById('urlPreviewBox').style.display = 'none';
+    document.getElementById('deleteInlineBtn').style.display = 'none';
+    document.getElementById('saveSourceBtn').textContent = 'Salvar fonte';
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function openEditMovieModal(sourceId) {
+    const s = _allMovieSources.find(x => x.id === sourceId);
+    if (!s) return;
+    // Resolve o título entre as fontes-irmãs (mesmo filme/série) — evita
+    // reabrir com título em branco se justo essa fonte não tiver salvo.
+    const siblings = _allMovieSources.filter(x => x.tmdb_id === s.tmdb_id && x.media_type === s.media_type);
+    const resolvedTitle = (siblings.find(x => x.title && x.title.trim())?.title) || s.title || '(sem título)';
+    _currentMovieItem = { id: s.tmdb_id, title: resolvedTitle, type: s.media_type, poster_path: s.poster_path };
+    _editingSourceId = s.id;
+    document.getElementById('modalTitle').textContent = resolvedTitle;
+    document.getElementById('modalSub').textContent =
+      `${s.media_type === 'movie' ? 'Filme' : 'Série'}${s.season ? ` · T${s.season}E${s.episode}` : ''} · TMDB #${s.tmdb_id}`;
+    setMovieModalPoster(s.poster_path);
+    document.getElementById('episodeFields').style.display = s.media_type === 'tv' ? 'block' : 'none';
+    document.getElementById('seasonInput').value = s.season || 1;
+    document.getElementById('episodeInput').value = s.episode || 1;
+    document.getElementById('sourceUrlInput').value = s.source_url;
+    document.getElementById('sourceLabelInput').value = s.source_label;
+    document.getElementById('sourcePriorityInput').value = s.priority;
+    previewMovieUrl(s.source_url);
+    document.getElementById('deleteInlineBtn').style.display = 'inline-block';
+    document.getElementById('saveSourceBtn').textContent = 'Salvar alterações';
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function setMovieModalPoster(posterPath) {
+    const img = document.getElementById('modalPoster');
+    const ph  = document.getElementById('modalPosterPh');
+    if (posterPath) {
+      img.src = IMG_BASE + 'w200' + posterPath;
+      img.style.display = 'block';
+      ph.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      ph.style.display = 'flex';
+    }
+  }
+
+  function closeMovieModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    document.getElementById('urlPreviewBox').style.display = 'none';
+    document.getElementById('urlPreviewFrame').innerHTML = '';
+    _currentMovieItem = null;
+    _editingSourceId = null;
+  }
+
+  // Hosts de embed conhecidos cujas URLs às vezes terminam com o nome do
+  // arquivo original (ex: streamtape.com/e/XXXX/Nome.Do.Filme.1080p.mkv) —
+  // isso engana o regex de "arquivo direto" abaixo, porque a URL literalmente
+  // termina em .mkv/.mp4 mesmo sendo uma PÁGINA DE EMBED, não um arquivo de
+  // vídeo de verdade. Sempre tratamos esses domínios como iframe.
+  const KNOWN_EMBED_HOSTS = ['streamtape.com', 'streamta.pe', 'doodstream.com', 'dood.to', 'dood.watch'];
+
+  function isDirectVideo(url) {
+    // Mesma regra usada pelo player no site (index.html: isDirectVideoUrl),
+    // mantidas em sincronia de propósito — ver comentário lá.
+    try {
+      const hostname = new URL(url).hostname.replace(/^www\./, '');
+      if (KNOWN_EMBED_HOSTS.some(h => hostname === h || hostname.endsWith('.' + h))) return false;
+    } catch (e) { /* URL relativa/inválida: segue pro teste de extensão normal */ }
+    return /\.(mp4|m3u8|mkv|webm)(\?|#|$)/i.test(url);
+  }
+
+  // Alguns provedores (Streamtape, Doodstream, etc.) fornecem um bloco de
+  // código <iframe src="..." width="800" ...></iframe> pronto pra copiar, em
+  // vez de só a URL pura. Se o usuário colar esse bloco inteiro no campo, a
+  // gente extrai automaticamente só a URL (src="...") em vez de forçar o
+  // usuário a editar manualmente o HTML antes de colar.
+  function extractEmbedUrl(pasted) {
+    const trimmed = pasted.trim();
+    if (!trimmed.includes('<iframe') && !trimmed.includes('src=')) return trimmed;
+    const match = trimmed.match(/src=["']([^"']+)["']/i);
+    return match ? match[1] : trimmed;
+  }
+
+  function previewMovieUrl(rawValue) {
+    const url = extractEmbedUrl(rawValue);
+    // Se a URL foi extraída de um bloco de embed colado, substitui o valor
+    // visível do campo pela URL limpa (evita salvar o <iframe> inteiro).
+    const input = document.getElementById('sourceUrlInput');
+    if (input && input.value.trim() !== url && (rawValue.includes('<iframe') || rawValue.includes('src='))) {
+      input.value = url;
+    }
+    const box   = document.getElementById('urlPreviewBox');
+    const pill  = document.getElementById('urlTypePill');
+    const frame = document.getElementById('urlPreviewFrame');
+    if (!url) { box.style.display = 'none'; return; }
+    box.style.display = 'block';
+    frame.innerHTML = '';
+
+    if (isDirectVideo(url)) {
+      const isHttp = url.startsWith('http://');
+      pill.textContent = isHttp ? '⚠️ Arquivo direto (HTTP — mixed content!)' : '✅ Arquivo direto (HTTPS)';
+      pill.style.background = isHttp ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)';
+      pill.style.color      = isHttp ? 'var(--red)' : 'var(--green)';
+      if (isHttp) {
+        frame.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--red);font-size:0.8rem;padding:12px;text-align:center;">
+          ⚠️ Links <b>http://</b> não rodam em sites https://.<br>O player usará proxy automático no site.
+        </div>`;
+      } else {
+        const vid = document.createElement('video');
+        vid.src = url; vid.controls = true; vid.style.cssText = 'width:100%;height:100%;';
+        frame.appendChild(vid);
+      }
+    } else {
+      pill.textContent = '🎬 Link embed / iframe';
+      pill.style.background = 'rgba(124,58,237,0.15)'; pill.style.color = 'var(--accent)';
+      const ifr = document.createElement('iframe');
+      ifr.src = url; ifr.style.cssText = 'width:100%;height:100%;border:none;';
+      ifr.allow = 'autoplay; encrypted-media; picture-in-picture';
+      frame.appendChild(ifr);
+    }
+  }
+
+  async function saveMovieSource() {
+    if (!_currentMovieItem) return;
+    const url = extractEmbedUrl(document.getElementById('sourceUrlInput').value.trim());
+    const label = document.getElementById('sourceLabelInput').value.trim() || 'Player';
+    const priority = parseInt(document.getElementById('sourcePriorityInput').value, 10) || 0;
+
+    if (!url) { showToast('Cole a URL do player antes de salvar.'); return; }
+
+    const isTv = _currentMovieItem.type === 'tv';
+    const season  = isTv ? parseInt(document.getElementById('seasonInput').value, 10) : null;
+    const episode = isTv ? parseInt(document.getElementById('episodeInput').value, 10) : null;
+
+    const btn = document.getElementById('saveSourceBtn');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    const action = _editingSourceId ? 'update-source' : 'create-source';
+    const result = await fetch('/api/admin-vip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_session?.access_token}` },
+      body: JSON.stringify({
+        action,
+        sourceId: _editingSourceId,
+        tmdb_id: _currentMovieItem.id,
+        media_type: _currentMovieItem.type,
+        title: _currentMovieItem.title,
+        poster_path: _currentMovieItem.poster_path,
+        season, episode,
+        source_url: url,
+        source_label: label,
+        priority,
+      })
+    }).then(r => r.json()).catch(e => ({ error: e.message }));
+
+    btn.disabled = false;
+    btn.textContent = _editingSourceId ? 'Salvar alterações' : 'Salvar fonte';
+
+    if (result.error) {
+      showToast(String(result.error).includes('duplicate') ? '❌ Essa fonte já está cadastrada pra esse item.' : '❌ Erro ao salvar: ' + result.error);
+      return;
+    }
+
+    showToast(_editingSourceId ? '✅ Fonte atualizada!' : '✅ Fonte salva!');
+    closeMovieModal();
+    loadMovieSources();
+  }
+
+  async function deleteMovieSourceFromModal() {
+    if (!_editingSourceId) return;
+    if (!confirm('Excluir essa fonte? Essa ação não pode ser desfeita.')) return;
+    await deleteMovieSource(_editingSourceId);
+    closeMovieModal();
+  }
+
+  async function deleteMovieSource(sourceId) {
+    if (!_editingSourceId && !confirm('Excluir essa fonte? Essa ação não pode ser desfeita.')) return;
+    const result = await fetch('/api/admin-vip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_session?.access_token}` },
+      body: JSON.stringify({ action: 'delete-source', sourceId })
+    }).then(r => r.json()).catch(e => ({ error: e.message }));
+    if (result.error) { showToast('❌ Erro: ' + result.error); return; }
+    showToast('✅ Fonte excluída.');
+    loadMovieSources();
+  }
+
+  async function toggleMovieSourceActive(sourceId, currentlyActive) {
+    const result = await fetch('/api/admin-vip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_session?.access_token}` },
+      body: JSON.stringify({ action: 'toggle-source', sourceId, isActive: !currentlyActive })
+    }).then(r => r.json()).catch(e => ({ error: e.message }));
+    if (result.error) { showToast('❌ Erro: ' + result.error); return; }
+    loadMovieSources();
+  }
+
+  async function loadMovieSources() {
+    const wrap = document.getElementById('recentSourcesWrap');
+    const result = await fetch('/api/admin-vip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_session?.access_token}` },
+      body: JSON.stringify({ action: 'list-sources' })
+    }).then(r => r.json()).catch(e => ({ error: e.message }));
+
+    if (result.error) {
+      wrap.innerHTML = '<div class="empty-state">Erro ao carregar fontes.</div>';
+      return;
+    }
+    _allMovieSources = result.sources || [];
+    renderGroupedSources();
+  }
+
+  function renderGroupedSources() {
+    const wrap = document.getElementById('recentSourcesWrap');
+    const filter = (document.getElementById('filterInput')?.value || '').trim().toLowerCase();
+
+    // Agrupa PRIMEIRO, sem filtrar ainda. Filtrar linha-a-linha antes de
+    // agrupar era o bug: se uma fonte específica tivesse o título em
+    // branco (cadastrada por um fluxo que não preencheu esse campo), ela
+    // sumia da busca mesmo o filme tendo outras fontes com título certo.
+    const groups = new Map();
+    _allMovieSources.forEach(s => {
+      const key = s.media_type + ':' + s.tmdb_id;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(s);
+    });
+
+    // Resolve um título "canônico" por grupo: usa a primeira fonte do
+    // grupo que tiver título preenchido, não necessariamente a primeira
+    // da lista (que pode ser justamente a com título em branco).
+    let groupList = [...groups.entries()].map(([key, items]) => {
+      const resolvedTitle = (items.find(s => s.title && s.title.trim())?.title) || '(sem título)';
+      return { key, items, resolvedTitle };
+    });
+
+    if (filter) {
+      groupList = groupList.filter(g => g.resolvedTitle.toLowerCase().includes(filter));
+    }
+
+    if (groupList.length === 0) {
+      wrap.innerHTML = `<div class="empty-state">${filter ? 'Nenhum título encontrado com esse filtro.' : 'Nenhuma fonte cadastrada ainda. Busque um título acima para começar.'}</div>`;
+      return;
+    }
+
+    groupList.sort((a, b) => {
+      const latestA = Math.max(...a.items.map(s => new Date(s.created_at).getTime()));
+      const latestB = Math.max(...b.items.map(s => new Date(s.created_at).getTime()));
+      return latestB - latestA;
+    });
+
+    wrap.innerHTML = groupList.map(({ key, items, resolvedTitle }) => {
+      const first = items[0];
+      const isTv = first.media_type === 'tv';
+      const poster = first.poster_path
+        ? `<img src="${IMG_BASE}w92${first.poster_path}" alt="" loading="lazy" />`
+        : `<div class="ph">🎬</div>`;
+
+      const sorted = [...items].sort((a, b) => {
+        if ((a.season || 0) !== (b.season || 0)) return (a.season || 0) - (b.season || 0);
+        return (a.episode || 0) - (b.episode || 0);
+      });
+
+      const rowsHtml = sorted.map(s => {
+        const epTag = s.season ? `T${s.season}E${s.episode}` : '—';
         return `
-          <div class="result-card" onclick='handleMovieClick(${JSON.stringify({id:r.id, title:r.title||r.name, type, poster_path:r.poster_path}).replace(/'/g, "&#39;")}, ${has})'>
-            ${r.poster_path ? `<img src="${IMG_BASE}w200${r.poster_path}">` : '<div style="height:200px; background:var(--surface2)"></div>'}
-            <div class="status-pill" style="background:${has?'var(--green)':'var(--muted)'}; color:white">${has?'Cadastrado':'Novo'}</div>
-            <div class="info"><div class="t">${r.title||r.name}</div></div>
+          <div class="source-row">
+            <div class="source-ep-tag">${epTag}</div>
+            <div class="source-row-main">
+              <div class="source-label-text">${s.source_label}</div>
+              <span class="source-url-text" title="${s.source_url}">${s.source_url}</span>
+            </div>
+            <span class="pill ${s.is_active ? 'active' : 'inactive'}">${s.is_active ? 'Ativa' : 'Inativa'}</span>
+            <div class="row-actions">
+              <button onclick="event.stopPropagation(); openEditMovieModal(${s.id})">Editar</button>
+              <button onclick="event.stopPropagation(); toggleMovieSourceActive(${s.id}, ${s.is_active})">${s.is_active ? 'Desativar' : 'Ativar'}</button>
+              <button class="danger" onclick="event.stopPropagation(); deleteMovieSource(${s.id})">Excluir</button>
+            </div>
           </div>
         `;
       }).join('');
-    }
 
-    function handleMovieClick(item, has) {
-      if(has) { document.getElementById('filterInput').value = item.title; renderGroupedSources(); document.getElementById('recentSourcesCard').scrollIntoView(); showToast('Filtrado!'); }
-      else openMovieModal(item);
-    }
+      const metaText = isTv
+        ? `Série · ${items.length} fonte${items.length > 1 ? 's' : ''} cadastrada${items.length > 1 ? 's' : ''}`
+        : `Filme · ${items.length} fonte${items.length > 1 ? 's' : ''}`;
 
-    function openMovieModal(item) {
-      _currentMovieItem = item; _editingSourceId = null;
-      document.getElementById('modalTitle').textContent = item.title;
-      document.getElementById('modalSub').textContent = item.type + ' #' + item.id;
-      document.getElementById('modalPoster').src = item.poster_path ? IMG_BASE + 'w200' + item.poster_path : '';
-      document.getElementById('modalPoster').style.display = item.poster_path ? 'block' : 'none';
-      document.getElementById('episodeFields').style.display = item.type === 'tv' ? 'block' : 'none';
-      document.getElementById('modalOverlay').classList.add('open');
-    }
-
-    function closeMovieModal() { document.getElementById('modalOverlay').classList.remove('open'); }
-
-    async function saveMovieSource() {
-      const res = await api(_editingSourceId ? 'update-source' : 'create-source', {
-        tmdb_id: _currentMovieItem.id, media_type: _currentMovieItem.type, title: _currentMovieItem.title,
-        poster_path: _currentMovieItem.poster_path, source_url: document.getElementById('sourceUrlInput').value,
-        source_label: document.getElementById('sourceLabelInput').value || 'Player',
-        priority: parseInt(document.getElementById('sourcePriorityInput').value)
-      });
-      if(res.error) alert(res.error); else { showToast('Salvo!'); closeMovieModal(); loadMovieSources(); }
-    }
-
-    async function loadMovieSources() { const data = await api('list-sources'); _allMovieSources = data.sources || []; renderGroupedSources(); }
-    function renderGroupedSources() {
-      const filter = document.getElementById('filterInput').value.toLowerCase();
-      const groups = new Map();
-      _allMovieSources.forEach(s => { const k = s.media_type + ':' + s.tmdb_id; if(!groups.has(k)) groups.set(k, []); groups.get(k).push(s); });
-      let list = [...groups.entries()].map(([k, items]) => ({ k, items, title: items[0].title }));
-      if(filter) list = list.filter(l => l.title.toLowerCase().includes(filter));
-      document.getElementById('recentSourcesWrap').innerHTML = list.map(g => `
-        <div class="title-group">
-          <div class="title-group-head" onclick="this.parentElement.classList.toggle('open')">
-            <img src="${IMG_BASE}w92${g.items[0].poster_path}">
-            <div class="title-group-info"><div class="name">${g.title}</div><div class="meta">${g.items.length} fontes</div></div>
+      return `
+        <div class="title-group" id="group-${key.replace(':','-')}">
+          <div class="title-group-head" onclick="toggleMovieGroup('group-${key.replace(':','-')}')">
+            ${poster}
+            <div class="title-group-info">
+              <div class="name">${resolvedTitle}</div>
+              <div class="meta">${metaText}</div>
+            </div>
             <div class="title-group-chevron">▾</div>
           </div>
           <div class="title-group-body">
-            ${g.items.map(s => `
-              <div class="source-row">
-                <div class="source-row-main"><div class="source-label-text">${s.source_label}</div><div class="source-url-text">${s.source_url}</div></div>
-                <div class="row-actions"><button onclick="event.stopPropagation(); deleteSource(${s.id})">Excluir</button></div>
-              </div>
-            `).join('')}
+            ${rowsHtml}
+            <button class="title-group-add" onclick='event.stopPropagation(); openMovieModal(${JSON.stringify({
+              id: first.tmdb_id, title: resolvedTitle, type: first.media_type, poster_path: first.poster_path
+            }).replace(/'/g, "&#39;")})'>${isTv ? '+ Adicionar episódio / servidor' : '+ Adicionar servidor'}</button>
           </div>
         </div>
-      `).join('');
+      `;
+    }).join('');
+  }
+
+  function toggleMovieGroup(groupId) {
+    document.getElementById(groupId)?.classList.toggle('open');
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // ABA: ANÚNCIOS
+  // ════════════════════════════════════════════════════════════
+  let _allAds = [];
+  let _editingAdId = null;
+
+  const AD_TYPE_LABELS = {
+    popunder: 'Pop-under',
+    direct_link: 'Link Direto',
+    banner_mobile: 'Banner Mobile',
+    banner_desktop: 'Banner Desktop',
+  };
+  const AD_PLACEMENT_LABELS = {
+    watch: 'Só ao assistir',
+    global: 'Todo o site',
+  };
+
+  function updateAdContentPlaceholder() {
+    const type = document.getElementById('adContentTypeInput').value;
+    const textarea = document.getElementById('adContentInput');
+    // A sequência "<" + "/script>" abaixo é quebrada de propósito: o
+    // navegador fecha a tag de script ao encontrar essa sequência literal em
+    // QUALQUER lugar do código-fonte, mesmo dentro de uma string JS entre
+    // aspas — o parser HTML não sabe que está "dentro de uma string".
+    textarea.placeholder = type === 'script'
+      ? 'Cole a tag <script async src="...">...<' + '/script> aqui...'
+      : 'Cole a URL direta do anúncio aqui (ex: https://exemplo.com/pop)';
+  }
+
+  async function loadAds() {
+    const data = await api('list-ads');
+    if (data.error) { showToast('❌ ' + data.error); return; }
+    _allAds = data.ads || [];
+    renderAdsList();
+  }
+
+  function renderAdsList() {
+    const wrap = document.getElementById('adsListWrap');
+    if (!_allAds.length) {
+      wrap.innerHTML = `<p style="color:var(--muted);font-size:0.85rem;padding:20px 0;text-align:center">Nenhum anúncio cadastrado ainda.</p>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Tipo</th>
+            <th>Local</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${_allAds.map(ad => `
+            <tr>
+              <td>${escapeHtml(ad.name)}</td>
+              <td>${AD_TYPE_LABELS[ad.ad_type] || ad.ad_type}</td>
+              <td>${AD_PLACEMENT_LABELS[ad.placement] || ad.placement}</td>
+              <td>
+                <span class="pill ${ad.is_active ? 'active' : 'inactive'}">
+                  ${ad.is_active ? 'Ativo' : 'Inativo'}
+                </span>
+              </td>
+              <td style="white-space:nowrap">
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick='editAd(${JSON.stringify(ad).replace(/'/g, "&#39;")})' title="Editar">✏️</button>
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleAd('${ad.id}', ${!ad.is_active})" title="${ad.is_active ? 'Desativar' : 'Ativar'}">
+                  ${ad.is_active ? '⏸️' : '▶️'}
+                </button>
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="deleteAd('${ad.id}', '${escapeHtml(ad.name).replace(/'/g, "\\'")}')" title="Excluir">🗑️</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function escapeHtml(str) {
+    return String(str || '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  function editAd(ad) {
+    _editingAdId = ad.id;
+    document.getElementById('adNameInput').value = ad.name;
+    document.getElementById('adTypeInput').value = ad.ad_type;
+    document.getElementById('adPlacementInput').value = ad.placement;
+    document.getElementById('adContentTypeInput').value = ad.content_type;
+    document.getElementById('adContentInput').value = ad.content;
+    document.getElementById('adPriorityInput').value = ad.priority || 0;
+    updateAdContentPlaceholder();
+    document.getElementById('saveAdBtn').textContent = 'Salvar alterações';
+    document.getElementById('cancelEditAdBtn').style.display = 'block';
+    document.getElementById('tab-ads').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function resetAdForm() {
+    _editingAdId = null;
+    document.getElementById('adNameInput').value = '';
+    document.getElementById('adTypeInput').value = 'popunder';
+    document.getElementById('adPlacementInput').value = 'watch';
+    document.getElementById('adContentTypeInput').value = 'script';
+    document.getElementById('adContentInput').value = '';
+    document.getElementById('adPriorityInput').value = 0;
+    updateAdContentPlaceholder();
+    document.getElementById('saveAdBtn').textContent = 'Salvar anúncio';
+    document.getElementById('cancelEditAdBtn').style.display = 'none';
+  }
+
+  async function saveAd() {
+    const name = document.getElementById('adNameInput').value.trim();
+    const ad_type = document.getElementById('adTypeInput').value;
+    const placement = document.getElementById('adPlacementInput').value;
+    const content_type = document.getElementById('adContentTypeInput').value;
+    const content = document.getElementById('adContentInput').value.trim();
+    const priority = parseInt(document.getElementById('adPriorityInput').value, 10) || 0;
+
+    if (!name || !content) {
+      showToast('Preencha o nome e o código/link do anúncio.');
+      return;
+    }
+    // Validação básica: se o formato escolhido é "script", o conteúdo colado
+    // deveria realmente conter uma tag <script> — evita salvar por engano
+    // uma URL solta marcada como script (ou vice-versa).
+    if (content_type === 'script' && !content.includes('<script')) {
+      showToast('⚠️ Formato "Script" selecionado, mas o conteúdo colado não parece ter uma tag <script>.');
+      return;
     }
 
-    async function deleteSource(id) { if(confirm('Excluir?')) { await api('delete-source', { sourceId: id }); loadMovieSources(); } }
+    const btn = document.getElementById('saveAdBtn');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
 
-    async function loadAds() { const data = await api('list-ads'); const ads = data.ads || []; document.getElementById('adsListWrap').innerHTML = `<table><thead><tr><th>Nome</th><th>Ações</th></tr></thead><tbody>${ads.map(ad => `<tr><td>${ad.name}</td><td><button class="btn-secondary" onclick="deleteAd(${ad.id})">Excluir</button></td></tr>`).join('')}</tbody></table>`; }
-    async function saveAd() { await api('create-ad', { name: document.getElementById('adNameInput').value, ad_type: document.getElementById('adTypeInput').value, content: document.getElementById('adContentInput').value, is_active: true }); loadAds(); }
-    async function deleteAd(id) { await api('delete-ad', { adId: id }); loadAds(); }
+    const action = _editingAdId ? 'update-ad' : 'create-ad';
+    const result = await api(action, {
+      adId: _editingAdId,
+      name, ad_type, content_type, content, placement, priority,
+    });
 
-    async function loadIptvSources() { const data = await api('list-iptv-sources'); const sources = data.sources || []; document.getElementById('iptvListWrap').innerHTML = `<table><thead><tr><th>Nome</th><th>Ações</th></tr></thead><tbody>${sources.map(s => `<tr><td>${s.name}</td><td><button class="btn-secondary" onclick="deleteIptv(${s.id})">Excluir</button></td></tr>`).join('')}</tbody></table>`; }
-    async function saveIptvSource() { await api('create-iptv-source', { name: document.getElementById('iptvNameInput').value, xtreamHost: document.getElementById('iptvHostInput').value, xtreamUser: document.getElementById('iptvUserInput').value, xtreamPass: document.getElementById('iptvPassInput').value }); loadIptvSources(); }
-    async function deleteIptv(id) { await api('delete-iptv-source', { sourceId: id }); loadIptvSources(); }
+    btn.disabled = false;
+    if (result.error) {
+      showToast('❌ ' + (result.error?.message || result.error));
+      btn.textContent = _editingAdId ? 'Salvar alterações' : 'Salvar anúncio';
+      return;
+    }
 
-    async function loadEmbedPartners() { const data = await api('list-embed-partners'); const partners = data.partners || []; document.getElementById('embedListWrap').innerHTML = `<table><thead><tr><th>Nome</th><th>Domínio</th><th>Ações</th></tr></thead><tbody>${partners.map(p => `<tr><td>${p.label}</td><td>${p.authorized_domain || 'Qualquer'}</td><td><button class="btn-secondary" onclick="deleteEmbed(${p.id})">Excluir</button></td></tr>`).join('')}</tbody></table>`; }
-    async function saveEmbedPartner() { await api('create-embed-partner', { label: document.getElementById('embedLabelInput').value, authorizedDomain: document.getElementById('embedDomainInput').value }); loadEmbedPartners(); }
-    async function deleteEmbed(id) { await api('delete-embed-partner', { partnerId: id }); loadEmbedPartners(); }
+    showToast(_editingAdId ? '✅ Anúncio atualizado!' : '✅ Anúncio criado!');
+    resetAdForm();
+    loadAds();
+  }
 
-    checkExistingSession();
-  </script>
+  async function toggleAd(adId, newState) {
+    const result = await api('toggle-ad', { adId, isActive: newState });
+    if (result.error) { showToast('❌ ' + result.error); return; }
+    showToast(newState ? '▶️ Anúncio ativado' : '⏸️ Anúncio desativado');
+    loadAds();
+  }
+
+  async function deleteAd(adId, name) {
+    if (!confirm(`Excluir o anúncio "${name}"? Essa ação não pode ser desfeita.`)) return;
+    const result = await api('delete-ad', { adId });
+    if (result.error) { showToast('❌ ' + result.error); return; }
+    showToast('🗑️ Anúncio excluído');
+    loadAds();
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // ABA: IPTV (fontes M3U/Xtream)
+  // ════════════════════════════════════════════════════════════
+  let _allIptvSources = [];
+
+  async function loadIptvSources() {
+    const data = await api('list-iptv-sources');
+    if (data.error) { showToast('❌ ' + data.error); return; }
+    _allIptvSources = data.sources || [];
+    renderIptvList();
+  }
+
+  function iptvProgressLabel(source) {
+    const stats = source.last_sync_stats;
+    if (source.sync_phase === 'done' && stats) {
+      return `✅ Volta completa: ${stats.last_run_matched} encontrados, ${stats.last_run_unmatched} não encontrados (de ${stats.total_movies_in_playlist})`;
+    }
+    if (source.sync_cursor > 0) {
+      return `⏳ Em andamento: posição ${source.sync_cursor}${stats ? ' (última volta: ' + stats.total_movies_in_playlist + ' filmes)' : ''}`;
+    }
+    return '⏳ Aguardando primeira sincronização (roda automaticamente todo dia)';
+  }
+
+  function renderIptvList() {
+    const wrap = document.getElementById('iptvListWrap');
+    if (!_allIptvSources.length) {
+      wrap.innerHTML = `<p style="color:var(--muted);font-size:0.85rem;padding:20px 0;text-align:center">Nenhuma fonte IPTV cadastrada ainda.</p>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Host</th>
+            <th>Prioridade</th>
+            <th>Progresso</th>
+            <th>Status</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${_allIptvSources.map(s => `
+            <tr>
+              <td>${escapeHtml(s.name)}</td>
+              <td style="font-size:0.75rem;color:var(--muted)">${escapeHtml(s.xtream_host)}</td>
+              <td>${s.priority}</td>
+              <td style="font-size:0.75rem;max-width:220px">${iptvProgressLabel(s)}</td>
+              <td>
+                <span class="pill ${s.is_active ? 'active' : 'inactive'}">
+                  ${s.is_active ? 'Ativa' : 'Pausada'}
+                </span>
+              </td>
+              <td style="white-space:nowrap">
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleIptvSource('${s.id}', ${!s.is_active})" title="${s.is_active ? 'Pausar' : 'Reativar'}">
+                  ${s.is_active ? '⏸️' : '▶️'}
+                </button>
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="deleteIptvSource('${s.id}', '${escapeHtml(s.name).replace(/'/g, "\\'")}')" title="Excluir fonte e todos os filmes dela">🗑️</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  async function saveIptvSource() {
+    const name = document.getElementById('iptvNameInput').value.trim();
+    const xtreamHost = document.getElementById('iptvHostInput').value.trim().replace(/\/+$/, ''); // remove barra final se tiver
+    const xtreamUser = document.getElementById('iptvUserInput').value.trim();
+    const xtreamPass = document.getElementById('iptvPassInput').value.trim();
+    const priority = parseInt(document.getElementById('iptvPriorityInput').value, 10) || 5;
+
+    if (!name || !xtreamHost || !xtreamUser || !xtreamPass) {
+      showToast('Preencha nome, host, usuário e senha.');
+      return;
+    }
+    if (!/^https?:\/\//i.test(xtreamHost)) {
+      showToast('⚠️ O host precisa começar com http:// ou https://');
+      return;
+    }
+
+    const btn = document.getElementById('saveIptvBtn');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    const result = await api('create-iptv-source', { name, xtreamHost, xtreamUser, xtreamPass, priority });
+
+    btn.disabled = false;
+    btn.textContent = 'Salvar fonte';
+    if (result.error) { showToast('❌ ' + (result.error?.message || result.error)); return; }
+
+    showToast('✅ Fonte IPTV cadastrada! A sincronização começa automaticamente.');
+    document.getElementById('iptvNameInput').value = '';
+    document.getElementById('iptvHostInput').value = '';
+    document.getElementById('iptvUserInput').value = '';
+    document.getElementById('iptvPassInput').value = '';
+    document.getElementById('iptvPriorityInput').value = '5';
+    loadIptvSources();
+  }
+
+  async function toggleIptvSource(sourceId, newState) {
+    const result = await api('toggle-iptv-source', { sourceId, isActive: newState });
+    if (result.error) { showToast('❌ ' + result.error); return; }
+    showToast(newState ? '▶️ Fonte reativada' : '⏸️ Fonte pausada (filmes já cadastrados continuam no ar)');
+    loadIptvSources();
+  }
+
+  async function deleteIptvSource(sourceId, name) {
+    if (!confirm(`Excluir a fonte "${name}" e TODOS os filmes que vieram dela? Essa ação não pode ser desfeita — use quando a assinatura tiver vencido de vez.`)) return;
+    const result = await api('delete-iptv-source', { sourceId });
+    if (result.error) { showToast('❌ ' + result.error); return; }
+    showToast(`🗑️ Fonte "${name}" e seus filmes foram excluídos`);
+    loadIptvSources();
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // ABA: EMBEDS (parceiros do player distribuído)
+  // ════════════════════════════════════════════════════════════
+  let _allEmbedPartners = [];
+  let _justCreatedKey = null; // guarda a key recém-criada pra mostrar completa só uma vez
+
+  async function loadEmbedPartners() {
+    const data = await api('list-embed-partners');
+    if (data.error) { showToast('❌ ' + data.error); return; }
+    _allEmbedPartners = data.partners || [];
+    renderEmbedList();
+  }
+
+  function maskKey(key) {
+    if (!key) return '';
+    return key.slice(0, 8) + '••••••••';
+  }
+
+  function renderEmbedList() {
+    const wrap = document.getElementById('embedListWrap');
+    if (!_allEmbedPartners.length) {
+      wrap.innerHTML = `<p style="color:var(--muted);font-size:0.85rem;padding:20px 0;text-align:center">Nenhum parceiro cadastrado ainda.</p>`;
+      return;
+    }
+    wrap.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Parceiro</th>
+            <th>Key</th>
+            <th>Domínio</th>
+            <th>Ads</th>
+            <th>Status</th>
+            <th>Último uso</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${_allEmbedPartners.map(p => `
+            <tr>
+              <td>${escapeHtml(p.label)}</td>
+              <td style="font-family:monospace;font-size:0.75rem">
+                ${p.key === _justCreatedKey
+                  ? `<span style="color:var(--green)">${escapeHtml(p.key)}</span> <button class="btn-secondary" style="width:auto;padding:2px 6px;font-size:0.7rem" onclick="navigator.clipboard.writeText('${p.key}');showToast('📋 Key copiada')">copiar</button>`
+                  : maskKey(p.key)}
+              </td>
+              <td style="font-size:0.75rem;color:var(--muted)">${p.domain ? escapeHtml(p.domain) : '<em>qualquer site</em>'}</td>
+              <td>
+                <span class="pill ${p.ads_enabled ? 'active' : 'inactive'}" style="cursor:pointer" onclick="toggleEmbedAds('${p.id}', ${!p.ads_enabled})" title="Clique pra alternar">
+                  ${p.ads_enabled ? 'Ativados' : 'Desativados'}
+                </span>
+              </td>
+              <td>
+                <span class="pill ${p.active ? 'active' : 'inactive'}">
+                  ${p.active ? 'Ativo' : 'Bloqueado'}
+                </span>
+              </td>
+              <td style="font-size:0.75rem;color:var(--muted)">${p.last_used_at ? new Date(p.last_used_at).toLocaleString('pt-BR') : 'nunca usado'}</td>
+              <td style="white-space:nowrap">
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleEmbedPartner('${p.id}', ${!p.active})" title="${p.active ? 'Bloquear' : 'Reativar'}">
+                  ${p.active ? '🚫' : '▶️'}
+                </button>
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleEmbedStats('${p.key}', '${p.id}')" title="Ver estatísticas (adblock/sandbox/ads)">📊</button>
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="deleteEmbedPartner('${p.id}', '${escapeHtml(p.label).replace(/'/g, "\\'")}')" title="Excluir parceiro">🗑️</button>
+              </td>
+            </tr>
+            <tr id="embedStatsRow-${p.id}" style="display:none">
+              <td colspan="7" style="background:rgba(255,255,255,0.02)">
+                <div id="embedStatsContent-${p.id}" style="padding:12px;font-size:0.8rem;color:var(--muted)">Carregando...</div>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // Alterna a exibição do painel de estatísticas (adblock/sandbox/ads)
+  // de um parceiro específico, buscando os dados agregados dos últimos
+  // 7 dias só quando o painel é aberto (não carrega tudo de uma vez).
+  async function toggleEmbedStats(partnerKey, partnerId) {
+    const row = document.getElementById(`embedStatsRow-${partnerId}`);
+    const content = document.getElementById(`embedStatsContent-${partnerId}`);
+    const isHidden = row.style.display === 'none';
+    row.style.display = isHidden ? 'table-row' : 'none';
+    if (!isHidden) return; // fechando — não precisa buscar de novo
+
+    content.innerHTML = 'Carregando estatísticas...';
+    const result = await api('embed-telemetry-stats', { partnerKey, days: 7 });
+    if (result.error) { content.innerHTML = `❌ ${result.error}`; return; }
+
+    if (!result.total) {
+      content.innerHTML = 'Nenhuma sessão registrada nos últimos 7 dias ainda.';
+      return;
+    }
+
+    const adStatusLabels = {
+      loaded: '✅ Ad carregou',
+      blocked: '🚫 Bloqueado',
+      error: '⚠️ Erro',
+      not_attempted: '➖ Sem ad configurado',
+    };
+    const adStatusHtml = Object.entries(result.adStatusCount)
+      .map(([k, v]) => `${adStatusLabels[k] || k}: <strong style="color:#fff">${v}</strong>`)
+      .join(' &nbsp;•&nbsp; ');
+
+    content.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:20px">
+        <div>📈 Sessões (7 dias): <strong style="color:#fff">${result.total}</strong></div>
+        <div>🛡️ Adblock detectado: <strong style="color:#fff">${result.adblockPct ?? '—'}%</strong></div>
+        <div>📦 Sandbox detectado: <strong style="color:#fff">${result.sandboxPct ?? '—'}%</strong></div>
+      </div>
+      <div style="margin-top:8px">${adStatusHtml}</div>
+    `;
+  }
+
+  async function saveEmbedPartner() {
+    const label = document.getElementById('embedLabelInput').value.trim();
+    const domain = document.getElementById('embedDomainInput').value.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+    const adsEnabled = document.getElementById('embedAdsInput').checked;
+    const adZoneId = document.getElementById('embedAdZoneInput').value.trim();
+    const notes = document.getElementById('embedNotesInput').value.trim();
+
+    if (!label) { showToast('Informe o nome do parceiro.'); return; }
+
+    const btn = document.getElementById('saveEmbedBtn');
+    btn.disabled = true;
+    btn.textContent = 'Gerando...';
+
+    const result = await api('create-embed-partner', { label, domain, adsEnabled, adZoneId, notes });
+
+    btn.disabled = false;
+    btn.textContent = 'Gerar key';
+    if (result.error) { showToast('❌ ' + (result.error?.message || result.error)); return; }
+
+    _justCreatedKey = result.partner.key;
+    showToast('✅ Parceiro criado! Copie a key abaixo — ela só aparece completa agora.');
+    document.getElementById('embedLabelInput').value = '';
+    document.getElementById('embedDomainInput').value = '';
+    document.getElementById('embedAdZoneInput').value = '';
+    document.getElementById('embedNotesInput').value = '';
+    document.getElementById('embedAdsInput').checked = true;
+    loadEmbedPartners();
+  }
+
+  async function toggleEmbedPartner(partnerId, newState) {
+    const result = await api('toggle-embed-partner', { partnerId, active: newState });
+    if (result.error) { showToast('❌ ' + result.error); return; }
+    showToast(newState ? '▶️ Parceiro reativado' : '🚫 Parceiro bloqueado — o player dele para de tocar agora');
+    loadEmbedPartners();
+  }
+
+  async function toggleEmbedAds(partnerId, newState) {
+    const result = await api('toggle-embed-ads', { partnerId, adsEnabled: newState });
+    if (result.error) { showToast('❌ ' + result.error); return; }
+    showToast(newState ? '📢 Ads ativados pra esse parceiro' : '🔕 Ads desativados pra esse parceiro');
+    loadEmbedPartners();
+  }
+
+  async function deleteEmbedPartner(partnerId, label) {
+    if (!confirm(`Excluir o parceiro "${label}"? A key para de funcionar imediatamente. Essa ação não pode ser desfeita.`)) return;
+    const result = await api('delete-embed-partner', { partnerId });
+    if (result.error) { showToast('❌ ' + result.error); return; }
+    showToast(`🗑️ Parceiro "${label}" excluído`);
+    loadEmbedPartners();
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // ABA: DASHBOARD
+  // ════════════════════════════════════════════════════════════
+  let _dashboardLoadedOnce = false;
+
+  async function loadDashboard() {
+    // Evita recarregar toda vez que o usuário troca de aba e volta —
+    // números não mudam segundo a segundo, um refresh manual (F5) já cobre
+    // o caso de querer dados mais recentes.
+    if (_dashboardLoadedOnce) return;
+    _dashboardLoadedOnce = true;
+
+    const data = await api('dashboard-stats');
+    if (data.error) {
+      showToast('❌ ' + data.error);
+      return;
+    }
+
+    document.getElementById('dashTotalSources').textContent = (data.totalVipSources ?? 0).toLocaleString('pt-BR');
+    document.getElementById('dashTotalIptv').textContent = (data.totalIptvSources ?? 0).toLocaleString('pt-BR');
+    document.getElementById('dashActiveCodes').textContent = (data.activeVipCodes ?? 0).toLocaleString('pt-BR');
+    document.getElementById('dashTotalUsers').textContent = (data.totalUsers ?? 0).toLocaleString('pt-BR');
+    document.getElementById('dashActiveAds').textContent = (data.activeAds ?? 0).toLocaleString('pt-BR');
+    document.getElementById('dashUnmatched').textContent = (data.totalUnmatched ?? 0).toLocaleString('pt-BR');
+
+    const topWrap = document.getElementById('dashTopSourcesWrap');
+    const topSources = data.topSources || [];
+    if (!topSources.length) {
+      topWrap.innerHTML = `<p style="color:var(--muted);font-size:0.85rem;padding:20px 0;text-align:center">Nenhum dado ainda.</p>`;
+      return;
+    }
+    const maxCount = Math.max(...topSources.map(s => s.count));
+    topWrap.innerHTML = topSources.map(s => `
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px">
+          <span>${escapeHtml(s.label)}</span>
+          <span style="color:var(--muted)">${s.count.toLocaleString('pt-BR')}</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.08);border-radius:6px;height:8px;overflow:hidden">
+          <div style="background:var(--gold,#d4af37);height:100%;width:${(s.count / maxCount * 100).toFixed(1)}%"></div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ── TOAST ──
+  let _toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+  }
+</script>
 </body>
 </html>
