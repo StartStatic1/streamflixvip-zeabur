@@ -1670,7 +1670,7 @@
         ? `<img src="${IMG_BASE}w200${r.poster_path}" alt="" loading="lazy" />`
         : `<div class="ph">🎬</div>`;
       return `
-        <div class="result-card" onclick='openMovieModal(${JSON.stringify({
+        <div class="result-card" onclick='openMovieModalSmart(${JSON.stringify({
           id: r.id, title, year, type, poster_path: r.poster_path
         }).replace(/'/g, "&#39;")})'>
           ${poster}
@@ -1701,9 +1701,29 @@
     if (e.key === 'Enter') doMovieSearch();
   });
 
-  function openMovieModal(item) {
+  // Abre o modal de forma inteligente: se o filme já existe, traz o título correto
+  // e deixa pronto para adicionar novo host. Se é novo, abre em branco.
+  function openMovieModalSmart(item) {
+    const existingSources = _allMovieSources.filter(x => x.tmdb_id === item.id && x.media_type === item.type);
+    if (existingSources.length > 0) {
+      // Filme já cadastrado — resolve o título entre as fontes
+      const resolvedTitle = (existingSources.find(x => x.title && x.title.trim())?.title) || item.title || '(sem título)';
+      item.title = resolvedTitle;
+    }
+    openMovieModal(item);
+  }
+
+    function openMovieModal(item) {
     _currentMovieItem = item;
     _editingSourceId = null;
+    
+    // Resolve o título entre as fontes do filme (se já cadastrado)
+    const existingSources = _allMovieSources.filter(x => x.tmdb_id === item.id && x.media_type === item.type);
+    if (existingSources.length > 0) {
+      const resolvedTitle = (existingSources.find(x => x.title && x.title.trim())?.title) || item.title || '(sem título)';
+      item.title = resolvedTitle;
+    }
+    
     document.getElementById('modalTitle').textContent = item.title;
     document.getElementById('modalSub').textContent =
       `${item.type === 'movie' ? 'Filme' : 'Série'} · ${item.year || '—'} · TMDB #${item.id}`;
