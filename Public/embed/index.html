@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>StreamFlixVIP Player</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; background:#000; overflow:hidden; }
+  #playerWrap {
+    width:100vw; height:100vh; background:#000; position:relative;
+    display:flex; flex-direction:column;
+  }
+  #playerMedia { position:relative; width:100%; flex:1 1 auto; min-height:0; background:#000; }
+  #playerMedia video { position:absolute; inset:0; width:100%; height:100%; border:none; display:block; object-fit:contain; }
+
+  /* Barra de controles como overlay flutuando por cima do vídeo — nunca
+     divide espaço em layout com ele, então sumir (opacity:0) nunca deixa
+     buraco preto embaixo. Ver anotação da correção original no projeto
+     principal (index.html) sobre por que isso importa. */
+  #customControlsBar {
+    position:absolute; left:0; right:0; bottom:0; z-index:20;
+    display:flex; align-items:center; gap:8px; padding:9px 14px 20px;
+    background:linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0));
+    transition:opacity .25s ease;
+  }
+  #customControlsBar.idle { opacity:0; pointer-events:none; }
+  .ctrl-btn {
+    background:none; border:none; color:#fff; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    width:32px; height:32px; border-radius:8px; flex:none; padding:0;
+  }
+  .ctrl-btn:hover { background:rgba(255,255,255,0.12); }
+  .ctrl-btn svg { width:20px; height:20px; }
+  #seekBar { flex:1; height:4px; cursor:pointer; accent-color:#f0a830; }
+  #timeLabel { color:#fff; font:600 12px system-ui, sans-serif; white-space:nowrap; min-width:88px; text-align:center; }
+
+  #statusScreen {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:12px;
+    color:#c0bdd8; font:500 15px system-ui, sans-serif; text-align:center; padding:24px;
+    background:#0b0b13;
+  }
+  #statusScreen.hidden { display:none; }
+  #statusScreen .spinner {
+    width:34px; height:34px; border-radius:50%;
+    border:3px solid rgba(255,255,255,0.15); border-top-color:#f0a830;
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="playerWrap">
+  <div id="playerMedia">
+    <video id="playerVideo" playsinline webkit-playsinline></video>
+  </div>
+  <div id="customControlsBar" style="display:none">
+    <button class="ctrl-btn" id="playPauseBtn" title="Play/Pause">▶</button>
+    <span id="timeLabel">00:00 / 00:00</span>
+    <input type="range" id="seekBar" min="0" max="100" value="0">
+    <button class="ctrl-btn" id="fullscreenBtn" title="Tela cheia">⛶</button>
+  </div>
+  <div id="statusScreen">
+    <div class="spinner"></div>
+    <div id="statusText">Carregando player…</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ── Parâmetros da URL do embed ──
+  // Uso: /embed/?key=SUA_KEY&tmdb=<id>&type=movie|tv&season=<n>&episode=<n>
+  // A src do vídeo NUNCA vai na URL do embed — ela é resolvida no backend
+  // a partir do tmdb_id, no seu próprio catálogo, e nunca fica exposta
+  // no HTML/JS da página do parceiro.
+  const params = new URLSearchParams(window.location.search);
+  const KEY     = params.get('key') || '';
+  const TMDB_ID = params.get('tmdb') || '';
+  const TYPE    = params.get('type') || 'movie';
+  const SEASON  = params.get('season') || '';
+  const EPISODE = params.get('episode') || '';
+
+  const statusScreen = document.getElementById('statusScreen');
+  const statusText   = document.getElementById('statusText');
+  const video        = document.getElementById('playerVideo');
+  const controlsBar  = document.getElementById('customControlsBar');
+
+  function showStatus(msg) {
+    statusText.textContent = msg;
+    statusScreen.classList.remove('hidden');
+  }
+  function hideStatus() {
+    statusScreen.classList.add('hidden');
+  }
+
+  // ── 1) Validação remota ANTES de tocar qualquer coisa ──
+  // Isso é o que permite bloqueio remoto: se a key for desativada no
+  // painel admin, todo mundo que tiver esse iframe instalado para de
+  // conseguir tocar vídeo na próxima vez que a página carregar — sem
+  // precisar mexer em nenhum arquivo instalado em site de terceiro.
+  async function validateAndStart() {
+    if (!KEY) { showStatus('Player não configurado (faltando key).'); return; }
+    if (!TMDB_ID) { showStatus('Player não configurado (faltando ID do título).'); return; }
+
+    let config;
+    try {
+      let url = `/api/embed-config?key=${encodeURIComponent(KEY)}&tmdb=${encodeURIComponent(TMDB_ID)}&type=${encodeURIComponent(TYPE)}`;
+      if (SEASON)  url += `&season=${encodeURIComponent(SEASON)}`;
+      if (EPISODE) url += `&episode=${encodeURIComponent(EPISODE)}`;
+      const r = await fetch(url);
+      config = await r.json();
+    } catch (e) {
+      showStatus('Não foi possível validar o player agora. Tente novamente em instantes.');
+      return;
+    }
+
+    if (!config.allowed) {
+      // Mensagem genérica de propósito — não expõe o motivo exato do
+      // bloqueio (domain_mismatch, blocked_by_admin, title_not_found, etc)
+      // pra quem instalou.
+      showStatus('Conteúdo indisponível.');
+      return;
+    }
+
+    hideStatus();
+    startPlayback(config.src);
+
+    // Sandbox é detectável de imediato (não depende do ad tentar carregar).
+    const sandboxed = detectSandbox();
+
+    if (config.ads && config.ads.enabled) {
+      loadAds(config.ads.zoneId, sandboxed);
+    } else {
+      reportTelemetry({ sandboxed, adStatus: 'not_attempted' });
+    }
+  }
+
+  // ── Telemetria: adblock, sandbox e status do ad ──
+  // Best-effort: nunca deve atrasar ou quebrar a reprodução do vídeo.
+  // Ver api/embed-config.js (rota POST) pra onde isso é gravado.
+  function reportTelemetry({ sandboxed, adStatus }) {
+    try {
+      fetch('/api/embed-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: KEY,
+          tmdbId: TMDB_ID,
+          adblock: adStatus === 'blocked',
+          sandboxed: !!sandboxed,
+          adStatus,
+        }),
+        keepalive: true, // garante envio mesmo se a aba fechar logo em seguida
+      }).catch(() => {});
+    } catch (e) { /* telemetria nunca deve gerar erro visível */ }
+  }
+
+  // Detecta se o iframe está rodando com atributo sandbox restritivo no
+  // <iframe> do parceiro. Testa acesso a APIs que o sandbox costuma
+  // bloquear — se falhar, é sinal de sandbox ativo. Não é 100% garantido
+  // (varia por combinação de flags do atributo sandbox), mas é um sinal útil.
+  function detectSandbox() {
+    let restricted = false;
+    try {
+      // Sandbox sem "allow-same-origin" bloqueia acesso a cookies/storage
+      // e força origin como "null".
+      if (window.origin === 'null' || document.location.origin === 'null') restricted = true;
+      document.cookie = 'sfv_test=1';
+      if (!document.cookie.includes('sfv_test=1')) restricted = true;
+    } catch (e) {
+      restricted = true;
+    }
+    return restricted;
+  }
+
+  // Detecta adblock com um elemento-isca: bloqueadores de anúncio
+  // costumam remover ou zerar elementos com classes/ids associados a ads.
+  // Resolve rápido (300ms) pra não atrasar o relatório de telemetria.
+  function detectAdblock() {
+    return new Promise((resolve) => {
+      const bait = document.createElement('div');
+      bait.className = 'ad-banner ads advertisement';
+      bait.style.cssText = 'position:absolute;left:-9999px;width:1px;height:1px;';
+      document.body.appendChild(bait);
+      setTimeout(() => {
+        const blocked = bait.offsetParent === null || bait.clientHeight === 0 || getComputedStyle(bait).display === 'none';
+        bait.remove();
+        resolve(blocked);
+      }, 300);
+    });
+  }
+
+  // ── 2) Reprodução (HLS + mp4, mesma lógica do player principal) ──
+  let hlsInstance = null;
+  function isM3u8(url) { return /\.m3u8(\?|#|$)/i.test(url); }
+
+  function startPlayback(url) {
+    controlsBar.style.display = 'flex';
+    if (isM3u8(url)) {
+      if (window.Hls && window.Hls.isSupported()) {
+        hlsInstance = new window.Hls({
+          maxBufferLength: 60,
+          maxMaxBufferLength: 120,
+          maxBufferSize: 200 * 1000 * 1000,
+          maxBufferHole: 0.5,
+        });
+        hlsInstance.loadSource(url);
+        hlsInstance.attachMedia(video);
+      } else {
+        video.src = url; // Safari/iOS: HLS nativo
+      }
+    } else {
+      video.src = url;
+    }
+    video.play().catch(() => { /* autoplay bloqueado — usuário dá play manual */ });
+  }
+
+  // ── 3) Ads (placeholder de integração Monetag) ──
+  // Sanduichar aqui a tag real do Monetag pra esse zoneId. Como este
+  // script roda DENTRO do seu iframe/domínio, quem instala o embed não
+  // tem acesso ao DOM interno pra remover isso (isolamento de origem).
+  async function loadAds(zoneId, sandboxed) {
+    if (!zoneId) { reportTelemetry({ sandboxed, adStatus: 'not_attempted' }); return; }
+
+    const adblockDetected = await detectAdblock();
+    if (adblockDetected) {
+      reportTelemetry({ sandboxed, adStatus: 'blocked' });
+      return;
+    }
+
+    try {
+      // Exemplo de integração (ajustar pro snippet real do Monetag):
+      // const s = document.createElement('script');
+      // s.src = `https://alwingulla.com/tag.min.js`;
+      // s.dataset.zone = zoneId;
+      // s.onload = () => reportTelemetry({ sandboxed, adStatus: 'loaded' });
+      // s.onerror = () => reportTelemetry({ sandboxed, adStatus: 'error' });
+      // document.body.appendChild(s);
+
+      // Enquanto a tag real não está plugada aqui, reporta como
+      // "not_attempted" pra não inflar estatística de "loaded" falso.
+      reportTelemetry({ sandboxed, adStatus: 'not_attempted' });
+    } catch (e) {
+      reportTelemetry({ sandboxed, adStatus: 'error' });
+    }
+  }
+
+  // ── 4) Controles (play/pause, seek, fullscreen, auto-hide) ──
+  document.getElementById('playPauseBtn').addEventListener('click', () => {
+    if (video.paused) video.play(); else video.pause();
+  });
+  document.getElementById('playPauseBtn').addEventListener('click', updatePlayIcon);
+  video.addEventListener('play',  updatePlayIcon);
+  video.addEventListener('pause', updatePlayIcon);
+  function updatePlayIcon() {
+    document.getElementById('playPauseBtn').textContent = video.paused ? '▶' : '❚❚';
+  }
+
+  function fmt(t) {
+    if (!isFinite(t)) return '00:00';
+    const m = Math.floor(t / 60), s = Math.floor(t % 60);
+    return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  }
+  video.addEventListener('timeupdate', () => {
+    if (!video.duration) return;
+    document.getElementById('seekBar').value = (video.currentTime / video.duration) * 100;
+    document.getElementById('timeLabel').textContent = `${fmt(video.currentTime)} / ${fmt(video.duration)}`;
+  });
+  document.getElementById('seekBar').addEventListener('input', (e) => {
+    if (video.duration) video.currentTime = (e.target.value / 100) * video.duration;
+  });
+
+  document.getElementById('fullscreenBtn').addEventListener('click', () => {
+    const wrap = document.getElementById('playerWrap');
+    if (!document.fullscreenElement) {
+      (wrap.requestFullscreen || wrap.webkitRequestFullscreen)?.call(wrap);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    }
+  });
+
+  // Auto-hide da barra depois de 3s parado (mesmo comportamento do
+  // player principal) — funciona em fullscreen ou não, aqui simplificado
+  // pra sempre ativo já que o embed é 100% dedicado ao vídeo.
+  let idleTimer = null;
+  function showControlsBar() {
+    controlsBar.classList.remove('idle');
+    clearTimeout(idleTimer);
+    if (!video.paused) idleTimer = setTimeout(() => controlsBar.classList.add('idle'), 3000);
+  }
+  ['mousemove', 'touchstart', 'click'].forEach(evt => document.getElementById('playerWrap').addEventListener(evt, showControlsBar));
+  video.addEventListener('play', showControlsBar);
+  video.addEventListener('pause', showControlsBar);
+
+  validateAndStart();
+})();
+</script>
+</body>
+</html>
