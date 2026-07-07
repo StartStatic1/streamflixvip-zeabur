@@ -19,11 +19,17 @@ const EXTRA_ALLOWED_HOSTS = [
   'unitvlite.xyz',
   'sventank.com',
   'cdnbr02.com',
-  'nxpanelxr51.info', 
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
-const CACHE_TTL_MS = 60 * 1000;
+// Reduzido de 60s para 10s: com 60s, cadastrar uma fonte nova no admin e
+// testar o vídeo logo em seguida batia num cache antigo (sem o host novo)
+// e o proxy bloqueava com 403 — o player então mostrava "Servidor
+// indisponível" mesmo a fonte estando correta, só por timing. 10s ainda
+// evita consultar o Supabase a cada chunk de vídeo (que seria centenas de
+// queries por minuto durante uma reprodução), mas deixa o admin utilizável
+// quase na hora depois de cadastrar/editar uma fonte.
+const CACHE_TTL_MS = 10 * 1000;
 
 // ── Limite de streams simultâneos ──
 // Cada requisição de vídeo aqui mantém um buffer de chunks na memória do
@@ -54,6 +60,14 @@ async function getAllowedHosts() {
         try { hosts.add(new URL(row.source_url).hostname); } catch (_) {}
       }
       _hostsCache = { hosts, fetchedAt: now };
+      // Log de diagnóstico: se aparecer nos Runtime logs da Zeabur com
+      // contagens de hosts diferentes entre si (ex: um log com 4 hosts,
+      // outro com 6, alternando sem padrão), é sinal de que existe mais
+      // de um processo Node rodando simultaneamente na mesma VM, cada um
+      // com seu próprio cache em memória — nesse caso o problema não é
+      // mais o tempo de cache, e sim a Zeabur duplicando o processo (ver
+      // aquelas instâncias extras em "Starting" no painel).
+      console.log(`stream-proxy: cache de hosts atualizado (${hosts.size} hosts) — pid ${process.pid}`);
     }
   } catch (e) {
     console.error('stream-proxy: falha ao atualizar hosts, mantendo cache:', e);
