@@ -19,6 +19,8 @@ const EXTRA_ALLOWED_HOSTS = [
   'unitvlite.xyz',
   'sventank.com',
   'cdnbr02.com',
+  '002.jvrkt.online',
+  'kraewert.top', 
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
