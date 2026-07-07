@@ -1664,9 +1664,13 @@
   function openEditMovieModal(sourceId) {
     const s = _allMovieSources.find(x => x.id === sourceId);
     if (!s) return;
-    _currentMovieItem = { id: s.tmdb_id, title: s.title, type: s.media_type, poster_path: s.poster_path };
+    // Resolve o título entre as fontes-irmãs (mesmo filme/série) — evita
+    // reabrir com título em branco se justo essa fonte não tiver salvo.
+    const siblings = _allMovieSources.filter(x => x.tmdb_id === s.tmdb_id && x.media_type === s.media_type);
+    const resolvedTitle = (siblings.find(x => x.title && x.title.trim())?.title) || s.title || '(sem título)';
+    _currentMovieItem = { id: s.tmdb_id, title: resolvedTitle, type: s.media_type, poster_path: s.poster_path };
     _editingSourceId = s.id;
-    document.getElementById('modalTitle').textContent = s.title;
+    document.getElementById('modalTitle').textContent = resolvedTitle;
     document.getElementById('modalSub').textContent =
       `${s.media_type === 'movie' ? 'Filme' : 'Série'}${s.season ? ` · T${s.season}E${s.episode}` : ''} · TMDB #${s.tmdb_id}`;
     setMovieModalPoster(s.poster_path);
@@ -1867,28 +1871,41 @@
     const wrap = document.getElementById('recentSourcesWrap');
     const filter = (document.getElementById('filterInput')?.value || '').trim().toLowerCase();
 
-    let sources = _allMovieSources;
-    if (filter) sources = sources.filter(s => s.title.toLowerCase().includes(filter));
-
-    if (sources.length === 0) {
-      wrap.innerHTML = `<div class="empty-state">${filter ? 'Nenhum título encontrado com esse filtro.' : 'Nenhuma fonte cadastrada ainda. Busque um título acima para começar.'}</div>`;
-      return;
-    }
-
+    // Agrupa PRIMEIRO, sem filtrar ainda. Filtrar linha-a-linha antes de
+    // agrupar era o bug: se uma fonte específica tivesse o título em
+    // branco (cadastrada por um fluxo que não preencheu esse campo), ela
+    // sumia da busca mesmo o filme tendo outras fontes com título certo.
     const groups = new Map();
-    sources.forEach(s => {
+    _allMovieSources.forEach(s => {
       const key = s.media_type + ':' + s.tmdb_id;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(s);
     });
 
-    const groupList = [...groups.entries()].sort((a, b) => {
-      const latestA = Math.max(...a[1].map(s => new Date(s.created_at).getTime()));
-      const latestB = Math.max(...b[1].map(s => new Date(s.created_at).getTime()));
+    // Resolve um título "canônico" por grupo: usa a primeira fonte do
+    // grupo que tiver título preenchido, não necessariamente a primeira
+    // da lista (que pode ser justamente a com título em branco).
+    let groupList = [...groups.entries()].map(([key, items]) => {
+      const resolvedTitle = (items.find(s => s.title && s.title.trim())?.title) || '(sem título)';
+      return { key, items, resolvedTitle };
+    });
+
+    if (filter) {
+      groupList = groupList.filter(g => g.resolvedTitle.toLowerCase().includes(filter));
+    }
+
+    if (groupList.length === 0) {
+      wrap.innerHTML = `<div class="empty-state">${filter ? 'Nenhum título encontrado com esse filtro.' : 'Nenhuma fonte cadastrada ainda. Busque um título acima para começar.'}</div>`;
+      return;
+    }
+
+    groupList.sort((a, b) => {
+      const latestA = Math.max(...a.items.map(s => new Date(s.created_at).getTime()));
+      const latestB = Math.max(...b.items.map(s => new Date(s.created_at).getTime()));
       return latestB - latestA;
     });
 
-    wrap.innerHTML = groupList.map(([key, items]) => {
+    wrap.innerHTML = groupList.map(({ key, items, resolvedTitle }) => {
       const first = items[0];
       const isTv = first.media_type === 'tv';
       const poster = first.poster_path
@@ -1928,7 +1945,7 @@
           <div class="title-group-head" onclick="toggleMovieGroup('group-${key.replace(':','-')}')">
             ${poster}
             <div class="title-group-info">
-              <div class="name">${first.title}</div>
+              <div class="name">${resolvedTitle}</div>
               <div class="meta">${metaText}</div>
             </div>
             <div class="title-group-chevron">▾</div>
@@ -1936,7 +1953,7 @@
           <div class="title-group-body">
             ${rowsHtml}
             <button class="title-group-add" onclick='event.stopPropagation(); openMovieModal(${JSON.stringify({
-              id: first.tmdb_id, title: first.title, type: first.media_type, poster_path: first.poster_path
+              id: first.tmdb_id, title: resolvedTitle, type: first.media_type, poster_path: first.poster_path
             }).replace(/'/g, "&#39;")})'>${isTv ? '+ Adicionar episódio / servidor' : '+ Adicionar servidor'}</button>
           </div>
         </div>
