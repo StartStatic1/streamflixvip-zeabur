@@ -120,17 +120,15 @@ async function handler(req, res) {
     // Cada operador de painel Xtream/IPTV configura seu próprio firewall e
     // regras do Cloudflare, então não existe uma combinação universal.
     //
-    // TIMEOUT — causa raiz do travamento silencioso e inconsistente: o
-    // fetch() sem timeout explícito espera INDEFINIDAMENTE se a origem (ou
-    // o CDN pra onde ela redireciona, ex: meshantic.com) demorar a
-    // responder. Isso não gera nenhum erro no log (por isso os Runtime
-    // logs não mostravam nada no momento do travamento) e explica por que
-    // o mesmo link funciona no navegador (que tem seus próprios timeouts e
-    // pode tentar de novo) mas trava no proxy sem aviso. Com o timeout
-    // abaixo, uma origem lenta falha de forma visível em vez de prender a
-    // requisição pra sempre — e vira um "servidor indisponível" real, não
-    // um travamento mudo.
-    const FETCH_TIMEOUT_MS = 12000;
+    // TIMEOUT — proteção contra travamento silencioso indefinido, mas com
+    // margem generosa: testamos 12s e descobrimos que era curto demais —
+    // cortava conexões que eram só lentas (não travadas de verdade) e que
+    // teriam completado com mais paciência. Servidores IPTV/Xtream muitas
+    // vezes demoram bem mais que isso pra entregar o primeiro byte,
+    // especialmente sob carga. 45s ainda evita a requisição ficar presa
+    // pra sempre (o problema original), mas dá tempo real pra origens
+    // lentas responderem antes de desistir.
+    const FETCH_TIMEOUT_MS = 45000;
 
     async function tryFetch(variant) {
       const headers = {};
@@ -202,12 +200,12 @@ async function handler(req, res) {
     // WATCHDOG DE INATIVIDADE: mesmo com o timeout inicial do fetch, a
     // conexão pode abrir normalmente e depois travar NO MEIO do stream
     // (ex: a origem para de mandar bytes sem fechar a conexão). Sem isso,
-    // o reader.read() abaixo ficaria esperando pra sempre, silenciosamente
-    // — o mesmo tipo de travamento mudo, só que no meio do vídeo em vez de
-    // no início. Se nenhum chunk novo chegar em STALL_TIMEOUT_MS, encerra
-    // a resposta em vez de prender a conexão do usuário indefinidamente.
+    // o reader.read() abaixo ficaria esperando pra sempre, silenciosamente.
+    // Mesma lógica do timeout inicial: margem generosa (60s) porque
+    // origens IPTV têm picos de lentidão real que não são travamento de
+    // verdade — um valor curto demais corta streams que teriam continuado.
     if (upstream.body) {
-      const STALL_TIMEOUT_MS = 15000;
+      const STALL_TIMEOUT_MS = 60000;
       const reader = upstream.body.getReader();
       req.on('close', () => reader.cancel().catch(() => {}));
       try {
