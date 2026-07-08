@@ -2867,14 +2867,23 @@
   }
 
   // type aqui é o tipo de UI: 'movie' | 'tv' | 'anime'
-  function cardHTML(item, type = 'movie') {
+  // genreMap (opcional): { [genreId]: 'Nome' } — resolvido 1x e cacheado por
+  // ensureGenreListCache(), pra não precisar buscar o detalhe completo de
+  // cada item só pra saber o nome do gênero (isso era o que deixava a Home
+  // lenta: uma requisição HTTP extra por card, em série no carregamento).
+  function cardHTML(item, type = 'movie', genreMap = null) {
     const poster = item.poster_path
       ? `<img class="card-poster" src="${IMG_BASE}w342${item.poster_path}" alt="${(item.title||item.name||'').replace(/"/g,'&quot;')}" loading="lazy" width="185" height="278" />`
       : `<div class="card-poster-placeholder">🎬</div>`;
     const title = item.title || item.name || 'Sem título';
     const year  = (item.release_date || item.first_air_date || '').slice(0,4);
     const rating = item.vote_average ? item.vote_average.toFixed(1) : '-';
-    const genreNames = (item.genres || []).slice(0,2).map(g => g.name).join(' · ');
+    // item.genres (array de objetos) só existe quando veio do endpoint de
+    // detalhe (/movie/{id}); item.genre_ids (array de números) vem de
+    // /discover, /popular, /search etc — resolvemos o nome localmente.
+    const genreNames = item.genres
+      ? item.genres.slice(0,2).map(g => g.name).join(' · ')
+      : (genreMap ? (item.genre_ids||[]).slice(0,2).map(id => genreMap[id]).filter(Boolean).join(' · ') : '');
     const desc = item.overview || '';
     const saved = isInWatchlist(item.id, type);
     const badgeLabel = type === 'movie' ? 'FILME' : (type === 'anime' ? 'ANIME' : 'SÉRIE');
@@ -2966,16 +2975,20 @@
     if (track) track.scrollBy({ left: dir * track.clientWidth * 0.82, behavior:'smooth' });
   }
 
-  // type = tipo de UI ('movie'|'tv'|'anime'); usa tmdbType() pra montar o path certo
-  async function loadRow(rowId, ids, type = 'movie', limit = 14) {
+  // type aqui é o tipo de UI ('movie'|'tv'|'anime').
+  // ANTES: buscava o detalhe de cada item individualmente (Promise.all de
+  // até 14 chamadas HTTP por fileira) só pra pegar o nome do gênero — isso
+  // multiplicado pelas ~7 fileiras da Home virava quase 100 requisições
+  // extras e deixava o carregamento visivelmente lento, principalmente em
+  // rede móvel. Os itens já vêm com poster, título, nota e genre_ids na
+  // própria resposta de /discover, /popular etc, então usamos eles direto.
+  async function loadRow(rowId, items, type = 'movie', limit = 14) {
     const track = document.getElementById(rowId);
     if (!track) return;
-    const slice = ids.slice(0, limit);
-    const path = tmdbType(type) === 'movie' ? '/movie/' : '/tv/';
-    const items = await Promise.all(slice.map(id => tmdb(path + id, {append_to_response:'genres'})));
-    const cards = items.filter(Boolean);
-    cards.forEach(i => { itemStore[type+':'+i.id] = i; });
-    track.innerHTML = cards.map(i => cardHTML(i, type)).join('');
+    const slice = (items || []).filter(Boolean).slice(0, limit);
+    const genreMap = await ensureGenreListCache();
+    slice.forEach(i => { itemStore[type+':'+i.id] = i; });
+    track.innerHTML = slice.map(i => cardHTML(i, type, genreMap)).join('');
   }
 
   // ══════════════════════════════════════
@@ -3279,13 +3292,13 @@
 
     await setupHero(extractIds(populares).slice(0,15), 'movie');
 
-    loadRow('row-lancamentos', extractIds(lancamentos), 'movie');
-    loadRow('row-populares',   extractIds(populares),   'movie');
-    loadRow('row-acao',        extractIds(acao),        'movie');
-    loadRow('row-anime',       extractIds(anime),       'anime');
-    loadRow('row-series-top',  extractIds(seriesTop),   'tv');
-    loadRow('row-series-pop',  extractIds(seriesPop),   'tv');
-    loadRow('row-comedia',     extractIds(comedia),     'movie');
+    loadRow('row-lancamentos', lancamentos?.results, 'movie');
+    loadRow('row-populares',   populares?.results,   'movie');
+    loadRow('row-acao',        acao?.results,        'movie');
+    loadRow('row-anime',       anime?.results,       'anime');
+    loadRow('row-series-top',  seriesTop?.results,   'tv');
+    loadRow('row-series-pop',  seriesPop?.results,   'tv');
+    loadRow('row-comedia',     comedia?.results,     'movie');
   }
 
   // ══════════════════════════════════════
@@ -3456,7 +3469,8 @@
       grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔍</div>Nenhum título encontrado com esse filtro.</div>';
     } else {
       results.forEach(i => { itemStore[uiType+':'+i.id] = i; });
-      grid.insertAdjacentHTML('beforeend', results.map(i => cardHTML(i, uiType)).join(''));
+      const genreMap = await ensureGenreListCache();
+      grid.insertAdjacentHTML('beforeend', results.map(i => cardHTML(i, uiType, genreMap)).join(''));
     }
 
     if (!data || allGridState.page >= (data.total_pages||1) || (data?.results||[]).length === 0) {
@@ -3655,8 +3669,7 @@
 
     const similar = (full.similar?.results || [])
       .filter(s => type !== 'anime' ? true : s.original_language === 'ja')
-      .slice(0,14)
-      .map(s => s.id);
+      .slice(0,14);
     if (similar.length) {
       document.getElementById('similarSection').innerHTML = rowSectionHTML('row-similar', 'Títulos parecidos');
       loadRow('row-similar', similar, type);
@@ -5090,8 +5103,11 @@ document.addEventListener('click', (e) => {
   }
 
   // Cache simples (nunca expira dentro da sessão) dos nomes de gênero de
-  // filme + TV combinados, usado só para rotular os chips da busca.
+  // filme + TV combinados. _genreListResolved é a versão síncrona (objeto
+  // pronto, não Promise) pra usar em código que não é async, como
+  // renderFilteredSearchResults.
   let _genreListCachePromise = null;
+  let _genreListResolved = null;
   function ensureGenreListCache() {
     if (_genreListCachePromise) return _genreListCachePromise;
     _genreListCachePromise = Promise.all([
@@ -5101,6 +5117,7 @@ document.addEventListener('click', (e) => {
       const map = {};
       (m?.genres || []).forEach(g => map[g.id] = g.name);
       (t?.genres || []).forEach(g => { if (!map[g.id]) map[g.id] = g.name; });
+      _genreListResolved = map;
       return map;
     }).catch(() => ({}));
     return _genreListCachePromise;
@@ -5152,8 +5169,12 @@ document.addEventListener('click', (e) => {
     if (_searchFilters.year) items = items.filter(i => (i.release_date || i.first_air_date || '').slice(0,4) === _searchFilters.year);
 
     const limited = items.slice(0, 24);
-    g.innerHTML = limited.map(i => cardHTML(i, i._type)).join('') ||
+    g.innerHTML = limited.map(i => cardHTML(i, i._type, _genreListResolved)).join('') ||
       `<div class="empty-state"><div class="empty-state-icon">🔍</div>Nenhum resultado encontrado${Object.values(_searchFilters).some(Boolean) ? ' com esses filtros' : ''}.</div>`;
+    // Se o mapa de gêneros ainda não tinha chegado (busca muito rápida),
+    // busca e refaz o render assim que resolver, pra completar os cards
+    // com o nome do gênero em vez de deixá-los sem essa informação.
+    if (!_genreListResolved) ensureGenreListCache().then(() => renderFilteredSearchResults());
   }
   function closeSearch() {
     document.getElementById('searchOverlay').classList.remove('open');
