@@ -15,15 +15,6 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 // Hosts extras sempre liberados, mesmo que não estejam em vip_sources ainda.
 // Útil pra testes antes de cadastrar no painel.
-//
-// NOTA: hosts de CDN com subdomínio numerado (ex: 002.jvrkt.online) que
-// aparecem só depois de um redirect não devem entrar aqui — cada filme
-// desse mesmo provedor pode redirecionar pra um número diferente
-// (001., 002., 003...), então fixar um só cobre por acaso o título que
-// foi testado. Ver getAllowedHosts(): o redirect já é seguido pelo fetch
-// (redirect: 'follow'), então o host de destino do redirect não passa
-// pela checagem de allowedHosts — só o host da URL ORIGINAL (a cadastrada
-// no admin) precisa estar liberado.
 const EXTRA_ALLOWED_HOSTS = [
   'unitvlite.xyz',
   'sventank.com',
@@ -31,28 +22,7 @@ const EXTRA_ALLOWED_HOSTS = [
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
-// Reduzido de 60s para 10s: com 60s, cadastrar uma fonte nova no admin e
-// testar o vídeo logo em seguida batia num cache antigo (sem o host novo)
-// e o proxy bloqueava com 403 — o player então mostrava "Servidor
-// indisponível" mesmo a fonte estando correta, só por timing. 10s ainda
-// evita consultar o Supabase a cada chunk de vídeo (que seria centenas de
-// queries por minuto durante uma reprodução), mas deixa o admin utilizável
-// quase na hora depois de cadastrar/editar uma fonte.
-const CACHE_TTL_MS = 10 * 1000;
-
-// ── Limite de streams simultâneos ──
-// Cada requisição de vídeo aqui mantém um buffer de chunks na memória do
-// processo Node enquanto faz o pipe origem→navegador (ver comentário mais
-// abaixo sobre por que usamos stream em vez de arrayBuffer). Numa VM de
-// 2GB, isso significa que memória sobe com o NÚMERO de pessoas assistindo
-// ao mesmo tempo, não com CPU — é exatamente o padrão visto no painel
-// Zeabur (72% de RAM com só 6% de CPU). Sem um teto, muitos streams
-// simultâneos enchem a RAM e o processo trava/reinicia (os "502" e as
-// várias instâncias em "Starting" que apareceram no painel). Este limite
-// rejeita novas conexões de vídeo além do teto com uma mensagem clara, em
-// vez de deixar a VM inteira travar para todo mundo.
-const MAX_CONCURRENT_STREAMS = 15; // ajuste conforme observar o uso real de RAM por stream
-let _activeStreams = 0;
+const CACHE_TTL_MS = 60 * 1000;
 
 async function getAllowedHosts() {
   const now = Date.now();
@@ -69,14 +39,6 @@ async function getAllowedHosts() {
         try { hosts.add(new URL(row.source_url).hostname); } catch (_) {}
       }
       _hostsCache = { hosts, fetchedAt: now };
-      // Log de diagnóstico: se aparecer nos Runtime logs da Zeabur com
-      // contagens de hosts diferentes entre si (ex: um log com 4 hosts,
-      // outro com 6, alternando sem padrão), é sinal de que existe mais
-      // de um processo Node rodando simultaneamente na mesma VM, cada um
-      // com seu próprio cache em memória — nesse caso o problema não é
-      // mais o tempo de cache, e sim a Zeabur duplicando o processo (ver
-      // aquelas instâncias extras em "Starting" no painel).
-      console.log(`stream-proxy: cache de hosts atualizado (${hosts.size} hosts) — pid ${process.pid}`);
     }
   } catch (e) {
     console.error('stream-proxy: falha ao atualizar hosts, mantendo cache:', e);
@@ -106,59 +68,12 @@ async function handler(req, res) {
     return;
   }
 
-  if (_activeStreams >= MAX_CONCURRENT_STREAMS) {
-    res.status(503).json({ error: 'Servidor com muitos streams simultâneos no momento. Tente novamente em instantes ou escolha outro servidor.' });
-    return;
-  }
-  _activeStreams++;
-
   try {
-    // ── Estratégia de headers por tentativa, não fixa ──
-    // Testamos e confirmamos que hosts diferentes (unitvlite.xyz, sventank.com,
-    // cdnbr03.com) reagem de forma DIFERENTE ao mesmo User-Agent: um fixo
-    // "VLC/3.0.4 LibVLC/3.0.4" ajudou o cdnbr03.com mas quebrou o unitvlite.xyz.
-    // Cada operador de painel Xtream/IPTV configura seu próprio firewall e
-    // regras do Cloudflare, então não existe uma combinação universal.
-    //
-    // NOVO: servidores que usam token assinado na URL final (parâmetros
-    // "verify=" e "expire=", vistos em cdnbr03.com/jvrkt.online) costumam
-    // checar o header Referer/Origin para bloquear hotlinking — ou seja,
-    // recusam quando quem pede é claramente um servidor (nossa VM) em vez
-    // de um navegador real. Testado no celular direto (com Referer da
-    // própria página) o vídeo carregou; pelo proxy (sem Referer nenhum)
-    // falhou. Por isso agora tentamos, em ordem: (1) sem nada extra, (2)
-    // com Referer/Origin apontando pro próprio host de origem (mascarando
-    // como se o pedido viesse de dentro do player Xtream), (3) com UA de
-    // player. Isso cobre os três motivos de bloqueio mais comuns sem fixar
-    // uma combinação que quebre alguma fonte específica.
-    async function tryFetch(variant) {
-      const headers = {};
-      if (req.headers.range) headers.range = req.headers.range;
-      if (variant === 'referer' || variant === 'both') {
-        const fakeOrigin = `${target.protocol}//${target.host}`;
-        headers['Referer'] = fakeOrigin + '/';
-        headers['Origin'] = fakeOrigin;
-      }
-      if (variant === 'ua' || variant === 'both') {
-        headers['User-Agent'] = 'VLC/3.0.4 LibVLC/3.0.4';
-      }
-      return fetch(target.toString(), { headers, redirect: 'follow' });
-    }
+    // repassa o header Range, essencial para permitir avançar/retroceder no player
+    const forwardHeaders = {};
+    if (req.headers.range) forwardHeaders.range = req.headers.range;
 
-    let upstream = await tryFetch(null);
-
-    // Se a tentativa "neutra" falhou de forma que sugere bloqueio (403
-    // Forbidden, 406 Not Acceptable), tenta variantes de headers em ordem
-    // até uma funcionar ou esgotar as opções.
-    if (!upstream.ok && upstream.status !== 206 && [403, 406].includes(upstream.status)) {
-      upstream = await tryFetch('referer');
-    }
-    if (!upstream.ok && upstream.status !== 206 && [403, 406].includes(upstream.status)) {
-      upstream = await tryFetch('ua');
-    }
-    if (!upstream.ok && upstream.status !== 206 && [403, 406].includes(upstream.status)) {
-      upstream = await tryFetch('both');
-    }
+    const upstream = await fetch(target.toString(), { headers: forwardHeaders });
 
     if (!upstream.ok && upstream.status !== 206) {
       res.status(upstream.status).json({ error: 'Servidor de origem retornou erro: ' + upstream.status });
@@ -207,11 +122,6 @@ async function handler(req, res) {
     } else {
       res.end();
     }
-  } finally {
-    // Sempre libera a "vaga" de stream, mesmo em caso de erro, timeout,
-    // ou usuário fechando a página no meio — senão o contador só cresce
-    // e MAX_CONCURRENT_STREAMS trava novos streams pra sempre.
-    _activeStreams--;
   }
 }
 
