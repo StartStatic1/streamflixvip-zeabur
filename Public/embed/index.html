@@ -220,12 +220,21 @@
     video.play().catch(() => { /* autoplay bloqueado — usuário dá play manual */ });
   }
 
-  // ── 3) Ads (placeholder de integração Monetag) ──
-  // Sanduichar aqui a tag real do Monetag pra esse zoneId. Como este
-  // script roda DENTRO do seu iframe/domínio, quem instala o embed não
-  // tem acesso ao DOM interno pra remover isso (isolamento de origem).
+  // ── 3) Ads (Monetag — mesmo padrão do player principal /index.html) ──
+  // O zoneId vem do admin (campo "Ad zone" do parceiro) e é o data-zone
+  // do script al5sm.com; o popunder em si abre sempre pra omg10.com/4/<zoneId>,
+  // só em clique real do usuário (nunca automático), com cooldown pra não
+  // abrir mais de uma aba por sessão de play. Como este script roda DENTRO
+  // do seu iframe/domínio, quem instala o embed não tem acesso ao DOM
+  // interno pra remover isso (isolamento de origem).
+  let _adZoneId = null;
+  let _adScriptLoaded = false;
+  let _lastAdTriggerAt = 0;
+  const AD_TRIGGER_COOLDOWN_MS = 25000; // espelha o cooldown do player principal
+
   async function loadAds(zoneId, sandboxed) {
     if (!zoneId) { reportTelemetry({ sandboxed, adStatus: 'not_attempted' }); return; }
+    _adZoneId = zoneId;
 
     const adblockDetected = await detectAdblock();
     if (adblockDetected) {
@@ -234,20 +243,44 @@
     }
 
     try {
-      // Exemplo de integração (ajustar pro snippet real do Monetag):
-      // const s = document.createElement('script');
-      // s.src = `https://alwingulla.com/tag.min.js`;
-      // s.dataset.zone = zoneId;
-      // s.onload = () => reportTelemetry({ sandboxed, adStatus: 'loaded' });
-      // s.onerror = () => reportTelemetry({ sandboxed, adStatus: 'error' });
-      // document.body.appendChild(s);
+      const s = document.createElement('script');
+      s.dataset.zone = zoneId;
+      s.src = 'https://al5sm.com/tag.min.js';
+      s.onload = () => { _adScriptLoaded = true; reportTelemetry({ sandboxed, adStatus: 'loaded' }); };
+      s.onerror = () => reportTelemetry({ sandboxed, adStatus: 'error' });
+      document.body.appendChild(s);
 
-      // Enquanto a tag real não está plugada aqui, reporta como
-      // "not_attempted" pra não inflar estatística de "loaded" falso.
-      reportTelemetry({ sandboxed, adStatus: 'not_attempted' });
+      // Dispara o popunder no primeiro clique/toque real dentro do player,
+      // igual ao fluxo do site principal (nunca dispara sozinho por timer).
+      ['click', 'touchstart'].forEach(evt => {
+        document.getElementById('playerWrap').addEventListener(evt, triggerEmbedAd, { passive: true });
+      });
     } catch (e) {
       reportTelemetry({ sandboxed, adStatus: 'error' });
     }
+  }
+
+  // Abre o popunder — só deve ser chamado em ação explícita do usuário.
+  function triggerEmbedAd() {
+    if (!_adZoneId) return;
+    const now = Date.now();
+    if (now - _lastAdTriggerAt < AD_TRIGGER_COOLDOWN_MS) return;
+    _lastAdTriggerAt = now;
+
+    const targetUrl = `https://omg10.com/4/${_adZoneId}`;
+    try {
+      const w = window.open(targetUrl, '_blank');
+      if (!w || w.closed || typeof w.closed === 'undefined') {
+        const a = document.createElement('a');
+        a.href = targetUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (e) { /* popup bloqueado — segue o vídeo sem travar nada */ }
   }
 
   // ── 4) Controles (play/pause, seek, fullscreen, auto-hide) ──
