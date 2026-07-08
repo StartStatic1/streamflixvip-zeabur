@@ -1071,6 +1071,52 @@
   </div>
 </div>
 
+<!-- ════════════ MODAL: gerar código do iframe pra um parceiro de embed ════════════ -->
+<div class="modal-overlay" id="embedCodeOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:1rem" id="embedCodePartnerLabel"></div>
+        <div style="font-size:0.78rem;color:var(--muted)" id="embedCodePartnerDomain"></div>
+      </div>
+      <button onclick="closeEmbedCodeModal()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;padding:4px 8px">×</button>
+    </div>
+
+    <div id="embedCodeDomainWarning" style="display:none;margin-top:12px;padding:10px 12px;border-radius:8px;background:rgba(245,197,24,0.1);border:1px solid var(--gold);color:var(--gold);font-size:0.78rem">
+      ⚠️ Este parceiro está travado num domínio específico — o iframe só vai carregar de verdade quando embedado dentro desse site.
+    </div>
+
+    <label style="margin-top:14px">TMDB ID do título</label>
+    <input type="text" id="embedCodeTmdbInput" placeholder="ex: 550" oninput="updateEmbedCodePreview()"/>
+
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <div style="flex:1">
+        <label>Tipo</label>
+        <select id="embedCodeTypeInput" onchange="updateEmbedCodePreview()">
+          <option value="movie">Filme</option>
+          <option value="tv">Série</option>
+        </select>
+      </div>
+      <div style="flex:1" id="embedCodeSeasonWrap" style="display:none">
+        <label>Temporada</label>
+        <input type="number" id="embedCodeSeasonInput" min="1" placeholder="—" oninput="updateEmbedCodePreview()"/>
+      </div>
+      <div style="flex:1" id="embedCodeEpisodeWrap" style="display:none">
+        <label>Episódio</label>
+        <input type="number" id="embedCodeEpisodeInput" min="1" placeholder="—" oninput="updateEmbedCodePreview()"/>
+      </div>
+    </div>
+
+    <label style="margin-top:14px">Código do iframe (cole no site do parceiro)</label>
+    <textarea id="embedCodeOutput" readonly rows="4" style="width:100%;font-family:'Courier New',monospace;font-size:0.75rem;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text)"></textarea>
+
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn-secondary" style="flex:1" onclick="copyEmbedCode()">📋 Copiar código</button>
+      <button class="btn-primary" style="flex:1" onclick="openEmbedCodeTestTab()">▶ Testar em nova aba</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 
@@ -2496,6 +2542,90 @@
     return key.slice(0, 8) + '••••••••';
   }
 
+  // ── Modal: gerar código do iframe pra um parceiro ──
+  // Isso é a peça que faltava no fluxo: até aqui o admin gerava a KEY, mas
+  // tinha que montar a URL/código do iframe manualmente. Este modal monta
+  // o <iframe> pronto (com key + tmdb id + tipo) pra copiar e colar direto
+  // no site do parceiro, e também deixa testar em uma aba nova.
+  let _embedCodePartner = null;
+
+  function openEmbedCodeModal(partnerId) {
+    const p = _allEmbedPartners.find(x => x.id === partnerId);
+    if (!p) return;
+    _embedCodePartner = p;
+
+    document.getElementById('embedCodePartnerLabel').textContent = p.label;
+    document.getElementById('embedCodePartnerDomain').textContent = p.domain
+      ? `Travado no domínio: ${p.domain}`
+      : 'Sem trava de domínio — funciona em qualquer site';
+    document.getElementById('embedCodeDomainWarning').style.display = p.domain ? 'block' : 'none';
+
+    document.getElementById('embedCodeTmdbInput').value = '';
+    document.getElementById('embedCodeTypeInput').value = 'movie';
+    document.getElementById('embedCodeSeasonInput').value = '';
+    document.getElementById('embedCodeEpisodeInput').value = '';
+    updateEmbedCodePreview();
+
+    document.getElementById('embedCodeOverlay').classList.add('open');
+  }
+
+  function closeEmbedCodeModal() {
+    document.getElementById('embedCodeOverlay').classList.remove('open');
+    _embedCodePartner = null;
+  }
+
+  // Monta a URL do embed a partir dos campos preenchidos. Retorna '' se
+  // ainda não tem o mínimo necessário (key do parceiro + tmdb id).
+  function buildEmbedUrl() {
+    if (!_embedCodePartner) return '';
+    const tmdb = document.getElementById('embedCodeTmdbInput').value.trim();
+    if (!tmdb) return '';
+    const type = document.getElementById('embedCodeTypeInput').value;
+    const season = document.getElementById('embedCodeSeasonInput').value.trim();
+    const episode = document.getElementById('embedCodeEpisodeInput').value.trim();
+
+    const origin = window.location.origin; // mesmo domínio do painel = mesmo domínio do site público
+    let url = `${origin}/embed/?key=${encodeURIComponent(_embedCodePartner.key)}&tmdb=${encodeURIComponent(tmdb)}&type=${encodeURIComponent(type)}`;
+    if (type === 'tv' && season)  url += `&season=${encodeURIComponent(season)}`;
+    if (type === 'tv' && episode) url += `&episode=${encodeURIComponent(episode)}`;
+    return url;
+  }
+
+  function updateEmbedCodePreview() {
+    const isTv = document.getElementById('embedCodeTypeInput').value === 'tv';
+    document.getElementById('embedCodeSeasonWrap').style.display = isTv ? 'block' : 'none';
+    document.getElementById('embedCodeEpisodeWrap').style.display = isTv ? 'block' : 'none';
+
+    const url = buildEmbedUrl();
+    const output = document.getElementById('embedCodeOutput');
+    if (!url) {
+      output.value = '';
+      output.placeholder = 'Preencha o TMDB ID pra gerar o código.';
+      return;
+    }
+    output.value = `<iframe src="${url}" width="100%" height="480" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+  }
+
+  function copyEmbedCode() {
+    const output = document.getElementById('embedCodeOutput');
+    if (!output.value) { showToast('⚠️ Preencha o TMDB ID antes de copiar.'); return; }
+    navigator.clipboard.writeText(output.value);
+    showToast('📋 Código copiado!');
+  }
+
+  // Abre a URL do embed sozinha (sem o wrapper <iframe>) numa aba nova.
+  // Isso testa o player "puro", mas ATENÇÃO: se o parceiro tiver domínio
+  // travado, abrir direto assim tem Referer vazio (não veio de dentro de
+  // um iframe em outro site) e por isso o player vai mostrar "Conteúdo
+  // indisponível" — esse é o comportamento correto da trava de domínio,
+  // não um bug. Pra testar como o parceiro veria de verdade, use a página
+  // /embed/teste-host.html (link abaixo do botão).
+  function openEmbedCodeTestTab() {
+    const url = buildEmbedUrl();
+    if (!url) { showToast('⚠️ Preencha o TMDB ID antes de testar.'); return; }
+    window.open(url, '_blank');
+  }
+
   function renderEmbedList() {
     const wrap = document.getElementById('embedListWrap');
     if (!_allEmbedPartners.length) {
@@ -2537,6 +2667,7 @@
               </td>
               <td style="font-size:0.75rem;color:var(--muted)">${p.last_used_at ? new Date(p.last_used_at).toLocaleString('pt-BR') : 'nunca usado'}</td>
               <td style="white-space:nowrap">
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="openEmbedCodeModal('${p.id}')" title="Gerar código do iframe">&lt;/&gt;</button>
                 <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleEmbedPartner('${p.id}', ${!p.active})" title="${p.active ? 'Bloquear' : 'Reativar'}">
                   ${p.active ? '🚫' : '▶️'}
                 </button>
