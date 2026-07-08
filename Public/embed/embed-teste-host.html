@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StreamFlixVIP — Teste de trava de Host</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; min-height: 100vh;
+    background: #0b0b13; color: #e8e6f2;
+    font: 15px/1.5 system-ui, -apple-system, sans-serif;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .sub { color: #8b87a8; font-size: 0.85rem; margin-bottom: 24px; max-width: 760px; }
+  .layout {
+    display: grid; grid-template-columns: 360px 1fr; gap: 24px;
+    max-width: 1300px; margin: 0 auto;
+  }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: #14131f; border: 1px solid #232136; border-radius: 12px;
+    padding: 20px; margin-bottom: 20px;
+  }
+  .panel h2 { font-size: 0.95rem; margin: 0 0 4px; }
+  .panel .desc { font-size: 0.78rem; color: #8b87a8; margin-bottom: 14px; }
+  label {
+    display: block; font-size: 0.78rem; color: #a9a5c9;
+    margin: 12px 0 6px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+  }
+  label:first-of-type { margin-top: 0; }
+  input, select {
+    width: 100%; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid #2c2a42; background: #0e0d17; color: #fff;
+    font-size: 0.9rem;
+  }
+  input:focus, select:focus { outline: none; border-color: #f0a830; }
+  .row { display: flex; gap: 10px; }
+  .row > div { flex: 1; }
+  button {
+    margin-top: 14px; width: 100%; padding: 12px; border: none; border-radius: 8px;
+    background: #f0a830; color: #1a1409; font-weight: 700; font-size: 0.85rem;
+    cursor: pointer;
+  }
+  button:hover { background: #ffb93f; }
+  button.secondary { background: #232136; color: #e8e6f2; }
+  button.secondary:hover { background: #2c2a42; }
+  .url-box {
+    margin-top: 12px; padding: 10px 12px; background: #0e0d17; border: 1px solid #2c2a42;
+    border-radius: 8px; font-size: 0.7rem; color: #8b87a8; word-break: break-all; font-family: monospace;
+  }
+  .frame-wrap {
+    background: #000; border-radius: 12px; overflow: hidden; border: 1px solid #232136;
+    aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center;
+  }
+  .frame-wrap iframe { width: 100%; height: 100%; border: none; }
+  .placeholder { color: #4a4664; font-size: 0.85rem; text-align: center; padding: 20px; }
+  .badge { display:inline-block; font-size:0.68rem; font-weight:700; padding:3px 8px; border-radius:6px; margin-left:6px; vertical-align:middle; }
+  .badge.info { background: rgba(124,58,237,0.15); color:#a78bfa; }
+  .badge.warn { background: rgba(245,197,24,0.15); color:#f0a830; }
+  .explain { font-size: 0.78rem; color: #8b87a8; margin-top: 10px; line-height:1.6; }
+  .explain b { color: #c7c4e0; }
+  .result-tag { display:inline-block; margin-top:10px; padding:6px 10px; border-radius:6px; font-size:0.78rem; font-weight:700; }
+  .result-tag.ok { background: rgba(34,197,94,0.15); color:#4ade80; }
+  .result-tag.blocked { background: rgba(239,68,68,0.15); color:#f87171; }
+</style>
+</head>
+<body>
+
+<h1>🔒 Teste da trava de Host — StreamFlixVIP Embed</h1>
+<div class="sub">
+  Esta página existe pra responder uma pergunta específica: <b>"se eu configurar um Host no parceiro, o player
+  realmente só toca dentro daquele site?"</b>. O teste comum (colar o link do embed direto no navegador, ou num
+  iframe dentro do próprio painel) <b>não prova isso</b> — nesses casos o navegador manda o próprio domínio do
+  painel como origem, o que não representa um site de terceiro de verdade.
+</div>
+
+<div class="layout">
+  <div>
+    <div class="panel">
+      <h2>1. Dados do parceiro</h2>
+      <div class="desc">Cole a key gerada no admin (aba 🔗 Embeds) e o TMDB ID de um título já cadastrado.</div>
+
+      <label for="keyInput">Key do parceiro</label>
+      <input id="keyInput" type="text" placeholder="sfv_xxxxxxxxxxxxxxxx" autocomplete="off">
+
+      <label for="tmdbInput">TMDB ID</label>
+      <input id="tmdbInput" type="text" placeholder="ex: 550" autocomplete="off">
+
+      <div class="row">
+        <div>
+          <label for="typeInput">Tipo</label>
+          <select id="typeInput">
+            <option value="movie">Filme</option>
+            <option value="tv">Série</option>
+          </select>
+        </div>
+        <div>
+          <label for="seasonInput">Temporada</label>
+          <input id="seasonInput" type="number" min="1" placeholder="—">
+        </div>
+        <div>
+          <label for="episodeInput">Episódio</label>
+          <input id="episodeInput" type="number" min="1" placeholder="—">
+        </div>
+      </div>
+
+      <label for="baseUrlInput">URL base do site (deixe como está se estiver testando local)</label>
+      <input id="baseUrlInput" type="text" value="" placeholder="https://cinemega.online">
+    </div>
+
+    <div class="panel">
+      <h2>2. Teste A — carregamento normal <span class="badge info">como o admin vendo</span></h2>
+      <div class="desc">
+        Carrega o iframe normalmente nesta página. Se o parceiro tiver Host configurado, isso só vai
+        funcionar se <b>esta própria página</b> estiver hospedada no domínio configurado — senão deve bloquear.
+      </div>
+      <button onclick="loadEmbed('normal')">▶ Carregar (teste normal)</button>
+    </div>
+
+    <div class="panel">
+      <h2>3. Teste B — sem informação de origem <span class="badge warn">simula o bug antigo</span></h2>
+      <div class="desc">
+        Carrega o mesmo iframe dentro de um <code>&lt;iframe sandbox&gt;</code> sem <code>allow-same-origin</code>,
+        o que força o navegador a não mandar nem Referer nem Origin — exatamente a situação que
+        <b>antes vazava</b> (liberava o player mesmo com Host configurado). Depois da correção, isso deve
+        sempre mostrar "Conteúdo indisponível" quando o parceiro tiver Host configurado.
+      </div>
+      <button class="secondary" onclick="loadEmbed('sandboxed')">🚫 Carregar sem origem (teste do bug)</button>
+    </div>
+
+    <div class="url-box" id="urlBox">A URL do embed vai aparecer aqui.</div>
+    <div id="resultTag"></div>
+  </div>
+
+  <div class="frame-wrap" id="frameWrap">
+    <div class="placeholder">Preencha os campos e escolha um dos dois testes ao lado.</div>
+  </div>
+</div>
+
+<script>
+function buildUrl() {
+  const key = document.getElementById('keyInput').value.trim();
+  const tmdb = document.getElementById('tmdbInput').value.trim();
+  const type = document.getElementById('typeInput').value;
+  const season = document.getElementById('seasonInput').value.trim();
+  const episode = document.getElementById('episodeInput').value.trim();
+  const base = (document.getElementById('baseUrlInput').value.trim() || window.location.origin).replace(/\/+$/, '');
+
+  if (!key || !tmdb) return null;
+
+  let url = `${base}/embed/?key=${encodeURIComponent(key)}&tmdb=${encodeURIComponent(tmdb)}&type=${encodeURIComponent(type)}`;
+  if (type === 'tv' && season)  url += `&season=${encodeURIComponent(season)}`;
+  if (type === 'tv' && episode) url += `&episode=${encodeURIComponent(episode)}`;
+  return url;
+}
+
+function loadEmbed(mode) {
+  const url = buildUrl();
+  if (!url) { alert('Preencha ao menos a key e o TMDB ID.'); return; }
+
+  document.getElementById('urlBox').textContent = url;
+  document.getElementById('resultTag').innerHTML = '';
+
+  const wrap = document.getElementById('frameWrap');
+  wrap.innerHTML = '';
+  const iframe = document.createElement('iframe');
+  iframe.src = url;
+  iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+  iframe.allowFullscreen = true;
+
+  if (mode === 'sandboxed') {
+    // Sem "allow-same-origin": o iframe roda em origem "null" e o
+    // navegador não manda Referer nem Origin pro servidor — reproduz de
+    // forma real a situação que antes contornava a trava de domínio.
+    iframe.setAttribute('sandbox', 'allow-scripts allow-forms allow-popups');
+    iframe.setAttribute('referrerpolicy', 'no-referrer');
+  }
+
+  wrap.appendChild(iframe);
+
+  // Não dá pra ler o conteúdo do iframe (cross-origin/sandbox de propósito),
+  // então o "resultado" é visual: observe a tela do player à direita.
+  // "Conteúdo indisponível" = bloqueou. Vídeo/controles aparecendo = liberou.
+  setTimeout(() => {
+    document.getElementById('resultTag').innerHTML =
+      `<div class="explain">👀 Olhe a tela do player ao lado: <b>"Conteúdo indisponível"</b> = bloqueou.
+      Vídeo ou controles aparecendo = liberou. Não dá pra ler isso via JavaScript daqui porque o iframe é
+      de outra origem de propósito (é assim que o site de um parceiro real também estaria isolado).</div>`;
+  }, 800);
+}
+</script>
+
+</body>
+</html>
