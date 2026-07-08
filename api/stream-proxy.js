@@ -19,11 +19,24 @@ const EXTRA_ALLOWED_HOSTS = [
   'unitvlite.xyz',
   'sventank.com',
   'cdnbr02.com',
-  '9thgen.skin', 
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
 const CACHE_TTL_MS = 60 * 1000;
+
+// ── Limite de streams simultâneos ──
+// Cada requisição de vídeo aqui mantém um buffer de chunks na memória do
+// processo Node enquanto faz o pipe origem→navegador (ver comentário mais
+// abaixo sobre por que usamos stream em vez de arrayBuffer). Numa VM de
+// 2GB, isso significa que memória sobe com o NÚMERO de pessoas assistindo
+// ao mesmo tempo, não com CPU — é exatamente o padrão visto no painel
+// Zeabur (72% de RAM com só 6% de CPU). Sem um teto, muitos streams
+// simultâneos enchem a RAM e o processo trava/reinicia (os "502" e as
+// várias instâncias em "Starting" que apareceram no painel). Este limite
+// rejeita novas conexões de vídeo além do teto com uma mensagem clara, em
+// vez de deixar a VM inteira travar para todo mundo.
+const MAX_CONCURRENT_STREAMS = 15; // ajuste conforme observar o uso real de RAM por stream
+let _activeStreams = 0;
 
 async function getAllowedHosts() {
   const now = Date.now();
@@ -47,7 +60,7 @@ async function getAllowedHosts() {
   return _hostsCache.hosts;
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const { url } = req.query;
 
   if (!url) {
@@ -69,12 +82,38 @@ export default async function handler(req, res) {
     return;
   }
 
-  try {
-    // repassa o header Range, essencial para permitir avançar/retroceder no player
-    const forwardHeaders = {};
-    if (req.headers.range) forwardHeaders.range = req.headers.range;
+  if (_activeStreams >= MAX_CONCURRENT_STREAMS) {
+    res.status(503).json({ error: 'Servidor com muitos streams simultâneos no momento. Tente novamente em instantes ou escolha outro servidor.' });
+    return;
+  }
+  _activeStreams++;
 
-    const upstream = await fetch(target.toString(), { headers: forwardHeaders });
+  try {
+    // ── Estratégia de User-Agent por tentativa, não fixo ──
+    // Testamos e confirmamos que hosts diferentes (unitvlite.xyz, sventank.com,
+    // cdnbr03.com) reagem de forma DIFERENTE ao mesmo User-Agent: um fixo
+    // "VLC/3.0.4 LibVLC/3.0.4" ajudou o cdnbr03.com mas quebrou o unitvlite.xyz.
+    // Cada operador de painel Xtream/IPTV configura seu próprio firewall e
+    // regras do Cloudflare, então não existe um UA universal que sirva pra
+    // todos. Em vez de fixar um valor e trocar qual fonte quebra a cada
+    // ajuste, tentamos primeiro SEM forçar UA (deixando o padrão do Node) e,
+    // só se a origem recusar (403/406/erro), tentamos de novo com o UA de
+    // player de vídeo como fallback — assim cada fonte usa o que funciona
+    // para ela, automaticamente, sem precisar de configuração manual por host.
+    async function tryFetch(withPlayerUA) {
+      const headers = {};
+      if (req.headers.range) headers.range = req.headers.range;
+      if (withPlayerUA) headers['User-Agent'] = 'VLC/3.0.4 LibVLC/3.0.4';
+      return fetch(target.toString(), { headers, redirect: 'follow' });
+    }
+
+    let upstream = await tryFetch(false);
+
+    // Se a tentativa "neutra" falhou de forma que sugere bloqueio por UA
+    // (403 Forbidden, 406 Not Acceptable), tenta de novo com o UA de player.
+    if (!upstream.ok && upstream.status !== 206 && [403, 406].includes(upstream.status)) {
+      upstream = await tryFetch(true);
+    }
 
     if (!upstream.ok && upstream.status !== 206) {
       res.status(upstream.status).json({ error: 'Servidor de origem retornou erro: ' + upstream.status });
@@ -123,10 +162,17 @@ export default async function handler(req, res) {
     } else {
       res.end();
     }
+  } finally {
+    // Sempre libera a "vaga" de stream, mesmo em caso de erro, timeout,
+    // ou usuário fechando a página no meio — senão o contador só cresce
+    // e MAX_CONCURRENT_STREAMS trava novos streams pra sempre.
+    _activeStreams--;
   }
 }
 
-export const config = {
+module.exports = handler;
+
+module.exports.config = {
   api: {
     responseLimit: false, // vídeos costumam passar do limite padrão de resposta da Vercel
   },
