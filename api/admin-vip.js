@@ -149,11 +149,10 @@ module.exports = async function handler(req, res) {
   }
 
   // ── FILMES/SÉRIES: lista todas as fontes cadastradas (pro painel) ──
-  // Antes tinha limit=300 fixo: qualquer fonte além das 300 mais recentes
-  // nunca aparecia no card "Fontes cadastradas" do admin, mesmo existindo
-  // no banco (por isso a busca TMDB dizia "✓ Cadastrado" mas o filtro da
-  // lista não achava o título). Agora pagina em blocos de 1000 usando o
-  // header Range do PostgREST até trazer tudo.
+  // MANTIDO por compatibilidade, mas não é mais usado pelo painel — baixar
+  // as 5000+ linhas inteiras a cada abertura da aba (e reprocessar tudo no
+  // cliente a cada tecla do filtro) era a causa da lentidão. Use
+  // 'list-sources-filtered' abaixo, que filtra e pagina no banco.
   if (action === 'list-sources') {
     const PAGE_SIZE = 1000;
     let allRows = [];
@@ -177,6 +176,118 @@ module.exports = async function handler(req, res) {
       offset += PAGE_SIZE;
     }
     res.status(200).json({ sources: allRows });
+    return;
+  }
+
+  // ── FILMES/SÉRIES: lista fontes com filtro/paginação feitos no banco ──
+  // Substitui 'list-sources': em vez de baixar as 5000+ linhas inteiras pro
+  // cliente e reagrupar/filtrar tudo em JS a cada tecla, filtramos e
+  // paginamos direto no PostgREST. Como o agrupamento por título ainda
+  // precisa acontecer por tmdb_id (um título pode ter várias fontes), a
+  // paginação aqui é por TÍTULO DISTINTO, não por linha:
+  //   1) pega os tmdb_ids distintos que batem com o filtro, já paginados
+  //   2) busca todas as fontes só desses tmdb_ids (poucas linhas)
+  // Isso mantém a resposta pequena e rápida independente do total no banco.
+  if (action === 'list-sources-filtered') {
+    const {
+      search = '',
+      mediaType = 'all',   // 'all' | 'movie' | 'tv'
+      status = 'all',      // 'all' | 'active' | 'inactive'
+      sort = 'recent',     // 'recent' | 'az' | 'za' | 'sources'
+      page = 1,
+      pageSize = 30,
+    } = body;
+
+    const qs = [];
+    qs.push('select=id,tmdb_id,media_type,season,episode,title,poster_path,is_active,created_at');
+    if (mediaType === 'movie' || mediaType === 'tv') qs.push(`media_type=eq.${mediaType}`);
+    if (search && search.trim()) {
+      // ilike com % dos dois lados = "contém", sem diferenciar maiúsculas
+      qs.push(`title=ilike.*${encodeURIComponent(search.trim())}*`);
+    }
+    if (status === 'active') qs.push('is_active=eq.true');
+    else if (status === 'inactive') qs.push('is_active=eq.false');
+    qs.push('order=created_at.desc');
+
+    // Busca até 4000 linhas que já batem no filtro de texto/tipo/status —
+    // isso é bem mais leve que baixar as 5000+ linhas inteiras da tabela,
+    // já que a maioria das buscas por título reduz bastante o total.
+    const listRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/vip_sources?${qs.join('&')}&limit=4000`,
+      { headers: svcHeaders }
+    );
+    const rows = await listRes.json();
+    if (!listRes.ok) { res.status(502).json({ error: 'Erro ao listar fontes', detail: rows }); return; }
+
+    // Agrupa por título (tmdb_id + media_type) — igual à lógica antiga do
+    // front, só que agora sobre um conjunto já filtrado e bem menor.
+    const groups = new Map();
+    (rows || []).forEach(s => {
+      const key = s.media_type + ':' + s.tmdb_id;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(s);
+    });
+
+    let groupList = [...groups.entries()].map(([key, items]) => {
+      const resolvedTitle = (items.find(s => s.title && s.title.trim())?.title) || '(sem título)';
+      const activeCount   = items.filter(s => s.is_active).length;
+      const latest = Math.max(...items.map(s => new Date(s.created_at).getTime()));
+      return {
+        key,
+        tmdb_id: items[0].tmdb_id,
+        media_type: items[0].media_type,
+        poster_path: items.find(s => s.poster_path)?.poster_path || null,
+        resolvedTitle,
+        sourceCount: items.length,
+        activeCount,
+        inactiveCount: items.length - activeCount,
+        latest,
+      };
+    });
+
+    // Filtro por status precisa ser reaplicado no nível do GRUPO (não da
+    // linha): "com ativo" = grupo tem >=1 fonte ativa; "só inativos" =
+    // grupo não tem nenhuma ativa. Isso não dá pra fazer 100% via query de
+    // linha acima porque um grupo pode ter fontes ativas e inativas juntas.
+    if (status === 'active') groupList = groupList.filter(g => g.activeCount > 0);
+    else if (status === 'inactive') groupList = groupList.filter(g => g.activeCount === 0);
+
+    const totalGroups = groupList.length;
+
+    if (sort === 'az') groupList.sort((a,b) => a.resolvedTitle.localeCompare(b.resolvedTitle, 'pt-BR'));
+    else if (sort === 'za') groupList.sort((a,b) => b.resolvedTitle.localeCompare(a.resolvedTitle, 'pt-BR'));
+    else if (sort === 'sources') groupList.sort((a,b) => b.sourceCount - a.sourceCount);
+    else groupList.sort((a,b) => b.latest - a.latest);
+
+    const start = (Math.max(1, page) - 1) * pageSize;
+    const pageItems = groupList.slice(start, start + pageSize);
+
+    res.status(200).json({
+      groups: pageItems.map(g => ({
+        tmdb_id: g.tmdb_id, media_type: g.media_type, title: g.resolvedTitle,
+        poster_path: g.poster_path, sourceCount: g.sourceCount,
+        activeCount: g.activeCount, inactiveCount: g.inactiveCount,
+      })),
+      totalGroups,
+      page: Math.max(1, page),
+      hasMore: start + pageSize < totalGroups,
+    });
+    return;
+  }
+
+  // ── FILMES/SÉRIES: busca as fontes completas de UM título específico ──
+  // Usado ao expandir um grupo na lista (a listagem paginada acima não traz
+  // url/label/priority de cada fonte pra não pesar a resposta da página).
+  if (action === 'list-sources-for-title') {
+    const { tmdbId, mediaType } = body;
+    if (!tmdbId || !mediaType) { res.status(400).json({ error: 'Informe tmdbId e mediaType' }); return; }
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/vip_sources?tmdb_id=eq.${encodeURIComponent(tmdbId)}&media_type=eq.${encodeURIComponent(mediaType)}&select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at&order=season.asc,episode.asc,priority.desc`,
+      { headers: svcHeaders }
+    );
+    const rows = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao buscar fontes do título', detail: rows }); return; }
+    res.status(200).json({ sources: rows || [] });
     return;
   }
 
