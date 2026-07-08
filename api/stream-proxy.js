@@ -24,20 +24,6 @@ const EXTRA_ALLOWED_HOSTS = [
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
 const CACHE_TTL_MS = 60 * 1000;
 
-// ── Limite de streams simultâneos ──
-// Cada requisição de vídeo aqui mantém um buffer de chunks na memória do
-// processo Node enquanto faz o pipe origem→navegador (ver comentário mais
-// abaixo sobre por que usamos stream em vez de arrayBuffer). Numa VM de
-// 2GB, isso significa que memória sobe com o NÚMERO de pessoas assistindo
-// ao mesmo tempo, não com CPU — é exatamente o padrão visto no painel
-// Zeabur (72% de RAM com só 6% de CPU). Sem um teto, muitos streams
-// simultâneos enchem a RAM e o processo trava/reinicia (os "502" e as
-// várias instâncias em "Starting" que apareceram no painel). Este limite
-// rejeita novas conexões de vídeo além do teto com uma mensagem clara, em
-// vez de deixar a VM inteira travar para todo mundo.
-const MAX_CONCURRENT_STREAMS = 15; // ajuste conforme observar o uso real de RAM por stream
-let _activeStreams = 0;
-
 async function getAllowedHosts() {
   const now = Date.now();
   if (now - _hostsCache.fetchedAt < CACHE_TTL_MS) return _hostsCache.hosts;
@@ -81,12 +67,6 @@ async function handler(req, res) {
     res.status(403).json({ error: 'Domínio não autorizado. Cadastre a fonte no painel admin primeiro.' });
     return;
   }
-
-  if (_activeStreams >= MAX_CONCURRENT_STREAMS) {
-    res.status(503).json({ error: 'Servidor com muitos streams simultâneos no momento. Tente novamente em instantes ou escolha outro servidor.' });
-    return;
-  }
-  _activeStreams++;
 
   try {
     // repassa o header Range, essencial para permitir avançar/retroceder no player
@@ -142,11 +122,6 @@ async function handler(req, res) {
     } else {
       res.end();
     }
-  } finally {
-    // Sempre libera a "vaga" de stream, mesmo em caso de erro, timeout,
-    // ou usuário fechando a página no meio — senão o contador só cresce
-    // e MAX_CONCURRENT_STREAMS trava novos streams pra sempre.
-    _activeStreams--;
   }
 }
 
