@@ -19,6 +19,7 @@ const EXTRA_ALLOWED_HOSTS = [
   'unitvlite.xyz',
   'sventank.com',
   'cdnbr02.com',
+  '9thgen.skin', 
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
@@ -46,7 +47,7 @@ async function getAllowedHosts() {
   return _hostsCache.hosts;
 }
 
-async function handler(req, res) {
+export default async function handler(req, res) {
   const { url } = req.query;
 
   if (!url) {
@@ -125,9 +126,7 @@ async function handler(req, res) {
   }
 }
 
-module.exports = handler;
-
-module.exports.config = {
+export const config = {
   api: {
     responseLimit: false, // vídeos costumam passar do limite padrão de resposta da Vercel
   },
