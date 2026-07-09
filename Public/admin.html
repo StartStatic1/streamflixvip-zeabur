@@ -569,6 +569,46 @@
     .source-row:first-child { border-top: none; }
     .source-row-main { flex: 1; min-width: 120px; }
     .source-ep-tag { font-size: 0.72rem; font-weight: 700; color: var(--muted); min-width: 42px; }
+
+    /* ── Modal: gerar código do iframe (embed) ── */
+    .embed-flow {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px; margin-top: 14px;
+    }
+    .embed-flow-box { flex: 1; text-align: center; }
+    .embed-flow-box .cap { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: 4px; }
+    .embed-flow-box .val { font-size: 0.82rem; font-weight: 700; word-break: break-all; }
+    .embed-flow-box.mine .val { color: var(--gold); }
+    .embed-flow-box.theirs .val { color: var(--accent); }
+    .embed-flow-arrow { color: var(--muted); font-size: 1.1rem; flex-shrink: 0; }
+
+    .embed-status-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .embed-status-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 0.72rem; font-weight: 700; padding: 5px 10px; border-radius: 100px;
+    }
+    .embed-status-chip.ok { background: rgba(34,197,94,0.15); color: var(--green); }
+    .embed-status-chip.warn { background: rgba(245,197,24,0.15); color: var(--gold); }
+    .embed-status-chip.neutral { background: rgba(136,136,170,0.15); color: var(--muted); }
+
+    .embed-steps { margin-top: 16px; }
+    .embed-step { display: flex; gap: 10px; margin-bottom: 12px; }
+    .embed-step-num {
+      flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+      background: var(--accent); color: #fff; font-size: 0.72rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .embed-step-body { flex: 1; min-width: 0; padding-top: 1px; }
+    .embed-step-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 2px; }
+    .embed-step-desc { font-size: 0.76rem; color: var(--muted); line-height: 1.5; }
+
+    .embed-note {
+      display: flex; gap: 8px; margin-top: 14px; padding: 10px 12px;
+      border-radius: 8px; font-size: 0.76rem; line-height: 1.5;
+    }
+    .embed-note.gold { background: rgba(245,197,24,0.1); border: 1px solid var(--gold); color: var(--gold); }
+    .embed-note.muted { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
     .source-label-text { font-size: 0.84rem; font-weight: 600; }
     .source-url-text { font-size: 0.72rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: block; }
     .pill { display: inline-block; font-size: 0.66rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; flex-shrink: 0; }
@@ -1073,46 +1113,110 @@
 
 <!-- ════════════ MODAL: gerar código do iframe pra um parceiro de embed ════════════ -->
 <div class="modal-overlay" id="embedCodeOverlay">
-  <div class="modal">
+  <div class="modal" style="max-width:560px">
     <div class="modal-head">
       <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:1rem" id="embedCodePartnerLabel"></div>
+        <div style="font-weight:700;font-size:1.05rem" id="embedCodePartnerLabel"></div>
         <div style="font-size:0.78rem;color:var(--muted)" id="embedCodePartnerDomain"></div>
       </div>
       <button onclick="closeEmbedCodeModal()" style="background:none;border:none;color:var(--muted);font-size:1.4rem;cursor:pointer;padding:4px 8px">×</button>
     </div>
 
-    <div id="embedCodeDomainWarning" style="display:none;margin-top:12px;padding:10px 12px;border-radius:8px;background:rgba(245,197,24,0.1);border:1px solid var(--gold);color:var(--gold);font-size:0.78rem">
-      ⚠️ Este parceiro está travado num domínio específico — o iframe só vai carregar de verdade quando embedado dentro desse site.
-    </div>
-
-    <label style="margin-top:14px">TMDB ID do título</label>
-    <input type="text" id="embedCodeTmdbInput" placeholder="ex: 550" oninput="updateEmbedCodePreview()"/>
-
-    <div style="display:flex;gap:10px;margin-top:14px">
-      <div style="flex:1">
-        <label>Tipo</label>
-        <select id="embedCodeTypeInput" onchange="updateEmbedCodePreview()">
-          <option value="movie">Filme</option>
-          <option value="tv">Série</option>
-        </select>
+    <!-- Diagrama: deixa visualmente óbvio que a URL do iframe é DO SEU
+         servidor, e que o parceiro só cola o código no site dele — a
+         dúvida mais comum é achar que precisa trocar isso pelo domínio
+         do cliente. -->
+    <div class="embed-flow">
+      <div class="embed-flow-box mine">
+        <div class="cap">Seu servidor</div>
+        <div class="val" id="embedFlowMyDomain">—</div>
       </div>
-      <div style="flex:1" id="embedCodeSeasonWrap" style="display:none">
-        <label>Temporada</label>
-        <input type="number" id="embedCodeSeasonInput" min="1" placeholder="—" oninput="updateEmbedCodePreview()"/>
-      </div>
-      <div style="flex:1" id="embedCodeEpisodeWrap" style="display:none">
-        <label>Episódio</label>
-        <input type="number" id="embedCodeEpisodeInput" min="1" placeholder="—" oninput="updateEmbedCodePreview()"/>
+      <div class="embed-flow-arrow">▶</div>
+      <div class="embed-flow-box theirs">
+        <div class="cap">Site do parceiro</div>
+        <div class="val" id="embedFlowTheirDomain">—</div>
       </div>
     </div>
+    <div class="embed-note muted">
+      O vídeo sempre é servido do <b>seu</b> domínio. O parceiro só cola o &lt;iframe&gt; abaixo — ele nunca
+      recebe nem enxerga a URL real do arquivo/CDN.
+    </div>
 
-    <label style="margin-top:14px">Código do iframe (cole no site do parceiro)</label>
-    <textarea id="embedCodeOutput" readonly rows="4" style="width:100%;font-family:'Courier New',monospace;font-size:0.75rem;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text)"></textarea>
+    <!-- Status atuais do parceiro: Host travado ou livre, Ads ligado/desligado -->
+    <div class="embed-status-row">
+      <span class="embed-status-chip" id="embedStatusHost"></span>
+      <span class="embed-status-chip" id="embedStatusAds"></span>
+      <span class="embed-status-chip" id="embedStatusActive"></span>
+    </div>
 
-    <div style="display:flex;gap:10px;margin-top:14px">
+    <div id="embedCodeDomainWarning" class="embed-note gold" style="display:none">
+      ⚠️ Host travado — este iframe só carrega o vídeo de verdade quando estiver dentro do site configurado
+      acima. Testando fora dele (inclusive colando a URL direto no navegador), vai aparecer "Conteúdo indisponível" — isso é esperado, não é erro.
+    </div>
+
+    <div class="embed-steps">
+      <div class="embed-step">
+        <div class="embed-step-num">1</div>
+        <div class="embed-step-body">
+          <div class="embed-step-title">Escolha o título</div>
+          <div class="embed-step-desc">Preencha o TMDB ID do filme/série (o mesmo ID usado na aba Filmes & Séries).</div>
+          <input type="text" id="embedCodeTmdbInput" placeholder="ex: 550" oninput="updateEmbedCodePreview()" style="margin-top:8px"/>
+        </div>
+      </div>
+
+      <div class="embed-step">
+        <div class="embed-step-num">2</div>
+        <div class="embed-step-body">
+          <div class="embed-step-title">Tipo e episódio</div>
+          <div class="embed-step-desc">Séries precisam de temporada/episódio; filmes não.</div>
+          <div style="display:flex;gap:10px;margin-top:8px">
+            <div style="flex:1">
+              <select id="embedCodeTypeInput" onchange="updateEmbedCodePreview()">
+                <option value="movie">Filme</option>
+                <option value="tv">Série</option>
+              </select>
+            </div>
+            <div style="flex:1" id="embedCodeSeasonWrap" style="display:none">
+              <input type="number" id="embedCodeSeasonInput" min="1" placeholder="Temporada" oninput="updateEmbedCodePreview()"/>
+            </div>
+            <div style="flex:1" id="embedCodeEpisodeWrap" style="display:none">
+              <input type="number" id="embedCodeEpisodeInput" min="1" placeholder="Episódio" oninput="updateEmbedCodePreview()"/>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="embed-step">
+        <div class="embed-step-num">3</div>
+        <div class="embed-step-body">
+          <div class="embed-step-title">Envie este código pro parceiro</div>
+          <div class="embed-step-desc">É só isso que ele precisa colar no HTML do site dele — nada mais.</div>
+          <textarea id="embedCodeOutput" readonly rows="4" style="width:100%;font-family:'Courier New',monospace;font-size:0.75rem;resize:vertical;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);margin-top:8px"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:6px">
       <button class="btn-secondary" style="flex:1" onclick="copyEmbedCode()">📋 Copiar código</button>
       <button class="btn-primary" style="flex:1" onclick="openEmbedCodeTestTab()">▶ Testar em nova aba</button>
+    </div>
+    <div class="embed-note muted" style="margin-top:10px">
+      💡 "Testar em nova aba" abre o player fora de um iframe de terceiro — bom pra conferir se o vídeo toca,
+      mas <b>não</b> testa a trava de Host (que só existe quando embedado num site diferente). Pra esse teste
+      real, use a página <code>embed-teste-host.html</code>.
+    </div>
+
+    <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:8px">Controles manuais deste parceiro</div>
+      <div style="display:flex;gap:10px">
+        <button class="btn-secondary" style="flex:1" id="embedModalToggleActiveBtn" onclick="toggleEmbedFromModal('active')"></button>
+        <button class="btn-secondary" style="flex:1" id="embedModalToggleAdsBtn" onclick="toggleEmbedFromModal('ads')"></button>
+      </div>
+      <div class="embed-note muted" style="margin-top:10px">
+        <b>Bloquear</b> derruba o player em qualquer site que já tenha esse iframe instalado, na hora — não
+        precisa avisar o parceiro nem trocar código. <b>Desligar Ads</b> mantém o vídeo tocando normalmente,
+        só para de mostrar anúncio nesse parceiro específico.
+      </div>
     </div>
   </div>
 </div>
@@ -2555,10 +2659,25 @@
     _embedCodePartner = p;
 
     document.getElementById('embedCodePartnerLabel').textContent = p.label;
-    document.getElementById('embedCodePartnerDomain').textContent = p.domain
-      ? `Travado no domínio: ${p.domain}`
-      : 'Sem trava de domínio — funciona em qualquer site';
-    document.getElementById('embedCodeDomainWarning').style.display = p.domain ? 'block' : 'none';
+    document.getElementById('embedCodePartnerDomain').textContent = 'Código de embed para este parceiro';
+
+    // Diagrama "seu servidor → site do parceiro"
+    document.getElementById('embedFlowMyDomain').textContent = window.location.hostname;
+    document.getElementById('embedFlowTheirDomain').textContent = p.domain || 'qualquer site';
+
+    const hostChip = document.getElementById('embedStatusHost');
+    if (p.domain) {
+      hostChip.className = 'embed-status-chip warn';
+      hostChip.textContent = `🔒 Travado em ${p.domain}`;
+    } else {
+      hostChip.className = 'embed-status-chip neutral';
+      hostChip.textContent = '🌐 Sem trava — qualquer site';
+    }
+
+    // Chips de Ads/Ativo + textos dos botões manuais
+    refreshEmbedModalStatus();
+
+    document.getElementById('embedCodeDomainWarning').style.display = p.domain ? 'flex' : 'none';
 
     document.getElementById('embedCodeTmdbInput').value = '';
     document.getElementById('embedCodeTypeInput').value = 'movie';
@@ -2766,6 +2885,61 @@
     if (result.error) { showToast('❌ ' + result.error); return; }
     showToast(newState ? '📢 Ads ativados pra esse parceiro' : '🔕 Ads desativados pra esse parceiro');
     loadEmbedPartners();
+  }
+
+  // Controles manuais dentro do próprio modal de "gerar código" — pra não
+  // precisar fechar o modal, achar a linha na tabela e voltar. Reaproveita
+  // as mesmas actions de toggleEmbedPartner/toggleEmbedAds, só que atualiza
+  // o estado local (_embedCodePartner) e os chips/botões sem fechar o modal.
+  async function toggleEmbedFromModal(what) {
+    if (!_embedCodePartner) return;
+    const p = _embedCodePartner;
+
+    if (what === 'active') {
+      const result = await api('toggle-embed-partner', { partnerId: p.id, active: !p.active });
+      if (result.error) { showToast('❌ ' + result.error); return; }
+      p.active = !p.active;
+      showToast(p.active ? '▶️ Parceiro reativado' : '🚫 Parceiro bloqueado — o player dele para de tocar agora');
+    } else if (what === 'ads') {
+      const result = await api('toggle-embed-ads', { partnerId: p.id, adsEnabled: !p.ads_enabled });
+      if (result.error) { showToast('❌ ' + result.error); return; }
+      p.ads_enabled = !p.ads_enabled;
+      showToast(p.ads_enabled ? '📢 Ads ativados pra esse parceiro' : '🔕 Ads desativados pra esse parceiro');
+    }
+
+    // Atualiza a lista em memória (evita esperar um novo fetch pra
+    // refletir na tabela quando o modal for fechado) e re-renderiza os
+    // chips/botões do próprio modal.
+    const idx = _allEmbedPartners.findIndex(x => x.id === p.id);
+    if (idx > -1) _allEmbedPartners[idx] = p;
+    renderEmbedList();
+    refreshEmbedModalStatus();
+  }
+
+  // Atualiza só os chips/botões do modal (sem reconstruir o modal inteiro,
+  // pra não perder o que o admin já digitou no TMDB ID / temporada / etc).
+  function refreshEmbedModalStatus() {
+    const p = _embedCodePartner;
+    if (!p) return;
+
+    const adsChip = document.getElementById('embedStatusAds');
+    if (p.ads_enabled) {
+      adsChip.className = 'embed-status-chip ok';
+      adsChip.textContent = p.ad_zone_id ? `📢 Ads on · zona ${p.ad_zone_id}` : '📢 Ads on · zona padrão';
+    } else {
+      adsChip.className = 'embed-status-chip neutral';
+      adsChip.textContent = '📢 Ads desligados';
+    }
+
+    const activeChip = document.getElementById('embedStatusActive');
+    activeChip.className = p.active ? 'embed-status-chip ok' : 'embed-status-chip warn';
+    activeChip.textContent = p.active ? '✅ Parceiro ativo' : '🚫 Parceiro bloqueado';
+
+    const activeBtn = document.getElementById('embedModalToggleActiveBtn');
+    activeBtn.textContent = p.active ? '🚫 Bloquear parceiro' : '▶️ Reativar parceiro';
+
+    const adsBtn = document.getElementById('embedModalToggleAdsBtn');
+    adsBtn.textContent = p.ads_enabled ? '🔕 Desligar Ads' : '📢 Ligar Ads';
   }
 
   async function deleteEmbedPartner(partnerId, label) {
