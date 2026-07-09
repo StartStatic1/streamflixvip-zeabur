@@ -27,9 +27,17 @@
 
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
-// Ad zone padrão do Monetag usada quando o parceiro não tem uma própria
-// configurada na tabela (ads_enabled=true mas ad_zone_id nulo).
-const DEFAULT_AD_ZONE_ID = 'TROCAR_PELA_SUA_ZONE_ID_PADRAO';
+// Ad zone padrão usada quando o parceiro não tem uma própria configurada
+// na tabela (ads_enabled=true mas ad_zone_id vazio). Fica null de
+// propósito: como a Zone ID é preenchida manualmente por parceiro, direto
+// no painel (aba 🔗 Embeds → campo "Ad Zone ID do Monetag"), não faz
+// sentido ter um valor padrão fixo aqui — um placeholder de texto nesse
+// lugar geraria uma URL de anúncio inválida (era o bug anterior:
+// "TROCAR_PELA_SUA_ZONE_ID_PADRAO" virava
+// https://omg10.com/4/TROCAR_PELA_SUA_ZONE_ID_PADRAO, que não abre nada).
+// Com null, o player simplesmente não tenta carregar ad pra um parceiro
+// sem zone própria configurada — sem erro, sem link quebrado.
+const DEFAULT_AD_ZONE_ID = null;
 
 // ════════════════════════════════════════════════════════════
 // POST: recebe telemetria (adblock/sandbox/status de ads)
@@ -97,10 +105,21 @@ async function handleConfig(req, res) {
   }
 
   // Referer real da requisição (mais confiável que um parâmetro "origin"
-  // que o próprio client poderia forjar) — usado só como sinal adicional.
+  // que o próprio client poderia forjar) — usado como sinal principal.
+  // Fallback pro header Origin quando o Referer não vier: navegadores
+  // modernos frequentemente omitem Referer por política de privacidade
+  // (Referrer-Policy: no-referrer/strict-origin, extensões de bloqueio,
+  // HTTPS→HTTP, etc), mas ainda mandam Origin na maioria dos casos —
+  // SEM esse fallback, refererHost ficava vazio e a checagem de domínio
+  // era pulada inteira, liberando o embed em qualquer site mesmo com um
+  // domínio específico configurado no parceiro.
   const referer = req.headers.referer || req.headers.referrer || '';
+  const origin  = req.headers.origin || '';
   let refererHost = '';
-  try { refererHost = new URL(referer).hostname.replace(/^www\./, ''); } catch (e) { /* sem referer, segue sem essa checagem */ }
+  try { refererHost = new URL(referer).hostname.replace(/^www\./, ''); } catch (e) { /* segue pro fallback */ }
+  if (!refererHost) {
+    try { refererHost = new URL(origin).hostname.replace(/^www\./, ''); } catch (e) { /* sem nenhum dos dois — segue sem essa checagem */ }
+  }
 
   const headers = {
     'apikey': serviceKey,
@@ -122,12 +141,25 @@ async function handleConfig(req, res) {
       res.status(200).json({ allowed: false, reason: 'blocked_by_admin' });
       return;
     }
-    // Se um domínio específico foi configurado, o referer precisa bater.
-    // domain=null na tabela significa "libera pra qualquer site" (útil
-    // durante testes, mas recomendável travar depois pra produção).
-    if (partner.domain && refererHost && refererHost !== partner.domain && !refererHost.endsWith('.' + partner.domain)) {
-      res.status(200).json({ allowed: false, reason: 'domain_mismatch' });
-      return;
+    // Se um domínio específico foi configurado (partner.domain preenchido),
+    // o site que está carregando o iframe PRECISA bater com ele. ANTES,
+    // esta checagem só rodava dentro de "if (partner.domain && refererHost
+    // && ...)" — ou seja, se refererHost viesse vazio (nenhum Referer/
+    // Origin identificável, comum em iframes), a condição inteira dava
+    // false e o domínio configurado era simplesmente ignorado, liberando
+    // o embed em QUALQUER host. Agora: domínio configurado + não foi
+    // possível identificar a origem = bloqueia (mais seguro travar quando
+    // não dá pra checar do que liberar por padrão).
+    if (partner.domain) {
+      if (!refererHost) {
+        res.status(200).json({ allowed: false, reason: 'domain_check_failed_no_referer' });
+        return;
+      }
+      const domainMatches = refererHost === partner.domain || refererHost.endsWith('.' + partner.domain);
+      if (!domainMatches) {
+        res.status(200).json({ allowed: false, reason: 'domain_mismatch' });
+        return;
+      }
     }
 
     // ── 2) Resolve a fonte de vídeo pelo tmdb_id no SEU catálogo ──
@@ -158,9 +190,24 @@ async function handleConfig(req, res) {
       body: JSON.stringify({ last_used_at: new Date().toISOString() }),
     }).catch(() => {});
 
+    // ── 3) Mixed content: source_url pode vir em http:// (comum em
+    // provedores Xtream/IPTV) mas a página do embed roda em https://. O
+    // navegador do parceiro bloqueia isso silenciosamente — sem erro
+    // visível, sem onerror confiável, sem nada: só fica com tela preta.
+    // Isso é o que fazia o embed "não funcionar no site mas funcionar no
+    // APK" (WebView pode ter mixed content liberado nas configs; navegador
+    // comum não). A correção é a mesma já usada no player principal
+    // (Public/index.html, resolvePlayableUrl): reescreve pra passar pelo
+    // /api/stream-proxy, que busca o vídeo em http:// server-to-server e
+    // devolve pelo seu próprio domínio https — o navegador do parceiro só
+    // vê https o tempo todo.
+    const playableSrc = source.source_url.startsWith('http://')
+      ? `/api/stream-proxy?url=${encodeURIComponent(source.source_url)}`
+      : source.source_url;
+
     res.status(200).json({
       allowed: true,
-      src: source.source_url,
+      src: playableSrc,
       ads: {
         enabled: !!partner.ads_enabled,
         zoneId: partner.ad_zone_id || DEFAULT_AD_ZONE_ID,
