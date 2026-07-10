@@ -1,0 +1,32 @@
+name: Sincronização IPTV (standalone)
+
+# Roda automaticamente a cada 30 minutos, e também pode ser disparado
+# manualmente pela aba "Actions" do GitHub (botão "Run workflow").
+#
+# IMPORTANTE — antes de usar, configure os Secrets do repositório em:
+# Settings > Secrets and variables > Actions > New repository secret
+#   SUPABASE_SERVICE_ROLE_KEY  (mesma chave já usada no Zeabur)
+#   TMDB_API_KEY               (mesma chave já usada no Zeabur)
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Rodar sincronização IPTV
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: node sync-standalone.js
