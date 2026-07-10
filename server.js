@@ -107,6 +107,16 @@ app.listen(PORT, () => {
   console.log(`StreamFlixVIP (espelho Zeabur) rodando na porta ${PORT}`);
 });
 
+// ── Sincronização IPTV automática, sem depender de cron externo ──
+// No Zeabur este processo roda 24/7 como container (diferente da Vercel,
+// que era serverless e dependia do Vercel Cron / cron-job.org batendo na
+// URL). Por isso a sincronização roda sozinha aqui dentro, em loop, e
+// continua avançando o catálogo mesmo que nenhum serviço externo de cron
+// funcione ou dê timeout.
+// Intervalo de 5 minutos: dá tempo de cada ciclo processar um bom lote de
+// filmes (até 50s de trabalho) sem sobrepor ciclos nem martelar a TMDB.
+iptvSync.startAutoSync({ intervalMs: 5 * 60 * 1000, timeBudgetMs: 50_000 });
+
 // ── Watchdog de memória ──
 // Numa VM de 2GB com stream de vídeo passando pelo Node (stream-proxy.js),
 // cada requisição simultânea de vídeo consome um buffer de chunks na RAM.
