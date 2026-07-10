@@ -120,33 +120,28 @@ async function downloadM3U(source) {
   return tmpPath;
 }
 
-module.exports = async function handler(req, res) {
-  // Padrão oficial da Vercel: quando o Cron chama este endpoint, ele envia
-  // automaticamente o header "Authorization: Bearer <CRON_SECRET>" — não
-  // precisa (e não deve) colocar o secret na URL do vercel.json, pois isso
-  // ficaria visível no repositório. O parâmetro ?secret= na URL continua
-  // funcionando só como forma de você testar manualmente pelo navegador.
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers['authorization'] || '';
-  const headerOk = cronSecret && authHeader === `Bearer ${cronSecret}`;
-  const queryOk = cronSecret && req.query.secret === cronSecret;
-  if (!headerOk && !queryOk) {
-    res.status(401).json({ error: 'Não autorizado' });
-    return;
-  }
-
+// ── Núcleo da sincronização, independente de HTTP ──
+// Extraído do handler pra poder ser chamado tanto pela rota (compatibilidade
+// com o cron externo / teste manual pelo navegador) quanto internamente por
+// um setInterval no server.js — sem depender de nenhum serviço de cron de
+// terceiros, já que o Zeabur roda como container 24/7 (não serverless).
+//
+// timeBudgetMs: no Zeabur não existe limite de 60s (isso era coisa da
+// Vercel Serverless Functions), mas ainda vale processar em fatias de
+// tempo pra não segurar a chamada HTTP por tempo indefinido nem monopolizar
+// o event loop com um request gigante. Ajustável por quem chama.
+async function runIptvSync({ timeBudgetMs = 50_000 } = {}) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const tmdbApiKey = process.env.TMDB_API_KEY;
   if (!serviceKey || !tmdbApiKey) {
-    res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY ou TMDB_API_KEY não configuradas' });
-    return;
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY ou TMDB_API_KEY não configuradas');
   }
 
-  const TIME_BUDGET_MS = 50_000; // margem de segurança abaixo do maxDuration de 60s
+  const TIME_BUDGET_MS = timeBudgetMs;
   const startTime = Date.now();
   const timeLeft = () => TIME_BUDGET_MS - (Date.now() - startTime);
 
-  try {
+  {
     // Suporta múltiplas fontes cadastradas: cada chamada processa a fonte
     // "mais atrasada" (que não sincroniza há mais tempo, ou nunca
     // sincronizou ainda). Chamadas seguintes do cron vão revezando entre
@@ -157,8 +152,7 @@ module.exports = async function handler(req, res) {
       'is_active=eq.true&select=*&order=last_batch_at.asc.nullsfirst&limit=1'
     );
     if (!sources.length) {
-      res.status(200).json({ message: 'Nenhuma fonte IPTV ativa cadastrada.' });
-      return;
+      return { success: true, message: 'Nenhuma fonte IPTV ativa cadastrada.' };
     }
     const source = sources[0];
 
@@ -264,7 +258,7 @@ module.exports = async function handler(req, res) {
     }
     await sbUpdate(serviceKey, 'iptv_sources', `id=eq.${source.id}`, patch);
 
-    res.status(200).json({
+    return {
       success: true,
       source: source.name,
       processedThisRun,
@@ -274,13 +268,85 @@ module.exports = async function handler(req, res) {
       progress: `${Math.min(cursor, allMovies.length)}/${allMovies.length}`,
       isLastBatch,
       elapsedMs: Date.now() - startTime,
-    });
+    };
+  }
+}
+
+// ── Handler HTTP (rota /api/iptv-sync) ──
+// Mantido por compatibilidade: continua protegido por secret e pode ser
+// chamado manualmente pelo navegador ou por um serviço de cron externo.
+// Só que agora ele NÃO é mais a única forma de disparar a sincronização —
+// veja startAutoSync() logo abaixo, usado pelo server.js pra rodar sozinho.
+async function handler(req, res) {
+  // Padrão oficial da Vercel: quando o Cron chama este endpoint, ele envia
+  // automaticamente o header "Authorization: Bearer <CRON_SECRET>" — não
+  // precisa (e não deve) colocar o secret na URL do vercel.json, pois isso
+  // ficaria visível no repositório. O parâmetro ?secret= na URL continua
+  // funcionando só como forma de você testar manualmente pelo navegador.
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = req.headers['authorization'] || '';
+  const headerOk = cronSecret && authHeader === `Bearer ${cronSecret}`;
+  const queryOk = cronSecret && req.query.secret === cronSecret;
+  if (!headerOk && !queryOk) {
+    res.status(401).json({ error: 'Não autorizado' });
+    return;
+  }
+
+  try {
+    const result = await runIptvSync({ timeBudgetMs: 50_000 });
+    res.status(200).json(result);
   } catch (err) {
     console.error('[iptv-sync] falhou:', err);
     res.status(500).json({ success: false, error: err.message });
   }
-};
+}
 
+// ── Auto-sync interno (sem cron externo) ──
+// Chamado pelo server.js num setInterval. Roda em loop dentro do próprio
+// processo Node — que já fica de pé 24/7 no Zeabur (container, diferente
+// da Vercel serverless) — então não depende de NENHUM serviço de cron de
+// terceiro (cron-job.org, etc) nem sofre o timeout de 30s que esses
+// serviços costumam ter no plano grátis, já que a chamada nunca sai pela
+// rede: é só uma chamada de função dentro do mesmo processo.
+//
+// intervalMs: de quanto em quanto tempo tenta rodar um novo ciclo.
+// timeBudgetMs: por quanto tempo cada ciclo processa filmes antes de parar
+// e esperar o próximo ciclo (evita monopolizar o event loop por tempo
+// indefinido caso a playlist seja enorme).
+let autoSyncRunning = false;
+function startAutoSync({ intervalMs = 5 * 60 * 1000, timeBudgetMs = 50_000 } = {}) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.TMDB_API_KEY) {
+    console.warn('[iptv-sync] auto-sync NÃO iniciado: faltam variáveis de ambiente (SUPABASE_SERVICE_ROLE_KEY / TMDB_API_KEY).');
+    return;
+  }
+
+  console.log(`[iptv-sync] auto-sync interno ativado — roda a cada ${Math.round(intervalMs / 1000)}s, sem depender de cron externo.`);
+
+  const tick = async () => {
+    if (autoSyncRunning) {
+      console.log('[iptv-sync] ciclo anterior ainda rodando, pulando este tick.');
+      return;
+    }
+    autoSyncRunning = true;
+    try {
+      const result = await runIptvSync({ timeBudgetMs });
+      console.log('[iptv-sync] auto-sync ciclo concluído:', JSON.stringify(result));
+    } catch (err) {
+      console.error('[iptv-sync] auto-sync ciclo falhou:', err.message);
+    } finally {
+      autoSyncRunning = false;
+    }
+  };
+
+  // Primeiro ciclo logo na subida do servidor (não espera o intervalo
+  // inteiro pra começar a trabalhar), os seguintes no intervalo definido.
+  tick();
+  setInterval(tick, intervalMs);
+}
+
+module.exports = handler;
 module.exports.config = {
   api: { responseLimit: false },
 };
+module.exports.runIptvSync = runIptvSync;
+module.exports.startAutoSync = startAutoSync;
