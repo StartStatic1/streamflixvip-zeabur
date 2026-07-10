@@ -3966,6 +3966,11 @@
   // ══════════════════════════════════════
   const STREAM_PROXY_VERCEL = '/api/stream-proxy?url=';
   const STREAM_PROXY_ZEABUR = '';
+  // Bunny CDN (Pull Zone) — cacheia os streams IPTV (HTTP) e entrega mais
+  // rápido pro player. Deixe '' pra desativar e voltar a usar o proxy
+  // direto do Zeabur (STREAM_PROXY_VERCEL acima).
+  // Exemplo: 'https://streamflixvip.b-cdn.net/api/stream-proxy?url='
+  const STREAM_PROXY_BUNNY = 'https://streamflixvip.b-cdn.net/api/stream-proxy?url=';
   let hlsInstance = null;
 
   // ── Fallback automático de servidor (só pro <video> nativo) ──
@@ -4584,7 +4589,8 @@ document.addEventListener('click', (e) => {
     const isHttp = url.startsWith('http://');
     const pageIsHttps = window.location.protocol === 'https:';
     if (isHttp && pageIsHttps) {
-      const proxyBase = STREAM_PROXY_VERCEL || STREAM_PROXY_ZEABUR;
+      // Prioridade: Bunny CDN (cacheia e entrega mais rápido) > proxy próprio do Zeabur
+      const proxyBase = STREAM_PROXY_BUNNY || STREAM_PROXY_VERCEL || STREAM_PROXY_ZEABUR;
       if (proxyBase) return proxyBase + encodeURIComponent(url);
       return url;
     }
