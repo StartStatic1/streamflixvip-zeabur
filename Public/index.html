@@ -3964,7 +3964,19 @@
   // ══════════════════════════════════════
   // PLAYER — NÃO ALTERADO (só encapsulado)
   // ══════════════════════════════════════
-  const STREAM_PROXY_VERCEL = '/api/stream-proxy?url=';
+  // STREAM_PROXY_VERCEL agora aponta pro domínio da Bunny CDN, não mais
+  // pro mesmo domínio da página (URL relativa). O motivo: colocar a Bunny
+  // na frente do proxy de vídeo (api/stream-proxy no Zeabur) faz ela
+  // cachear os trechos de vídeo já buscados, entregando mais rápido pros
+  // próximos espectadores do mesmo conteúdo/região, e tirando carga
+  // repetida do servidor Zeabur. A Bunny já está configurada com Origin
+  // URL = https://streamflixpro.zeabur.app, então qualquer rota (incluindo
+  // /api/stream-proxy) responde igual, só que com cache na frente.
+  //
+  // Testado manualmente em produção: Range requests (seek/avançar/voltar)
+  // funcionam normalmente através da Bunny, e repetir o mesmo trecho de
+  // vídeo fica visivelmente mais rápido na segunda vez (cache hit).
+  const STREAM_PROXY_VERCEL = 'https://streamflixvip.b-cdn.net/api/stream-proxy?url=';
   const STREAM_PROXY_ZEABUR = '';
   // Bunny CDN (Pull Zone) — cacheia os streams IPTV (HTTP) e entrega mais
   // rápido pro player. Deixe '' pra desativar e voltar a usar o proxy
