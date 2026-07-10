@@ -69,7 +69,20 @@ async function searchTmdbMovie(title, year, appBaseUrl, tmdbApiKey) {
   url.searchParams.set('language', 'pt-BR');
   if (year) url.searchParams.set('primary_release_year', String(year));
 
-  const res = await fetch(url.toString());
+  // Timeout explícito de 5s: sem isso, uma rede instável ou uma resolução
+  // de DNS lenta pode deixar o fetch pendurado até o timeout default do
+  // runtime (bem mais alto), e com centenas de filmes por ciclo isso
+  // consome o timeBudgetMs inteiro em poucas tentativas, travando o
+  // progresso da sincronização. Falhando rápido aqui, o loop principal
+  // segue pro próximo filme em vez de ficar preso num só.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  let res;
+  try {
+    res = await fetch(url.toString(), { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) throw new Error(`TMDB search falhou: ${res.status}`);
   const data = await res.json();
   if (!data.results || data.results.length === 0) return null;
@@ -99,7 +112,17 @@ async function searchTmdbMovie(title, year, appBaseUrl, tmdbApiKey) {
 
 async function downloadM3U(source) {
   const url = `${source.xtream_host}/get.php?username=${source.xtream_user}&password=${source.xtream_pass}&type=m3u_plus`;
-  const res = await fetch(url);
+  // Timeout de 20s: a fonte Xtream às vezes está lenta/instável (visto nos
+  // logs: ConnectTimeoutError repetido). Sem limite aqui, uma fonte fora
+  // do ar prende o ciclo inteiro até o timeout default do runtime.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  let res;
+  try {
+    res = await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) throw new Error(`Falha ao baixar M3U: HTTP ${res.status}`);
 
   const tmpPath = path.join(os.tmpdir(), `iptv-${source.id}.m3u`);
