@@ -73,7 +73,27 @@ async function handler(req, res) {
     const forwardHeaders = {};
     if (req.headers.range) forwardHeaders.range = req.headers.range;
 
-    const upstream = await fetch(target.toString(), { headers: forwardHeaders });
+    // Timeout de conexão: sem isso, se o servidor de origem (ex: Svent)
+    // demorar ou não responder, o fetch fica pendurado indefinidamente e
+    // o player do usuário só fica girando pra sempre, sem erro nenhum.
+    // 15s é generoso pro handshake inicial + primeiro byte; depois que o
+    // stream começa a chegar, o corpo já não passa mais por este timeout
+    // (só se aplica à espera da resposta inicial do upstream).
+    const controller = new AbortController();
+    const connectTimeout = setTimeout(() => controller.abort(), 15000);
+    let upstream;
+    try {
+      upstream = await fetch(target.toString(), { headers: forwardHeaders, signal: controller.signal });
+    } catch (fetchErr) {
+      if (fetchErr.name === 'AbortError') {
+        res.status(504).json({ error: 'Tempo esgotado ao conectar no servidor de origem (' + target.hostname + ').' });
+      } else {
+        res.status(502).json({ error: 'Falha ao conectar no servidor de origem: ' + fetchErr.message });
+      }
+      return;
+    } finally {
+      clearTimeout(connectTimeout);
+    }
 
     if (!upstream.ok && upstream.status !== 206) {
       res.status(upstream.status).json({ error: 'Servidor de origem retornou erro: ' + upstream.status });
