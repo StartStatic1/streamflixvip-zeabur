@@ -62,7 +62,17 @@ module.exports = async function handler(req, res) {
       if (year) url.searchParams.set('y', year);
     }
 
-    const omdbRes = await fetch(url.toString());
+    // Timeout de 8s: mesmo padrão usado em tmdb.js e stream-proxy.js — sem
+    // isso, uma instabilidade de rede de saída deixa a nota de IMDb/RT
+    // pendurada em vez de simplesmente cair pro fallback "não encontrado".
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    let omdbRes;
+    try {
+      omdbRes = await fetch(url.toString(), { signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
     const data = await omdbRes.json();
 
     if (data.Response === 'False') {
