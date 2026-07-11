@@ -73,6 +73,17 @@ async function handler(req, res) {
     const forwardHeaders = {};
     if (req.headers.range) forwardHeaders.range = req.headers.range;
 
+    // Muitos provedores Xtream redirecionam (302) para uma CDN de entrega
+    // real com token temporário na URL (ex: sventank.com -> algumcdn.com).
+    // Essas CDNs costumam ter proteção anti-hotlink que bloqueia ou serve
+    // conteúdo diferente quando a requisição não parece vir de um
+    // navegador real (sem User-Agent, sem Referer) — que é exatamente o
+    // caso do fetch do Node por padrão. Sem isso, a origem responde com
+    // erro (ou o player simplesmente não recebe o vídeo esperado), mesmo
+    // que a mesma URL funcione perfeitamente colada direto no navegador.
+    forwardHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+    forwardHeaders['Referer'] = target.origin + '/';
+
     // Timeout de conexão: sem isso, se o servidor de origem (ex: Svent)
     // demorar ou não responder, o fetch fica pendurado indefinidamente e
     // o player do usuário só fica girando pra sempre, sem erro nenhum.
