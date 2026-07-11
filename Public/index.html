@@ -4610,6 +4610,7 @@ document.addEventListener('click', (e) => {
   }
   function stopVideoPlayer() {
     const video = document.getElementById('playerVideo');
+    clearStallWatchdog();
     if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
     video.removeEventListener('timeupdate', onVideoTimeUpdate);
     video.pause();
@@ -4659,6 +4660,43 @@ document.addEventListener('click', (e) => {
     return true;
   }
 
+  // ── Watchdog de "travou sem erro" ──
+  // Cobre o caso que nem video.onerror nem HLS.js ERROR pegam: a conexão
+  // (Bunny CDN -> Zeabur -> servidor de origem) simplesmente não responde
+  // nada — nem sucesso nem erro — e o <video>/HLS fica esperando pra
+  // sempre, girando o ícone de play sem nenhum evento disparar. Sem isso,
+  // o usuário via a tela travada e o fallback automático nunca acionava,
+  // porque tecnicamente "não houve erro" do ponto de vista do navegador.
+  let _stallWatchdogTimer = null;
+  const STALL_WATCHDOG_MS = 12000; // se não começar a tocar em 12s, considera falho
+
+  function clearStallWatchdog() {
+    if (_stallWatchdogTimer) {
+      clearTimeout(_stallWatchdogTimer);
+      _stallWatchdogTimer = null;
+    }
+  }
+
+  function armStallWatchdog(idx, video) {
+    clearStallWatchdog();
+    _stallWatchdogTimer = setTimeout(() => {
+      // Se currentTime ainda não andou e não está de fato tocando, trava real.
+      if (video.readyState < 2 && video.currentTime === 0) {
+        console.warn('[watchdog] servidor', idx, 'não respondeu em', STALL_WATCHDOG_MS, 'ms');
+        tryAutoFallback(idx, 'stall_sem_resposta');
+      }
+    }, STALL_WATCHDOG_MS);
+
+    // Cancela o watchdog assim que o vídeo realmente começar a progredir.
+    const onProgressConfirmed = () => {
+      clearStallWatchdog();
+      video.removeEventListener('playing', onProgressConfirmed);
+      video.removeEventListener('timeupdate', onProgressConfirmed);
+    };
+    video.addEventListener('playing', onProgressConfirmed, { once: true });
+    video.addEventListener('timeupdate', onProgressConfirmed, { once: true });
+  }
+
   function playServer(idx) {
     const grid = document.getElementById('serverGrid');
     const servers = grid._servers;
@@ -4678,6 +4716,7 @@ document.addEventListener('click', (e) => {
       document.getElementById('customControlsBar').style.display = 'flex';
       wireCustomControlsBar();
       const playable = resolvePlayableUrl(url);
+      armStallWatchdog(idx, video);
 
       // Captura o progresso pendente (se houver) e já consome a variável,
       // pra não reaplicar o resume caso o usuário troque de servidor depois.
