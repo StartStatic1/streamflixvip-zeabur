@@ -48,7 +48,18 @@ module.exports = async function handler(req, res) {
       if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
     });
 
-    const tmdbRes = await fetch(url.toString());
+    // Timeout de 10s: sem isso, uma instabilidade de rede de saída do
+    // servidor (já observada afetando outras chamadas externas) deixa essa
+    // requisição pendurada e o card do filme fica girando sem nunca dar
+    // erro nem sucesso pro front-end.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    let tmdbRes;
+    try {
+      tmdbRes = await fetch(url.toString(), { signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
     const data = await tmdbRes.json();
 
     // Cacheia no edge/CDN da Vercel por 1h, com 24h de stale-while-revalidate
