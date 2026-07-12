@@ -1,0 +1,38 @@
+name: Sincronização IPTV — Séries (standalone)
+
+# Irmão separado de iptv-sync.yml (que cuida só de filmes). Roda de forma
+# totalmente independente: horário próprio, cursor de progresso próprio
+# (series_sync_cursor, diferente do sync_cursor usado pelo sync de filmes),
+# então um nunca atrasa nem disputa tempo com o outro.
+#
+# IMPORTANTE — antes de usar:
+# 1. Configure os mesmos Secrets já usados pelo iptv-sync.yml em:
+#    Settings > Secrets and variables > Actions
+#      SUPABASE_SERVICE_ROLE_KEY
+#      TMDB_API_KEY
+# 2. Adicione as colunas novas na tabela iptv_sources do Supabase
+#    (series_sync_cursor, series_last_batch_at, series_last_synced_at,
+#    series_last_sync_stats) — ver SQL fornecido junto com este arquivo.
+on:
+  schedule:
+    - cron: '15 */1 * * *'   # roda 1x por hora, no minuto 15 (deslocado do sync de filmes pra não competir por rede/CPU no mesmo instante)
+  workflow_dispatch: {}
+
+jobs:
+  sync-series:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Rodar sincronização de SÉRIES
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+        run: node sync-series-standalone.js
