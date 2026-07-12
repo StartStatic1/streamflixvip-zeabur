@@ -1577,9 +1577,13 @@
       display:none; flex-direction:column; overflow-y:auto;
     }
     .search-overlay.open { display:flex; animation:fadeIn .2s ease; }
+    /* Header fica sticky, mas agora enxuto: só a barra de busca + a
+       toolbar (título de resultados, densidade, botão Filtros). O painel
+       de filtros expandido NÃO mora aqui — fica logo abaixo, fora do
+       sticky, então abrir os filtros não "engole" a tela toda no mobile. */
     .search-overlay-header {
       position:sticky; top:0; background:rgba(8,8,15,0.98);
-      backdrop-filter:blur(20px); padding:80px 44px 24px;
+      backdrop-filter:blur(20px); padding:80px 44px 20px;
       border-bottom:1px solid var(--border-soft); z-index:10;
     }
     .search-overlay-bar {
@@ -1598,26 +1602,52 @@
       padding:4px; transition:color .2s; line-height:1; cursor:pointer;
     }
     .search-close-btn:hover { color:var(--text); }
+
+    /* Barra de toolbar: título de resultados + ações (densidade / filtros).
+       Fica dentro do header sticky mas é uma linha compacta só — não come
+       a tela quando os filtros abrem, porque o painel deles não mora aqui. */
+    .search-toolbar {
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      margin-top:18px; flex-wrap:wrap;
+    }
+    .search-toolbar-actions { display:flex; align-items:center; gap:8px; flex-shrink:0; }
     .search-results-title {
       font-family:var(--font-display); font-size:1.1rem; font-weight:700;
-      margin-top:28px; margin-bottom:20px; color:var(--muted);
+      color:var(--muted); margin:0;
     }
     .search-results-title span { color:var(--text); }
     .search-body { padding:0 44px 44px; flex:1; }
     .search-hint { color:var(--muted); font-size:0.85rem; padding:8px 0 0; }
 
-    /* ── Filtros da busca ── */
-    .search-filters { margin-top:20px; }
+    /* Toggle de densidade dos cards (normal / compacto) */
+    .grid-density-toggle {
+      display:flex; align-items:center; gap:2px; background:var(--surface);
+      border:1px solid var(--border-soft); border-radius:8px; padding:3px;
+    }
+    .density-btn {
+      display:flex; align-items:center; justify-content:center; width:30px; height:26px;
+      border:none; border-radius:6px; background:none; color:var(--muted); cursor:pointer;
+      transition:all .15s;
+    }
+    .density-btn:hover { color:var(--text); }
+    .density-btn.active { background:var(--accent2); color:#fff; }
+
+    /* ── Filtros da busca ──
+       O painel NÃO fica dentro do header sticky: é um bloco normal do fluxo,
+       logo abaixo dele. Assim, ao abrir, ele empurra a página (não "come"
+       a viewport toda) e os resultados continuam visíveis/roláveis logo em
+       seguida — sem a rolagem gigante que existia antes no mobile. */
     .search-filters-toggle {
       display:inline-flex; align-items:center; gap:7px; background:none; border:1px solid var(--border-soft);
       color:var(--muted); font-size:0.8rem; font-weight:600; padding:7px 14px; border-radius:8px;
-      transition:all .2s; cursor:pointer;
+      transition:all .2s; cursor:pointer; white-space:nowrap;
     }
     .search-filters-toggle:hover { color:var(--text); border-color:var(--accent2); }
     .search-filters-toggle.has-active { color:var(--gold); border-color:rgba(240,168,48,0.35); background:var(--gold-soft); }
     .search-filters-panel {
-      display:none; margin-top:14px; padding:18px 20px; background:var(--surface);
-      border:1px solid var(--border-soft); border-radius:12px;
+      display:none; padding:18px 44px; background:var(--bg-elevated);
+      border-bottom:1px solid var(--border-soft);
+      box-shadow:inset 0 8px 16px -12px rgba(0,0,0,0.6);
     }
     .search-filters-panel.open { display:block; animation:fadeIn .2s ease; }
     .search-filter-group { margin-bottom:16px; }
@@ -1633,14 +1663,31 @@
     }
     .search-chip.active { background:var(--accent2); border-color:var(--accent2); color:#fff; }
     .search-chip:hover:not(.active) { border-color:var(--accent2); color:var(--text); }
-    .search-filters-actions { display:flex; gap:10px; margin-top:16px; }
+    .search-filters-actions {
+      display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px;
+      padding-top:14px; border-top:1px solid var(--border-soft);
+    }
+    .search-filters-result-count { font-size:0.78rem; color:var(--muted-dim); }
     .search-filters-clear {
       background:none; border:1px solid var(--border-soft); color:var(--muted); font-size:0.78rem; font-weight:700;
       padding:8px 16px; border-radius:8px; cursor:pointer;
     }
     .search-filters-clear:hover { color:var(--text); }
+
+    /* Grid compacta: mais colunas, cards menores — pra "caber mais" como
+       pedido, mantendo o card real (poster + título + nota + ano). */
+    .grid.grid-compact { grid-template-columns:repeat(auto-fill, minmax(112px, 1fr)); gap:10px; }
+    .grid.grid-compact .card-body { padding:7px 8px 9px; }
+    .grid.grid-compact .card-title { font-size:0.72rem; margin-bottom:3px; }
+    .grid.grid-compact .card-meta-row { font-size:0.64rem; gap:6px; }
+    .grid.grid-compact .card-badge-type { font-size:0.5rem; padding:2px 5px; top:5px; right:5px; }
+    .grid.grid-compact .card-fav-btn { width:24px; height:24px; font-size:0.75rem; top:5px; left:5px; }
+
     @media (max-width:680px) {
-      .search-filters-panel { padding:14px 16px; }
+      .search-filters-panel { padding:14px 18px; }
+      .search-toolbar { margin-top:14px; }
+      .search-results-title { font-size:0.95rem; }
+      .grid.grid-compact { grid-template-columns:repeat(3,1fr); gap:8px; }
     }
 
     .trailer-modal {
@@ -2102,38 +2149,49 @@
       <input type="text" placeholder="Buscar filmes, séries, animes..." id="searchOverlayInput" oninput="handleSearchOverlay(this.value)" />
       <button class="search-close-btn" onclick="closeSearch()">×</button>
     </div>
-    <div class="search-results-title" id="searchResultsTitle" style="display:none">Resultados para <span id="searchQueryLabel"></span></div>
-    <div class="search-filters" id="searchFiltersWrap" style="display:none">
-      <button class="search-filters-toggle" id="searchFiltersToggleBtn" onclick="toggleSearchFilters()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-        Filtros <span id="searchFiltersActiveCount"></span>
-      </button>
-      <div class="search-filters-panel" id="searchFiltersPanel">
-        <div class="search-filter-group">
-          <div class="search-filter-label">Categoria</div>
-          <div class="search-chip-row" id="searchFilterType">
-            <button class="search-chip active" data-val="" onclick="setSearchFilter('type','',this)">Todos</button>
-            <button class="search-chip" data-val="movie" onclick="setSearchFilter('type','movie',this)">Filmes</button>
-            <button class="search-chip" data-val="tv" onclick="setSearchFilter('type','tv',this)">Séries</button>
-            <button class="search-chip" data-val="anime" onclick="setSearchFilter('type','anime',this)">Animes</button>
-          </div>
+    <div class="search-toolbar" id="searchToolbar" style="display:none">
+      <div class="search-results-title" id="searchResultsTitle">Resultados para <span id="searchQueryLabel"></span></div>
+      <div class="search-toolbar-actions">
+        <div class="grid-density-toggle" id="gridDensityToggle" role="group" aria-label="Tamanho dos cards">
+          <button type="button" class="density-btn active" data-density="normal" onclick="setGridDensity('normal',this)" title="Cards normais">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1.4"/><rect x="14" y="3" width="7" height="18" rx="1.4"/></svg>
+          </button>
+          <button type="button" class="density-btn" data-density="compact" onclick="setGridDensity('compact',this)" title="Cards compactos">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="5" height="18" rx="1.2"/><rect x="9.5" y="3" width="5" height="18" rx="1.2"/><rect x="17" y="3" width="5" height="18" rx="1.2"/></svg>
+          </button>
         </div>
-        <div class="search-filter-group">
-          <div class="search-filter-label">Gênero</div>
-          <div class="search-chip-row" id="searchFilterGenre">
-            <button class="search-chip active" data-val="" onclick="setSearchFilter('genre','',this)">Todos</button>
-          </div>
-        </div>
-        <div class="search-filter-group">
-          <div class="search-filter-label">Ano</div>
-          <div class="search-chip-row" id="searchFilterYear">
-            <button class="search-chip active" data-val="" onclick="setSearchFilter('year','',this)">Todos</button>
-          </div>
-        </div>
-        <div class="search-filters-actions">
-          <button class="search-filters-clear" onclick="clearSearchFilters()">Limpar filtros</button>
-        </div>
+        <button class="search-filters-toggle" id="searchFiltersToggleBtn" onclick="toggleSearchFilters()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+          Filtros <span id="searchFiltersActiveCount"></span>
+        </button>
       </div>
+    </div>
+  </div>
+  <div class="search-filters-panel" id="searchFiltersPanel">
+    <div class="search-filter-group">
+      <div class="search-filter-label">Categoria</div>
+      <div class="search-chip-row" id="searchFilterType">
+        <button class="search-chip active" data-val="" onclick="setSearchFilter('type','',this)">Todos</button>
+        <button class="search-chip" data-val="movie" onclick="setSearchFilter('type','movie',this)">Filmes</button>
+        <button class="search-chip" data-val="tv" onclick="setSearchFilter('type','tv',this)">Séries</button>
+        <button class="search-chip" data-val="anime" onclick="setSearchFilter('type','anime',this)">Animes</button>
+      </div>
+    </div>
+    <div class="search-filter-group">
+      <div class="search-filter-label">Gênero</div>
+      <div class="search-chip-row" id="searchFilterGenre">
+        <button class="search-chip active" data-val="" onclick="setSearchFilter('genre','',this)">Todos</button>
+      </div>
+    </div>
+    <div class="search-filter-group">
+      <div class="search-filter-label">Ano</div>
+      <div class="search-chip-row" id="searchFilterYear">
+        <button class="search-chip active" data-val="" onclick="setSearchFilter('year','',this)">Todos</button>
+      </div>
+    </div>
+    <div class="search-filters-actions">
+      <span class="search-filters-result-count" id="searchFiltersResultCount"></span>
+      <button class="search-filters-clear" onclick="clearSearchFilters()">Limpar filtros</button>
     </div>
   </div>
   <div class="search-body">
@@ -5109,7 +5167,8 @@ document.addEventListener('click', (e) => {
     qSpan.textContent = '"' + q + '"';
     const g = document.getElementById('grid-search');
     g.innerHTML = skeletonCards(8);
-    document.getElementById('searchFiltersWrap').style.display = 'none';
+    document.getElementById('searchToolbar').style.display = 'none';
+    document.getElementById('searchFiltersPanel').classList.remove('open');
 
     const [movies, tv] = await Promise.all([tmdb('/search/movie',{query:q}), tmdb('/search/tv',{query:q})]);
 
@@ -5130,8 +5189,9 @@ document.addEventListener('click', (e) => {
     resetSearchFilterChipsUI();
 
     if (_searchRawResults.length) {
-      document.getElementById('searchFiltersWrap').style.display = 'block';
+      document.getElementById('searchToolbar').style.display = 'flex';
       populateSearchFilterOptions();
+      applyStoredGridDensity();
     }
 
     renderFilteredSearchResults();
@@ -5242,6 +5302,31 @@ document.addEventListener('click', (e) => {
     // busca e refaz o render assim que resolver, pra completar os cards
     // com o nome do gênero em vez de deixá-los sem essa informação.
     if (!_genreListResolved) ensureGenreListCache().then(() => renderFilteredSearchResults());
+
+    const countEl = document.getElementById('searchFiltersResultCount');
+    if (countEl) {
+      countEl.textContent = items.length === 1 ? '1 resultado' : `${items.length} resultados`;
+    }
+  }
+
+  // Restaura a preferência de densidade salva (se houver) sempre que uma
+  // nova busca é feita, já que a grid é recriada do zero a cada doSearch.
+  function applyStoredGridDensity() {
+    let mode = 'normal';
+    try { mode = localStorage.getItem('sf_search_density') || 'normal'; } catch(e) {}
+    const btn = document.querySelector(`#gridDensityToggle .density-btn[data-density="${mode}"]`);
+    setGridDensity(mode, btn);
+  }
+
+  // Alterna a densidade da grade de resultados da busca entre "normal"
+  // (cards padrão do site) e "compact" (mais colunas, cards menores) —
+  // útil pra comparar mais títulos de uma vez sem trocar de tela.
+  function setGridDensity(mode, btnEl) {
+    const g = document.getElementById('grid-search');
+    g.classList.toggle('grid-compact', mode === 'compact');
+    document.querySelectorAll('#gridDensityToggle .density-btn').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    try { localStorage.setItem('sf_search_density', mode); } catch(e) {}
   }
   function closeSearch() {
     document.getElementById('searchOverlay').classList.remove('open');
