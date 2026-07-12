@@ -5236,10 +5236,20 @@ document.addEventListener('click', (e) => {
   // Preenche os chips de Gênero e Ano dinamicamente, olhando só para os
   // gêneros/anos que de fato aparecem nos resultados atuais — evita mostrar
   // filtros que não vão retornar nada.
+  // Recalcula os chips de Gênero e Ano a partir do conjunto de itens que
+  // JÁ passou pelo filtro de Categoria (tipo). Antes, essa lista era
+  // montada uma única vez com TODOS os resultados (filme+série+anime
+  // juntos), então gêneros exclusivos de série (ex: "Action & Adventure",
+  // "News", "Talk") continuavam aparecendo mesmo com "Filmes" selecionado
+  // — e clicar neles sempre dava 0 resultado, porque nenhum filme tem
+  // esses IDs de gênero. Agora recalculamos sempre que a Categoria muda.
   function populateSearchFilterOptions() {
+    const byType = _searchFilters.type
+      ? _searchRawResults.filter(i => i._type === _searchFilters.type)
+      : _searchRawResults;
+
     const genreMap = new Map();
-    (window.__genreListCache || {});
-    _searchRawResults.forEach(i => {
+    byType.forEach(i => {
       (i.genre_ids || []).forEach(gid => { if (!genreMap.has(gid)) genreMap.set(gid, true); });
     });
     // Usa o cache de gêneros já buscado pela página "Filmes" se existir;
@@ -5250,19 +5260,27 @@ document.addEventListener('click', (e) => {
         .map(gid => ({ id: gid, name: names[gid] || null }))
         .filter(g => g.name)
         .sort((a,b) => a.name.localeCompare(b.name));
-      genreEl.innerHTML = '<button class="search-chip active" data-val="" onclick="setSearchFilter(\'genre\',\'\',this)">Todos</button>' +
-        chips.map(g => `<button class="search-chip" data-val="${g.id}" onclick="setSearchFilter('genre','${g.id}',this)">${g.name}</button>`).join('');
+      // Se o gênero selecionado não existe mais nessa categoria, limpa o filtro
+      // em vez de deixar um chip "fantasma" ativo que nunca vai bater com nada.
+      const genreStillValid = !_searchFilters.genre || chips.some(g => String(g.id) === _searchFilters.genre);
+      if (!genreStillValid) _searchFilters.genre = '';
+      genreEl.innerHTML = '<button class="search-chip' + (!_searchFilters.genre ? ' active' : '') + '" data-val="" onclick="setSearchFilter(\'genre\',\'\',this)">Todos</button>' +
+        chips.map(g => `<button class="search-chip${String(g.id)===_searchFilters.genre?' active':''}" data-val="${g.id}" onclick="setSearchFilter('genre','${g.id}',this)">${g.name}</button>`).join('');
+      if (!genreStillValid) renderFilteredSearchResults();
     });
 
     const years = new Set();
-    _searchRawResults.forEach(i => {
+    byType.forEach(i => {
       const y = (i.release_date || i.first_air_date || '').slice(0,4);
       if (y) years.add(y);
     });
     const yearEl = document.getElementById('searchFilterYear');
     const sortedYears = Array.from(years).sort((a,b) => b - a);
-    yearEl.innerHTML = '<button class="search-chip active" data-val="" onclick="setSearchFilter(\'year\',\'\',this)">Todos</button>' +
-      sortedYears.map(y => `<button class="search-chip" data-val="${y}" onclick="setSearchFilter('year','${y}',this)">${y}</button>`).join('');
+    const yearStillValid = !_searchFilters.year || sortedYears.includes(_searchFilters.year);
+    if (!yearStillValid) _searchFilters.year = '';
+    yearEl.innerHTML = '<button class="search-chip' + (!_searchFilters.year ? ' active' : '') + '" data-val="" onclick="setSearchFilter(\'year\',\'\',this)">Todos</button>' +
+      sortedYears.map(y => `<button class="search-chip${y===_searchFilters.year?' active':''}" data-val="${y}" onclick="setSearchFilter('year','${y}',this)">${y}</button>`).join('');
+    if (!yearStillValid) renderFilteredSearchResults();
   }
 
   // Cache simples (nunca expira dentro da sessão) dos nomes de gênero de
@@ -5296,6 +5314,11 @@ document.addEventListener('click', (e) => {
     btnEl.parentElement.querySelectorAll('.search-chip').forEach(c => c.classList.remove('active'));
     btnEl.classList.add('active');
     updateSearchFiltersToggleLabel();
+    // Trocar a Categoria muda o universo de itens disponível — recalcula
+    // que gêneros/anos existem de fato nesse universo (senão os chips de
+    // gênero continuam mostrando opções de série mesmo com "Filmes"
+    // selecionado, e vice-versa, o que gera filtros que nunca batem).
+    if (kind === 'type') populateSearchFilterOptions();
     renderFilteredSearchResults();
   }
 
@@ -5303,6 +5326,7 @@ document.addEventListener('click', (e) => {
     _searchFilters = { type: '', genre: '', year: '' };
     _searchResultsShown = SEARCH_RESULTS_BATCH;
     resetSearchFilterChipsUI();
+    populateSearchFilterOptions();
     updateSearchFiltersToggleLabel();
     renderFilteredSearchResults();
   }
