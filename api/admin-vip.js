@@ -405,18 +405,27 @@ module.exports = async function handler(req, res) {
       // já que o auto-sync (iptv-sync) só traz filmes por enquanto e as
       // séries entram majoritariamente por cadastro manual.
       //
-      // IMPORTANTE: o PostgREST limita respostas a 1000 linhas por padrão.
-      // Com ~27 mil registros em vip_sources, uma busca sem paginação
-      // trunca silenciosamente nas primeiras ~1000 — por isso paginamos
+      // IMPORTANTE: séries têm uma linha por EPISÓDIO em vip_sources
+      // (colunas season/episode), diferente de filme que é 1 linha = 1
+      // filme. Por isso "séries com fonte" não pode ser contagem de
+      // linhas — precisa contar tmdb_id únicos entre as linhas de série,
+      // senão 1 série com 5 episódios cadastrados aparece como "5 séries".
+      // A tabela por servidor mostra contagem de episódios mesmo (útil
+      // pra ver volume de conteúdo por fonte); só o card do topo usa a
+      // contagem de séries distintas.
+      //
+      // O PostgREST limita respostas a 1000 linhas por padrão. Com ~27 mil
+      // registros em vip_sources, uma busca sem paginação trunca
+      // silenciosamente nas primeiras ~1000 — por isso paginamos
       // explicitamente até esgotar as linhas (Range em blocos de 1000).
-      const bySourceCounts = {}; // label -> { movie, tv }
+      const bySourceCounts = {}; // label -> { movie, tv } (tv = episódios)
+      const seriesIds = new Set(); // tmdb_id únicos de série, pra contagem distinta
       let totalMovies = 0;
-      let totalSeries = 0;
       const PAGE_SIZE = 1000;
       let from = 0;
       while (true) {
         const pageRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/vip_sources?select=source_label,media_type`,
+          `${SUPABASE_URL}/rest/v1/vip_sources?select=source_label,media_type,tmdb_id`,
           { headers: { ...svcHeaders, Range: `${from}-${from + PAGE_SIZE - 1}` } }
         );
         const pageRows = await pageRes.json();
@@ -426,13 +435,14 @@ module.exports = async function handler(req, res) {
           const label = row.source_label || '(sem nome)';
           const isTv = row.media_type === 'tv';
           if (!bySourceCounts[label]) bySourceCounts[label] = { movie: 0, tv: 0 };
-          if (isTv) { bySourceCounts[label].tv++; totalSeries++; }
+          if (isTv) { bySourceCounts[label].tv++; seriesIds.add(row.tmdb_id); }
           else { bySourceCounts[label].movie++; totalMovies++; }
         }
 
         if (pageRows.length < PAGE_SIZE) break; // última página
         from += PAGE_SIZE;
       }
+      const totalSeries = seriesIds.size;
       const topSources = Object.entries(bySourceCounts)
         .map(([label, c]) => ({ label, movie: c.movie, tv: c.tv, count: c.movie + c.tv }))
         .sort((a, b) => b.count - a.count)
