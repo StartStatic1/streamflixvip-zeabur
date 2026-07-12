@@ -1683,6 +1683,16 @@
     .grid.grid-compact .card-badge-type { font-size:0.5rem; padding:2px 5px; top:5px; right:5px; }
     .grid.grid-compact .card-fav-btn { width:24px; height:24px; font-size:0.75rem; top:5px; left:5px; }
 
+    /* Botão "Carregar mais" ao final da grid de busca — ocupa a linha
+       toda do grid (grid-column:1/-1) pra não ficar espremido num card. */
+    .search-load-more {
+      grid-column:1/-1; margin:14px auto 4px; padding:11px 26px; border-radius:10px;
+      background:var(--surface); border:1px solid var(--border-soft); color:var(--text);
+      font-family:var(--font); font-size:0.85rem; font-weight:700; cursor:pointer;
+      transition:all .2s; display:block;
+    }
+    .search-load-more:hover { border-color:var(--accent2); color:#fff; background:var(--card-hover); }
+
     @media (max-width:680px) {
       .search-filters-panel { padding:14px 18px; }
       .search-toolbar { margin-top:14px; }
@@ -5159,6 +5169,28 @@ document.addEventListener('click', (e) => {
   }
   let _searchRawResults = []; // resultados brutos da última busca (para filtrar sem refazer a chamada de rede)
   let _searchFilters = { type: '', genre: '', year: '' };
+  const SEARCH_MAX_PAGES = 5; // ~100 itens por tipo (filme/tv) — dá material de sobra pros filtros de gênero/ano/categoria
+  const SEARCH_RESULTS_BATCH = 24; // quantos cards renderizamos por vez / a cada "Carregar mais"
+  let _searchResultsShown = SEARCH_RESULTS_BATCH;
+
+  // Busca várias páginas de um endpoint de busca do TMDB (movie ou tv) e
+  // junta tudo num array só. Sem isso, os filtros de Categoria/Gênero/Ano
+  // só tinham a 1ª página (~20 itens) pra recortar, e séries/animes — que
+  // já aparecem em menor quantidade pra maioria dos termos — sumiam quase
+  // sempre que combinados com outro filtro.
+  async function tmdbSearchAllPages(path, query) {
+    const first = await tmdb(path, { query, page: 1 });
+    if (!first) return [];
+    let results = first.results || [];
+    const totalPages = Math.min(first.total_pages || 1, SEARCH_MAX_PAGES);
+    if (totalPages > 1) {
+      const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, i) => tmdb(path, { query, page: i + 2 }))
+      );
+      rest.forEach(d => { if (d?.results) results = results.concat(d.results); });
+    }
+    return results;
+  }
 
   async function doSearch(q) {
     const label = document.getElementById('searchResultsTitle');
@@ -5170,11 +5202,13 @@ document.addEventListener('click', (e) => {
     document.getElementById('searchToolbar').style.display = 'none';
     document.getElementById('searchFiltersPanel').classList.remove('open');
 
-    const [movies, tv] = await Promise.all([tmdb('/search/movie',{query:q}), tmdb('/search/tv',{query:q})]);
+    const [movieResults, tvResults] = await Promise.all([
+      tmdbSearchAllPages('/search/movie', q),
+      tmdbSearchAllPages('/search/tv', q),
+    ]);
 
-    const movieItems = (movies?.results||[]).map(i=>({...i,_type:'movie'}));
+    const movieItems = movieResults.map(i=>({...i,_type:'movie'}));
     // separa séries "normais" de animes (japonês + gênero animação) dentro dos resultados de TV
-    const tvResults = tv?.results || [];
     const tvItems = tvResults
       .filter(i => !(i.original_language === 'ja' && (i.genre_ids||[]).includes(ANIME_GENRE_ID)))
       .map(i => ({...i, _type:'tv'}));
@@ -5186,6 +5220,8 @@ document.addEventListener('click', (e) => {
     _searchRawResults.forEach(i => { itemStore[i._type+':'+i.id] = i; });
 
     _searchFilters = { type: '', genre: '', year: '' };
+    _searchResultsShown = SEARCH_RESULTS_BATCH;
+    _lastRenderedItemsRef = null;
     resetSearchFilterChipsUI();
 
     if (_searchRawResults.length) {
@@ -5265,6 +5301,7 @@ document.addEventListener('click', (e) => {
 
   function clearSearchFilters() {
     _searchFilters = { type: '', genre: '', year: '' };
+    _searchResultsShown = SEARCH_RESULTS_BATCH;
     resetSearchFilterChipsUI();
     updateSearchFiltersToggleLabel();
     renderFilteredSearchResults();
@@ -5288,6 +5325,8 @@ document.addEventListener('click', (e) => {
     countEl.textContent = activeCount ? `(${activeCount})` : '';
   }
 
+  let _lastRenderedItemsRef = null;
+
   function renderFilteredSearchResults() {
     const g = document.getElementById('grid-search');
     let items = _searchRawResults;
@@ -5295,9 +5334,21 @@ document.addEventListener('click', (e) => {
     if (_searchFilters.genre) items = items.filter(i => (i.genre_ids || []).includes(Number(_searchFilters.genre)));
     if (_searchFilters.year) items = items.filter(i => (i.release_date || i.first_air_date || '').slice(0,4) === _searchFilters.year);
 
-    const limited = items.slice(0, 24);
+    // Sempre que o conjunto de itens muda (novo filtro), volta a mostrar
+    // só o primeiro lote — sem isso, trocar de filtro com "mostrar mais"
+    // já acionado deixaria o corte antigo grande demais ou pequeno demais.
+    if (items !== _lastRenderedItemsRef) {
+      _searchResultsShown = SEARCH_RESULTS_BATCH;
+      _lastRenderedItemsRef = items;
+    }
+
+    const limited = items.slice(0, _searchResultsShown);
+    const hasMore = items.length > limited.length;
     g.innerHTML = limited.map(i => cardHTML(i, i._type, _genreListResolved)).join('') ||
       `<div class="empty-state"><div class="empty-state-icon">🔍</div>Nenhum resultado encontrado${Object.values(_searchFilters).some(Boolean) ? ' com esses filtros' : ''}.</div>`;
+    if (hasMore) {
+      g.insertAdjacentHTML('beforeend', `<button class="search-load-more" onclick="loadMoreSearchResults()">Carregar mais (${items.length - limited.length} restantes)</button>`);
+    }
     // Se o mapa de gêneros ainda não tinha chegado (busca muito rápida),
     // busca e refaz o render assim que resolver, pra completar os cards
     // com o nome do gênero em vez de deixá-los sem essa informação.
@@ -5307,6 +5358,11 @@ document.addEventListener('click', (e) => {
     if (countEl) {
       countEl.textContent = items.length === 1 ? '1 resultado' : `${items.length} resultados`;
     }
+  }
+
+  function loadMoreSearchResults() {
+    _searchResultsShown += SEARCH_RESULTS_BATCH;
+    renderFilteredSearchResults();
   }
 
   // Restaura a preferência de densidade salva (se houver) sempre que uma
