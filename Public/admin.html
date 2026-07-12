@@ -650,6 +650,10 @@
       <button type="submit" class="auth-email-btn" id="adminPasswordBtn">Entrar</button>
     </form>
 
+    <div style="text-align:center;margin-top:10px;">
+      <a href="#" id="forgotPassLink" onclick="event.preventDefault();sendPasswordReset();" style="font-size:0.78rem;color:var(--muted);text-decoration:underline;cursor:pointer;">Esqueci minha senha</a>
+    </div>
+
     <div class="auth-msg" id="adminAuthMsg"></div>
   </div>
 </div>
@@ -1382,6 +1386,38 @@
     } finally {
       btn.disabled = false;
       btn.textContent = 'Entrar';
+    }
+  }
+
+  // ── ESQUECI MINHA SENHA ──
+  // Envia e-mail com link de recuperação, forçando o redirect de volta para
+  // ESTA página (admin.html) via redirectTo — em vez de depender do "Site URL"
+  // padrão do projeto Supabase, que aponta para a home do site. O Supabase
+  // exige que essa URL esteja cadastrada em Authentication > URL Configuration
+  // > Redirect URLs (ex: https://streamflixvip.online/admin.html).
+  async function sendPasswordReset() {
+    const email = document.getElementById('adminEmailInput').value.trim().toLowerCase();
+    if (!email) {
+      setAdminAuthMsg('⚠️ Digite seu e-mail no campo acima antes de clicar em "Esqueci minha senha".', 'error');
+      return;
+    }
+    const link = document.getElementById('forgotPassLink');
+    const originalText = link.textContent;
+    link.textContent = 'Enviando...';
+    setAdminAuthMsg('');
+    try {
+      const { error } = await withTimeout(
+        db.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname }),
+        10000,
+        'enviar e-mail de recuperação'
+      );
+      if (error) throw error;
+      setAdminAuthMsg('✅ Se este e-mail estiver cadastrado, um link de recuperação foi enviado. Verifique a caixa de entrada (e o spam).', 'success');
+    } catch (e) {
+      console.error('sendPasswordReset:', e);
+      setAdminAuthMsg('⚠️ ' + e.message, 'error');
+    } finally {
+      link.textContent = originalText;
     }
   }
 
