@@ -404,22 +404,34 @@ module.exports = async function handler(req, res) {
       // de quais fontes têm mais conteúdo, já separando filme de série,
       // já que o auto-sync (iptv-sync) só traz filmes por enquanto e as
       // séries entram majoritariamente por cadastro manual.
-      const bySourceRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/vip_sources?select=source_label,media_type`,
-        { headers: svcHeaders }
-      );
-      const bySourceRows = await bySourceRes.json();
-      const bySourceCounts = {}; // label -> { movie, tv, total }
+      //
+      // IMPORTANTE: o PostgREST limita respostas a 1000 linhas por padrão.
+      // Com ~27 mil registros em vip_sources, uma busca sem paginação
+      // trunca silenciosamente nas primeiras ~1000 — por isso paginamos
+      // explicitamente até esgotar as linhas (Range em blocos de 1000).
+      const bySourceCounts = {}; // label -> { movie, tv }
       let totalMovies = 0;
       let totalSeries = 0;
-      if (Array.isArray(bySourceRows)) {
-        for (const row of bySourceRows) {
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      while (true) {
+        const pageRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/vip_sources?select=source_label,media_type`,
+          { headers: { ...svcHeaders, Range: `${from}-${from + PAGE_SIZE - 1}` } }
+        );
+        const pageRows = await pageRes.json();
+        if (!Array.isArray(pageRows) || pageRows.length === 0) break;
+
+        for (const row of pageRows) {
           const label = row.source_label || '(sem nome)';
           const isTv = row.media_type === 'tv';
           if (!bySourceCounts[label]) bySourceCounts[label] = { movie: 0, tv: 0 };
           if (isTv) { bySourceCounts[label].tv++; totalSeries++; }
           else { bySourceCounts[label].movie++; totalMovies++; }
         }
+
+        if (pageRows.length < PAGE_SIZE) break; // última página
+        from += PAGE_SIZE;
       }
       const topSources = Object.entries(bySourceCounts)
         .map(([label, c]) => ({ label, movie: c.movie, tv: c.tv, count: c.movie + c.tv }))
