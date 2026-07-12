@@ -400,24 +400,31 @@ module.exports = async function handler(req, res) {
         countRows('vip_ads', '&is_active=eq.true'),
       ]);
 
-      // Breakdown de filmes por servidor/fonte (top 5) — dá visão rápida
-      // de quais fontes têm mais conteúdo
+      // Breakdown de filmes/séries por servidor/fonte — dá visão rápida
+      // de quais fontes têm mais conteúdo, já separando filme de série,
+      // já que o auto-sync (iptv-sync) só traz filmes por enquanto e as
+      // séries entram majoritariamente por cadastro manual.
       const bySourceRes = await fetch(
-        `${SUPABASE_URL}/rest/v1/vip_sources?select=source_label`,
+        `${SUPABASE_URL}/rest/v1/vip_sources?select=source_label,media_type`,
         { headers: svcHeaders }
       );
       const bySourceRows = await bySourceRes.json();
-      const bySourceCounts = {};
+      const bySourceCounts = {}; // label -> { movie, tv, total }
+      let totalMovies = 0;
+      let totalSeries = 0;
       if (Array.isArray(bySourceRows)) {
         for (const row of bySourceRows) {
           const label = row.source_label || '(sem nome)';
-          bySourceCounts[label] = (bySourceCounts[label] || 0) + 1;
+          const isTv = row.media_type === 'tv';
+          if (!bySourceCounts[label]) bySourceCounts[label] = { movie: 0, tv: 0 };
+          if (isTv) { bySourceCounts[label].tv++; totalSeries++; }
+          else { bySourceCounts[label].movie++; totalMovies++; }
         }
       }
       const topSources = Object.entries(bySourceCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([label, count]) => ({ label, count }));
+        .map(([label, c]) => ({ label, movie: c.movie, tv: c.tv, count: c.movie + c.tv }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8);
 
       res.status(200).json({
         totalVipSources,
@@ -426,6 +433,8 @@ module.exports = async function handler(req, res) {
         totalUsers,
         totalUnmatched,
         activeAds,
+        totalMovies,
+        totalSeries,
         topSources,
       });
     } catch (err) {
