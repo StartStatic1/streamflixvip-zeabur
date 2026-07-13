@@ -104,6 +104,11 @@ dependencies {
     // WebView isolado, só pra fontes que são iframe de terceiro
     implementation("androidx.webkit:webkit:1.11.0")
 
+    // Material Components for Android — necessário pois themes.xml usa
+    // parent="Theme.Material3.DayNight.NoActionBar", que vem desta lib
+    // (diferente do androidx.compose.material3, que não define estilos XML).
+    implementation("com.google.android.material:material:1.12.0")
+
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.2")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
