@@ -19,6 +19,7 @@ interface TmdbApi {
     suspend fun request(
         @Query("path") path: String,
         @Query("page") page: Int? = null,
+        @Query("query") query: String? = null,
         @Query("append_to_response") appendToResponse: String? = null,
     ): TmdbResponse
 }
@@ -58,9 +59,16 @@ data class TmdbItem(
     val release_date: String? = null,
     val first_air_date: String? = null,
     val vote_average: Double? = null,
+    // Só vem preenchido em resultados de /search/multi, que mistura
+    // filme e série no mesmo array — usado pra saber pra onde navegar
+    // ao clicar num resultado de busca.
+    val media_type: String? = null,
 ) {
     /** Nome de exibição: filme usa `title`, série usa `name`. */
     val displayTitle: String get() = title ?: name ?: "Sem título"
+
+    /** Resolve o tipo mesmo fora do contexto de busca (filme sempre tem title, série sempre tem name). */
+    val resolvedMediaType: String get() = media_type ?: if (title != null) "movie" else "tv"
 }
 
 data class TmdbGenre(val id: Int, val name: String)

@@ -45,6 +45,15 @@ object NetworkModule {
             .create(TmdbApi::class.java)
     }
 
+    val vipApi: VipApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL) // mesmo backend Express, endpoints /api/vip-status e /api/redeem-vip
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(VipApi::class.java)
+    }
+
     val supabaseApi: SupabaseApi by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.SUPABASE_URL + "/")
@@ -52,6 +61,15 @@ object NetworkModule {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(SupabaseApi::class.java)
+    }
+
+    val supabaseAuthApi: SupabaseAuthApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.SUPABASE_URL + "/")
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(SupabaseAuthApi::class.java)
     }
 
     /** Anon key pública do Supabase — mesmo valor embutido em Public/index.html. */
