@@ -1,8 +1,5 @@
 name: Build Android APK (StreamFlixVIP)
 
-# Builda o app Kotlin nativo inteiramente na nuvem do GitHub — não precisa
-# de PC nem Android Studio instalado. Roda sob demanda (workflow_dispatch)
-# ou automaticamente em push que mexa na pasta android/.
 on:
   workflow_dispatch: {}
   push:
@@ -29,14 +26,17 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # Gera o gradlew (script wrapper) automaticamente — não precisamos
-      # commitar o binário gradle-wrapper.jar no repositório, essa action
-      # resolve e cacheia tudo isso na nuvem.
-      - name: Configurar Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Gerar wrapper do Gradle (versão fixa 8.7)
+        run: |
+          curl -sL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.7/bin/gradle wrapper --gradle-version 8.7
+
+      - name: Dar permissão de execução ao gradlew
+        run: chmod +x gradlew
 
       - name: Buildar APK de debug (instalável direto, sem assinatura de loja)
-        run: gradle assembleDebug
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Enviar APK como artefato para download
         uses: actions/upload-artifact@v4
