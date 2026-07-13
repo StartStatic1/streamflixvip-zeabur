@@ -1,0 +1,52 @@
+name: Build Android APK (StreamFlixVIP)
+
+# Builda o app Kotlin nativo inteiramente na nuvem do GitHub — não precisa
+# de PC nem Android Studio instalado. Roda sob demanda (workflow_dispatch)
+# ou automaticamente em push que mexa na pasta android/.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-android-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # Gera o gradlew (script wrapper) automaticamente — não precisamos
+      # commitar o binário gradle-wrapper.jar no repositório, essa action
+      # resolve e cacheia tudo isso na nuvem.
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Gerar wrapper do Gradle
+        run: gradle wrapper --gradle-version 8.7
+
+      - name: Dar permissão de execução ao gradlew
+        run: chmod +x gradlew
+
+      - name: Buildar APK de debug (instalável direto, sem assinatura de loja)
+        run: ./gradlew assembleDebug
+
+      - name: Enviar APK como artefato para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamflixvip-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
