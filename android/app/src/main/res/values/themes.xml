@@ -3,7 +3,7 @@
          (ui/theme/Theme.kt). Este XML só existe porque o Android exige
          um tema referenciado no Manifest antes da Activity montar o
          Compose. -->
-    <style name="Theme.StreamFlixVIP" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.StreamFlixVIP" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">#0A0A10</item>
     </style>
 </resources>
