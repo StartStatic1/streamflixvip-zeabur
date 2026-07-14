@@ -30,6 +30,11 @@ sealed interface DetailUiState {
         val selectedSeason: Int? = null,
         val selectedEpisode: Int? = null,
         val episodeSources: List<VipSource> = emptyList(),
+        val isLoadingEpisodeSources: Boolean = false,
+        // Quando um episódio tem 2+ servidores, a UI deve abrir um
+        // seletor (bottom sheet) em vez de assistir direto — esse campo
+        // guarda "pra qual episódio" o seletor deve abrir. Null = fechado.
+        val showServerPickerForEpisode: Int? = null,
     ) : DetailUiState
 }
 
@@ -85,7 +90,12 @@ class DetailViewModel(
                         expandSeason(seasonToOpen)
                     }
                     if (initialSeason > 0) {
-                        loadEpisodeSources(initialSeason, initialEpisode.coerceAtLeast(1))
+                        // Aqui é só preparar a tela ao abrir vindo de "Continuar
+                        // assistindo" — a pessoa não tocou em nada ainda, então
+                        // não deve abrir sheet nem tocar nada sozinho. Por isso
+                        // busca as fontes direto pelo repository, sem passar
+                        // pela decisão de auto-play/sheet do loadEpisodeSources.
+                        preloadEpisodeSourcesSilently(initialSeason, initialEpisode.coerceAtLeast(1))
                     }
                 }
             } catch (e: Exception) {
@@ -116,16 +126,93 @@ class DetailViewModel(
         }
     }
 
-    /** Chamado quando o usuário escolhe um episódio numa série — busca as fontes daquele episódio específico. */
-    fun loadEpisodeSources(season: Int, episode: Int) {
+    /**
+     * Carrega as fontes de um episódio sem decidir nada sozinho (sem
+     * auto-play, sem abrir sheet) — usado só ao abrir a tela vindo de
+     * "Continuar assistindo", pra deixar o card daquele episódio já
+     * marcado como selecionado, caso a pessoa queira ver "onde estava".
+     */
+    private fun preloadEpisodeSourcesSilently(season: Int, episode: Int) {
         val current = _uiState.value as? DetailUiState.Success ?: return
         viewModelScope.launch {
-            try {
-                val sources = repository.getSourcesForEpisode(tmdbId, season, episode)
-                _uiState.value = current.copy(selectedSeason = season, selectedEpisode = episode, episodeSources = sources)
+            val sources = try {
+                repository.getSourcesForEpisode(tmdbId, season, episode)
             } catch (_: Exception) {
-                _uiState.value = current.copy(selectedSeason = season, selectedEpisode = episode, episodeSources = emptyList())
+                emptyList()
+            }
+            val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+            _uiState.value = stillCurrent.copy(
+                selectedSeason = season,
+                selectedEpisode = episode,
+                episodeSources = sources,
+            )
+        }
+    }
+
+    /**
+     * Chamado quando o usuário toca num episódio numa série — busca as
+     * fontes daquele episódio e decide o que fazer sozinho, sem exigir um
+     * segundo toque em "Onde assistir" mais abaixo na tela:
+     *  - 0 fontes: não faz nada além de guardar o estado (a seção mostra
+     *    "nenhuma fonte disponível" pro usuário, sem sheet).
+     *  - 1 fonte: essa é a única opção possível, então já dispara a
+     *    reprodução direto — não faz sentido perguntar "qual servidor"
+     *    quando só existe um.
+     *  - 2+ fontes: aí sim vale abrir o seletor (bottom sheet), porque a
+     *    escolha é real e a pessoa pode preferir uma fonte específica.
+     *
+     * onAutoPlay é chamado só no caso de fonte única, com o VipSource já
+     * pronto pra tocar — quem decide navegar pro player é a tela (que tem
+     * acesso ao NavController), o ViewModel só decide "deveria tocar".
+     */
+    fun loadEpisodeSources(season: Int, episode: Int, onAutoPlay: (VipSource) -> Unit) {
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        _uiState.value = current.copy(
+            selectedSeason = season,
+            selectedEpisode = episode,
+            isLoadingEpisodeSources = true,
+        )
+        viewModelScope.launch {
+            val sources = try {
+                repository.getSourcesForEpisode(tmdbId, season, episode)
+            } catch (_: Exception) {
+                emptyList()
+            }
+            val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+            // Evita aplicar um resultado atrasado se o usuário já trocou
+            // de episódio de novo enquanto essa busca ainda rodava.
+            if (stillCurrent.selectedSeason != season || stillCurrent.selectedEpisode != episode) return@launch
+
+            when {
+                sources.size == 1 -> {
+                    _uiState.value = stillCurrent.copy(
+                        episodeSources = sources,
+                        isLoadingEpisodeSources = false,
+                        showServerPickerForEpisode = null,
+                    )
+                    onAutoPlay(sources.first())
+                }
+                sources.size > 1 -> {
+                    _uiState.value = stillCurrent.copy(
+                        episodeSources = sources,
+                        isLoadingEpisodeSources = false,
+                        showServerPickerForEpisode = episode,
+                    )
+                }
+                else -> {
+                    _uiState.value = stillCurrent.copy(
+                        episodeSources = sources,
+                        isLoadingEpisodeSources = false,
+                        showServerPickerForEpisode = null,
+                    )
+                }
             }
         }
+    }
+
+    /** Fecha o seletor de servidor sem trocar de episódio (ex: usuário tocou fora do sheet). */
+    fun closeServerPicker() {
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        _uiState.value = current.copy(showServerPickerForEpisode = null)
     }
 }

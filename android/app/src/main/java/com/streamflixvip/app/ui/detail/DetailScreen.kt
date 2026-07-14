@@ -65,8 +65,15 @@ fun DetailScreen(
             DetailContent(
                 state = s,
                 onPlaySource = onPlaySource,
-                onSelectEpisode = viewModel::loadEpisodeSources,
+                onSelectEpisode = { season, episode, title, posterPath ->
+                    viewModel.loadEpisodeSources(season, episode) { source ->
+                        // Fonte única: já dispara o player direto, sem
+                        // exigir escolher servidor manualmente.
+                        onPlaySource(source, season, episode, title, posterPath)
+                    }
+                },
                 onToggleSeason = viewModel::expandSeason,
+                onDismissServerPicker = viewModel::closeServerPicker,
             )
         }
     }
@@ -76,8 +83,9 @@ fun DetailScreen(
 private fun DetailContent(
     state: DetailUiState.Success,
     onPlaySource: (source: VipSource, season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
-    onSelectEpisode: (season: Int, episode: Int) -> Unit,
+    onSelectEpisode: (season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
     onToggleSeason: (season: Int) -> Unit,
+    onDismissServerPicker: () -> Unit,
 ) {
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
@@ -116,6 +124,10 @@ private fun DetailContent(
         }
 
         if (state.mediaType == "movie") {
+            // Filme continua com a seção fixa de servidores — não há
+            // conceito de "1 toque, já sabe o que tocar" aqui, porque não
+            // existe um card de episódio anterior pra já disparar o play;
+            // esta é a primeira e única decisão da tela.
             item {
                 SourcesSection(
                     sources = state.movieSources,
@@ -140,23 +152,52 @@ private fun DetailContent(
                     isLoadingEpisodes = state.isLoadingEpisodes && state.expandedSeason == season.season_number,
                     selectedSeason = state.selectedSeason,
                     selectedEpisode = state.selectedEpisode,
+                    loadingEpisodeNumber = if (state.isLoadingEpisodeSources) state.selectedEpisode else null,
                     onToggle = { onToggleSeason(season.season_number) },
-                    onSelectEpisode = onSelectEpisode,
+                    onSelectEpisode = { epNum -> onSelectEpisode(season.season_number, epNum, title, posterPath) },
                 )
-            }
-            if (state.selectedSeason != null) {
-                item {
-                    SourcesSection(
-                        sources = state.episodeSources,
-                        onPlaySource = { source ->
-                            onPlaySource(source, state.selectedSeason, state.selectedEpisode ?: 0, title, posterPath)
-                        },
-                    )
-                }
             }
         }
 
         item { Spacer(Modifier.height(32.dp)) }
+    }
+
+    // Só abre quando o episódio tocado tem 2+ servidores — ver a
+    // decisão em DetailViewModel.loadEpisodeSources. Fonte única já
+    // tocou direto e nunca chega a marcar showServerPickerForEpisode.
+    if (state.mediaType == "tv" && state.showServerPickerForEpisode != null) {
+        val sheetState = rememberModalBottomSheetState()
+        ModalBottomSheet(
+            onDismissRequest = onDismissServerPicker,
+            sheetState = sheetState,
+        ) {
+            Column(Modifier.padding(bottom = 24.dp)) {
+                Text(
+                    "Episódio ${state.showServerPickerForEpisode} · Escolha o servidor",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 20.dp, bottom = 12.dp),
+                )
+                Column(Modifier.padding(horizontal = 20.dp)) {
+                    state.episodeSources.forEachIndexed { index, source ->
+                        SourceRow(
+                            source = source,
+                            isRecommended = index == 0,
+                            onClick = {
+                                onPlaySource(
+                                    source,
+                                    state.selectedSeason ?: 0,
+                                    state.selectedEpisode ?: 0,
+                                    title,
+                                    posterPath,
+                                )
+                            },
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -168,8 +209,9 @@ private fun SeasonAccordion(
     isLoadingEpisodes: Boolean,
     selectedSeason: Int?,
     selectedEpisode: Int?,
+    loadingEpisodeNumber: Int?,
     onToggle: () -> Unit,
-    onSelectEpisode: (season: Int, episode: Int) -> Unit,
+    onSelectEpisode: (episode: Int) -> Unit,
 ) {
     Column(
         Modifier
@@ -218,7 +260,8 @@ private fun SeasonAccordion(
                         SimpleEpisodeRow(
                             episodeNumber = epNum,
                             isSelected = selectedSeason == season.season_number && selectedEpisode == epNum,
-                            onClick = { onSelectEpisode(season.season_number, epNum) },
+                            isLoading = selectedSeason == season.season_number && loadingEpisodeNumber == epNum,
+                            onClick = { onSelectEpisode(epNum) },
                         )
                     }
                 }
@@ -228,7 +271,8 @@ private fun SeasonAccordion(
                         EpisodeCard(
                             episode = ep,
                             isSelected = selectedSeason == season.season_number && selectedEpisode == ep.episode_number,
-                            onClick = { onSelectEpisode(season.season_number, ep.episode_number) },
+                            isLoading = selectedSeason == season.season_number && loadingEpisodeNumber == ep.episode_number,
+                            onClick = { onSelectEpisode(ep.episode_number) },
                         )
                         Spacer(Modifier.height(10.dp))
                     }
@@ -240,13 +284,17 @@ private fun SeasonAccordion(
 
 /**
  * Card de episódio no padrão dos grandes apps de streaming: thumbnail 16:9,
- * número + título, duração, e sinopse resumida em 2 linhas. Substitui os
- * chips numéricos que não davam nenhuma informação real sobre o episódio.
+ * número + título, duração, e sinopse resumida em 2 linhas. Um toque já
+ * busca as fontes e decide sozinho — toca direto se só houver 1 servidor,
+ * ou abre o seletor se houver mais de um (ver DetailViewModel). O ícone
+ * de play deixa de ser decorativo: enquanto busca, vira um spinner, dando
+ * feedback real de "algo está acontecendo" pro toque que a pessoa deu.
  */
 @Composable
 private fun EpisodeCard(
     episode: TmdbEpisode,
     isSelected: Boolean,
+    isLoading: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
@@ -276,12 +324,20 @@ private fun EpisodeCard(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            Icon(
-                imageVector = Icons.Filled.PlayArrow,
-                contentDescription = null,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.size(28.dp),
-            )
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = androidx.compose.ui.graphics.Color.White,
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = if (isSelected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(28.dp),
+                )
+            }
         }
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -320,6 +376,7 @@ private fun EpisodeCard(
 private fun SimpleEpisodeRow(
     episodeNumber: Int,
     isSelected: Boolean,
+    isLoading: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
@@ -330,12 +387,19 @@ private fun SimpleEpisodeRow(
             .padding(vertical = 10.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = Icons.Filled.PlayArrow,
-            contentDescription = null,
-            tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(18.dp),
-        )
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
         Spacer(Modifier.width(8.dp))
         Text(
             "Episódio $episodeNumber",
