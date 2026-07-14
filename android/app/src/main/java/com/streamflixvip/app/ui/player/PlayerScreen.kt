@@ -391,6 +391,20 @@ private fun NativePlayer(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
+                    // O layout padrão do controller do Media3 inclui um
+                    // botão de "settings" (engrenagem, id exo_settings) no
+                    // canto inferior direito — mas qualidade/áudio/legenda/
+                    // velocidade já são escolhidos pelos nossos chips
+                    // customizados (linha ~419 abaixo), então esse botão
+                    // nativo fica redundante e reservava aquele espaço
+                    // vazio ao lado do tempo. O Media3 não expõe um setter
+                    // dedicado pra escondê-lo isoladamente, então achamos
+                    // a View já inflada pelo id padrão e escondemos.
+                    post {
+                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)
+                            ?.visibility = android.view.View.GONE
+                    }
+
                     // Espelha show/hide dos controles nativos (play/pause/seek)
                     // pra nossa barra de chips extra — assim os dois aparecem
                     // e somem juntos, com o mesmo toque na tela.
