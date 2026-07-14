@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -180,7 +181,7 @@ fun PlayerScreen(
     }
 }
 
-@OptIn(DelicateCoroutinesApi::class)
+@OptIn(DelicateCoroutinesApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun NativePlayer(
     url: String,
