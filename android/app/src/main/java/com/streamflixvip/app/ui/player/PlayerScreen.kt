@@ -12,23 +12,26 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -181,7 +184,7 @@ fun PlayerScreen(
     }
 }
 
-@OptIn(DelicateCoroutinesApi::class, ExperimentalMaterial3Api::class)
+@OptIn(DelicateCoroutinesApi::class)
 @Composable
 private fun NativePlayer(
     url: String,
@@ -208,12 +211,12 @@ private fun NativePlayer(
     var selectedAudioLabel by remember { mutableStateOf("Padrão") }
     var selectedQualityLabel by remember { mutableStateOf("Automático") }
     var playbackSpeed by remember { mutableStateOf(1f) }
-    var showSubtitleMenu by remember { mutableStateOf(false) }
-    var showAudioMenu by remember { mutableStateOf(false) }
-    var showQualityMenu by remember { mutableStateOf(false) }
-    var showSpeedMenu by remember { mutableStateOf(false) }
-    var showSettingsSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState()
+    // Um único estado de "página" ativa no painel de configurações, em vez
+    // de um bottom sheet vertical (que em tela forçada em paisagem cobria o
+    // vídeo quase inteiro) com dropdowns empilhados dentro dele. NONE =
+    // painel fechado, MAIN = lista principal, os outros = submenu daquela
+    // opção (com botão de voltar pro MAIN).
+    var settingsPanel by remember { mutableStateOf(SettingsPanel.NONE) }
     // Espelha a visibilidade dos controles nativos do ExoPlayer (que já
     // somem sozinhos após alguns segundos parado, e reaparecem com um
     // toque) — assim nossa barra de chips soma/aparece exatamente junto,
@@ -443,99 +446,203 @@ private fun NativePlayer(
                 .navigationBarsPadding()
                 .padding(end = 8.dp, bottom = 4.dp),
         ) {
-            IconButton(onClick = { showSettingsSheet = true }) {
+            IconButton(onClick = { settingsPanel = SettingsPanel.MAIN }) {
                 Text("⚙", fontSize = 22.sp, color = Color.White)
             }
         }
 
-        if (showSettingsSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showSettingsSheet = false },
-                sheetState = sheetState,
+        if (settingsPanel != SettingsPanel.NONE) {
+            // Scrim invisível cobrindo a tela toda só pra capturar o toque
+            // "fora do painel" e fechar — mesmo comportamento de tocar fora
+            // de um bottom sheet, sem precisar de um Dialog/Popup separado.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                    ) { settingsPanel = SettingsPanel.NONE },
+            )
+
+            // Painel compacto ancorado no canto inferior direito — mesma
+            // posição do botão de engrenagem — no lugar do bottom sheet que
+            // subia do fundo até quase o topo. Largura fixa e altura
+            // limitada com rolagem, do jeito que cabe numa tela deitada
+            // sem tampar o vídeo inteiro.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .padding(end = 8.dp, bottom = 48.dp)
+                    .width(280.dp)
+                    .heightIn(max = 260.dp)
+                    .background(Color.Black.copy(alpha = 0.92f), RoundedCornerShape(12.dp))
+                    // Consome o toque dentro do painel pra não vazar pro
+                    // scrim atrás e fechar sem querer.
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                    ) {},
             ) {
                 Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
                 ) {
-                    SettingsRow(label = "Proporção", value = aspectMode.label) {
-                        aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
-                    }
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                    when (settingsPanel) {
+                        SettingsPanel.MAIN -> {
+                            SettingsRow(label = "Proporção", value = aspectMode.label) {
+                                aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
+                            }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
-                    SettingsRow(label = "Legenda", value = selectedSubtitleLabel) { showSubtitleMenu = true }
-                    DropdownMenu(expanded = showSubtitleMenu, onDismissRequest = { showSubtitleMenu = false }) {
-                        DropdownMenuItem(text = { Text("Desligada") }, onClick = {
-                            selectSubtitle(null)
-                            showSubtitleMenu = false
-                        })
-                        subtitleOptions.forEach { option ->
-                            DropdownMenuItem(text = { Text(option.label) }, onClick = {
-                                selectSubtitle(option)
-                                showSubtitleMenu = false
-                            })
-                        }
-                        if (subtitleOptions.isEmpty()) {
-                            DropdownMenuItem(text = { Text("Sem legendas nesta fonte", color = Color.Gray) }, onClick = {}, enabled = false)
-                        }
-                    }
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                            SettingsRow(label = "Legenda", value = selectedSubtitleLabel) {
+                                settingsPanel = SettingsPanel.SUBTITLE
+                            }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
-                    if (audioOptions.isNotEmpty()) {
-                        SettingsRow(label = "Áudio", value = selectedAudioLabel) { showAudioMenu = true }
-                        DropdownMenu(expanded = showAudioMenu, onDismissRequest = { showAudioMenu = false }) {
-                            DropdownMenuItem(text = { Text("Padrão") }, onClick = {
-                                selectAudio(null)
-                                showAudioMenu = false
-                            })
-                            audioOptions.forEach { option ->
-                                DropdownMenuItem(text = { Text(option.label) }, onClick = {
-                                    selectAudio(option)
-                                    showAudioMenu = false
-                                })
+                            if (audioOptions.isNotEmpty()) {
+                                SettingsRow(label = "Áudio", value = selectedAudioLabel) {
+                                    settingsPanel = SettingsPanel.AUDIO
+                                }
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                            }
+
+                            SettingsRow(label = "Qualidade", value = selectedQualityLabel) {
+                                settingsPanel = SettingsPanel.QUALITY
+                            }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                            SettingsRow(label = "Velocidade", value = "${playbackSpeed}x") {
+                                settingsPanel = SettingsPanel.SPEED
+                            }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                            SettingsRow(label = "Abrir no VLC / player externo", value = "") {
+                                settingsPanel = SettingsPanel.NONE
+                                openInExternalPlayer(context, url)
                             }
                         }
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                    }
 
-                    SettingsRow(label = "Qualidade", value = selectedQualityLabel) { showQualityMenu = true }
-                    DropdownMenu(expanded = showQualityMenu, onDismissRequest = { showQualityMenu = false }) {
-                        DropdownMenuItem(text = { Text("Automático") }, onClick = {
-                            selectQuality(null)
-                            showQualityMenu = false
-                        })
-                        qualityOptions.forEach { option ->
-                            DropdownMenuItem(text = { Text(option.label) }, onClick = {
-                                selectQuality(option)
-                                showQualityMenu = false
-                            })
+                        SettingsPanel.SUBTITLE -> {
+                            SubmenuHeader(title = "Legenda") { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuItem(label = "Desligada", selected = selectedSubtitleLabel == "Desligada") {
+                                selectSubtitle(null)
+                                settingsPanel = SettingsPanel.MAIN
+                            }
+                            subtitleOptions.forEach { option ->
+                                SubmenuItem(label = option.label, selected = selectedSubtitleLabel == option.label) {
+                                    selectSubtitle(option)
+                                    settingsPanel = SettingsPanel.MAIN
+                                }
+                            }
+                            if (subtitleOptions.isEmpty()) {
+                                Text(
+                                    "Sem legendas nesta fonte",
+                                    color = Color.Gray,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(vertical = 10.dp),
+                                )
+                            }
                         }
-                        if (qualityOptions.isEmpty()) {
-                            DropdownMenuItem(text = { Text("Só uma qualidade disponível", color = Color.Gray) }, onClick = {}, enabled = false)
-                        }
-                    }
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
-                    SettingsRow(label = "Velocidade", value = "${playbackSpeed}x") { showSpeedMenu = true }
-                    DropdownMenu(expanded = showSpeedMenu, onDismissRequest = { showSpeedMenu = false }) {
-                        PLAYBACK_SPEEDS.forEach { speed ->
-                            DropdownMenuItem(text = { Text("${speed}x") }, onClick = {
-                                playbackSpeed = speed
-                                exoPlayer.setPlaybackSpeed(speed)
-                                showSpeedMenu = false
-                            })
+                        SettingsPanel.AUDIO -> {
+                            SubmenuHeader(title = "Áudio") { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuItem(label = "Padrão", selected = selectedAudioLabel == "Padrão") {
+                                selectAudio(null)
+                                settingsPanel = SettingsPanel.MAIN
+                            }
+                            audioOptions.forEach { option ->
+                                SubmenuItem(label = option.label, selected = selectedAudioLabel == option.label) {
+                                    selectAudio(option)
+                                    settingsPanel = SettingsPanel.MAIN
+                                }
+                            }
                         }
-                    }
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
-                    SettingsRow(label = "Abrir no VLC / player externo", value = "") {
-                        showSettingsSheet = false
-                        openInExternalPlayer(context, url)
+                        SettingsPanel.QUALITY -> {
+                            SubmenuHeader(title = "Qualidade") { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuItem(label = "Automático", selected = selectedQualityLabel == "Automático") {
+                                selectQuality(null)
+                                settingsPanel = SettingsPanel.MAIN
+                            }
+                            qualityOptions.forEach { option ->
+                                SubmenuItem(label = option.label, selected = selectedQualityLabel == option.label) {
+                                    selectQuality(option)
+                                    settingsPanel = SettingsPanel.MAIN
+                                }
+                            }
+                            if (qualityOptions.isEmpty()) {
+                                Text(
+                                    "Só uma qualidade disponível",
+                                    color = Color.Gray,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(vertical = 10.dp),
+                                )
+                            }
+                        }
+
+                        SettingsPanel.SPEED -> {
+                            SubmenuHeader(title = "Velocidade") { settingsPanel = SettingsPanel.MAIN }
+                            PLAYBACK_SPEEDS.forEach { speed ->
+                                SubmenuItem(label = "${speed}x", selected = playbackSpeed == speed) {
+                                    playbackSpeed = speed
+                                    exoPlayer.setPlaybackSpeed(speed)
+                                    settingsPanel = SettingsPanel.MAIN
+                                }
+                            }
+                        }
+
+                        SettingsPanel.NONE -> {}
                     }
                 }
             }
+        }
+    }
+}
+
+/** As "páginas" possíveis do painel de configurações do player. */
+private enum class SettingsPanel { NONE, MAIN, SUBTITLE, AUDIO, QUALITY, SPEED }
+
+@Composable
+private fun SubmenuHeader(title: String, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+            ) { onBack() }
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("←", color = Color.White, fontSize = 18.sp, modifier = Modifier.padding(end = 12.dp))
+        Text(title, color = Color.White, fontSize = 16.sp)
+    }
+    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+}
+
+@Composable
+private fun SubmenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onClick,
+            )
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            color = if (selected) Color.White else Color.White.copy(alpha = 0.75f),
+            fontSize = 15.sp,
+        )
+        if (selected) {
+            Text("✓", color = Color.White, fontSize = 15.sp)
         }
     }
 }
@@ -545,6 +652,11 @@ private fun SettingsRow(label: String, value: String, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onClick,
+            )
             .padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
