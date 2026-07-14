@@ -176,7 +176,7 @@ private fun DetailContent(
                     "Episódio ${state.showServerPickerForEpisode} · Escolha o servidor",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 20.dp, bottom = 12.dp),
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
                 )
                 Column(Modifier.padding(horizontal = 20.dp)) {
                     state.episodeSources.forEachIndexed { index, source ->
