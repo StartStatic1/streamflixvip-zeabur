@@ -69,6 +69,12 @@ data class TmdbItem(
 
     /** Resolve o tipo mesmo fora do contexto de busca (filme sempre tem title, série sempre tem name). */
     val resolvedMediaType: String get() = media_type ?: if (title != null) "movie" else "tv"
+
+    /** Ano de lançamento (filme usa release_date, série usa first_air_date). */
+    val displayYear: String? get() = (release_date ?: first_air_date)?.take(4)?.takeIf { it.length == 4 }
+
+    /** Nota formatada com 1 casa decimal (ex: "7.8"), ou null se o TMDB ainda não tem votos suficientes. */
+    val displayRating: String? get() = vote_average?.takeIf { it > 0 }?.let { "%.1f".format(it) }
 }
 
 data class TmdbGenre(val id: Int, val name: String)

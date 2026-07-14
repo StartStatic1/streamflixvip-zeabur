@@ -167,34 +167,82 @@ private fun SourcesSection(
     onPlaySource: (VipSource) -> Unit,
 ) {
     Column(Modifier.padding(16.dp)) {
-        Text("Servidores disponíveis", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text("Onde assistir", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         if (sources.isEmpty()) {
-            Text("Nenhuma fonte cadastrada ainda.", fontSize = 13.sp)
+            Text(
+                "Nenhuma fonte disponível ainda para este título.",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         } else {
-            sources.forEach { source ->
-                SourceRow(source = source, onClick = { onPlaySource(source) })
+            // A lista já vem ordenada por prioridade (maior primeiro) da
+            // API — o primeiro item é a fonte que a gente recomenda, então
+            // ganha destaque visual pra a pessoa não precisar adivinhar
+            // qual servidor escolher.
+            sources.forEachIndexed { index, source ->
+                SourceRow(source = source, isRecommended = index == 0, onClick = { onPlaySource(source) })
                 Spacer(Modifier.height(8.dp))
             }
         }
     }
 }
 
+/** Extrai um selo de qualidade (4K/HD/SD etc) do nome da fonte, se houver. */
+private fun qualityBadge(label: String?): String? {
+    if (label == null) return null
+    val upper = label.uppercase()
+    return listOf("4K", "2160P", "1080P", "720P", "HD", "SD").firstOrNull { upper.contains(it) }
+        ?.let { if (it == "2160P") "4K" else it }
+}
+
 @Composable
-private fun SourceRow(source: VipSource, onClick: () -> Unit) {
+private fun SourceRow(source: VipSource, isRecommended: Boolean, onClick: () -> Unit) {
+    val badge = qualityBadge(source.source_label)
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        color = if (isRecommended) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(10.dp))
-            Text(source.displayName, fontSize = 14.sp)
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(source.displayName, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                if (isRecommended) {
+                    Text(
+                        "Recomendado",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            badge?.let {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                ) {
+                    Text(
+                        it,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
+            }
         }
     }
 }

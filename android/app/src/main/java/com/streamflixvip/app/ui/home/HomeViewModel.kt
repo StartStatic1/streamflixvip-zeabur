@@ -21,6 +21,7 @@ sealed interface HomeUiState {
     data class Error(val message: String) : HomeUiState
     data class Success(
         val continueWatching: List<WatchProgressEntry> = emptyList(),
+        val heroItems: List<TmdbItem> = emptyList(),
         val rows: List<HomeRow>,
     ) : HomeUiState
 }
@@ -58,8 +59,11 @@ class HomeViewModel(
 
                 _uiState.value = HomeUiState.Success(
                     continueWatching = continueWatching,
+                    // Os 5 primeiros "em cartaz" viram o banner rotativo do
+                    // topo — mais impacto visual que uma fileira comum, e
+                    // evita repetir os mesmos pôsteres duas vezes na tela.
+                    heroItems = nowPlaying.take(5),
                     rows = listOf(
-                        HomeRow("Em cartaz", nowPlaying, "movie"),
                         HomeRow("Filmes populares", popularMovies, "movie"),
                         HomeRow("Séries populares", popularSeries, "tv"),
                     )
