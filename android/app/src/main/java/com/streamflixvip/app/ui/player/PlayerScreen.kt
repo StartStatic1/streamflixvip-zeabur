@@ -12,20 +12,22 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -209,7 +211,8 @@ private fun NativePlayer(
     var showAudioMenu by remember { mutableStateOf(false) }
     var showQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
-    var showMoreMenu by remember { mutableStateOf(false) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
     // Espelha a visibilidade dos controles nativos do ExoPlayer (que já
     // somem sozinhos após alguns segundos parado, e reaparecem com um
     // toque) — assim nossa barra de chips soma/aparece exatamente junto,
@@ -398,12 +401,17 @@ private fun NativePlayer(
                     // customizados (linha ~419 abaixo), então esse botão
                     // nativo fica redundante e reservava aquele espaço
                     // vazio ao lado do tempo. O Media3 não expõe um setter
-                    // dedicado pra escondê-lo isoladamente, então achamos
-                    // a View já inflada pelo id padrão e escondemos.
-                    post {
+                    // dedicado pra escondê-lo isoladamente, então achamos a
+                    // View já inflada pelo id padrão e escondemos — chamando
+                    // de novo a cada troca de visibilidade dos controles,
+                    // porque o Media3 pode reinflar/reexibir esse botão
+                    // sozinho (troca de faixa, rotação de tela) e ele
+                    // voltaria a aparecer se escondêssemos só uma vez.
+                    fun hideNativeSettingsButton() {
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)
                             ?.visibility = android.view.View.GONE
                     }
+                    post { hideNativeSettingsButton() }
 
                     // Espelha show/hide dos controles nativos (play/pause/seek)
                     // pra nossa barra de chips extra — assim os dois aparecem
@@ -411,6 +419,7 @@ private fun NativePlayer(
                     setControllerVisibilityListener(
                         PlayerView.ControllerVisibilityListener { visibility ->
                             controlsVisible = visibility == android.view.View.VISIBLE
+                            hideNativeSettingsButton()
                         },
                     )
                 }
@@ -418,30 +427,44 @@ private fun NativePlayer(
             update = { view -> view.resizeMode = aspectMode.resizeMode },
         )
 
-        // Barra de controles extras (proporção, legenda, áudio, qualidade)
-        // — fica ACIMA da linha nativa de tempo/configurações do ExoPlayer
-        // (que ocupa o canto inferior esquerdo/direito), não sobreposta a
-        // ela. O padding inferior maior é o que garante esse respiro; sem
-        // ele o texto de tempo do player ("00:55 · 1:49:47") ficava
-        // embaixo do chip "16:9", ilegível.
+        // Botão único de configurações — substitui a engrenagem nativa do
+        // ExoPlayer (escondida acima) na MESMA posição (canto inferior
+        // direito, na altura da barra de tempo/seek), em vez da fileira de
+        // chips que antes ficava solta acima de tudo. Toque abre um bottom
+        // sheet com proporção, legenda, áudio, qualidade e mais — padrão
+        // premium (YouTube/Netflix) em vez de poluir a tela com botões.
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomStart),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .navigationBarsPadding()
+                .padding(end = 8.dp, bottom = 4.dp),
         ) {
-            Row(
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(start = 12.dp, end = 12.dp, bottom = 56.dp, top = 8.dp)
-                    .horizontalScroll(rememberScrollState()),
-            ) {
-                PlayerChip(text = aspectMode.label) {
-                    aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
-                }
+            IconButton(onClick = { showSettingsSheet = true }) {
+                Text("⚙", fontSize = 22.sp, color = Color.White)
+            }
+        }
 
-                Box {
-                    PlayerChip(text = "CC: $selectedSubtitleLabel") { showSubtitleMenu = true }
+        if (showSettingsSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showSettingsSheet = false },
+                sheetState = sheetState,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    SettingsRow(label = "Proporção", value = aspectMode.label) {
+                        aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
+                    }
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                    SettingsRow(label = "Legenda", value = selectedSubtitleLabel) { showSubtitleMenu = true }
                     DropdownMenu(expanded = showSubtitleMenu, onDismissRequest = { showSubtitleMenu = false }) {
                         DropdownMenuItem(text = { Text("Desligada") }, onClick = {
                             selectSubtitle(null)
@@ -457,11 +480,10 @@ private fun NativePlayer(
                             DropdownMenuItem(text = { Text("Sem legendas nesta fonte", color = Color.Gray) }, onClick = {}, enabled = false)
                         }
                     }
-                }
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
-                if (audioOptions.isNotEmpty()) {
-                    Box {
-                        PlayerChip(text = "Áudio: $selectedAudioLabel") { showAudioMenu = true }
+                    if (audioOptions.isNotEmpty()) {
+                        SettingsRow(label = "Áudio", value = selectedAudioLabel) { showAudioMenu = true }
                         DropdownMenu(expanded = showAudioMenu, onDismissRequest = { showAudioMenu = false }) {
                             DropdownMenuItem(text = { Text("Padrão") }, onClick = {
                                 selectAudio(null)
@@ -474,11 +496,10 @@ private fun NativePlayer(
                                 })
                             }
                         }
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                     }
-                }
 
-                Box {
-                    PlayerChip(text = selectedQualityLabel) { showQualityMenu = true }
+                    SettingsRow(label = "Qualidade", value = selectedQualityLabel) { showQualityMenu = true }
                     DropdownMenu(expanded = showQualityMenu, onDismissRequest = { showQualityMenu = false }) {
                         DropdownMenuItem(text = { Text("Automático") }, onClick = {
                             selectQuality(null)
@@ -494,22 +515,9 @@ private fun NativePlayer(
                             DropdownMenuItem(text = { Text("Só uma qualidade disponível", color = Color.Gray) }, onClick = {}, enabled = false)
                         }
                     }
-                }
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
 
-                // Menu compacto agrupando opções secundárias (velocidade e
-                // abrir num player externo) — evita poluir a barra
-                // principal com um chip pra cada uma dessas opções menos
-                // usadas no dia a dia.
-                Box {
-                    PlayerChip(text = "⋮ Mais") { showMoreMenu = true }
-                    DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
-                        DropdownMenuItem(text = { Text("Velocidade: ${playbackSpeed}x") }, onClick = { showMoreMenu = false; showSpeedMenu = true })
-                        DropdownMenuItem(text = { Text("Abrir no VLC / player externo") }, onClick = {
-                            showMoreMenu = false
-                            openInExternalPlayer(context, url)
-                        })
-                    }
-                    // Submenu de velocidade, aberto a partir do "Mais".
+                    SettingsRow(label = "Velocidade", value = "${playbackSpeed}x") { showSpeedMenu = true }
                     DropdownMenu(expanded = showSpeedMenu, onDismissRequest = { showSpeedMenu = false }) {
                         PLAYBACK_SPEEDS.forEach { speed ->
                             DropdownMenuItem(text = { Text("${speed}x") }, onClick = {
@@ -519,6 +527,12 @@ private fun NativePlayer(
                             })
                         }
                     }
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                    SettingsRow(label = "Abrir no VLC / player externo", value = "") {
+                        showSettingsSheet = false
+                        openInExternalPlayer(context, url)
+                    }
                 }
             }
         }
@@ -526,14 +540,15 @@ private fun NativePlayer(
 }
 
 @Composable
-private fun PlayerChip(text: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.55f)),
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-        modifier = Modifier.padding(horizontal = 3.dp),
+private fun SettingsRow(label: String, value: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(text, fontSize = 11.sp, color = Color.White)
+        Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.padding(end = 12.dp))
+        Text(value, color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp)
     }
 }
 
