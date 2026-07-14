@@ -29,6 +29,11 @@ sealed interface DetailUiState {
 class DetailViewModel(
     private val tmdbId: Int,
     private val mediaType: String,
+    // Preenchidos quando a tela abre a partir de "Continuar assistindo" —
+    // já sabemos qual episódio a pessoa estava vendo, então adiantamos a
+    // busca das fontes daquele episódio em vez de forçar escolher de novo.
+    private val initialSeason: Int = -1,
+    private val initialEpisode: Int = -1,
     private val repository: CatalogRepository = CatalogRepository(),
 ) : ViewModel() {
 
@@ -61,6 +66,10 @@ class DetailViewModel(
                     tmdbId = tmdbId,
                     movieSources = movieSources,
                 )
+
+                if (mediaType == "tv" && initialSeason > 0) {
+                    loadEpisodeSources(initialSeason, initialEpisode.coerceAtLeast(1))
+                }
             } catch (e: Exception) {
                 _uiState.value = DetailUiState.Error(e.message ?: "Erro ao carregar detalhes")
             }

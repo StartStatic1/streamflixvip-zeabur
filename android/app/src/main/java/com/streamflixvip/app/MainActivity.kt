@@ -119,6 +119,11 @@ private fun MainAppScaffold(
                 HomeScreen(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
+                    onContinueWatchingClick = { entry ->
+                        navController.navigate(
+                            "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
+                        )
+                    },
                 )
             }
 
@@ -135,16 +140,24 @@ private fun MainAppScaffold(
             }
 
             composable(
-                route = "detail/{tmdbId}/{mediaType}",
+                route = "detail/{tmdbId}/{mediaType}?season={season}&episode={episode}&resume={resume}",
                 arguments = listOf(
                     navArgument("tmdbId") { type = NavType.IntType },
                     navArgument("mediaType") { type = NavType.StringType },
+                    navArgument("season") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("episode") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("resume") { type = NavType.IntType; defaultValue = 0 },
                 ),
             ) { entry ->
                 val tmdbId = entry.arguments?.getInt("tmdbId") ?: return@composable
                 val mediaType = entry.arguments?.getString("mediaType") ?: "movie"
+                val initialSeason = entry.arguments?.getInt("season") ?: -1
+                val initialEpisode = entry.arguments?.getInt("episode") ?: -1
+                val resumeSeconds = entry.arguments?.getInt("resume") ?: 0
                 val viewModel: DetailViewModel = viewModel(
-                    factory = viewModelFactory { DetailViewModel(tmdbId, mediaType) },
+                    factory = viewModelFactory {
+                        DetailViewModel(tmdbId, mediaType, initialSeason = initialSeason, initialEpisode = initialEpisode)
+                    },
                 )
                 DetailScreen(
                     viewModel = viewModel,
@@ -156,7 +169,7 @@ private fun MainAppScaffold(
                         val encodedTitle = URLEncoder.encode(title, "UTF-8")
                         val encodedPoster = URLEncoder.encode(posterPath ?: "none", "UTF-8")
                         navController.navigate(
-                            "player/$encodedUrl/${source.isDirectPlayable}/$tmdbId/$mediaType/$season/$episode/$encodedTitle/$encodedPoster",
+                            "player/$encodedUrl/${source.isDirectPlayable}/$tmdbId/$mediaType/$season/$episode/$encodedTitle/$encodedPoster/$resumeSeconds",
                         )
                     },
                     onBack = { navController.popBackStack() },
@@ -164,7 +177,7 @@ private fun MainAppScaffold(
             }
 
             composable(
-                route = "player/{encodedUrl}/{isDirect}/{tmdbId}/{mediaType}/{season}/{episode}/{encodedTitle}/{encodedPoster}",
+                route = "player/{encodedUrl}/{isDirect}/{tmdbId}/{mediaType}/{season}/{episode}/{encodedTitle}/{encodedPoster}/{resume}",
                 arguments = listOf(
                     navArgument("encodedUrl") { type = NavType.StringType },
                     navArgument("isDirect") { type = NavType.BoolType },
@@ -174,6 +187,7 @@ private fun MainAppScaffold(
                     navArgument("episode") { type = NavType.IntType },
                     navArgument("encodedTitle") { type = NavType.StringType },
                     navArgument("encodedPoster") { type = NavType.StringType },
+                    navArgument("resume") { type = NavType.IntType },
                 ),
             ) { entry ->
                 val args = entry.arguments ?: return@composable
@@ -183,6 +197,7 @@ private fun MainAppScaffold(
                 val playerMediaType = args.getString("mediaType") ?: "movie"
                 val season = args.getInt("season")
                 val episode = args.getInt("episode")
+                val resumeSeconds = args.getInt("resume")
                 val title = URLDecoder.decode(args.getString("encodedTitle") ?: "", "UTF-8")
                 val posterPath = URLDecoder.decode(args.getString("encodedPoster") ?: "none", "UTF-8").let {
                     if (it == "none") null else it
@@ -199,6 +214,7 @@ private fun MainAppScaffold(
                     episode = episode,
                     title = title,
                     posterPath = posterPath,
+                    resumeSeconds = resumeSeconds,
                 )
             }
         }

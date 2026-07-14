@@ -1,6 +1,7 @@
 package com.streamflixvip.app.ui.home
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -46,6 +47,7 @@ private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 fun HomeScreen(
     viewModel: HomeViewModel,
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
+    onContinueWatchingClick: (WatchProgressEntry) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -77,7 +79,7 @@ fun HomeScreen(
                 }
                 if (s.continueWatching.isNotEmpty()) {
                     item {
-                        ContinueWatchingRow(entries = s.continueWatching, onItemClick = onItemClick)
+                        ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick)
                         Spacer(Modifier.height(24.dp))
                     }
                 }
@@ -97,6 +99,7 @@ fun HomeScreen(
  * por cima. Troca de slide sozinho a cada 6s, mas responde a swipe
  * manual do usuário a qualquer momento (HorizontalPager nativo).
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HeroBanner(
     items: List<TmdbItem>,
@@ -212,7 +215,7 @@ private fun HeroBanner(
 @Composable
 private fun ContinueWatchingRow(
     entries: List<WatchProgressEntry>,
-    onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
+    onItemClick: (WatchProgressEntry) -> Unit,
 ) {
     Column {
         Text(
@@ -228,7 +231,7 @@ private fun ContinueWatchingRow(
             items(entries) { entry ->
                 ContinueWatchingCard(
                     entry = entry,
-                    onClick = { onItemClick(entry.tmdb_id, entry.media_type) },
+                    onClick = { onItemClick(entry) },
                 )
             }
         }
