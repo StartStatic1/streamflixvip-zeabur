@@ -121,7 +121,12 @@ private fun DetailContent(
                 )
             }
             items(seasons) { season ->
-                SeasonRow(season = season, onSelectEpisode = onSelectEpisode)
+                SeasonRow(
+                    season = season,
+                    selectedSeason = state.selectedSeason,
+                    selectedEpisode = state.selectedEpisode,
+                    onSelectEpisode = onSelectEpisode,
+                )
             }
             if (state.selectedSeason != null) {
                 item {
@@ -142,6 +147,8 @@ private fun DetailContent(
 @Composable
 private fun SeasonRow(
     season: TmdbSeason,
+    selectedSeason: Int?,
+    selectedEpisode: Int?,
     onSelectEpisode: (season: Int, episode: Int) -> Unit,
 ) {
     // Versão simplificada: lista os episódios como números clicáveis.
@@ -156,9 +163,19 @@ private fun SeasonRow(
         // um Row comum não tem scroll, só mostra o que cabe na largura da tela.
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items((1..season.episode_count).toList()) { epNum ->
+                val isSelected = selectedSeason == season.season_number && selectedEpisode == epNum
                 AssistChip(
                     onClick = { onSelectEpisode(season.season_number, epNum) },
                     label = { Text("Ep $epNum") },
+                    colors = if (isSelected) {
+                        AssistChipDefaults.assistChipColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            labelColor = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        AssistChipDefaults.assistChipColors()
+                    },
+                    border = if (isSelected) null else AssistChipDefaults.assistChipBorder(enabled = true),
                 )
             }
         }

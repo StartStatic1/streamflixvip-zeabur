@@ -2,9 +2,13 @@ package com.streamflixvip.app.ui.player
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.content.Intent
+import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,8 +17,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -80,6 +84,24 @@ private data class TrackOption(
 )
 
 /**
+ * Abre a URL atual num player externo instalado (VLC ou qualquer outro
+ * app que registre suporte a vídeo) via Intent.ACTION_VIEW — mesmo
+ * mecanismo que o Android usa pra "abrir com" em qualquer app. Se
+ * nenhum player estiver instalado, mostra um aviso em vez de crashar.
+ */
+private fun openInExternalPlayer(context: android.content.Context, url: String) {
+    try {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(Uri.parse(url), "video/*")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    } catch (_: android.content.ActivityNotFoundException) {
+        Toast.makeText(context, "Nenhum player externo instalado (ex: VLC).", Toast.LENGTH_SHORT).show()
+    }
+}
+
+/**
  * Tela de reprodução — implementa a decisão híbrida combinada:
  *
  * - Fonte direta (.mp4/.m3u8, incluindo as que passam pelo stream-proxy):
@@ -121,6 +143,20 @@ fun PlayerScreen(
         insetsController?.hide(WindowInsetsCompat.Type.systemBars())
         onDispose {
             insetsController?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    // Força paisagem automaticamente ao abrir o player — antes disso só
+    // ficava em tela cheia de verdade se o celular já estivesse deitado
+    // fisicamente, o que obrigava o usuário a girar manualmente toda vez.
+    // Restaura a orientação original (geralmente retrato) ao sair, pra não
+    // deixar o resto do app preso em paisagem.
+    val activity = view.context as? Activity
+    DisposableEffect(Unit) {
+        val originalOrientation = activity?.requestedOrientation
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        onDispose {
+            activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
 
@@ -173,6 +209,7 @@ private fun NativePlayer(
     var showAudioMenu by remember { mutableStateOf(false) }
     var showQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
     // Espelha a visibilidade dos controles nativos do ExoPlayer (que já
     // somem sozinhos após alguns segundos parado, e reaparecem com um
     // toque) — assim nossa barra de chips soma/aparece exatamente junto,
@@ -367,36 +404,25 @@ private fun NativePlayer(
             update = { view -> view.resizeMode = aspectMode.resizeMode },
         )
 
-        // Barra de controles extras (proporção, legenda, áudio, velocidade,
-        // qualidade) — some/aparece junto com os controles nativos do
-        // ExoPlayer, em vez de ficar fixa cobrindo o vídeo o tempo todo.
+        // Barra de controles extras (proporção, legenda, áudio, qualidade)
+        // — posicionada embaixo, perto de onde fica o ícone de
+        // configurações nativo do ExoPlayer, em vez de flutuar isolada no
+        // topo competindo por atenção. Some/aparece junto com os
+        // controles nativos do player.
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopEnd),
+            modifier = Modifier.align(Alignment.BottomStart),
         ) {
             Row(
                 modifier = Modifier
-                    .statusBarsPadding()
-                    .padding(8.dp)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
                     .horizontalScroll(rememberScrollState()),
             ) {
                 PlayerChip(text = aspectMode.label) {
                     aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
-                }
-
-                Box {
-                    PlayerChip(text = "${playbackSpeed}x") { showSpeedMenu = true }
-                    DropdownMenu(expanded = showSpeedMenu, onDismissRequest = { showSpeedMenu = false }) {
-                        PLAYBACK_SPEEDS.forEach { speed ->
-                            DropdownMenuItem(text = { Text("${speed}x") }, onClick = {
-                                playbackSpeed = speed
-                                exoPlayer.setPlaybackSpeed(speed)
-                                showSpeedMenu = false
-                            })
-                        }
-                    }
                 }
 
                 Box {
@@ -451,6 +477,31 @@ private fun NativePlayer(
                         }
                         if (qualityOptions.isEmpty()) {
                             DropdownMenuItem(text = { Text("Só uma qualidade disponível", color = Color.Gray) }, onClick = {}, enabled = false)
+                        }
+                    }
+                }
+
+                // Menu compacto agrupando opções secundárias (velocidade e
+                // abrir num player externo) — evita poluir a barra
+                // principal com um chip pra cada uma dessas opções menos
+                // usadas no dia a dia.
+                Box {
+                    PlayerChip(text = "⋮ Mais") { showMoreMenu = true }
+                    DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                        DropdownMenuItem(text = { Text("Velocidade: ${playbackSpeed}x") }, onClick = { showMoreMenu = false; showSpeedMenu = true })
+                        DropdownMenuItem(text = { Text("Abrir no VLC / player externo") }, onClick = {
+                            showMoreMenu = false
+                            openInExternalPlayer(context, url)
+                        })
+                    }
+                    // Submenu de velocidade, aberto a partir do "Mais".
+                    DropdownMenu(expanded = showSpeedMenu, onDismissRequest = { showSpeedMenu = false }) {
+                        PLAYBACK_SPEEDS.forEach { speed ->
+                            DropdownMenuItem(text = { Text("${speed}x") }, onClick = {
+                                playbackSpeed = speed
+                                exoPlayer.setPlaybackSpeed(speed)
+                                showSpeedMenu = false
+                            })
                         }
                     }
                 }
