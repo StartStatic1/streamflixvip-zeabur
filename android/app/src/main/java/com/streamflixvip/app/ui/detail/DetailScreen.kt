@@ -3,6 +3,7 @@ package com.streamflixvip.app.ui.detail
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -150,8 +151,11 @@ private fun SeasonRow(
     Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
         Text(season.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            (1..season.episode_count).forEach { epNum ->
+        // LazyRow (não Row comum) é essencial aqui: temporadas com mais de
+        // ~5-6 episódios simplesmente cortavam o resto sem dar pra rolar —
+        // um Row comum não tem scroll, só mostra o que cabe na largura da tela.
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items((1..season.episode_count).toList()) { epNum ->
                 AssistChip(
                     onClick = { onSelectEpisode(season.season_number, epNum) },
                     label = { Text("Ep $epNum") },

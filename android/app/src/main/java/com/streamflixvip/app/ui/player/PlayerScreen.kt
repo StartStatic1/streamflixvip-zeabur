@@ -1,14 +1,21 @@
 package com.streamflixvip.app.ui.player
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,9 +33,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -58,7 +69,10 @@ private enum class AspectMode(val label: String, val resizeMode: Int) {
     FILL("Esticar", AspectRatioFrameLayout.RESIZE_MODE_FILL),
 }
 
-/** Uma opção de faixa (legenda ou qualidade de vídeo) disponível na mídia atual. */
+/** Velocidades de reprodução disponíveis — mesmo padrão que VLC/YouTube usam. */
+private val PLAYBACK_SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+
+/** Uma opção de faixa (legenda, áudio ou qualidade de vídeo) disponível na mídia atual. */
 private data class TrackOption(
     val label: String,
     val group: TrackGroup,
@@ -69,9 +83,12 @@ private data class TrackOption(
  * Tela de reprodução — implementa a decisão híbrida combinada:
  *
  * - Fonte direta (.mp4/.m3u8, incluindo as que passam pelo stream-proxy):
- *   toca em ExoPlayer NATIVO de verdade, com controles próprios de
- *   proporção de tela, legenda e qualidade, além de retomar de onde a
- *   pessoa parou e salvar progresso periodicamente no Supabase.
+ *   toca em ExoPlayer NATIVO de verdade, em tela cheia imersiva (barra de
+ *   status/navegação do Android escondida), com controles próprios de
+ *   proporção de tela, legenda, áudio, velocidade e qualidade — tudo
+ *   escondendo junto com os controles nativos do player após alguns
+ *   segundos parado, reaparecendo com um toque na tela. Também retoma de
+ *   onde a pessoa parou e salva progresso periodicamente no Supabase.
  *
  * - Fonte que é iframe de player de terceiro (embed que só expõe HTML,
  *   não a URL do arquivo): cai pra WebView, isolada nesta tela. Esse
@@ -92,6 +109,21 @@ fun PlayerScreen(
     posterPath: String?,
     resumeSeconds: Int = 0,
 ) {
+    // Tela cheia imersiva: some com a barra de status e navegação do
+    // Android enquanto o player está aberto (padrão de qualquer player de
+    // vídeo — VLC, YouTube, Netflix). Restaura ao sair da tela, porque o
+    // resto do app deve continuar mostrando as barras normalmente.
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val window = (view.context as? Activity)?.window
+        val insetsController = window?.let { WindowCompat.getInsetsController(it, view) }
+        insetsController?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        insetsController?.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            insetsController?.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
     if (isDirectPlayable) {
         NativePlayer(
             url = sourceUrl,
@@ -131,11 +163,21 @@ private fun NativePlayer(
 
     var aspectMode by remember { mutableStateOf(AspectMode.FIT) }
     var subtitleOptions by remember { mutableStateOf(listOf<TrackOption>()) }
+    var audioOptions by remember { mutableStateOf(listOf<TrackOption>()) }
     var qualityOptions by remember { mutableStateOf(listOf<TrackOption>()) }
     var selectedSubtitleLabel by remember { mutableStateOf("Desligada") }
+    var selectedAudioLabel by remember { mutableStateOf("Padrão") }
     var selectedQualityLabel by remember { mutableStateOf("Automático") }
+    var playbackSpeed by remember { mutableStateOf(1f) }
     var showSubtitleMenu by remember { mutableStateOf(false) }
+    var showAudioMenu by remember { mutableStateOf(false) }
     var showQualityMenu by remember { mutableStateOf(false) }
+    var showSpeedMenu by remember { mutableStateOf(false) }
+    // Espelha a visibilidade dos controles nativos do ExoPlayer (que já
+    // somem sozinhos após alguns segundos parado, e reaparecem com um
+    // toque) — assim nossa barra de chips soma/aparece exatamente junto,
+    // em vez de ficar fixa na tela competindo com o vídeo.
+    var controlsVisible by remember { mutableStateOf(true) }
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context)
@@ -154,6 +196,7 @@ private fun NativePlayer(
                 addListener(object : Player.Listener {
                     override fun onTracksChanged(tracks: Tracks) {
                         val subtitles = mutableListOf<TrackOption>()
+                        val audios = mutableListOf<TrackOption>()
                         val qualities = mutableListOf<TrackOption>()
                         for (group in tracks.groups) {
                             when (group.type) {
@@ -162,6 +205,13 @@ private fun NativePlayer(
                                         val format = group.getTrackFormat(i)
                                         val label = format.label ?: format.language ?: "Faixa ${i + 1}"
                                         subtitles += TrackOption(label, group.mediaTrackGroup, i)
+                                    }
+                                }
+                                C.TRACK_TYPE_AUDIO -> {
+                                    for (i in 0 until group.length) {
+                                        val format = group.getTrackFormat(i)
+                                        val label = format.label ?: format.language ?: "Faixa ${i + 1}"
+                                        audios += TrackOption(label, group.mediaTrackGroup, i)
                                     }
                                 }
                                 C.TRACK_TYPE_VIDEO -> {
@@ -176,6 +226,10 @@ private fun NativePlayer(
                             }
                         }
                         subtitleOptions = subtitles
+                        // Só mostra opção de trocar áudio se houver mais de
+                        // uma faixa — a maioria das fontes tem só uma, e aí
+                        // o menu não agrega nada (só teria "Padrão" mesmo).
+                        audioOptions = if (audios.size > 1) audios else emptyList()
                         // Maior resolução primeiro, sem duplicar a mesma altura.
                         qualityOptions = qualities.distinctBy { it.label }.sortedByDescending {
                             it.label.removeSuffix("p").toIntOrNull() ?: 0
@@ -197,6 +251,20 @@ private fun NativePlayer(
             trackSelector.parameters.buildUpon()
                 .setOverrideForType(TrackSelectionOverride(option.group, option.trackIndex))
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .build()
+        }
+    }
+
+    fun selectAudio(option: TrackOption?) {
+        trackSelector.parameters = if (option == null) {
+            selectedAudioLabel = "Padrão"
+            trackSelector.parameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .build()
+        } else {
+            selectedAudioLabel = option.label
+            trackSelector.parameters.buildUpon()
+                .setOverrideForType(TrackSelectionOverride(option.group, option.trackIndex))
                 .build()
         }
     }
@@ -286,58 +354,104 @@ private fun NativePlayer(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
+                    // Espelha show/hide dos controles nativos (play/pause/seek)
+                    // pra nossa barra de chips extra — assim os dois aparecem
+                    // e somem juntos, com o mesmo toque na tela.
+                    setControllerVisibilityListener(
+                        PlayerView.ControllerVisibilityListener { visibility ->
+                            controlsVisible = visibility == android.view.View.VISIBLE
+                        },
+                    )
                 }
             },
             update = { view -> view.resizeMode = aspectMode.resizeMode },
         )
 
-        // Barra de controles extras (proporção, legenda, qualidade) —
-        // fica sobreposta no topo, por cima dos controles nativos do
-        // ExoPlayer (play/pause/seek), que continuam funcionando normalmente.
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .statusBarsPadding()
-                .padding(8.dp),
+        // Barra de controles extras (proporção, legenda, áudio, velocidade,
+        // qualidade) — some/aparece junto com os controles nativos do
+        // ExoPlayer, em vez de ficar fixa cobrindo o vídeo o tempo todo.
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopEnd),
         ) {
-            PlayerChip(text = aspectMode.label) {
-                aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
-            }
+            Row(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(8.dp)
+                    .horizontalScroll(rememberScrollState()),
+            ) {
+                PlayerChip(text = aspectMode.label) {
+                    aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
+                }
 
-            Box {
-                PlayerChip(text = "CC: $selectedSubtitleLabel") { showSubtitleMenu = true }
-                DropdownMenu(expanded = showSubtitleMenu, onDismissRequest = { showSubtitleMenu = false }) {
-                    DropdownMenuItem(text = { Text("Desligada") }, onClick = {
-                        selectSubtitle(null)
-                        showSubtitleMenu = false
-                    })
-                    subtitleOptions.forEach { option ->
-                        DropdownMenuItem(text = { Text(option.label) }, onClick = {
-                            selectSubtitle(option)
-                            showSubtitleMenu = false
-                        })
-                    }
-                    if (subtitleOptions.isEmpty()) {
-                        DropdownMenuItem(text = { Text("Sem legendas nesta fonte", color = Color.Gray) }, onClick = {}, enabled = false)
+                Box {
+                    PlayerChip(text = "${playbackSpeed}x") { showSpeedMenu = true }
+                    DropdownMenu(expanded = showSpeedMenu, onDismissRequest = { showSpeedMenu = false }) {
+                        PLAYBACK_SPEEDS.forEach { speed ->
+                            DropdownMenuItem(text = { Text("${speed}x") }, onClick = {
+                                playbackSpeed = speed
+                                exoPlayer.setPlaybackSpeed(speed)
+                                showSpeedMenu = false
+                            })
+                        }
                     }
                 }
-            }
 
-            Box {
-                PlayerChip(text = selectedQualityLabel) { showQualityMenu = true }
-                DropdownMenu(expanded = showQualityMenu, onDismissRequest = { showQualityMenu = false }) {
-                    DropdownMenuItem(text = { Text("Automático") }, onClick = {
-                        selectQuality(null)
-                        showQualityMenu = false
-                    })
-                    qualityOptions.forEach { option ->
-                        DropdownMenuItem(text = { Text(option.label) }, onClick = {
-                            selectQuality(option)
+                Box {
+                    PlayerChip(text = "CC: $selectedSubtitleLabel") { showSubtitleMenu = true }
+                    DropdownMenu(expanded = showSubtitleMenu, onDismissRequest = { showSubtitleMenu = false }) {
+                        DropdownMenuItem(text = { Text("Desligada") }, onClick = {
+                            selectSubtitle(null)
+                            showSubtitleMenu = false
+                        })
+                        subtitleOptions.forEach { option ->
+                            DropdownMenuItem(text = { Text(option.label) }, onClick = {
+                                selectSubtitle(option)
+                                showSubtitleMenu = false
+                            })
+                        }
+                        if (subtitleOptions.isEmpty()) {
+                            DropdownMenuItem(text = { Text("Sem legendas nesta fonte", color = Color.Gray) }, onClick = {}, enabled = false)
+                        }
+                    }
+                }
+
+                if (audioOptions.isNotEmpty()) {
+                    Box {
+                        PlayerChip(text = "Áudio: $selectedAudioLabel") { showAudioMenu = true }
+                        DropdownMenu(expanded = showAudioMenu, onDismissRequest = { showAudioMenu = false }) {
+                            DropdownMenuItem(text = { Text("Padrão") }, onClick = {
+                                selectAudio(null)
+                                showAudioMenu = false
+                            })
+                            audioOptions.forEach { option ->
+                                DropdownMenuItem(text = { Text(option.label) }, onClick = {
+                                    selectAudio(option)
+                                    showAudioMenu = false
+                                })
+                            }
+                        }
+                    }
+                }
+
+                Box {
+                    PlayerChip(text = selectedQualityLabel) { showQualityMenu = true }
+                    DropdownMenu(expanded = showQualityMenu, onDismissRequest = { showQualityMenu = false }) {
+                        DropdownMenuItem(text = { Text("Automático") }, onClick = {
+                            selectQuality(null)
                             showQualityMenu = false
                         })
-                    }
-                    if (qualityOptions.isEmpty()) {
-                        DropdownMenuItem(text = { Text("Só uma qualidade disponível", color = Color.Gray) }, onClick = {}, enabled = false)
+                        qualityOptions.forEach { option ->
+                            DropdownMenuItem(text = { Text(option.label) }, onClick = {
+                                selectQuality(option)
+                                showQualityMenu = false
+                            })
+                        }
+                        if (qualityOptions.isEmpty()) {
+                            DropdownMenuItem(text = { Text("Só uma qualidade disponível", color = Color.Gray) }, onClick = {}, enabled = false)
+                        }
                     }
                 }
             }
@@ -350,7 +464,7 @@ private fun PlayerChip(text: String, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         colors = ButtonDefaults.buttonColors(containerColor = Color.Black.copy(alpha = 0.55f)),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
         modifier = Modifier.padding(horizontal = 3.dp),
     ) {
         Text(text, fontSize = 11.sp, color = Color.White)
