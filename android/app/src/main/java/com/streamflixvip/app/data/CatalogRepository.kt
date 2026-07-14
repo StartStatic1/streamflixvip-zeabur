@@ -2,6 +2,7 @@ package com.streamflixvip.app.data
 
 import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.PostgrestFilter
+import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.VipSource
 
@@ -37,6 +38,19 @@ class CatalogRepository {
     /** Detalhes completos de uma série, incluindo lista de temporadas. */
     suspend fun getSeriesDetails(tmdbId: Int) =
         tmdb.request(path = "/tv/$tmdbId")
+
+    /**
+     * Lista de episódios de UMA temporada, com título/sinopse/imagem/duração
+     * de cada um — alimenta os cards de episódio na tela de Detalhes.
+     * Falha silenciosa: se a TMDB não responder, a UI cai pra números
+     * simples em vez de travar a tela inteira.
+     */
+    suspend fun getSeasonEpisodes(tmdbId: Int, season: Int): List<TmdbEpisode> =
+        try {
+            tmdb.requestSeasonDetail(path = "/tv/$tmdbId/season/$season").episodes.orEmpty()
+        } catch (e: Exception) {
+            emptyList()
+        }
 
     /**
      * Fontes de vídeo cadastradas pra um FILME — mesma query que

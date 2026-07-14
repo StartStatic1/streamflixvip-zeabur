@@ -3,6 +3,7 @@ package com.streamflixvip.app.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixvip.app.data.CatalogRepository
+import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbResponse
 import com.streamflixvip.app.network.VipSource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +21,12 @@ sealed interface DetailUiState {
         // primeiro, então as fontes daquele episódio são buscadas sob
         // demanda quando o usuário seleciona um episódio na lista).
         val movieSources: List<VipSource> = emptyList(),
+        // Temporada atualmente "aberta" na UI (mostrando a lista de
+        // episódios com thumbnail/sinopse). Diferente de selectedSeason,
+        // que é qual episódio está escolhido pra assistir agora.
+        val expandedSeason: Int? = null,
+        val episodesOfExpandedSeason: List<TmdbEpisode> = emptyList(),
+        val isLoadingEpisodes: Boolean = false,
         val selectedSeason: Int? = null,
         val selectedEpisode: Int? = null,
         val episodeSources: List<VipSource> = emptyList(),
@@ -67,11 +74,44 @@ class DetailViewModel(
                     movieSources = movieSources,
                 )
 
-                if (mediaType == "tv" && initialSeason > 0) {
-                    loadEpisodeSources(initialSeason, initialEpisode.coerceAtLeast(1))
+                if (mediaType == "tv") {
+                    // Abre direto a temporada que a pessoa estava vendo (vindo de
+                    // "Continuar assistindo"), ou a primeira temporada da série —
+                    // assim a lista de episódios já aparece pronta ao entrar na
+                    // tela, sem exigir um toque extra pra "abrir a temporada 1".
+                    val seasons = details.seasons.orEmpty().filter { it.season_number > 0 }
+                    val seasonToOpen = if (initialSeason > 0) initialSeason else seasons.firstOrNull()?.season_number
+                    if (seasonToOpen != null) {
+                        expandSeason(seasonToOpen)
+                    }
+                    if (initialSeason > 0) {
+                        loadEpisodeSources(initialSeason, initialEpisode.coerceAtLeast(1))
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.value = DetailUiState.Error(e.message ?: "Erro ao carregar detalhes")
+            }
+        }
+    }
+
+    /**
+     * Abre uma temporada na UI, buscando a lista real de episódios
+     * (título, sinopse, imagem, duração) via TMDB. Repetir o toque na
+     * mesma temporada já aberta a fecha de novo (comportamento de
+     * accordion, como o site já faz).
+     */
+    fun expandSeason(season: Int) {
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        if (current.expandedSeason == season) {
+            _uiState.value = current.copy(expandedSeason = null, episodesOfExpandedSeason = emptyList())
+            return
+        }
+        _uiState.value = current.copy(expandedSeason = season, episodesOfExpandedSeason = emptyList(), isLoadingEpisodes = true)
+        viewModelScope.launch {
+            val episodes = repository.getSeasonEpisodes(tmdbId, season)
+            val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+            if (stillCurrent.expandedSeason == season) {
+                _uiState.value = stillCurrent.copy(episodesOfExpandedSeason = episodes, isLoadingEpisodes = false)
             }
         }
     }

@@ -22,6 +22,17 @@ interface TmdbApi {
         @Query("query") query: String? = null,
         @Query("append_to_response") appendToResponse: String? = null,
     ): TmdbResponse
+
+    /**
+     * Mesmo proxy, mesmo path (ex: "/tv/123/season/1"), mas desserializado
+     * como TmdbSeasonDetail em vez de TmdbResponse — o formato de retorno
+     * de /tv/{id}/season/{n} é bem diferente (lista de episódios com
+     * título/sinopse/imagem própria de cada um), então usa um método
+     * Retrofit separado só pra não forçar TmdbResponse a acumular campos
+     * de formatos completamente diferentes.
+     */
+    @GET("api/tmdb")
+    suspend fun requestSeasonDetail(@Query("path") path: String): TmdbSeasonDetail
 }
 
 /**
@@ -84,3 +95,30 @@ data class TmdbSeason(
     val episode_count: Int,
     val name: String,
 )
+
+/**
+ * Detalhe de uma temporada específica, retornado por /tv/{id}/season/{n}
+ * — é aqui que vem a lista real de episódios com título, sinopse,
+ * imagem e duração (o endpoint /tv/{id} sozinho só traz o resumo das
+ * temporadas, sem detalhar episódio por episódio).
+ */
+data class TmdbSeasonDetail(
+    val season_number: Int,
+    val episodes: List<TmdbEpisode>? = null,
+)
+
+data class TmdbEpisode(
+    val episode_number: Int,
+    val name: String? = null,
+    val overview: String? = null,
+    val still_path: String? = null,
+    val runtime: Int? = null, // em minutos; pode vir null quando o TMDB ainda não tem o dado
+    val air_date: String? = null,
+    val vote_average: Double? = null,
+) {
+    /** Duração formatada (ex: "42 min"), ou null se o TMDB não informou. */
+    val displayRuntime: String? get() = runtime?.takeIf { it > 0 }?.let { "$it min" }
+
+    val displayName: String get() = name?.takeIf { it.isNotBlank() } ?: "Episódio $episode_number"
+}
+
