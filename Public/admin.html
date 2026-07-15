@@ -1116,6 +1116,18 @@
       </div>
     </div>
 
+    <div style="margin-top:14px;padding:12px;border-radius:8px;background:var(--surface2)">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
+        <input type="checkbox" id="vipLockInput" style="width:auto;margin:0" onchange="onVipLockChange()"/>
+        <span>🔒 Exclusivo VIP (bloqueia este título inteiro pra quem não é VIP)</span>
+      </label>
+      <div id="freeEpisodeLimitField" style="margin-top:10px;display:none">
+        <label>Episódios grátis até (deixe em branco = sem limite parcial)</label>
+        <input type="number" id="freeEpisodeLimitInput" min="1" placeholder="ex: 5 → episódios 1-5 grátis, 6+ exige VIP"/>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:4px">Só faz sentido pra série. Vale pro título inteiro (todos os episódios cadastrados), não só este.</div>
+      </div>
+    </div>
+
     <div style="display:flex;gap:10px;margin-top:20px">
       <button class="btn-primary" id="saveSourceBtn" onclick="saveMovieSource()" style="flex:1">Salvar fonte</button>
       <button class="btn-signout" id="deleteInlineBtn" onclick="deleteMovieSourceFromModal()" style="display:none">Excluir</button>
@@ -1936,10 +1948,21 @@
     document.getElementById('sourceUrlInput').value = '';
     document.getElementById('sourceLabelInput').value = '';
     document.getElementById('sourcePriorityInput').value = 10;
+    document.getElementById('vipLockInput').checked = false;
+    document.getElementById('freeEpisodeLimitInput').value = '';
+    document.getElementById('freeEpisodeLimitField').style.display = 'block';
     document.getElementById('urlPreviewBox').style.display = 'none';
     document.getElementById('deleteInlineBtn').style.display = 'none';
     document.getElementById('saveSourceBtn').textContent = 'Salvar fonte';
     document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function onVipLockChange() {
+    // Se marcou "exclusivo VIP total", não faz sentido também configurar
+    // um limite parcial de episódios grátis — um exclui o outro. Esconde
+    // o campo (mas não apaga o valor, caso desmarque de novo).
+    const locked = document.getElementById('vipLockInput').checked;
+    document.getElementById('freeEpisodeLimitField').style.display = locked ? 'none' : 'block';
   }
 
   function openEditMovieModal(sourceId) {
@@ -1960,6 +1983,9 @@
     document.getElementById('sourceUrlInput').value = s.source_url;
     document.getElementById('sourceLabelInput').value = s.source_label;
     document.getElementById('sourcePriorityInput').value = s.priority;
+    document.getElementById('vipLockInput').checked = !!s.vip_lock;
+    document.getElementById('freeEpisodeLimitInput').value = s.vip_free_episode_limit || '';
+    document.getElementById('freeEpisodeLimitField').style.display = s.vip_lock ? 'none' : 'block';
     previewMovieUrl(s.source_url);
     document.getElementById('deleteInlineBtn').style.display = 'inline-block';
     document.getElementById('saveSourceBtn').textContent = 'Salvar alterações';
@@ -2060,6 +2086,12 @@
     const url = extractEmbedUrl(document.getElementById('sourceUrlInput').value.trim());
     const label = document.getElementById('sourceLabelInput').value.trim() || 'Player';
     const priority = parseInt(document.getElementById('sourcePriorityInput').value, 10) || 0;
+    const vipLock = document.getElementById('vipLockInput').checked;
+    const freeEpisodeLimitRaw = document.getElementById('freeEpisodeLimitInput').value.trim();
+    // Se "exclusivo VIP total" está marcado, o limite parcial não se aplica
+    // (um exclui o outro) — sempre manda null nesse caso, mesmo que o
+    // campo ainda tivesse um valor digitado antes de marcar o checkbox.
+    const freeEpisodeLimit = (!vipLock && freeEpisodeLimitRaw) ? parseInt(freeEpisodeLimitRaw, 10) : null;
 
     if (!url) { showToast('Cole a URL do player antes de salvar.'); return; }
 
@@ -2086,6 +2118,8 @@
         source_url: url,
         source_label: label,
         priority,
+        vip_lock: vipLock,
+        vip_free_episode_limit: freeEpisodeLimit,
       })
     }).then(r => r.json()).catch(e => ({ error: e.message }));
 
@@ -2344,6 +2378,11 @@
 
     const rowsHtml = sorted.map(s => {
       const epTag = s.season ? `T${s.season}E${s.episode}` : '—';
+      // Selo visual de bloqueio VIP na listagem — dá pra ver de relance
+      // quais fontes estão travadas sem precisar abrir o modal de cada uma.
+      const vipTag = s.vip_lock
+        ? `<span class="pill" style="background:rgba(234,179,8,0.15);color:#eab308">🔒 VIP total</span>`
+        : (s.vip_free_episode_limit ? `<span class="pill" style="background:rgba(234,179,8,0.15);color:#eab308">🔒 Grátis até Ep${s.vip_free_episode_limit}</span>` : '');
       return `
         <div class="source-row">
           <div class="source-ep-tag">${epTag}</div>
@@ -2351,6 +2390,7 @@
             <div class="source-label-text">${s.source_label}</div>
             <span class="source-url-text" title="${s.source_url}">${s.source_url}</span>
           </div>
+          ${vipTag}
           <span class="pill ${s.is_active ? 'active' : 'inactive'}">${s.is_active ? 'Ativa' : 'Inativa'}</span>
           <div class="row-actions">
             <button onclick="event.stopPropagation(); openEditMovieModal(${s.id})">Editar</button>

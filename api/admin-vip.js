@@ -159,7 +159,7 @@ module.exports = async function handler(req, res) {
     let offset = 0;
     while (true) {
       const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/vip_sources?select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at&order=created_at.desc`,
+        `${SUPABASE_URL}/rest/v1/vip_sources?select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at,vip_lock,vip_free_episode_limit&order=created_at.desc`,
         {
           headers: {
             ...svcHeaders,
@@ -199,7 +199,7 @@ module.exports = async function handler(req, res) {
     } = body;
 
     const qs = [];
-    qs.push('select=id,tmdb_id,media_type,season,episode,title,poster_path,is_active,created_at');
+    qs.push('select=id,tmdb_id,media_type,season,episode,title,poster_path,is_active,created_at,vip_lock,vip_free_episode_limit');
     if (mediaType === 'movie' || mediaType === 'tv') qs.push(`media_type=eq.${mediaType}`);
     if (search && search.trim()) {
       // ilike com % dos dois lados = "contém", sem diferenciar maiúsculas
@@ -282,7 +282,7 @@ module.exports = async function handler(req, res) {
     const { tmdbId, mediaType } = body;
     if (!tmdbId || !mediaType) { res.status(400).json({ error: 'Informe tmdbId e mediaType' }); return; }
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/vip_sources?tmdb_id=eq.${encodeURIComponent(tmdbId)}&media_type=eq.${encodeURIComponent(mediaType)}&select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at&order=season.asc,episode.asc,priority.desc`,
+      `${SUPABASE_URL}/rest/v1/vip_sources?tmdb_id=eq.${encodeURIComponent(tmdbId)}&media_type=eq.${encodeURIComponent(mediaType)}&select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at,vip_lock,vip_free_episode_limit&order=season.asc,episode.asc,priority.desc`,
       { headers: svcHeaders }
     );
     const rows = await r.json();
@@ -293,7 +293,7 @@ module.exports = async function handler(req, res) {
 
   // ── FILMES/SÉRIES: cria nova fonte ──
   if (action === 'create-source') {
-    const { tmdb_id, media_type, title, poster_path, season, episode, source_url, source_label, priority } = body;
+    const { tmdb_id, media_type, title, poster_path, season, episode, source_url, source_label, priority, vip_lock, vip_free_episode_limit } = body;
     if (!tmdb_id || !media_type || !source_url) {
       res.status(400).json({ error: 'Dados incompletos para criar a fonte' });
       return;
@@ -304,6 +304,8 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         tmdb_id, media_type, title, poster_path, season, episode,
         source_url, source_label, priority, created_by: userId,
+        vip_lock: !!vip_lock,
+        vip_free_episode_limit: vip_free_episode_limit || null,
       }),
     });
     const result = await r.json();
@@ -318,7 +320,7 @@ module.exports = async function handler(req, res) {
 
   // ── FILMES/SÉRIES: atualiza fonte existente ──
   if (action === 'update-source') {
-    const { sourceId, season, episode, source_url, source_label, priority, title, poster_path } = body;
+    const { sourceId, season, episode, source_url, source_label, priority, title, poster_path, vip_lock, vip_free_episode_limit } = body;
     if (!sourceId) { res.status(400).json({ error: 'Informe sourceId' }); return; }
     const patchBody = { season, episode, source_url, source_label, priority };
     // Só sobrescreve título/poster se vier preenchido — assim uma edição
@@ -326,6 +328,11 @@ module.exports = async function handler(req, res) {
     // que estivesse em branco.
     if (title) patchBody.title = title;
     if (poster_path) patchBody.poster_path = poster_path;
+    // vip_lock/vip_free_episode_limit sempre são enviados pelo modal (mesmo
+    // que "desmarcados"/vazios), então sempre sobrescrevemos — diferente de
+    // título/poster, aqui "vazio" é um valor válido (destravar o título).
+    patchBody.vip_lock = !!vip_lock;
+    patchBody.vip_free_episode_limit = vip_free_episode_limit || null;
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(sourceId)}`, {
       method: 'PATCH',
       headers: { ...svcHeaders, 'Prefer': 'return=representation' },
