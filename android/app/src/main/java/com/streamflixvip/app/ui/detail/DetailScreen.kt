@@ -79,6 +79,12 @@ fun DetailScreen(
     }
 }
 
+// ModalBottomSheet e rememberModalBottomSheetState ainda são marcados como
+// @ExperimentalMaterial3Api pela própria biblioteca do Compose (podem
+// mudar de assinatura em versões futuras) — o OptIn abaixo é a forma
+// padrão de reconhecer isso e permitir o uso mesmo assim, já que é a
+// via oficial (não um workaround) para abrir bottom sheets no Material3.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DetailContent(
     state: DetailUiState.Success,
