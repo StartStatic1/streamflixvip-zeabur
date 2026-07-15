@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -67,6 +68,14 @@ fun DetailScreen(
         mutableStateOf<PendingSource?>(null)
     }
 
+    // Filme com 2+ fontes: o botão "Assistir Agora" não pode simplesmente
+    // tocar a primeira sem perguntar, porque aí a existência de um
+    // servidor secundário vira invisível pra pessoa. Mesmo padrão que
+    // série já usa (showServerPickerForEpisode), só que aqui é um state
+    // simples porque filme não depende de buscar fontes sob demanda — a
+    // lista já veio pronta no carregamento inicial da tela.
+    var showMovieServerPicker by remember { mutableStateOf(false) }
+
     when (val s = state) {
         is DetailUiState.Loading -> {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -95,10 +104,44 @@ fun DetailScreen(
                         pendingWatch = PendingSource(source, season, episode)
                     }
                 },
+                onWatchMovieNow = {
+                    when (s.movieSources.size) {
+                        0 -> Unit
+                        1 -> pendingWatch = PendingSource(s.movieSources.first(), 0, 0)
+                        else -> showMovieServerPicker = true
+                    }
+                },
                 onToggleSeason = viewModel::expandSeason,
                 onDismissServerPicker = viewModel::closeServerPicker,
                 onUpgradeClick = onUpgradeClick,
             )
+
+            if (showMovieServerPicker) {
+                val sheetState = rememberModalBottomSheetState()
+                ModalBottomSheet(onDismissRequest = { showMovieServerPicker = false }, sheetState = sheetState) {
+                    Column(Modifier.padding(bottom = 24.dp)) {
+                        Text(
+                            "Escolha o servidor",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+                        )
+                        Column(Modifier.padding(horizontal = 20.dp)) {
+                            s.movieSources.forEachIndexed { index, source ->
+                                SourceRow(
+                                    source = source,
+                                    isRecommended = index == 0,
+                                    onClick = {
+                                        showMovieServerPicker = false
+                                        pendingWatch = PendingSource(source, 0, 0)
+                                    },
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -135,6 +178,7 @@ private fun DetailContent(
     state: DetailUiState.Success,
     onRequestWatch: (source: VipSource, season: Int, episode: Int) -> Unit,
     onSelectEpisode: (season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
+    onWatchMovieNow: () -> Unit,
     onToggleSeason: (season: Int) -> Unit,
     onDismissServerPicker: () -> Unit,
     onUpgradeClick: () -> Unit,
@@ -147,17 +191,16 @@ private fun DetailContent(
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
     var isFavorite by remember { mutableStateOf(false) }
 
-    // Fonte que o botão fixo "Assistir Agora" do header deve disparar.
-    // Filme: a fonte recomendada (primeira da lista, já ordenada por
-    // prioridade). Série: a primeira fonte do primeiro episódio da
-    // primeira temporada carregada — mesmo comportamento de "continuar de
-    // onde faz sentido" que os cards de episódio já oferecem, só que
-    // acessível sem precisar rolar até a lista de temporadas.
-    val heroWatchEnabled = if (state.mediaType == "movie") {
-        state.movieSources.isNotEmpty() && !state.movieIsLocked(isVip)
-    } else {
-        true // série sempre expande a primeira temporada ao tocar, mesmo sem fonte pré-carregada
-    }
+    // Botão fixo "Assistir Agora" no header: só existe pra FILME. Série
+    // não tem esse botão — o padrão de referência (CineVerse) não usa
+    // botão fixo pra série, só a lista de temporadas/episódios logo
+    // abaixo, onde cada episódio já é o próprio "botão de play" (1 toque
+    // já busca a fonte e decide sozinho, ver loadEpisodeSources). Colocar
+    // um botão fixo em cima seria redundante e ambíguo ("qual episódio
+    // isso vai tocar?").
+    val heroWatchEnabled = state.mediaType == "movie" &&
+        state.movieSources.isNotEmpty() &&
+        !state.movieIsLocked(isVip)
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
@@ -172,17 +215,7 @@ private fun DetailContent(
                 isFavorite = isFavorite,
                 onToggleFavorite = { isFavorite = !isFavorite },
                 showWatchNowButton = heroWatchEnabled,
-                onWatchNowClick = {
-                    if (state.mediaType == "movie") {
-                        state.movieSources.firstOrNull()?.let { source -> onRequestWatch(source, 0, 0) }
-                    } else {
-                        val firstSeason = details.seasons.orEmpty().filter { it.season_number > 0 }.minByOrNull { it.season_number }
-                        firstSeason?.let { season ->
-                            if (state.expandedSeason != season.season_number) onToggleSeason(season.season_number)
-                            onSelectEpisode(season.season_number, 1, title, posterPath)
-                        }
-                    }
-                },
+                onWatchNowClick = onWatchMovieNow,
             )
         }
 
@@ -195,17 +228,28 @@ private fun DetailContent(
         }
 
         if (state.mediaType == "movie") {
-            // Filme continua com a seção fixa de servidores — não há
-            // conceito de "1 toque, já sabe o que tocar" aqui, porque não
-            // existe um card de episódio anterior pra já disparar o play;
-            // esta é a primeira e única decisão da tela.
-            item {
-                SourcesSection(
-                    sources = state.movieSources,
-                    isLocked = state.movieIsLocked(isVip),
-                    onPlaySource = { source -> onRequestWatch(source, 0, 0) },
-                    onUpgradeClick = onUpgradeClick,
-                )
+            // Filme: cadeado VIP continua aparecendo aqui quando bloqueado
+            // (o botão "Assistir Agora" some nesse caso — ver
+            // heroWatchEnabled — então o cadeado com CTA de upgrade é a
+            // única forma de ação visível). Quando NÃO está bloqueado e já
+            // existe fonte, o botão do header já resolve o play; não repete
+            // a lista de servidores aqui embaixo pra não duplicar a mesma
+            // ação em dois lugares da tela.
+            if (state.movieIsLocked(isVip)) {
+                item {
+                    Column(Modifier.padding(16.dp)) {
+                        VipLockCard(onUpgradeClick = onUpgradeClick)
+                    }
+                }
+            } else if (state.movieSources.isEmpty()) {
+                item {
+                    Text(
+                        "Nenhuma fonte disponível ainda para este título.",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
             }
         } else {
             val seasons = details.seasons.orEmpty().filter { it.season_number > 0 } // ignora "specials" (temporada 0)
@@ -647,36 +691,36 @@ private fun DetailHeader(
  */
 @Composable
 private fun LivingBackdrop(backdropUrl: String?) {
+    // Zoom bem sutil e só nessa direção (sem pan lateral) — a versão
+    // anterior movia a imagem pros lados (translationX) por cima de um
+    // Box sem clip, e como o AsyncImage já preenche 100% do Box com
+    // Crop, qualquer translação empurra a borda da imagem pra dentro da
+    // área visível, aparecendo como uma "quina"/quadrado se destacando.
+    // Só escala (sempre a partir do centro, sem nunca sair da área
+    // clipada) evita esse artefato por completo.
     val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "backdrop")
     val scale by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.12f,
+        targetValue = 1.06f,
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(durationMillis = 9000, easing = androidx.compose.animation.core.LinearEasing),
+            animation = androidx.compose.animation.core.tween(durationMillis = 12000, easing = androidx.compose.animation.core.LinearEasing),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
         ),
         label = "backdropScale",
     )
-    val offsetX by infiniteTransition.animateFloat(
-        initialValue = -14f,
-        targetValue = 14f,
-        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(durationMillis = 11000, easing = androidx.compose.animation.core.LinearEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
-        ),
-        label = "backdropOffsetX",
-    )
     val veilAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.30f,
+        initialValue = 0.10f,
+        targetValue = 0.22f,
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-            animation = androidx.compose.animation.core.tween(durationMillis = 4000, easing = androidx.compose.animation.core.LinearEasing),
+            animation = androidx.compose.animation.core.tween(durationMillis = 5000, easing = androidx.compose.animation.core.LinearEasing),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
         ),
         label = "backdropVeil",
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    // clipToBounds garante que nada da imagem escalada escape da área
+    // reservada pro backdrop, não importa o valor de scale.
+    Box(modifier = Modifier.fillMaxSize().clipToBounds()) {
         AsyncImage(
             model = backdropUrl,
             contentDescription = null,
@@ -685,12 +729,11 @@ private fun LivingBackdrop(backdropUrl: String?) {
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
-                    translationX = offsetX
                 },
             contentScale = ContentScale.Crop,
         )
-        // Véu escuro pulsante — a "ofuscação" que faz a cena por trás
-        // parecer estar se movendo devagar, mesmo sendo uma imagem só.
+        // Véu escuro pulsante bem discreto — a "ofuscação" que faz a
+        // cena por trás parecer estar respirando, mesmo sendo 1 imagem.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -766,37 +809,6 @@ private fun SimpleEpisodeRow(
             color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
         )
-    }
-}
-
-@Composable
-private fun SourcesSection(
-    sources: List<VipSource>,
-    isLocked: Boolean,
-    onPlaySource: (VipSource) -> Unit,
-    onUpgradeClick: () -> Unit,
-) {
-    Column(Modifier.padding(16.dp)) {
-        Text("Assistir agora", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        if (isLocked) {
-            VipLockCard(onUpgradeClick = onUpgradeClick)
-        } else if (sources.isEmpty()) {
-            Text(
-                "Nenhuma fonte disponível ainda para este título.",
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            // A lista já vem ordenada por prioridade (maior primeiro) da
-            // API — o primeiro item é a fonte que a gente recomenda, então
-            // ganha destaque visual pra a pessoa não precisar adivinhar
-            // qual servidor escolher.
-            sources.forEachIndexed { index, source ->
-                SourceRow(source = source, isRecommended = index == 0, onClick = { onPlaySource(source) })
-                Spacer(Modifier.height(8.dp))
-            }
-        }
     }
 }
 
