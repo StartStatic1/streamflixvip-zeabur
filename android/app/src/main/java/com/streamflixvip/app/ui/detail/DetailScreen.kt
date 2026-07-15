@@ -141,7 +141,7 @@ private fun DetailContent(
             item {
                 SourcesSection(
                     sources = state.movieSources,
-                    isLocked = state.movieIsLocked,
+                    isLocked = state.movieIsLocked(isVip),
                     onPlaySource = { source -> onPlaySource(source, 0, 0, title, posterPath) },
                     onUpgradeClick = onUpgradeClick,
                 )
@@ -154,10 +154,12 @@ private fun DetailContent(
                     // Aviso visível de quantos episódios são grátis, quando a
                     // série tem limite parcial configurado — ajuda a pessoa a
                     // entender o cadeado antes mesmo de esbarrar nele.
-                    if (!state.seriesVipLocked && state.freeEpisodeLimit != null && !isVip) {
+                    val freeLimit = state.vipConfig?.vip_free_episode_limit
+                    val seriesFullyLocked = state.vipConfig?.vip_lock == true
+                    if (!seriesFullyLocked && freeLimit != null && !isVip) {
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            "Grátis até o episódio ${state.freeEpisodeLimit} — demais exigem VIP",
+                            "Grátis até o episódio $freeLimit — demais exigem VIP",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.primary,
                         )

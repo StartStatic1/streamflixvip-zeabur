@@ -7,6 +7,7 @@ import com.streamflixvip.app.data.VipStatusHolder
 import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbResponse
 import com.streamflixvip.app.network.VipSource
+import com.streamflixvip.app.network.VipTitleConfig
 import com.streamflixvip.app.network.requiresVip
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,10 +24,11 @@ sealed interface DetailUiState {
         // primeiro, então as fontes daquele episódio são buscadas sob
         // demanda quando o usuário seleciona um episódio na lista).
         val movieSources: List<VipSource> = emptyList(),
-        // Verdade se o FILME exige VIP e o usuário atual não é VIP —
-        // calculado a partir de movieSources + VipStatusHolder assim que
-        // as fontes chegam.
-        val movieIsLocked: Boolean = false,
+        // Config de bloqueio VIP do TÍTULO inteiro, vinda da tabela
+        // dedicada vip_titles — serve pra filme e série igual, sem
+        // depender de nenhuma fonte/servidor estar marcada de um jeito
+        // específico. Null = título nunca foi configurado = sem bloqueio.
+        val vipConfig: VipTitleConfig? = null,
         // Temporada atualmente "aberta" na UI (mostrando a lista de
         // episódios com thumbnail/sinopse). Diferente de selectedSeason,
         // que é qual episódio está escolhido pra assistir agora.
@@ -41,21 +43,12 @@ sealed interface DetailUiState {
         // seletor (bottom sheet) em vez de assistir direto — esse campo
         // guarda "pra qual episódio" o seletor deve abrir. Null = fechado.
         val showServerPickerForEpisode: Int? = null,
-        // Do painel: até qual episódio é liberado de graça nessa série
-        // (null = sem limite configurado). Usado pra decidir cadeado nos
-        // cards da lista de episódios ANTES do usuário escolher um.
-        val freeEpisodeLimit: Int? = null,
-        // Verdade se a série INTEIRA está marcada como vip_lock=true no
-        // painel (diferente de freeEpisodeLimit, que libera parcialmente).
-        val seriesVipLocked: Boolean = false,
     ) : DetailUiState {
+        /** Decide se o FILME deve mostrar cadeado em vez da lista de fontes. */
+        fun movieIsLocked(isVip: Boolean): Boolean = !isVip && requiresVip(vipConfig, episodeNumber = null)
+
         /** Decide se um episódio específico deve mostrar cadeado, sem precisar carregar suas fontes primeiro. */
-        fun episodeIsLocked(episodeNumber: Int, isVip: Boolean): Boolean {
-            if (isVip) return false
-            if (seriesVipLocked) return true
-            val limit = freeEpisodeLimit ?: return false
-            return episodeNumber > limit
-        }
+        fun episodeIsLocked(episodeNumber: Int, isVip: Boolean): Boolean = !isVip && requiresVip(vipConfig, episodeNumber)
     }
 }
 
@@ -92,23 +85,18 @@ class DetailViewModel(
                 } else {
                     emptyList()
                 }
-                // Pra série, busca a config VIP do título ANTES de qualquer
-                // episódio ser selecionado — é o que permite mostrar o
-                // cadeado direto nos cards da lista, sem esperar o usuário
-                // clicar em cada um pra descobrir se está bloqueado.
-                val seriesVipConfig = if (mediaType == "tv") repository.getSeriesVipConfig(tmdbId) else null
-
-                val isVipNow = VipStatusHolder.isVip.value
-                val movieIsLocked = mediaType == "movie" && !isVipNow && requiresVip(movieSources, episodeNumber = null)
+                // Config de bloqueio VIP do título — vem de uma consulta só,
+                // direto da tabela dedicada vip_titles. Serve tanto pra
+                // filme quanto série, e não depende de nenhuma fonte estar
+                // cadastrada de um jeito específico.
+                val vipConfig = repository.getVipTitleConfig(tmdbId, mediaType)
 
                 _uiState.value = DetailUiState.Success(
                     details = details,
                     mediaType = mediaType,
                     tmdbId = tmdbId,
                     movieSources = movieSources,
-                    movieIsLocked = movieIsLocked,
-                    freeEpisodeLimit = movieSources.firstOrNull()?.vip_free_episode_limit ?: seriesVipConfig?.vip_free_episode_limit,
-                    seriesVipLocked = seriesVipConfig?.vip_lock == true,
+                    vipConfig = vipConfig,
                 )
 
                 if (mediaType == "tv") {

@@ -33,7 +33,7 @@ interface SupabaseApi {
         @Query("media_type") mediaTypeFilter: String, // "eq.movie"
         @Query("is_active") isActiveFilter: String = "eq.true",
         @Query("season") seasonFilter: String = "is.null",
-        @Query("select") select: String = "source_url,source_label,priority,vip_lock,vip_free_episode_limit",
+        @Query("select") select: String = "source_url,source_label,priority",
         @Query("order") order: String = "priority.desc",
     ): List<VipSource>
 
@@ -45,30 +45,29 @@ interface SupabaseApi {
         @Query("season") seasonFilter: String,       // "eq.1"
         @Query("episode") episodeFilter: String,     // "eq.5"
         @Query("is_active") isActiveFilter: String = "eq.true",
-        @Query("select") select: String = "source_url,source_label,priority,vip_lock,vip_free_episode_limit",
+        @Query("select") select: String = "source_url,source_label,priority",
         @Query("order") order: String = "priority.desc",
     ): List<VipSource>
 
     /**
-     * Busca QUALQUER linha cadastrada pra um tmdb_id de série (sem filtrar
-     * por season/episode) — usada só pra descobrir vip_lock /
-     * vip_free_episode_limit do título, que são setados uma vez por
-     * título e valem pra todos os episódios. Mais confiável que assumir
-     * que o episódio 1 sempre tem fonte cadastrada (pode não ter, se o
-     * cadastro começou por outro episódio).
+     * Config de bloqueio VIP do TÍTULO inteiro — vem de uma tabela
+     * separada (vip_titles), com no máximo 1 linha por (tmdb_id,
+     * media_type). Independente de quantas fontes/servidores o título
+     * tenha cadastradas em vip_sources: marcar ou desmarcar VIP aqui não
+     * exige tocar em nenhuma fonte. Retorna lista vazia se o título nunca
+     * foi configurado (equivale a "sem bloqueio").
      */
-    @GET("rest/v1/vip_sources")
-    suspend fun getAnySourceForSeries(
+    @GET("rest/v1/vip_titles")
+    suspend fun getVipTitleConfig(
         @Header("apikey") apiKey: String,
         @Query("tmdb_id") tmdbIdFilter: String,
-        @Query("media_type") mediaTypeFilter: String = "eq.tv",
+        @Query("media_type") mediaTypeFilter: String,
         @Query("select") select: String = "vip_lock,vip_free_episode_limit",
-        @Query("limit") limit: Int = 1,
-    ): List<VipConfigOnly>
+    ): List<VipTitleConfig>
 }
 
-/** Resposta enxuta de getAnySourceForSeries — só os 2 campos que importam pra decidir bloqueio. */
-data class VipConfigOnly(
+/** Config de bloqueio de um título inteiro, vinda da tabela vip_titles (1 linha por tmdb_id+media_type). */
+data class VipTitleConfig(
     val vip_lock: Boolean? = null,
     val vip_free_episode_limit: Int? = null,
 )
@@ -77,14 +76,6 @@ data class VipSource(
     val source_url: String,
     val source_label: String?,
     val priority: Int?,
-    // Marca se ESTE título/episódio exige VIP. Vem de vip_sources.vip_lock —
-    // setado manualmente no painel pra lançamentos/títulos mais procurados.
-    val vip_lock: Boolean? = null,
-    // Só relevante pra série: número do último episódio liberado de graça
-    // (ex: 5 = episódios 1-5 livres, 6 em diante exige VIP). Null = sem
-    // limite (segue vip_lock normalmente). Setado no título, então todas
-    // as linhas de episódio daquele tmdb_id compartilham o mesmo valor.
-    val vip_free_episode_limit: Int? = null,
 ) {
     /** Nome amigável pra exibir na lista de servidores da tela de player. */
     val displayName: String get() = source_label ?: "Servidor"
@@ -130,19 +121,15 @@ object PostgrestFilter {
 }
 
 /**
- * Decide se um episódio/filme específico exige VIP, dado o conjunto de
- * fontes já carregadas pra aquele título (todas compartilham o mesmo
- * vip_lock / vip_free_episode_limit, setados por título no painel).
- *
- * Regra: vip_lock=true trava o título inteiro. Senão, se
- * vip_free_episode_limit estiver setado, episódios com número MAIOR que
- * o limite exigem VIP (ex: limite=5 → episódio 6+ trava). Filme não usa
- * o segundo critério (episodeNumber fica null pra filme).
+ * Decide se um episódio/filme exige VIP, a partir da config do TÍTULO
+ * (não mais das fontes individuais). vip_lock=true trava tudo; senão,
+ * vip_free_episode_limit trava episódios acima do número informado
+ * (só faz sentido pra série; filme sempre passa episodeNumber=null).
  */
-fun requiresVip(sources: List<VipSource>, episodeNumber: Int?): Boolean {
-    val sample = sources.firstOrNull() ?: return false
-    if (sample.vip_lock == true) return true
-    val limit = sample.vip_free_episode_limit
+fun requiresVip(config: VipTitleConfig?, episodeNumber: Int?): Boolean {
+    if (config == null) return false
+    if (config.vip_lock == true) return true
+    val limit = config.vip_free_episode_limit
     if (limit != null && episodeNumber != null) {
         return episodeNumber > limit
     }
