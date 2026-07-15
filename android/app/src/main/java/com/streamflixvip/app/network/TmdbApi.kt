@@ -58,7 +58,17 @@ data class TmdbResponse(
     val genres: List<TmdbGenre>? = null,
     val number_of_seasons: Int? = null,
     val seasons: List<TmdbSeason>? = null,
-)
+    val tagline: String? = null,
+    val runtime: Int? = null, // em minutos; só filme retorna isso direto no endpoint de detalhe
+) {
+    /** Duração formatada (ex: "1h 40m"), ou null se a API não informou (comum em séries). */
+    val displayRuntime: String?
+        get() = runtime?.takeIf { it > 0 }?.let {
+            val h = it / 60
+            val m = it % 60
+            if (h > 0) "${h}h ${m}m" else "${m}min"
+        }
+}
 
 data class TmdbItem(
     val id: Int,

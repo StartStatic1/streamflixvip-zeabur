@@ -7,6 +7,17 @@
          denuncia app mal feito. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Torna visíveis os apps capazes de abrir vídeo via ACTION_VIEW —
+         necessário a partir do Android 11 (API 30) pro seletor de
+         "Player externo" (VLC, MX Player etc.) funcionar de forma
+         confiável em todos os fabricantes, mesmo usando createChooser. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
+    </queries>
+
     <application
         android:name=".StreamFlixApp"
         android:allowBackup="true"

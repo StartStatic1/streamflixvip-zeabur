@@ -8,9 +8,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -47,6 +50,18 @@ fun DetailScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
+    // Fonte já decidida (única disponível, ou escolhida no sheet de
+    // servidor) aguardando a pessoa decidir COMO assistir — player
+    // interno (chama onPlaySource de verdade, que navega pro player) ou
+    // externo (abre um app de vídeo instalado via Intent, sem navegar
+    // pra lugar nenhum dentro do próprio app). Fica neste nível, e não
+    // dentro de DetailContent, porque tanto o fluxo de fonte única
+    // (abaixo, em onSelectEpisode) quanto o de múltiplas fontes (dentro
+    // de DetailContent, no sheet de servidor) precisam preenchê-lo.
+    var pendingWatch by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf<PendingSource?>(null)
+    }
+
     when (val s = state) {
         is DetailUiState.Loading -> {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -65,12 +80,14 @@ fun DetailScreen(
         is DetailUiState.Success -> {
             DetailContent(
                 state = s,
-                onPlaySource = onPlaySource,
-                onSelectEpisode = { season, episode, title, posterPath ->
+                onRequestWatch = { source, season, episode -> pendingWatch = PendingSource(source, season, episode) },
+                onSelectEpisode = { season, episode, _, _ ->
                     viewModel.loadEpisodeSources(season, episode) { source ->
-                        // Fonte única: já dispara o player direto, sem
-                        // exigir escolher servidor manualmente.
-                        onPlaySource(source, season, episode, title, posterPath)
+                        // Fonte única: já sabemos qual fonte usar, então
+                        // pula direto pra decisão de COMO assistir (interno
+                        // vs externo), sem exigir escolher servidor — não
+                        // há o que escolher quando só existe um.
+                        pendingWatch = PendingSource(source, season, episode)
                     }
                 },
                 onToggleSeason = viewModel::expandSeason,
@@ -79,7 +96,28 @@ fun DetailScreen(
             )
         }
     }
+
+    // O modal em si mora aqui (fora do when de loading/error/success),
+    // ligado ao mesmo pendingWatch preenchido pelos dois fluxos acima —
+    // um único lugar decide a UI de "player interno vs externo",
+    // independente de ter vindo de filme, fonte única de série, ou
+    // seletor de servidor de série.
+    pendingWatch?.let { pending ->
+        val successState = state as? DetailUiState.Success
+        val title = successState?.details?.title ?: successState?.details?.name ?: "Sem título"
+        val posterPath = successState?.details?.poster_path
+        WatchOptionsSheet(
+            source = pending.source,
+            onDismiss = { pendingWatch = null },
+            onPlayInternal = { source ->
+                onPlaySource(source, pending.season, pending.episode, title, posterPath)
+            },
+        )
+    }
 }
+
+/** Fonte já resolvida (única, ou escolhida no seletor de servidor) aguardando decisão de player interno/externo. */
+private data class PendingSource(val source: VipSource, val season: Int, val episode: Int)
 
 // ModalBottomSheet e rememberModalBottomSheetState ainda são marcados como
 // @ExperimentalMaterial3Api pela própria biblioteca do Compose (podem
@@ -90,7 +128,7 @@ fun DetailScreen(
 @Composable
 private fun DetailContent(
     state: DetailUiState.Success,
-    onPlaySource: (source: VipSource, season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
+    onRequestWatch: (source: VipSource, season: Int, episode: Int) -> Unit,
     onSelectEpisode: (season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
     onToggleSeason: (season: Int) -> Unit,
     onDismissServerPicker: () -> Unit,
@@ -100,35 +138,29 @@ private fun DetailContent(
     val title = details.title ?: details.name ?: "Sem título"
     val posterPath = details.poster_path
     val backdropUrl = details.backdrop_path?.let { TMDB_BACKDROP_BASE + it }
+    val posterUrl = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
+    var isFavorite by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                AsyncImage(
-                    model = backdropUrl,
-                    contentDescription = title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
+            DetailHeader(
+                title = title,
+                tagline = details.tagline,
+                backdropUrl = backdropUrl,
+                posterUrl = posterUrl,
+                rating = details.vote_average,
+                year = (details.release_date ?: details.first_air_date)?.take(4),
+                runtimeLabel = details.displayRuntime,
+                isFavorite = isFavorite,
+                onToggleFavorite = { isFavorite = !isFavorite },
+            )
         }
 
         item {
-            Column(Modifier.padding(16.dp)) {
-                Text(title, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(4.dp))
-                details.vote_average?.let {
-                    Text("⭐ ${"%.1f".format(it)}", fontSize = 13.sp)
-                }
-                Spacer(Modifier.height(10.dp))
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 details.overview?.let { overview ->
-                    Text(overview, fontSize = 14.sp, lineHeight = 20.sp)
+                    Text(overview, fontSize = 14.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f))
                 }
             }
         }
@@ -142,7 +174,7 @@ private fun DetailContent(
                 SourcesSection(
                     sources = state.movieSources,
                     isLocked = state.movieIsLocked(isVip),
-                    onPlaySource = { source -> onPlaySource(source, 0, 0, title, posterPath) },
+                    onPlaySource = { source -> onRequestWatch(source, 0, 0) },
                     onUpgradeClick = onUpgradeClick,
                 )
             }
@@ -207,13 +239,8 @@ private fun DetailContent(
                             source = source,
                             isRecommended = index == 0,
                             onClick = {
-                                onPlaySource(
-                                    source,
-                                    state.selectedSeason ?: 0,
-                                    state.selectedEpisode ?: 0,
-                                    title,
-                                    posterPath,
-                                )
+                                onDismissServerPicker()
+                                onRequestWatch(source, state.selectedSeason ?: 0, state.selectedEpisode ?: 0)
                             },
                         )
                         Spacer(Modifier.height(8.dp))
@@ -431,7 +458,169 @@ private fun EpisodeCard(
     }
 }
 
-/** Fallback usado só quando a TMDB não retorna detalhe da temporada. */
+/**
+ * Cabeçalho da tela de detalhes, no padrão visual do CineVerse: backdrop
+ * grande com gradiente escuro na base (garante contraste pro texto sem
+ * precisar de um scrim fixo), poster com sombra flutuando por cima
+ * (profundidade, não fica "colado" na imagem de fundo), título grande,
+ * tagline em itálico, e uma fileira de chips com a meta info essencial
+ * (ano, duração, nota) — tudo escaneável num único golpe de vista antes
+ * de decidir assistir.
+ */
+@Composable
+private fun DetailHeader(
+    title: String,
+    tagline: String?,
+    backdropUrl: String?,
+    posterUrl: String?,
+    rating: Double?,
+    year: String?,
+    runtimeLabel: String?,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(340.dp),
+        ) {
+            AsyncImage(
+                model = backdropUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            // Gradiente duplo: escurece o topo o suficiente pra status bar
+            // não brigar com a imagem, e escurece a base pra que o poster
+            // e o texto por cima fiquem sempre legíveis, não importa o
+            // quão clara seja a cena do backdrop escolhido.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.0f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f),
+                                0.5f to androidx.compose.ui.graphics.Color.Transparent,
+                                1.0f to MaterialTheme.colorScheme.background,
+                            ),
+                        ),
+                    ),
+            )
+        }
+
+        // Botões de ação flutuando sobre o backdrop, um em cada canto —
+        // mesmo padrão do CineVerse (coração à esquerda, compartilhar à
+        // direita), fora do fluxo de leitura principal do título.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 140.dp)
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            CircleIconButton(
+                icon = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                tint = if (isFavorite) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.White,
+                contentDescription = if (isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
+                onClick = onToggleFavorite,
+            )
+            CircleIconButton(
+                icon = Icons.Filled.Share,
+                tint = androidx.compose.ui.graphics.Color.White,
+                contentDescription = "Compartilhar",
+                onClick = { /* integração de share fica a cargo da Activity host */ },
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 90.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(150.dp)
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .then(Modifier),
+            ) {
+                AsyncImage(
+                    model = posterUrl,
+                    contentDescription = title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                title,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 24.dp),
+            )
+            tagline?.takeIf { it.isNotBlank() }?.let {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    it,
+                    fontSize = 13.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 32.dp),
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                year?.let { MetaChip(it) }
+                runtimeLabel?.let { MetaChip(it) }
+                rating?.let { MetaChip("⭐ ${"%.1f".format(it)}") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CircleIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: androidx.compose.ui.graphics.Color,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
+            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.4f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun MetaChip(label: String) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Text(
+            label,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+    }
+}
+
 @Composable
 private fun SimpleEpisodeRow(
     episodeNumber: Int,
@@ -476,7 +665,7 @@ private fun SourcesSection(
     onUpgradeClick: () -> Unit,
 ) {
     Column(Modifier.padding(16.dp)) {
-        Text("Onde assistir", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        Text("Assistir agora", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         if (isLocked) {
             VipLockCard(onUpgradeClick = onUpgradeClick)
