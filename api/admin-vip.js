@@ -159,7 +159,7 @@ module.exports = async function handler(req, res) {
     let offset = 0;
     while (true) {
       const r = await fetch(
-        `${SUPABASE_URL}/rest/v1/vip_sources?select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at,vip_lock,vip_free_episode_limit&order=created_at.desc`,
+        `${SUPABASE_URL}/rest/v1/vip_sources?select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at&order=created_at.desc`,
         {
           headers: {
             ...svcHeaders,
@@ -199,7 +199,7 @@ module.exports = async function handler(req, res) {
     } = body;
 
     const qs = [];
-    qs.push('select=id,tmdb_id,media_type,season,episode,title,poster_path,is_active,created_at,vip_lock,vip_free_episode_limit');
+    qs.push('select=id,tmdb_id,media_type,season,episode,title,poster_path,is_active,created_at');
     if (mediaType === 'movie' || mediaType === 'tv') qs.push(`media_type=eq.${mediaType}`);
     if (search && search.trim()) {
       // ilike com % dos dois lados = "contém", sem diferenciar maiúsculas
@@ -282,7 +282,7 @@ module.exports = async function handler(req, res) {
     const { tmdbId, mediaType } = body;
     if (!tmdbId || !mediaType) { res.status(400).json({ error: 'Informe tmdbId e mediaType' }); return; }
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/vip_sources?tmdb_id=eq.${encodeURIComponent(tmdbId)}&media_type=eq.${encodeURIComponent(mediaType)}&select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at,vip_lock,vip_free_episode_limit&order=season.asc,episode.asc,priority.desc`,
+      `${SUPABASE_URL}/rest/v1/vip_sources?tmdb_id=eq.${encodeURIComponent(tmdbId)}&media_type=eq.${encodeURIComponent(mediaType)}&select=id,tmdb_id,media_type,season,episode,title,poster_path,source_url,source_label,priority,is_active,created_at&order=season.asc,episode.asc,priority.desc`,
       { headers: svcHeaders }
     );
     const rows = await r.json();
@@ -293,7 +293,7 @@ module.exports = async function handler(req, res) {
 
   // ── FILMES/SÉRIES: cria nova fonte ──
   if (action === 'create-source') {
-    const { tmdb_id, media_type, title, poster_path, season, episode, source_url, source_label, priority, vip_lock, vip_free_episode_limit } = body;
+    const { tmdb_id, media_type, title, poster_path, season, episode, source_url, source_label, priority } = body;
     if (!tmdb_id || !media_type || !source_url) {
       res.status(400).json({ error: 'Dados incompletos para criar a fonte' });
       return;
@@ -304,8 +304,6 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         tmdb_id, media_type, title, poster_path, season, episode,
         source_url, source_label, priority, created_by: userId,
-        vip_lock: !!vip_lock,
-        vip_free_episode_limit: vip_free_episode_limit || null,
       }),
     });
     const result = await r.json();
@@ -320,7 +318,7 @@ module.exports = async function handler(req, res) {
 
   // ── FILMES/SÉRIES: atualiza fonte existente ──
   if (action === 'update-source') {
-    const { sourceId, season, episode, source_url, source_label, priority, title, poster_path, vip_lock, vip_free_episode_limit } = body;
+    const { sourceId, season, episode, source_url, source_label, priority, title, poster_path } = body;
     if (!sourceId) { res.status(400).json({ error: 'Informe sourceId' }); return; }
     const patchBody = { season, episode, source_url, source_label, priority };
     // Só sobrescreve título/poster se vier preenchido — assim uma edição
@@ -328,11 +326,6 @@ module.exports = async function handler(req, res) {
     // que estivesse em branco.
     if (title) patchBody.title = title;
     if (poster_path) patchBody.poster_path = poster_path;
-    // vip_lock/vip_free_episode_limit sempre são enviados pelo modal (mesmo
-    // que "desmarcados"/vazios), então sempre sobrescrevemos — diferente de
-    // título/poster, aqui "vazio" é um valor válido (destravar o título).
-    patchBody.vip_lock = !!vip_lock;
-    patchBody.vip_free_episode_limit = vip_free_episode_limit || null;
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(sourceId)}`, {
       method: 'PATCH',
       headers: { ...svcHeaders, 'Prefer': 'return=representation' },
@@ -341,6 +334,46 @@ module.exports = async function handler(req, res) {
     const result = await r.json();
     if (!r.ok) { res.status(502).json({ error: 'Erro ao atualizar fonte', detail: result }); return; }
     res.status(200).json({ updated: result });
+    return;
+  }
+
+  // ── VIP: busca a config de bloqueio do TÍTULO inteiro (tabela dedicada
+  // vip_titles — 1 linha por tmdb_id+media_type, independente de quantas
+  // fontes/servidores o título tenha em vip_sources) ──
+  if (action === 'get-vip-title') {
+    const { tmdb_id, media_type } = body;
+    if (!tmdb_id || !media_type) { res.status(400).json({ error: 'Informe tmdb_id e media_type' }); return; }
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/vip_titles?tmdb_id=eq.${encodeURIComponent(tmdb_id)}&media_type=eq.${encodeURIComponent(media_type)}&select=vip_lock,vip_free_episode_limit`,
+      { headers: svcHeaders },
+    );
+    const rows = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao buscar config VIP', detail: rows }); return; }
+    // Sem linha ainda = título nunca configurado = sem bloqueio algum.
+    res.status(200).json({ config: rows[0] || { vip_lock: false, vip_free_episode_limit: null } });
+    return;
+  }
+
+  // ── VIP: cria/atualiza a config de bloqueio do TÍTULO inteiro — 1 ÚNICA
+  // linha por título, nunca precisa tocar nas fontes/servidores pra
+  // marcar ou desmarcar VIP. Usa upsert (on_conflict) porque o título
+  // pode ou não já ter uma linha em vip_titles. ──
+  if (action === 'set-vip-title') {
+    const { tmdb_id, media_type, vip_lock, vip_free_episode_limit } = body;
+    if (!tmdb_id || !media_type) { res.status(400).json({ error: 'Informe tmdb_id e media_type' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_titles?on_conflict=tmdb_id,media_type`, {
+      method: 'POST',
+      headers: { ...svcHeaders, 'Prefer': 'resolution=merge-duplicates,return=representation' },
+      body: JSON.stringify({
+        tmdb_id, media_type,
+        vip_lock: !!vip_lock,
+        vip_free_episode_limit: (!vip_lock && vip_free_episode_limit) ? vip_free_episode_limit : null,
+        updated_by: userId,
+      }),
+    });
+    const result = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao salvar config VIP', detail: result }); return; }
+    res.status(200).json({ saved: result });
     return;
   }
 
