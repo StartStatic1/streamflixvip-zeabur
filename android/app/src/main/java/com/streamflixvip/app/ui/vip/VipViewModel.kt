@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixvip.app.data.RedeemResult
 import com.streamflixvip.app.data.VipRepository
+import com.streamflixvip.app.data.VipStatusHolder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -41,6 +42,7 @@ class VipViewModel(
                 planLabel = status.planLabel,
                 isLoadingStatus = false,
             )
+            VipStatusHolder.update(status.isVip)
         }
     }
 
@@ -67,6 +69,7 @@ class VipViewModel(
                         redeemSuccess = true,
                         redeemCode = "",
                     )
+                    VipStatusHolder.update(true)
                 }
                 is RedeemResult.Failure -> {
                     _uiState.value = _uiState.value.copy(

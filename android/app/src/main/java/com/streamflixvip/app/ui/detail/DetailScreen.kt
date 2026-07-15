@@ -43,6 +43,7 @@ fun DetailScreen(
     viewModel: DetailViewModel,
     onPlaySource: (source: VipSource, season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
     onBack: () -> Unit,
+    onUpgradeClick: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -74,6 +75,7 @@ fun DetailScreen(
                 },
                 onToggleSeason = viewModel::expandSeason,
                 onDismissServerPicker = viewModel::closeServerPicker,
+                onUpgradeClick = onUpgradeClick,
             )
         }
     }
@@ -92,11 +94,13 @@ private fun DetailContent(
     onSelectEpisode: (season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
     onToggleSeason: (season: Int) -> Unit,
     onDismissServerPicker: () -> Unit,
+    onUpgradeClick: () -> Unit,
 ) {
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
     val posterPath = details.poster_path
     val backdropUrl = details.backdrop_path?.let { TMDB_BACKDROP_BASE + it }
+    val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
@@ -137,18 +141,28 @@ private fun DetailContent(
             item {
                 SourcesSection(
                     sources = state.movieSources,
+                    isLocked = state.movieIsLocked,
                     onPlaySource = { source -> onPlaySource(source, 0, 0, title, posterPath) },
+                    onUpgradeClick = onUpgradeClick,
                 )
             }
         } else {
             val seasons = details.seasons.orEmpty().filter { it.season_number > 0 } // ignora "specials" (temporada 0)
             item {
-                Text(
-                    "Temporadas",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text("Temporadas", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    // Aviso visível de quantos episódios são grátis, quando a
+                    // série tem limite parcial configurado — ajuda a pessoa a
+                    // entender o cadeado antes mesmo de esbarrar nele.
+                    if (!state.seriesVipLocked && state.freeEpisodeLimit != null && !isVip) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "Grátis até o episódio ${state.freeEpisodeLimit} — demais exigem VIP",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
             }
             items(seasons) { season ->
                 SeasonAccordion(
@@ -159,6 +173,7 @@ private fun DetailContent(
                     selectedSeason = state.selectedSeason,
                     selectedEpisode = state.selectedEpisode,
                     loadingEpisodeNumber = if (state.isLoadingEpisodeSources) state.selectedEpisode else null,
+                    isEpisodeLocked = { epNum -> state.episodeIsLocked(epNum, isVip) },
                     onToggle = { onToggleSeason(season.season_number) },
                     onSelectEpisode = { epNum -> onSelectEpisode(season.season_number, epNum, title, posterPath) },
                 )
@@ -216,6 +231,7 @@ private fun SeasonAccordion(
     selectedSeason: Int?,
     selectedEpisode: Int?,
     loadingEpisodeNumber: Int?,
+    isEpisodeLocked: (Int) -> Boolean,
     onToggle: () -> Unit,
     onSelectEpisode: (episode: Int) -> Unit,
 ) {
@@ -267,6 +283,7 @@ private fun SeasonAccordion(
                             episodeNumber = epNum,
                             isSelected = selectedSeason == season.season_number && selectedEpisode == epNum,
                             isLoading = selectedSeason == season.season_number && loadingEpisodeNumber == epNum,
+                            isLocked = isEpisodeLocked(epNum),
                             onClick = { onSelectEpisode(epNum) },
                         )
                     }
@@ -278,6 +295,7 @@ private fun SeasonAccordion(
                             episode = ep,
                             isSelected = selectedSeason == season.season_number && selectedEpisode == ep.episode_number,
                             isLoading = selectedSeason == season.season_number && loadingEpisodeNumber == ep.episode_number,
+                            isLocked = isEpisodeLocked(ep.episode_number),
                             onClick = { onSelectEpisode(ep.episode_number) },
                         )
                         Spacer(Modifier.height(10.dp))
@@ -301,6 +319,7 @@ private fun EpisodeCard(
     episode: TmdbEpisode,
     isSelected: Boolean,
     isLoading: Boolean,
+    isLocked: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
@@ -330,31 +349,64 @@ private fun EpisodeCard(
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            if (isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp,
-                    color = androidx.compose.ui.graphics.Color.White,
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Filled.PlayArrow,
-                    contentDescription = null,
-                    tint = if (isSelected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(28.dp),
-                )
+            when {
+                isLocked -> {
+                    // Camada escura + cadeado por cima da thumbnail — sinaliza
+                    // bloqueio já na miniatura, antes mesmo de tocar no episódio.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("🔒", fontSize = 20.sp)
+                    }
+                }
+                isLoading -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = androidx.compose.ui.graphics.Color.White,
+                    )
+                }
+                else -> {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
             }
         }
         Spacer(Modifier.width(10.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                "${episode.episode_number}. ${episode.displayName}",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${episode.episode_number}. ${episode.displayName}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (isLocked) {
+                    Spacer(Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    ) {
+                        Text(
+                            "VIP",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                        )
+                    }
+                }
+            }
             episode.displayRuntime?.let { runtime ->
                 Spacer(Modifier.height(2.dp))
                 Text(
@@ -383,6 +435,7 @@ private fun SimpleEpisodeRow(
     episodeNumber: Int,
     isSelected: Boolean,
     isLoading: Boolean,
+    isLocked: Boolean,
     onClick: () -> Unit,
 ) {
     Row(
@@ -393,13 +446,10 @@ private fun SimpleEpisodeRow(
             .padding(vertical = 10.dp, horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (isLoading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
-            )
-        } else {
-            Icon(
+        when {
+            isLocked -> Text("🔒", fontSize = 14.sp, modifier = Modifier.size(18.dp))
+            isLoading -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            else -> Icon(
                 imageVector = Icons.Filled.PlayArrow,
                 contentDescription = null,
                 tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -419,12 +469,16 @@ private fun SimpleEpisodeRow(
 @Composable
 private fun SourcesSection(
     sources: List<VipSource>,
+    isLocked: Boolean,
     onPlaySource: (VipSource) -> Unit,
+    onUpgradeClick: () -> Unit,
 ) {
     Column(Modifier.padding(16.dp)) {
         Text("Onde assistir", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        if (sources.isEmpty()) {
+        if (isLocked) {
+            VipLockCard(onUpgradeClick = onUpgradeClick)
+        } else if (sources.isEmpty()) {
             Text(
                 "Nenhuma fonte disponível ainda para este título.",
                 fontSize = 13.sp,
@@ -438,6 +492,46 @@ private fun SourcesSection(
             sources.forEachIndexed { index, source ->
                 SourceRow(source = source, isRecommended = index == 0, onClick = { onPlaySource(source) })
                 Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+/**
+ * Cartão de cadeado exibido no lugar da lista de fontes quando o
+ * título/episódio exige VIP. Usa a cor dourada do tema (primary), nunca
+ * vermelho — cadeado comunica "exclusivo", não "erro".
+ */
+@Composable
+private fun VipLockCard(onUpgradeClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("🔒", fontSize = 28.sp)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Conteúdo exclusivo VIP",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Assine o VIP para desbloquear este título e assistir sem espera.",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(14.dp))
+            Button(onClick = onUpgradeClick, modifier = Modifier.fillMaxWidth()) {
+                Text("Seja VIP agora")
             }
         }
     }

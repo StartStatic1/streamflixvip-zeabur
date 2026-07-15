@@ -75,4 +75,22 @@ class CatalogRepository {
             seasonFilter = PostgrestFilter.eq(season),
             episodeFilter = PostgrestFilter.eq(episode),
         )
+
+    /**
+     * Busca só a configuração VIP (vip_lock / vip_free_episode_limit) de
+     * uma série — como essa config é setada por TÍTULO no painel (todas
+     * as linhas de vip_sources daquele tmdb_id compartilham o mesmo
+     * valor), uma única linha qualquer já basta pra saber se a série tem
+     * algum bloqueio configurado. Usado pra decidir se mostra cadeado nos
+     * cards da lista ANTES do usuário escolher um episódio.
+     */
+    suspend fun getSeriesVipConfig(tmdbId: Int): com.streamflixvip.app.network.VipConfigOnly? =
+        try {
+            supabase.getAnySourceForSeries(
+                apiKey = anonKey,
+                tmdbIdFilter = PostgrestFilter.eq(tmdbId),
+            ).firstOrNull()
+        } catch (e: Exception) {
+            null
+        }
 }

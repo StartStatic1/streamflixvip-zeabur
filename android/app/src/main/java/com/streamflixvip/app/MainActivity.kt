@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +28,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.streamflixvip.app.data.AuthRepository
 import com.streamflixvip.app.data.SessionStore
+import com.streamflixvip.app.data.VipRepository
+import com.streamflixvip.app.data.VipStatusHolder
 import com.streamflixvip.app.ui.auth.AuthScreen
 import com.streamflixvip.app.ui.auth.AuthViewModel
 import com.streamflixvip.app.ui.detail.DetailScreen
@@ -35,6 +39,7 @@ import com.streamflixvip.app.ui.home.HomeViewModel
 import com.streamflixvip.app.ui.mylist.MyListScreen
 import com.streamflixvip.app.ui.nav.StreamFlixBottomBar
 import com.streamflixvip.app.ui.player.PlayerScreen
+import com.streamflixvip.app.ui.player.VipWaitScreen
 import com.streamflixvip.app.ui.profile.ProfileScreen
 import com.streamflixvip.app.ui.search.SearchScreen
 import com.streamflixvip.app.ui.theme.StreamFlixTheme
@@ -101,6 +106,18 @@ private fun MainAppScaffold(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute in listOf("home", "search", "mylist", "profile")
+
+    // Popula o status VIP em memória assim que o app abre logado — assim,
+    // MESMO que o usuário nunca visite a aba Perfil, a tela de Detalhes já
+    // sabe se ele é VIP a tempo de decidir mostrar cadeado ou não. Sem
+    // isso, requiresVip() ficaria preso em "não-VIP" até a primeira visita
+    // ao Perfil (comportamento seguro, mas indesejado pra quem já pagou).
+    LaunchedEffect(userId) {
+        if (userId != null) {
+            val status = VipRepository().getStatus(userId)
+            VipStatusHolder.update(status.isVip)
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -173,6 +190,14 @@ private fun MainAppScaffold(
                         )
                     },
                     onBack = { navController.popBackStack() },
+                    onUpgradeClick = {
+                        // Leva pra aba Perfil, onde a seção VIP (resgate de
+                        // código + benefícios) já está — evita duplicar essa
+                        // tela em dois lugares diferentes do app.
+                        navController.navigate("profile") {
+                            launchSingleTop = true
+                        }
+                    },
                 )
             }
 
@@ -203,19 +228,41 @@ private fun MainAppScaffold(
                     if (it == "none") null else it
                 }
                 val url = URLDecoder.decode(encodedUrl, "UTF-8")
-                PlayerScreen(
-                    sourceUrl = url,
-                    isDirectPlayable = isDirect,
-                    userId = userId,
-                    accessToken = accessToken,
-                    tmdbId = playerTmdbId,
-                    mediaType = playerMediaType,
-                    season = season,
-                    episode = episode,
-                    title = title,
-                    posterPath = posterPath,
-                    resumeSeconds = resumeSeconds,
-                )
+
+                // Fricção pra não-VIP: espera alguns segundos antes do player
+                // abrir de verdade, com CTA pra pular virando VIP — mesma
+                // ideia do Rewarded Interstitial que o site já usa no
+                // primeiro play. VIP nunca vê essa tela (waitDone já nasce
+                // true). Estado local (não navegação) porque é só uma
+                // barreira temporal antes do MESMO destino, não uma tela
+                // que a pessoa navega "de volta" pra ela.
+                val isVip by VipStatusHolder.isVip.collectAsState()
+                var waitDone by remember(entry.id) { mutableStateOf(isVip) }
+
+                if (!waitDone) {
+                    VipWaitScreen(
+                        title = title,
+                        posterPath = posterPath,
+                        onWaitFinished = { waitDone = true },
+                        onUpgradeClick = {
+                            navController.navigate("profile") { launchSingleTop = true }
+                        },
+                    )
+                } else {
+                    PlayerScreen(
+                        sourceUrl = url,
+                        isDirectPlayable = isDirect,
+                        userId = userId,
+                        accessToken = accessToken,
+                        tmdbId = playerTmdbId,
+                        mediaType = playerMediaType,
+                        season = season,
+                        episode = episode,
+                        title = title,
+                        posterPath = posterPath,
+                        resumeSeconds = resumeSeconds,
+                    )
+                }
             }
         }
     }

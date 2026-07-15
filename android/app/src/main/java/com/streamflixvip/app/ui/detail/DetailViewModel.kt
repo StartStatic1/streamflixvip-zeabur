@@ -3,9 +3,11 @@ package com.streamflixvip.app.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixvip.app.data.CatalogRepository
+import com.streamflixvip.app.data.VipStatusHolder
 import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbResponse
 import com.streamflixvip.app.network.VipSource
+import com.streamflixvip.app.network.requiresVip
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -21,6 +23,10 @@ sealed interface DetailUiState {
         // primeiro, então as fontes daquele episódio são buscadas sob
         // demanda quando o usuário seleciona um episódio na lista).
         val movieSources: List<VipSource> = emptyList(),
+        // Verdade se o FILME exige VIP e o usuário atual não é VIP —
+        // calculado a partir de movieSources + VipStatusHolder assim que
+        // as fontes chegam.
+        val movieIsLocked: Boolean = false,
         // Temporada atualmente "aberta" na UI (mostrando a lista de
         // episódios com thumbnail/sinopse). Diferente de selectedSeason,
         // que é qual episódio está escolhido pra assistir agora.
@@ -35,7 +41,22 @@ sealed interface DetailUiState {
         // seletor (bottom sheet) em vez de assistir direto — esse campo
         // guarda "pra qual episódio" o seletor deve abrir. Null = fechado.
         val showServerPickerForEpisode: Int? = null,
-    ) : DetailUiState
+        // Do painel: até qual episódio é liberado de graça nessa série
+        // (null = sem limite configurado). Usado pra decidir cadeado nos
+        // cards da lista de episódios ANTES do usuário escolher um.
+        val freeEpisodeLimit: Int? = null,
+        // Verdade se a série INTEIRA está marcada como vip_lock=true no
+        // painel (diferente de freeEpisodeLimit, que libera parcialmente).
+        val seriesVipLocked: Boolean = false,
+    ) : DetailUiState {
+        /** Decide se um episódio específico deve mostrar cadeado, sem precisar carregar suas fontes primeiro. */
+        fun episodeIsLocked(episodeNumber: Int, isVip: Boolean): Boolean {
+            if (isVip) return false
+            if (seriesVipLocked) return true
+            val limit = freeEpisodeLimit ?: return false
+            return episodeNumber > limit
+        }
+    }
 }
 
 class DetailViewModel(
@@ -71,12 +92,23 @@ class DetailViewModel(
                 } else {
                     emptyList()
                 }
+                // Pra série, busca a config VIP do título ANTES de qualquer
+                // episódio ser selecionado — é o que permite mostrar o
+                // cadeado direto nos cards da lista, sem esperar o usuário
+                // clicar em cada um pra descobrir se está bloqueado.
+                val seriesVipConfig = if (mediaType == "tv") repository.getSeriesVipConfig(tmdbId) else null
+
+                val isVipNow = VipStatusHolder.isVip.value
+                val movieIsLocked = mediaType == "movie" && !isVipNow && requiresVip(movieSources, episodeNumber = null)
 
                 _uiState.value = DetailUiState.Success(
                     details = details,
                     mediaType = mediaType,
                     tmdbId = tmdbId,
                     movieSources = movieSources,
+                    movieIsLocked = movieIsLocked,
+                    freeEpisodeLimit = movieSources.firstOrNull()?.vip_free_episode_limit ?: seriesVipConfig?.vip_free_episode_limit,
+                    seriesVipLocked = seriesVipConfig?.vip_lock == true,
                 )
 
                 if (mediaType == "tv") {
@@ -134,6 +166,11 @@ class DetailViewModel(
      */
     private fun preloadEpisodeSourcesSilently(season: Int, episode: Int) {
         val current = _uiState.value as? DetailUiState.Success ?: return
+        val isVipNow = VipStatusHolder.isVip.value
+        if (current.episodeIsLocked(episode, isVipNow)) {
+            _uiState.value = current.copy(selectedSeason = season, selectedEpisode = episode, episodeSources = emptyList())
+            return
+        }
         viewModelScope.launch {
             val sources = try {
                 repository.getSourcesForEpisode(tmdbId, season, episode)
@@ -167,6 +204,22 @@ class DetailViewModel(
      */
     fun loadEpisodeSources(season: Int, episode: Int, onAutoPlay: (VipSource) -> Unit) {
         val current = _uiState.value as? DetailUiState.Success ?: return
+        val isVipNow = VipStatusHolder.isVip.value
+
+        // Episódio bloqueado: nem busca fonte, nem toca nada — só marca
+        // como selecionado pra o card acender e a seção "Onde assistir"
+        // mostrar o cadeado + CTA de upgrade em vez da lista de servidores.
+        if (current.episodeIsLocked(episode, isVipNow)) {
+            _uiState.value = current.copy(
+                selectedSeason = season,
+                selectedEpisode = episode,
+                episodeSources = emptyList(),
+                isLoadingEpisodeSources = false,
+                showServerPickerForEpisode = null,
+            )
+            return
+        }
+
         _uiState.value = current.copy(
             selectedSeason = season,
             selectedEpisode = episode,
