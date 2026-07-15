@@ -65,13 +65,25 @@ class ProgressRepository {
         }
     }
 
+    /**
+     * Busca o progresso de todas as séries/filmes que a pessoa começou a
+     * assistir. A tabela guarda uma linha por episódio (ex: 3 episódios
+     * assistidos de "Origem" = 3 linhas), porque cada episódio precisa
+     * lembrar sua própria posição — mas a Home deve mostrar só 1 card por
+     * série, com o episódio mais recente. Por isso agrupamos aqui por
+     * (tmdb_id, media_type): a API já devolve ordenado por updated_at
+     * decrescente, então a primeira ocorrência de cada série na lista é
+     * automaticamente a mais recente.
+     */
     suspend fun getContinueWatching(accessToken: String, userId: String): List<WatchProgressEntry> =
         try {
-            api.getContinueWatching(
+            val allEntries = api.getContinueWatching(
                 apiKey = anonKey,
                 bearerToken = "Bearer $accessToken",
                 userIdFilter = PostgrestFilter.eq(userId),
             )
+            allEntries
+                .distinctBy { it.tmdb_id to it.media_type }
         } catch (_: Exception) {
             emptyList()
         }

@@ -290,6 +290,17 @@ private fun ContinueWatchingCard(
             maxLines = 1,
             modifier = Modifier.width(120.dp),
         )
+        // Só faz sentido pra série (filme não tem season/episode reais —
+        // chegam como 0 vindos do fluxo de filme). Ajuda a pessoa a saber
+        // exatamente onde vai continuar, sem precisar abrir os detalhes.
+        if (entry.media_type == "tv" && entry.season > 0) {
+            Text(
+                text = "T${entry.season}:E${entry.episode}",
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
     }
 }
 
