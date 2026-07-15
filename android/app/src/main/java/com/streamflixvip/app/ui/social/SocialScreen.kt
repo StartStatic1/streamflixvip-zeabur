@@ -1,4 +1,4 @@
-package com.streamflixvip.app.ui.mylist
+package com.streamflixvip.app.ui.social
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,34 +17,30 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Placeholder — persistência de lista (favoritos/continuar assistindo)
- * é uma feature própria com escopo próprio (precisa de tabela no
- * Supabase + sync entre dispositivos), fica pra uma rodada dedicada.
- * O ícone da barra (Bookmark) evita a confusão anterior de usar Star
- * aqui — Star já é a estrela de avaliação usada em outros lugares do
- * app (MetaChip com nota do TMDB), então a mesma forma nas duas telas
- * ficava ambígua.
+ * Placeholder da aba Social — existe pra a rota nunca ficar "solta" (era
+ * isso que causava o crash: BottomNavBar linkava pra "social", mas o
+ * NavHost não tinha esse composable registrado, então o NavController
+ * tentava navegar pra um destino inexistente e derrubava a Activity).
+ *
+ * Posts/comentários de verdade (como no print do CineVerse) exigem uma
+ * tabela nova no Supabase (ex: social_posts) — isso é decisão de escopo
+ * pra próxima rodada, não algo pra inventar aqui sem confirmar contigo.
  */
 @Composable
-fun MyListScreen() {
+fun SocialScreen() {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                Icons.Filled.Bookmark,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.height(40.dp),
-            )
+            Text("💬", fontSize = 40.sp)
             Spacer(Modifier.height(12.dp))
             Text(
-                "Sua lista aparecerá aqui",
+                "Social chega em breve",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Em breve: favoritos e continuar assistindo.",
+                "Posts e comentários da comunidade vão aparecer aqui.",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

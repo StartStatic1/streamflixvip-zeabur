@@ -1,6 +1,7 @@
 package com.streamflixvip.app.ui.detail
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -145,6 +147,18 @@ private fun DetailContent(
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
     var isFavorite by remember { mutableStateOf(false) }
 
+    // Fonte que o botão fixo "Assistir Agora" do header deve disparar.
+    // Filme: a fonte recomendada (primeira da lista, já ordenada por
+    // prioridade). Série: a primeira fonte do primeiro episódio da
+    // primeira temporada carregada — mesmo comportamento de "continuar de
+    // onde faz sentido" que os cards de episódio já oferecem, só que
+    // acessível sem precisar rolar até a lista de temporadas.
+    val heroWatchEnabled = if (state.mediaType == "movie") {
+        state.movieSources.isNotEmpty() && !state.movieIsLocked(isVip)
+    } else {
+        true // série sempre expande a primeira temporada ao tocar, mesmo sem fonte pré-carregada
+    }
+
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             DetailHeader(
@@ -157,6 +171,18 @@ private fun DetailContent(
                 runtimeLabel = details.displayRuntime,
                 isFavorite = isFavorite,
                 onToggleFavorite = { isFavorite = !isFavorite },
+                showWatchNowButton = heroWatchEnabled,
+                onWatchNowClick = {
+                    if (state.mediaType == "movie") {
+                        state.movieSources.firstOrNull()?.let { source -> onRequestWatch(source, 0, 0) }
+                    } else {
+                        val firstSeason = details.seasons.orEmpty().filter { it.season_number > 0 }.minByOrNull { it.season_number }
+                        firstSeason?.let { season ->
+                            if (state.expandedSeason != season.season_number) onToggleSeason(season.season_number)
+                            onSelectEpisode(season.season_number, 1, title, posterPath)
+                        }
+                    }
+                },
             )
         }
 
@@ -481,6 +507,8 @@ private fun DetailHeader(
     runtimeLabel: String?,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
+    showWatchNowButton: Boolean,
+    onWatchNowClick: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -488,12 +516,7 @@ private fun DetailHeader(
                 .fillMaxWidth()
                 .height(340.dp),
         ) {
-            AsyncImage(
-                model = backdropUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
+            LivingBackdrop(backdropUrl = backdropUrl)
             // Gradiente duplo: escurece o topo o suficiente pra status bar
             // não brigar com a imagem, e escurece a base pra que o poster
             // e o texto por cima fiquem sempre legíveis, não importa o
@@ -586,7 +609,93 @@ private fun DetailHeader(
                 runtimeLabel?.let { MetaChip(it) }
                 rating?.let { MetaChip("⭐ ${"%.1f".format(it)}") }
             }
+
+            // Botão grande e fixo logo abaixo do poster, no padrão do
+            // CineVerse (referência que o Teddy mandou print): em vez de
+            // precisar rolar até a seção de servidores lá embaixo, 1 toque
+            // aqui já dispara a fonte recomendada e abre o mesmo modal de
+            // "player interno vs externo" que a lista de servidores usa.
+            // Some (em vez de desabilitar) quando não há fonte disponível
+            // ainda, pra não prometer um play que vai falhar.
+            if (showWatchNowButton) {
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onWatchNowClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Assistir Agora", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
+    }
+}
+
+/**
+ * Backdrop "vivo": em vez da imagem estática parada, aplica um zoom+pan
+ * lento e contínuo (efeito Ken Burns) puxando o próprio AsyncImage, e um
+ * véu escuro por cima que pulsa bem sutilmente — dá a sensação de "cena em
+ * movimento ofuscada por trás" que a referência do CineVerse tem com vídeo
+ * de fundo de verdade, sem o custo de banda/decodificação de rodar um
+ * vídeo por card de detalhe (inviável com 188K+ títulos no catálogo).
+ * Puramente decorativo: nunca temos vídeo de preview real por título.
+ */
+@Composable
+private fun LivingBackdrop(backdropUrl: String?) {
+    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "backdrop")
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.12f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(durationMillis = 9000, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "backdropScale",
+    )
+    val offsetX by infiniteTransition.animateFloat(
+        initialValue = -14f,
+        targetValue = 14f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(durationMillis = 11000, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "backdropOffsetX",
+    )
+    val veilAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.30f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(durationMillis = 4000, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "backdropVeil",
+    )
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        AsyncImage(
+            model = backdropUrl,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offsetX
+                },
+            contentScale = ContentScale.Crop,
+        )
+        // Véu escuro pulsante — a "ofuscação" que faz a cena por trás
+        // parecer estar se movendo devagar, mesmo sendo uma imagem só.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = veilAlpha)),
+        )
     }
 }
 

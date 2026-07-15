@@ -1,11 +1,11 @@
 package com.streamflixvip.app.ui.nav
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -28,7 +28,7 @@ sealed class BottomNavItem(val route: String, val label: String, val icon: andro
     data object Home : BottomNavItem("home", "Início", Icons.Filled.Home)
     data object Search : BottomNavItem("search", "Buscar", Icons.Filled.Search)
     data object Social : BottomNavItem("social", "Social", Icons.Filled.Groups)
-    data object MyList : BottomNavItem("mylist", "Minha Lista", Icons.Filled.Star)
+    data object MyList : BottomNavItem("mylist", "Minha Lista", Icons.Filled.Bookmark)
     data object Profile : BottomNavItem("profile", "Perfil", Icons.Filled.Person)
 }
 

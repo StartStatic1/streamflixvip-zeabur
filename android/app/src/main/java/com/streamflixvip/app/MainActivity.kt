@@ -42,6 +42,7 @@ import com.streamflixvip.app.ui.player.PlayerScreen
 import com.streamflixvip.app.ui.player.VipWaitScreen
 import com.streamflixvip.app.ui.profile.ProfileScreen
 import com.streamflixvip.app.ui.search.SearchScreen
+import com.streamflixvip.app.ui.social.SocialScreen
 import com.streamflixvip.app.ui.theme.StreamFlixTheme
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -105,7 +106,7 @@ private fun MainAppScaffold(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute in listOf("home", "search", "mylist", "profile")
+    val showBottomBar = currentRoute in listOf("home", "search", "social", "mylist", "profile")
 
     // Popula o status VIP em memória assim que o app abre logado — assim,
     // MESMO que o usuário nunca visite a aba Perfil, a tela de Detalhes já
@@ -146,6 +147,10 @@ private fun MainAppScaffold(
 
             composable("search") {
                 SearchScreen(onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") })
+            }
+
+            composable("social") {
+                SocialScreen()
             }
 
             composable("mylist") {
