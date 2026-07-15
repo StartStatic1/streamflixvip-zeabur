@@ -354,6 +354,28 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  // ── VIP: busca a config de VÁRIOS títulos de uma vez — usada pela
+  // listagem do painel pra já mostrar o selo 🔒 correto em cada card
+  // assim que a página carrega/recarrega, sem precisar abrir o modal de
+  // cada título individualmente pra descobrir se está bloqueado. ──
+  if (action === 'get-vip-titles-batch') {
+    const { items } = body; // [{ tmdb_id, media_type }, ...]
+    if (!Array.isArray(items) || items.length === 0) { res.status(200).json({ configs: [] }); return; }
+    // PostgREST não tem "OR de pares" nativo simples via query string, então
+    // busca por todos os tmdb_ids envolvidos (in.()) e filtra o par exato
+    // (tmdb_id, media_type) do lado do Node — mais simples e rápido o
+    // suficiente pra até algumas centenas de itens por página.
+    const ids = [...new Set(items.map(i => i.tmdb_id))];
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/vip_titles?tmdb_id=in.(${ids.join(',')})&select=tmdb_id,media_type,vip_lock,vip_free_episode_limit`,
+      { headers: svcHeaders },
+    );
+    const rows = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao buscar configs VIP', detail: rows }); return; }
+    res.status(200).json({ configs: rows || [] });
+    return;
+  }
+
   // ── VIP: cria/atualiza a config de bloqueio do TÍTULO inteiro — 1 ÚNICA
   // linha por título, nunca precisa tocar nas fontes/servidores pra
   // marcar ou desmarcar VIP. Usa upsert (on_conflict) porque o título

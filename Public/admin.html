@@ -2442,6 +2442,41 @@
       : '';
 
     wrap.innerHTML = groupsHtml + moreHtml;
+    refreshVipPills();
+  }
+
+  /**
+   * Busca em lote a config VIP de todos os títulos visíveis na página
+   * atual e preenche o pill 🔒 de cada card — é o que faz o estado "Grátis
+   * até Ep5" / "VIP total" continuar aparecendo depois de recarregar a
+   * página (antes disso, o pill só nascia preenchido na hora que você
+   * salvava, e sumia de novo em qualquer reload por nunca ser buscado de
+   * volta do banco).
+   */
+  async function refreshVipPills() {
+    if (_sourcesGroups.length === 0) return;
+    const items = _sourcesGroups.map(g => ({ tmdb_id: g.tmdb_id, media_type: g.media_type }));
+    const result = await fetch('/api/admin-vip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_session?.access_token}` },
+      body: JSON.stringify({ action: 'get-vip-titles-batch', items })
+    }).then(r => r.json()).catch(e => ({ error: e.message }));
+
+    if (result.error || !result.configs) return;
+
+    result.configs.forEach(cfg => {
+      const key = cfg.media_type + ':' + cfg.tmdb_id;
+      const domId = 'group-' + key.replace(':', '-');
+      const pillEl = document.getElementById('vip-pill-' + domId);
+      const btnEl = document.querySelector(`[onclick*="openVipTitleModal(${cfg.tmdb_id}, '${cfg.media_type}'"]`);
+      if (!pillEl) return;
+      if (cfg.vip_lock) {
+        pillEl.innerHTML = `<span class="tg-pill vip-lock">🔒 VIP total</span>`;
+      } else if (cfg.vip_free_episode_limit) {
+        pillEl.innerHTML = `<span class="tg-pill vip-lock">🔒 Grátis até Ep${cfg.vip_free_episode_limit}</span>`;
+      }
+      if (btnEl) btnEl.classList.toggle('is-locked', !!cfg.vip_lock || !!cfg.vip_free_episode_limit);
+    });
   }
 
   function loadMoreSources() {
