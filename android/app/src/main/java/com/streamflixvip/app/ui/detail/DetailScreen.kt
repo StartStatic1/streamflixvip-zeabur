@@ -47,6 +47,7 @@ private const val TMDB_STILL_BASE = "https://image.tmdb.org/t/p/w300"
  * fontes daquele episódio específico (mesma lógica do site: cada
  * episódio tem suas próprias fontes cadastradas).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScreen(
     viewModel: DetailViewModel,
