@@ -18,6 +18,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,8 +61,8 @@ fun DetailScreen(
     // dentro de DetailContent, porque tanto o fluxo de fonte única
     // (abaixo, em onSelectEpisode) quanto o de múltiplas fontes (dentro
     // de DetailContent, no sheet de servidor) precisam preenchê-lo.
-    var pendingWatch by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf<PendingSource?>(null)
+    var pendingWatch by remember {
+        mutableStateOf<PendingSource?>(null)
     }
 
     when (val s = state) {
@@ -140,7 +143,7 @@ private fun DetailContent(
     val backdropUrl = details.backdrop_path?.let { TMDB_BACKDROP_BASE + it }
     val posterUrl = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
-    var isFavorite by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    var isFavorite by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize()) {
         item {
