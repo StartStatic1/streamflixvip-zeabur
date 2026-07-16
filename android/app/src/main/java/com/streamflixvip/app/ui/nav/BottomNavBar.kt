@@ -28,7 +28,12 @@ sealed class BottomNavItem(val route: String, val label: String, val icon: andro
     data object Home : BottomNavItem("home", "Início", Icons.Filled.Home)
     data object Search : BottomNavItem("search", "Buscar", Icons.Filled.Search)
     data object Social : BottomNavItem("social", "Social", Icons.Filled.Groups)
-    data object MyList : BottomNavItem("mylist", "Minha Lista", Icons.Filled.Bookmark)
+    // Label curto de propósito ("Lista", não "Minha Lista") — com 2
+    // palavras o texto quebra em 2 linhas nesse espaço estreito, o que
+    // empurra o ícone pra cima em relação aos vizinhos (cada item da
+    // NavigationBar centraliza ícone+label como bloco único, então um
+    // bloco mais alto desalinha visualmente todo o resto da barra).
+    data object MyList : BottomNavItem("mylist", "Lista", Icons.Filled.Bookmark)
     data object Profile : BottomNavItem("profile", "Perfil", Icons.Filled.Person)
 }
 

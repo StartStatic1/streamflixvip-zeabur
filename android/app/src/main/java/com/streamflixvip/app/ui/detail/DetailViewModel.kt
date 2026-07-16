@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.streamflixvip.app.data.CatalogRepository
 import com.streamflixvip.app.data.VipStatusHolder
 import com.streamflixvip.app.network.TmdbEpisode
+import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.TmdbResponse
 import com.streamflixvip.app.network.VipSource
 import com.streamflixvip.app.network.VipTitleConfig
@@ -43,6 +44,10 @@ sealed interface DetailUiState {
         // seletor (bottom sheet) em vez de assistir direto — esse campo
         // guarda "pra qual episódio" o seletor deve abrir. Null = fechado.
         val showServerPickerForEpisode: Int? = null,
+        // Fileira "Você também pode gostar" — preenchida depois dos dados
+        // principais, sem bloquear a tela por ela (ver loadSimilarTitles).
+        // Vazia por padrão: a seção só aparece quando há algo pra mostrar.
+        val similarTitles: List<TmdbItem> = emptyList(),
     ) : DetailUiState {
         /** Decide se o FILME deve mostrar cadeado em vez da lista de fontes. */
         fun movieIsLocked(isVip: Boolean): Boolean = !isVip && requiresVip(vipConfig, episodeNumber = null)
@@ -100,16 +105,16 @@ class DetailViewModel(
                 )
 
                 if (mediaType == "tv") {
-                    // Abre direto a temporada que a pessoa estava vendo (vindo de
-                    // "Continuar assistindo"), ou a primeira temporada da série —
-                    // assim a lista de episódios já aparece pronta ao entrar na
-                    // tela, sem exigir um toque extra pra "abrir a temporada 1".
-                    val seasons = details.seasons.orEmpty().filter { it.season_number > 0 }
-                    val seasonToOpen = if (initialSeason > 0) initialSeason else seasons.firstOrNull()?.season_number
-                    if (seasonToOpen != null) {
-                        expandSeason(seasonToOpen)
-                    }
+                    // Diferente de antes: NÃO abre a temporada 1 sozinha ao
+                    // entrar na tela. Lista de temporadas fica recolhida por
+                    // padrão (só os títulos "Temporada 1", "Temporada 2"...
+                    // visíveis), igual à referência do CineVerse — exige 1
+                    // toque pra expandir e ver os episódios. Exceção: vindo
+                    // de "Continuar assistindo", aí sim abre direto na
+                    // temporada/episódio que a pessoa já estava vendo,
+                    // porque nesse caso a intenção já é clara.
                     if (initialSeason > 0) {
+                        expandSeason(initialSeason)
                         // Aqui é só preparar a tela ao abrir vindo de "Continuar
                         // assistindo" — a pessoa não tocou em nada ainda, então
                         // não deve abrir sheet nem tocar nada sozinho. Por isso
@@ -117,6 +122,16 @@ class DetailViewModel(
                         // pela decisão de auto-play/sheet do loadEpisodeSources.
                         preloadEpisodeSourcesSilently(initialSeason, initialEpisode.coerceAtLeast(1))
                     }
+                }
+
+                // Similares carregam DEPOIS de já mostrar a tela principal —
+                // não faz sentido segurar sinopse/pôster/fontes esperando
+                // uma fileira secundária no rodapé. Falha ou demora aqui
+                // nunca deve impedir o resto da tela de aparecer.
+                launch {
+                    val similar = repository.getSimilarTitles(tmdbId, mediaType)
+                    val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+                    _uiState.value = stillCurrent.copy(similarTitles = similar)
                 }
             } catch (e: Exception) {
                 _uiState.value = DetailUiState.Error(e.message ?: "Erro ao carregar detalhes")

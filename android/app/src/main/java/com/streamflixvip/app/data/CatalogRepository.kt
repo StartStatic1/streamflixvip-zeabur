@@ -40,6 +40,21 @@ class CatalogRepository {
         tmdb.request(path = "/tv/$tmdbId")
 
     /**
+     * Títulos parecidos com o que está sendo exibido na tela de Detalhes
+     * — preenche a fileira "Você também pode gostar" no lugar do espaço
+     * vazio que sobrava embaixo da lista de fontes/episódios. Mesmo
+     * endpoint padrão da TMDB (/movie/{id}/similar ou /tv/{id}/similar),
+     * passando pelo mesmo proxy genérico que os outros métodos já usam.
+     * Falha silenciosa: sem similares, a seção inteira só não aparece.
+     */
+    suspend fun getSimilarTitles(tmdbId: Int, mediaType: String): List<TmdbItem> =
+        try {
+            tmdb.request(path = "/$mediaType/$tmdbId/similar").results.orEmpty()
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+    /**
      * Lista de episódios de UMA temporada, com título/sinopse/imagem/duração
      * de cada um — alimenta os cards de episódio na tela de Detalhes.
      * Falha silenciosa: se a TMDB não responder, a UI cai pra números

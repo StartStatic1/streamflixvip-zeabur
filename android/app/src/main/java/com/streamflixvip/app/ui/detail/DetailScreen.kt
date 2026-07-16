@@ -34,11 +34,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.TmdbEpisode
+import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.TmdbSeason
 import com.streamflixvip.app.network.VipSource
 
 private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 private const val TMDB_STILL_BASE = "https://image.tmdb.org/t/p/w300"
+private const val TMDB_POSTER_SMALL_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
  * Tela de Detalhes: backdrop, sinopse, gêneros — e a lista de fontes
@@ -54,6 +56,7 @@ fun DetailScreen(
     onPlaySource: (source: VipSource, season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
     onBack: () -> Unit,
     onUpgradeClick: () -> Unit,
+    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -115,6 +118,7 @@ fun DetailScreen(
                 onToggleSeason = viewModel::expandSeason,
                 onDismissServerPicker = viewModel::closeServerPicker,
                 onUpgradeClick = onUpgradeClick,
+                onOpenTitle = onOpenTitle,
             )
 
             if (showMovieServerPicker) {
@@ -183,6 +187,7 @@ private fun DetailContent(
     onToggleSeason: (season: Int) -> Unit,
     onDismissServerPicker: () -> Unit,
     onUpgradeClick: () -> Unit,
+    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
 ) {
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
@@ -285,6 +290,39 @@ private fun DetailContent(
                     onToggle = { onToggleSeason(season.season_number) },
                     onSelectEpisode = { epNum -> onSelectEpisode(season.season_number, epNum, title, posterPath) },
                 )
+            }
+        }
+
+        // "Você também pode gostar" — preenche o espaço que sobrava vazio
+        // embaixo da lista de fontes/episódios. Só aparece quando a busca
+        // (disparada em paralelo no ViewModel) já trouxe algo; enquanto
+        // isso a seção simplesmente não existe, sem placeholder de loading
+        // pra não chamar atenção pra uma parte secundária da tela.
+        if (state.similarTitles.isNotEmpty()) {
+            item {
+                Text(
+                    "Você também pode gostar",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 10.dp),
+                )
+            }
+            item {
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                ) {
+                    items(state.similarTitles) { similar ->
+                        // O endpoint /similar sempre retorna itens do MESMO
+                        // tipo do título de origem (filme→filmes, série→
+                        // séries) — não precisa resolver media_type aqui,
+                        // já sabemos que é state.mediaType.
+                        SimilarTitleCard(
+                            item = similar,
+                            onClick = { onOpenTitle(similar.id, state.mediaType) },
+                        )
+                    }
+                }
             }
         }
 
@@ -587,7 +625,7 @@ private fun DetailHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 140.dp)
+                .padding(top = 195.dp)
                 .padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -608,16 +646,20 @@ private fun DetailHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 90.dp),
+                .padding(top = 130.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // Poster reduzido (110dp, era 150dp) — no tamanho anterior ele
+            // ocupava quase 2/3 da altura do backdrop, competindo com a
+            // própria cena de fundo em vez de complementá-la. Agora fica
+            // mais discreto/decorativo, deixando o backdrop ser o elemento
+            // visual principal do header, como na referência do CineVerse.
             Box(
                 modifier = Modifier
-                    .width(150.dp)
+                    .width(110.dp)
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .then(Modifier),
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
                 AsyncImage(
                     model = posterUrl,
@@ -759,6 +801,55 @@ private fun CircleIconButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun SimilarTitleCard(item: TmdbItem, onClick: () -> Unit) {
+    val posterUrl = item.poster_path?.let { TMDB_POSTER_SMALL_BASE + it }
+
+    Column(
+        modifier = Modifier
+            .width(110.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            AsyncImage(
+                model = posterUrl,
+                contentDescription = item.displayTitle,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            item.displayRating?.let { rating ->
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.65f))
+                        .padding(horizontal = 6.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("⭐", fontSize = 9.sp)
+                    Spacer(Modifier.width(2.dp))
+                    Text(rating, fontSize = 10.sp, color = androidx.compose.ui.graphics.Color.White)
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            item.displayTitle,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }
 

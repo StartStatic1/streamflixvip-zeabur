@@ -203,6 +203,14 @@ private fun MainAppScaffold(
                             launchSingleTop = true
                         }
                     },
+                    onOpenTitle = { openTmdbId, openMediaType ->
+                        // Empilha uma nova tela de Detail por cima da atual —
+                        // ao tocar em "Voltar" no título similar, volta pro
+                        // título original, comportamento padrão de navegação
+                        // encadeada (mesmo que abrir de qualquer outro lugar
+                        // do app, tipo Home ou Buscar).
+                        navController.navigate("detail/$openTmdbId/$openMediaType")
+                    },
                 )
             }
 
