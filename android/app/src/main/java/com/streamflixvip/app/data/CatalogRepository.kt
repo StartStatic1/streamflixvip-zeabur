@@ -114,19 +114,49 @@ class CatalogRepository {
         }
 
     /**
-     * Títulos de um gênero específico, pra grade da aba Gêneros. mediaType
-     * decide o endpoint discover certo (filme e série têm listas de
-     * gênero diferentes na TMDB — ex: "Guerra e Política" só existe pro
-     * lado tv, "Faroeste" só pro lado movie). Sem número de contagem total
-     * por decisão explícita: contar exigiria 1 chamada de rede por gênero
-     * só pra mostrar um número, então a tela usa apenas nome + capas.
+     * Títulos de um gênero específico, pra grade da aba Gêneros e pra
+     * tela de listagem por gênero. category decide o filtro extra:
+     * - Tudo: só filtra por gênero, sem restringir idioma/tipo
+     * - Filmes/Séries: restringe mediaType (movie/tv)
+     * - Animes/Doramas: filtra por idioma original (ja/ko) — a TMDB não
+     *   tem um "tipo" de anime/dorama separado, então usar idioma
+     *   original é o jeito prático de aproximar esse filtro sem precisar
+     *   de uma tabela de curadoria manual.
+     * Sem número de contagem total por decisão explícita: contar
+     * exigiria 1 chamada de rede extra só pra mostrar um número.
      */
-    suspend fun getTitlesByGenre(genreId: Int, mediaType: String, page: Int = 1): List<TmdbItem> =
-        tmdb.request(path = "/discover/$mediaType", page = page, withGenres = genreId.toString()).results.orEmpty()
+    suspend fun getTitlesByGenre(genreId: Int, category: GenreCategory, page: Int = 1): List<TmdbItem> {
+        val mediaType = category.mediaTypeOrDefault
+        return tmdb.request(
+            path = "/discover/$mediaType",
+            page = page,
+            withGenres = genreId.toString(),
+            withOriginalLanguage = category.originalLanguage,
+        ).results.orEmpty()
+    }
 }
 
 /** Gênero fixo pra grade da aba Gêneros — nome + IDs oficiais da TMDB (iguais pra filme e série). */
 data class GenreDefinition(val id: Int, val displayName: String)
+
+/**
+ * Filtro de categoria da aba Gêneros (pills Tudo/Filmes/Séries/Animes/
+ * Doramas). A TMDB não modela "anime" ou "dorama" como tipo próprio —
+ * são aproximados via idioma original (japonês/coreano) sobre o
+ * catálogo de séries, que é o padrão mais comum usado por esse tipo de
+ * app de streaming.
+ */
+enum class GenreCategory(val label: String, val mediaType: String?, val originalLanguage: String?) {
+    ALL("Tudo", null, null),
+    MOVIES("Filmes", "movie", null),
+    SERIES("Séries", "tv", null),
+    ANIME("Animes", "tv", "ja"),
+    DORAMA("Doramas", "tv", "ko"),
+    ;
+
+    /** discover exige um mediaType válido mesmo pra "Tudo" — usa movie como padrão nesse caso. */
+    val mediaTypeOrDefault: String get() = mediaType ?: "movie"
+}
 
 /**
  * Lista fixa (sem chamada de rede) dos gêneros mais comuns — evita ter
@@ -134,19 +164,17 @@ data class GenreDefinition(val id: Int, val displayName: String)
  * IDs conferem com a documentação oficial da TMDB.
  */
 val TMDB_GENRES = listOf(
-    GenreDefinition(28, "Ação"),
-    GenreDefinition(12, "Aventura"),
-    GenreDefinition(16, "Animação"),
-    GenreDefinition(35, "Comédia"),
     GenreDefinition(80, "Crime"),
-    GenreDefinition(18, "Drama"),
-    GenreDefinition(10751, "Família"),
-    GenreDefinition(14, "Fantasia"),
     GenreDefinition(27, "Terror"),
-    GenreDefinition(9648, "Mistério"),
-    GenreDefinition(10749, "Romance"),
-    GenreDefinition(878, "Ficção Científica"),
+    GenreDefinition(18, "Drama"),
+    GenreDefinition(35, "Comédia"),
+    GenreDefinition(28, "Ação e Aventura"),
+    GenreDefinition(14, "Ficção e Fantasia"),
     GenreDefinition(53, "Suspense"),
-    GenreDefinition(10752, "Guerra"),
+    GenreDefinition(9648, "Mistério"),
+    GenreDefinition(10751, "Família"),
+    GenreDefinition(16, "Animação"),
+    GenreDefinition(10749, "Romance"),
+    GenreDefinition(10752, "Guerra e Política"),
     GenreDefinition(37, "Faroeste"),
 )

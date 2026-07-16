@@ -22,6 +22,7 @@ interface TmdbApi {
         @Query("query") query: String? = null,
         @Query("append_to_response") appendToResponse: String? = null,
         @Query("with_genres") withGenres: String? = null,
+        @Query("with_original_language") withOriginalLanguage: String? = null,
     ): TmdbResponse
 
     /**

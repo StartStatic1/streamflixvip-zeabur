@@ -155,18 +155,18 @@ private fun MainAppScaffold(
                 val viewModel: GenreViewModel = viewModel()
                 GenreScreen(
                     viewModel = viewModel,
-                    onGenreClick = { genreId, genreName, mediaType ->
+                    onGenreClick = { genreId, genreName, category ->
                         val encodedName = java.net.URLEncoder.encode(genreName, "UTF-8")
-                        navController.navigate("genre_detail/$genreId/$mediaType?name=$encodedName")
+                        navController.navigate("genre_detail/$genreId/${category.name}?name=$encodedName")
                     },
                 )
             }
 
             composable(
-                route = "genre_detail/{genreId}/{mediaType}?name={name}",
+                route = "genre_detail/{genreId}/{category}?name={name}",
                 arguments = listOf(
                     navArgument("genreId") { type = NavType.IntType },
-                    navArgument("mediaType") { type = NavType.StringType },
+                    navArgument("category") { type = NavType.StringType },
                     navArgument("name") { type = NavType.StringType; defaultValue = "" },
                 ),
             ) { backStackEntry ->
@@ -174,7 +174,9 @@ private fun MainAppScaffold(
                 GenreDetailScreen(
                     genreId = args.getInt("genreId"),
                     genreName = java.net.URLDecoder.decode(args.getString("name") ?: "", "UTF-8"),
-                    mediaType = args.getString("mediaType") ?: "movie",
+                    category = runCatching {
+                        com.streamflixvip.app.data.GenreCategory.valueOf(args.getString("category") ?: "ALL")
+                    }.getOrDefault(com.streamflixvip.app.data.GenreCategory.ALL),
                     onBack = { navController.popBackStack() },
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
                 )

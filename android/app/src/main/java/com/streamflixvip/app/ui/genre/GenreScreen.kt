@@ -1,13 +1,20 @@
 package com.streamflixvip.app.ui.genre
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -20,11 +27,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.streamflixvip.app.data.GenreCategory
 
 private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w185"
+private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 
 // Paleta de gradientes rotativa — cada card pega uma cor por posição,
 // só pra dar variedade visual (igual aos prints de referência), sem
@@ -41,24 +51,46 @@ private val GRADIENTS = listOf(
 @Composable
 fun GenreScreen(
     viewModel: GenreViewModel,
-    onGenreClick: (genreId: Int, genreName: String, mediaType: String) -> Unit,
+    onGenreClick: (genreId: Int, genreName: String, category: GenreCategory) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    when (val s = state) {
-        is GenreUiState.Loading -> {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+    Column(Modifier.fillMaxSize()) {
+        Text(
+            "Gêneros",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 16.dp, top = 16.dp, bottom = 12.dp),
+        )
+
+        // Pills de filtro — sempre visíveis mesmo durante o carregamento,
+        // pra pessoa poder trocar de categoria sem esperar a primeira
+        // busca terminar.
+        val currentCategory = (state as? GenreUiState.Success)?.category ?: GenreCategory.ALL
+        Row(
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            GenreCategory.entries.forEach { category ->
+                CategoryPill(
+                    label = category.label,
+                    selected = category == currentCategory,
+                    onClick = { viewModel.selectCategory(category) },
+                )
             }
         }
-        is GenreUiState.Success -> {
-            Column(Modifier.fillMaxSize()) {
-                Text(
-                    "Gêneros",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                )
+
+        Spacer(Modifier.height(14.dp))
+
+        when (val s = state) {
+            is GenreUiState.Loading -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+            is GenreUiState.Success -> {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
@@ -66,15 +98,100 @@ fun GenreScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.weight(1f),
                 ) {
+                    // Banner de destaque ocupa a largura inteira (2 colunas).
+                    if (s.featured != null) {
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                            FeaturedGenreBanner(
+                                featured = s.featured,
+                                onExploreClick = {
+                                    onGenreClick(s.featured.genre.id, s.featured.genre.displayName, s.category)
+                                },
+                            )
+                        }
+                        item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+                            Text(
+                                "Todos os gêneros",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+                            )
+                        }
+                    }
                     items(s.cards, key = { it.genre.id }) { card ->
                         val index = s.cards.indexOf(card)
                         GenreCardView(
                             card = card,
                             gradient = GRADIENTS[index % GRADIENTS.size],
-                            onClick = { onGenreClick(card.genre.id, card.genre.displayName, card.mediaType) },
+                            onClick = { onGenreClick(card.genre.id, card.genre.displayName, s.category) },
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 10.dp),
+    ) {
+        Text(
+            label,
+            color = if (selected) Color.Black else MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        )
+    }
+}
+
+/** Banner grande de "destaque do dia" — troca de gênero a cada mudança de filtro, igual ao app de referência. */
+@Composable
+private fun FeaturedGenreBanner(featured: FeaturedGenre, onExploreClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1.6f)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        if (featured.backdropPath != null) {
+            AsyncImage(
+                model = TMDB_BACKDROP_BASE + featured.backdropPath,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        // Escurece a base da imagem pra legenda ficar legível por cima,
+        // sem depender de a imagem em si já ter contraste suficiente.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))),
+        )
+        Column(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+            Text(
+                "DESTAQUE DE HOJE",
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                featured.genre.displayName,
+                color = Color.White,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onExploreClick,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            ) {
+                Text("Explorar ${featured.genre.displayName}", color = Color.Black, fontWeight = FontWeight.Bold)
             }
         }
     }
