@@ -42,7 +42,9 @@ import com.streamflixvip.app.ui.player.PlayerScreen
 import com.streamflixvip.app.ui.player.VipWaitScreen
 import com.streamflixvip.app.ui.profile.ProfileScreen
 import com.streamflixvip.app.ui.search.SearchScreen
-import com.streamflixvip.app.ui.social.SocialScreen
+import com.streamflixvip.app.ui.genre.GenreDetailScreen
+import com.streamflixvip.app.ui.genre.GenreScreen
+import com.streamflixvip.app.ui.genre.GenreViewModel
 import com.streamflixvip.app.ui.theme.StreamFlixTheme
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -106,7 +108,7 @@ private fun MainAppScaffold(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute in listOf("home", "search", "social", "mylist", "profile")
+    val showBottomBar = currentRoute in listOf("home", "search", "genres", "mylist", "profile")
 
     // Popula o status VIP em memória assim que o app abre logado — assim,
     // MESMO que o usuário nunca visite a aba Perfil, a tela de Detalhes já
@@ -149,8 +151,33 @@ private fun MainAppScaffold(
                 SearchScreen(onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") })
             }
 
-            composable("social") {
-                SocialScreen()
+            composable("genres") {
+                val viewModel: GenreViewModel = viewModel()
+                GenreScreen(
+                    viewModel = viewModel,
+                    onGenreClick = { genreId, genreName, mediaType ->
+                        val encodedName = java.net.URLEncoder.encode(genreName, "UTF-8")
+                        navController.navigate("genre_detail/$genreId/$mediaType?name=$encodedName")
+                    },
+                )
+            }
+
+            composable(
+                route = "genre_detail/{genreId}/{mediaType}?name={name}",
+                arguments = listOf(
+                    navArgument("genreId") { type = NavType.IntType },
+                    navArgument("mediaType") { type = NavType.StringType },
+                    navArgument("name") { type = NavType.StringType; defaultValue = "" },
+                ),
+            ) { backStackEntry ->
+                val args = backStackEntry.arguments!!
+                GenreDetailScreen(
+                    genreId = args.getInt("genreId"),
+                    genreName = java.net.URLDecoder.decode(args.getString("name") ?: "", "UTF-8"),
+                    mediaType = args.getString("mediaType") ?: "movie",
+                    onBack = { navController.popBackStack() },
+                    onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
+                )
             }
 
             composable("mylist") {

@@ -21,6 +21,7 @@ interface TmdbApi {
         @Query("page") page: Int? = null,
         @Query("query") query: String? = null,
         @Query("append_to_response") appendToResponse: String? = null,
+        @Query("with_genres") withGenres: String? = null,
     ): TmdbResponse
 
     /**

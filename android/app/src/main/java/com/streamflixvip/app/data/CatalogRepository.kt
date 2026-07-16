@@ -102,14 +102,40 @@ class CatalogRepository {
      * específico. Retorna null se o título nunca foi marcado (= sem
      * bloqueio nenhum, comportamento padrão pra todo título novo).
      */
-    suspend fun getVipTitleConfig(tmdbId: Int, mediaType: String): com.streamflixvip.app.network.VipTitleConfig? =
-        try {
-            supabase.getVipTitleConfig(
-                apiKey = anonKey,
-                tmdbIdFilter = PostgrestFilter.eq(tmdbId),
-                mediaTypeFilter = PostgrestFilter.eq(mediaType),
-            ).firstOrNull()
-        } catch (e: Exception) {
-            null
-        }
+    /**
+     * Títulos de um gênero específico, pra grade da aba Gêneros. mediaType
+     * decide o endpoint discover certo (filme e série têm listas de
+     * gênero diferentes na TMDB — ex: "Guerra e Política" só existe pro
+     * lado tv, "Faroeste" só pro lado movie). Sem número de contagem total
+     * por decisão explícita: contar exigiria 1 chamada de rede por gênero
+     * só pra mostrar um número, então a tela usa apenas nome + capas.
+     */
+    suspend fun getTitlesByGenre(genreId: Int, mediaType: String, page: Int = 1): List<TmdbItem> =
+        tmdb.request(path = "/discover/$mediaType", page = page, withGenres = genreId.toString()).results.orEmpty()
 }
+
+/** Gênero fixo pra grade da aba Gêneros — nome + IDs oficiais da TMDB (iguais pra filme e série). */
+data class GenreDefinition(val id: Int, val displayName: String)
+
+/**
+ * Lista fixa (sem chamada de rede) dos gêneros mais comuns — evita ter
+ * que buscar /genre/movie/list e /genre/tv/list toda vez que a aba abre.
+ * IDs conferem com a documentação oficial da TMDB.
+ */
+val TMDB_GENRES = listOf(
+    GenreDefinition(28, "Ação"),
+    GenreDefinition(12, "Aventura"),
+    GenreDefinition(16, "Animação"),
+    GenreDefinition(35, "Comédia"),
+    GenreDefinition(80, "Crime"),
+    GenreDefinition(18, "Drama"),
+    GenreDefinition(10751, "Família"),
+    GenreDefinition(14, "Fantasia"),
+    GenreDefinition(27, "Terror"),
+    GenreDefinition(9648, "Mistério"),
+    GenreDefinition(10749, "Romance"),
+    GenreDefinition(878, "Ficção Científica"),
+    GenreDefinition(53, "Suspense"),
+    GenreDefinition(10752, "Guerra"),
+    GenreDefinition(37, "Faroeste"),
+)

@@ -81,6 +81,15 @@ object NetworkModule {
             .create(CommentsApi::class.java)
     }
 
+    val favoritesApi: FavoritesApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.SUPABASE_URL + "/")
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(FavoritesApi::class.java)
+    }
+
     val supabaseAuthApi: SupabaseAuthApi by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.SUPABASE_URL + "/")

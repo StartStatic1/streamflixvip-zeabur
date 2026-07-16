@@ -204,6 +204,86 @@ data class WatchProgressEntry(
 }
 
 /**
+ * Endpoints da "Minha Lista" (favoritos), tabela favorites. Mesmo padrão
+ * de watch_progress: RLS por auth.uid() = user_id, exige o JWT do
+ * usuário logado no header Authorization além da anon key.
+ *
+ * Requer criar a tabela no Supabase (SQL sugerido):
+ *
+ *   create table favorites (
+ *     user_id uuid not null references auth.users(id),
+ *     tmdb_id integer not null,
+ *     media_type text not null,
+ *     title text,
+ *     poster_path text,
+ *     created_at timestamptz not null default now(),
+ *     primary key (user_id, tmdb_id, media_type)
+ *   );
+ *   alter table favorites enable row level security;
+ *   create policy "favorites_select_own" on favorites for select
+ *     using (auth.uid() = user_id);
+ *   create policy "favorites_insert_own" on favorites for insert
+ *     with check (auth.uid() = user_id);
+ *   create policy "favorites_delete_own" on favorites for delete
+ *     using (auth.uid() = user_id);
+ */
+interface FavoritesApi {
+
+    @retrofit2.http.Headers("Content-Type: application/json", "Prefer: resolution=merge-duplicates,return=minimal")
+    @POST("rest/v1/favorites")
+    suspend fun addFavorite(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("on_conflict") onConflict: String = "user_id,tmdb_id,media_type",
+        @retrofit2.http.Body body: FavoriteUpsert,
+    )
+
+    @GET("rest/v1/favorites")
+    suspend fun getFavorites(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("order") order: String = "created_at.desc",
+        @Query("limit") limit: Int = 100,
+    ): List<FavoriteEntry>
+
+    @GET("rest/v1/favorites")
+    suspend fun getFavoriteByTitle(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
+    ): List<FavoriteEntry>
+
+    @retrofit2.http.DELETE("rest/v1/favorites")
+    suspend fun removeFavorite(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
+    )
+}
+
+data class FavoriteUpsert(
+    val user_id: String,
+    val tmdb_id: Int,
+    val media_type: String,
+    val title: String?,
+    val poster_path: String?,
+)
+
+data class FavoriteEntry(
+    val tmdb_id: Int,
+    val media_type: String,
+    val title: String?,
+    val poster_path: String?,
+) {
+    val displayTitle: String get() = title ?: "Sem título"
+}
+
+/**
  * Comentários por título (tabela title_comments) — mesma tabela que a
  * futura aba Social vai reaproveitar pra listar posts/atividade recente
  * em vez de duplicar uma tabela nova quando essa feature for construída.
