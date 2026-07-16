@@ -31,13 +31,17 @@ class CatalogRepository {
     suspend fun getNowPlayingMovies(page: Int = 1): List<TmdbItem> =
         tmdb.request(path = "/movie/now_playing", page = page).results.orEmpty()
 
-    /** Detalhes completos de um filme (sinopse, gêneros, nota, etc). */
+    /**
+     * Detalhes completos de um filme (sinopse, gêneros, nota, etc), já
+     * incluindo os vídeos (trailer/teaser do YouTube) na mesma chamada —
+     * append_to_response evita uma segunda requisição só pro trailer.
+     */
     suspend fun getMovieDetails(tmdbId: Int) =
-        tmdb.request(path = "/movie/$tmdbId")
+        tmdb.request(path = "/movie/$tmdbId", appendToResponse = "videos")
 
-    /** Detalhes completos de uma série, incluindo lista de temporadas. */
+    /** Detalhes completos de uma série, incluindo lista de temporadas e vídeos. */
     suspend fun getSeriesDetails(tmdbId: Int) =
-        tmdb.request(path = "/tv/$tmdbId")
+        tmdb.request(path = "/tv/$tmdbId", appendToResponse = "videos")
 
     /**
      * Títulos parecidos com o que está sendo exibido na tela de Detalhes

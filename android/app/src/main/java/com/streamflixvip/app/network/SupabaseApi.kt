@@ -202,3 +202,50 @@ data class WatchProgressEntry(
 
     val displayTitle: String get() = title ?: "Sem título"
 }
+
+/**
+ * Comentários por título (tabela title_comments) — mesma tabela que a
+ * futura aba Social vai reaproveitar pra listar posts/atividade recente
+ * em vez de duplicar uma tabela nova quando essa feature for construída.
+ * Leitura é pública (qualquer um vê os comentários de um título), mas
+ * postar exige o JWT do usuário logado, igual watch_progress.
+ */
+interface CommentsApi {
+
+    @GET("rest/v1/title_comments")
+    suspend fun getComments(
+        @Header("apikey") apiKey: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
+        @Query("select") select: String = "id,user_display_name,is_vip_author,comment_text,created_at",
+        @Query("order") order: String = "created_at.desc",
+        @Query("limit") limit: Int = 100,
+    ): List<TitleComment>
+
+    @retrofit2.http.Headers("Content-Type: application/json", "Prefer: return=minimal")
+    @POST("rest/v1/title_comments")
+    suspend fun postComment(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @retrofit2.http.Body body: TitleCommentInsert,
+    )
+}
+
+data class TitleComment(
+    val id: Long,
+    val user_display_name: String?,
+    val is_vip_author: Boolean = false,
+    val comment_text: String,
+    val created_at: String,
+) {
+    val displayAuthor: String get() = user_display_name?.takeIf { it.isNotBlank() } ?: "Usuário"
+}
+
+data class TitleCommentInsert(
+    val tmdb_id: Int,
+    val media_type: String,
+    val user_id: String,
+    val user_display_name: String?,
+    val is_vip_author: Boolean,
+    val comment_text: String,
+)

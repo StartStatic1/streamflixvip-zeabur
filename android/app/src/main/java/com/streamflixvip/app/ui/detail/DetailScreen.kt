@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbItem
@@ -115,10 +117,16 @@ fun DetailScreen(
                         else -> showMovieServerPicker = true
                     }
                 },
-                onToggleSeason = viewModel::expandSeason,
                 onDismissServerPicker = viewModel::closeServerPicker,
                 onUpgradeClick = onUpgradeClick,
                 onOpenTitle = onOpenTitle,
+                onBack = onBack,
+                onToggleSeasonPicker = viewModel::toggleSeasonPicker,
+                onPickSeason = viewModel::selectSeasonFromPicker,
+                onToggleEpisodeExpanded = viewModel::toggleEpisodeExpanded,
+                onOpenComments = viewModel::openComments,
+                onDismissComments = viewModel::closeComments,
+                onPostComment = { text, onResult -> viewModel.postComment(text, isVip = com.streamflixvip.app.data.VipStatusHolder.isVip.value, onResult = onResult) },
             )
 
             if (showMovieServerPicker) {
@@ -184,10 +192,16 @@ private fun DetailContent(
     onRequestWatch: (source: VipSource, season: Int, episode: Int) -> Unit,
     onSelectEpisode: (season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
     onWatchMovieNow: () -> Unit,
-    onToggleSeason: (season: Int) -> Unit,
     onDismissServerPicker: () -> Unit,
     onUpgradeClick: () -> Unit,
     onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
+    onBack: () -> Unit,
+    onToggleSeasonPicker: () -> Unit,
+    onPickSeason: (season: Int) -> Unit,
+    onToggleEpisodeExpanded: (episode: Int) -> Unit,
+    onOpenComments: () -> Unit,
+    onDismissComments: () -> Unit,
+    onPostComment: (text: String, onResult: (Boolean) -> Unit) -> Unit,
 ) {
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
@@ -196,6 +210,7 @@ private fun DetailContent(
     val posterUrl = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
     var isFavorite by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // Botão fixo "Assistir Agora" no header: só existe pra FILME. Série
     // não tem esse botão — o padrão de referência (CineVerse) não usa
@@ -222,6 +237,25 @@ private fun DetailContent(
                 onToggleFavorite = { isFavorite = !isFavorite },
                 showWatchNowButton = heroWatchEnabled,
                 onWatchNowClick = onWatchMovieNow,
+                onBack = onBack,
+                trailerKey = state.trailerKey,
+                onTrailerClick = trailerClick@{
+                    // Deixa o Android decidir: abre no app do YouTube se
+                    // estiver instalado, senão cai pro navegador — mesmo
+                    // princípio de "não escolher por conta própria" que
+                    // openInExternalPlayer já usa pro player externo.
+                    val key = state.trailerKey ?: return@trailerClick
+                    try {
+                        val intent = android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://www.youtube.com/watch?v=$key"),
+                        )
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        // Sem app capaz de abrir (situação rara) — falha
+                        // silenciosa, sem travar a tela por causa do trailer.
+                    }
+                },
             )
         }
 
@@ -257,8 +291,13 @@ private fun DetailContent(
                     )
                 }
             }
+            item {
+                CommentsEntryButton(onClick = onOpenComments, modifier = Modifier.padding(16.dp))
+            }
         } else {
             val seasons = details.seasons.orEmpty().filter { it.season_number > 0 } // ignora "specials" (temporada 0)
+            val currentSeason = seasons.firstOrNull { it.season_number == state.expandedSeason }
+
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text("Temporadas", fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -277,19 +316,69 @@ private fun DetailContent(
                     }
                 }
             }
-            items(seasons) { season ->
-                SeasonAccordion(
-                    season = season,
-                    isExpanded = state.expandedSeason == season.season_number,
-                    episodes = if (state.expandedSeason == season.season_number) state.episodesOfExpandedSeason else emptyList(),
-                    isLoadingEpisodes = state.isLoadingEpisodes && state.expandedSeason == season.season_number,
-                    selectedSeason = state.selectedSeason,
-                    selectedEpisode = state.selectedEpisode,
-                    loadingEpisodeNumber = if (state.isLoadingEpisodeSources) state.selectedEpisode else null,
-                    isEpisodeLocked = { epNum -> state.episodeIsLocked(epNum, isVip) },
-                    onToggle = { onToggleSeason(season.season_number) },
-                    onSelectEpisode = { epNum -> onSelectEpisode(season.season_number, epNum, title, posterPath) },
-                )
+
+            // Dropdown "Temporada N ▾" no lugar da lista solta de
+            // "Temporada 1 / Temporada 2 / Temporada 3..." empilhada —
+            // igual à referência do CineVerse: 1 seletor compacto que abre
+            // um menu flutuante com as opções, com a atual marcada. Só
+            // aparece se a série realmente tem mais de uma temporada
+            // (com 1 temporada só, o seletor seria clique morto).
+            item {
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    SeasonPickerHeader(
+                        currentSeason = currentSeason,
+                        allSeasons = seasons,
+                        showPicker = state.showSeasonPicker,
+                        onToggle = onToggleSeasonPicker,
+                        onPickSeason = onPickSeason,
+                    )
+                }
+            }
+
+            if (state.isLoadingEpisodes) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                    }
+                }
+            } else if (state.episodesOfExpandedSeason.isNotEmpty()) {
+                items(state.episodesOfExpandedSeason) { ep ->
+                    Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        CineverseEpisodeRow(
+                            episode = ep,
+                            isExpanded = state.expandedEpisodeNumber == ep.episode_number,
+                            isSelected = state.selectedSeason == state.expandedSeason && state.selectedEpisode == ep.episode_number,
+                            isLoading = state.isLoadingEpisodeSources && state.selectedSeason == state.expandedSeason && state.selectedEpisode == ep.episode_number,
+                            isLocked = state.episodeIsLocked(ep.episode_number, isVip),
+                            onToggleExpand = { onToggleEpisodeExpanded(ep.episode_number) },
+                            onPlay = { onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) },
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                }
+            } else if (currentSeason != null) {
+                // Fallback: TMDB não trouxe detalhe da temporada — ainda dá
+                // pra escolher por número, melhor que travar a tela.
+                item {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        (1..currentSeason.episode_count).forEach { epNum ->
+                            SimpleEpisodeRow(
+                                episodeNumber = epNum,
+                                isSelected = state.selectedSeason == state.expandedSeason && state.selectedEpisode == epNum,
+                                isLoading = state.isLoadingEpisodeSources && state.selectedSeason == state.expandedSeason && state.selectedEpisode == epNum,
+                                isLocked = state.episodeIsLocked(epNum, isVip),
+                                onClick = { onSelectEpisode(state.expandedSeason ?: 1, epNum, title, posterPath) },
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Comentários: mesma posição que o CineVerse usa (logo depois
+            // da lista de episódios) — funciona igual pra filme e série,
+            // então também aparece no bloco de filme, um pouco mais acima.
+            item {
+                CommentsEntryButton(onClick = onOpenComments, modifier = Modifier.padding(16.dp))
             }
         }
 
@@ -361,85 +450,112 @@ private fun DetailContent(
             }
         }
     }
+
+    if (state.showComments) {
+        CommentsModal(
+            comments = state.comments,
+            isLoading = state.isLoadingComments,
+            isPosting = state.isPostingComment,
+            isVip = isVip,
+            canPost = state.canPostComments,
+            onDismiss = onDismissComments,
+            onPost = onPostComment,
+        )
+    }
 }
 
+/**
+ * Seletor de temporada compacto — "Temporada N ▾" que abre um menu
+ * flutuante com todas as temporadas, a atual marcada com check. Substitui
+ * a lista antiga de "Temporada 1 / Temporada 2 / Temporada 3..." solta na
+ * tela (que ficava grande demais em séries com muitas temporadas) pelo
+ * mesmo padrão compacto do CineVerse.
+ */
 @Composable
-private fun SeasonAccordion(
-    season: TmdbSeason,
-    isExpanded: Boolean,
-    episodes: List<TmdbEpisode>,
-    isLoadingEpisodes: Boolean,
-    selectedSeason: Int?,
-    selectedEpisode: Int?,
-    loadingEpisodeNumber: Int?,
-    isEpisodeLocked: (Int) -> Boolean,
+private fun SeasonPickerHeader(
+    currentSeason: TmdbSeason?,
+    allSeasons: List<TmdbSeason>,
+    showPicker: Boolean,
     onToggle: () -> Unit,
-    onSelectEpisode: (episode: Int) -> Unit,
+    onPickSeason: (season: Int) -> Unit,
 ) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .animateContentSize() // anima a expansão/recolhimento em vez de "saltar" de tamanho
-    ) {
-        // Cabeçalho da temporada: nome + contagem de episódios + seta indicando estado.
+    Box {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .clickable(onClick = onToggle)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
-                Text(season.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    "${season.episode_count} episódios",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    currentSeason?.name ?: "Temporada",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
             Icon(
-                imageVector = if (isExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (isExpanded) "Recolher temporada" else "Expandir temporada",
+                imageVector = if (showPicker) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (showPicker) "Fechar seleção de temporada" else "Escolher temporada",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
-        if (isExpanded) {
-            if (isLoadingEpisodes) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center,
+        // Menu flutuante ancorado embaixo do seletor — mesmo padrão visual
+        // do print de referência (fundo escuro sólido, temporada atual
+        // destacada em vermelho/laranja com check à direita).
+        if (showPicker) {
+            Popup(
+                alignment = Alignment.TopStart,
+                offset = androidx.compose.ui.unit.IntOffset(0, 130),
+                onDismissRequest = onToggle,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = androidx.compose.ui.graphics.Color(0xFF1C1C1E),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier.width(220.dp),
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
-                }
-            } else if (episodes.isEmpty()) {
-                // Fallback: se a TMDB não trouxe detalhe da temporada, ainda dá pra
-                // escolher o episódio por número — melhor que travar a tela.
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    (1..season.episode_count).forEach { epNum ->
-                        SimpleEpisodeRow(
-                            episodeNumber = epNum,
-                            isSelected = selectedSeason == season.season_number && selectedEpisode == epNum,
-                            isLoading = selectedSeason == season.season_number && loadingEpisodeNumber == epNum,
-                            isLocked = isEpisodeLocked(epNum),
-                            onClick = { onSelectEpisode(epNum) },
-                        )
-                    }
-                }
-            } else {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    episodes.forEach { ep ->
-                        EpisodeCard(
-                            episode = ep,
-                            isSelected = selectedSeason == season.season_number && selectedEpisode == ep.episode_number,
-                            isLoading = selectedSeason == season.season_number && loadingEpisodeNumber == ep.episode_number,
-                            isLocked = isEpisodeLocked(ep.episode_number),
-                            onClick = { onSelectEpisode(ep.episode_number) },
-                        )
-                        Spacer(Modifier.height(10.dp))
+                    Column {
+                        allSeasons.forEach { season ->
+                            val isCurrent = season.season_number == currentSeason?.season_number
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPickSeason(season.season_number) }
+                                    .background(if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else androidx.compose.ui.graphics.Color.Transparent)
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column {
+                                    Text(
+                                        season.name,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        "${season.episode_count} episódios",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (isCurrent) {
+                                    Text("✓", color = MaterialTheme.colorScheme.primary, fontSize = 16.sp)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -448,81 +564,56 @@ private fun SeasonAccordion(
 }
 
 /**
- * Card de episódio no padrão dos grandes apps de streaming: thumbnail 16:9,
- * número + título, duração, e sinopse resumida em 2 linhas. Um toque já
- * busca as fontes e decide sozinho — toca direto se só houver 1 servidor,
- * ou abre o seletor se houver mais de um (ver DetailViewModel). O ícone
- * de play deixa de ser decorativo: enquanto busca, vira um spinner, dando
- * feedback real de "algo está acontecendo" pro toque que a pessoa deu.
+ * Linha de episódio estilo CineVerse: quando RECOLHIDA, é compacta (play
+ * + nome + tag SxEy + seta) — quando o usuário toca na seta, expande pra
+ * mostrar thumbnail 16:9 + sinopse completa por baixo, mantendo os outros
+ * episódios da lista compactos. Diferente do EpisodeCard antigo (que
+ * sempre mostrava thumbnail+sinopse de uma vez para TODOS os episódios da
+ * temporada, ocupando a tela inteira de rolagem).
  */
 @Composable
-private fun EpisodeCard(
+private fun CineverseEpisodeRow(
     episode: TmdbEpisode,
+    isExpanded: Boolean,
     isSelected: Boolean,
     isLoading: Boolean,
     isLocked: Boolean,
-    onClick: () -> Unit,
+    onToggleExpand: () -> Unit,
+    onPlay: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-            )
-            .clickable(onClick = onClick)
-            .padding(8.dp),
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .animateContentSize(),
     ) {
-        Box(
-            modifier = Modifier
-                .width(120.dp)
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center,
+        // Linha compacta: sempre visível, é o que a lista mostra por padrão.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (episode.still_path != null) {
-                AsyncImage(
-                    model = "$TMDB_STILL_BASE${episode.still_path}",
-                    contentDescription = episode.displayName,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-            when {
-                isLocked -> {
-                    // Camada escura + cadeado por cima da thumbnail — sinaliza
-                    // bloqueio já na miniatura, antes mesmo de tocar no episódio.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text("🔒", fontSize = 20.sp)
-                    }
-                }
-                isLoading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp,
-                        color = androidx.compose.ui.graphics.Color.White,
-                    )
-                }
-                else -> {
-                    Icon(
-                        imageVector = Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = if (isSelected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
-                        modifier = Modifier.size(28.dp),
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(onClick = onPlay),
+                contentAlignment = Alignment.Center,
+            ) {
+                when {
+                    isLocked -> Text("🔒", fontSize = 14.sp)
+                    isLoading -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    else -> Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = "Assistir episódio ${episode.episode_number}",
+                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "${episode.episode_number}. ${episode.displayName}",
                     fontSize = 13.sp,
@@ -530,41 +621,232 @@ private fun EpisodeCard(
                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
                 )
-                if (isLocked) {
-                    Spacer(Modifier.width(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                    ) {
-                        Text(
-                            "VIP",
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                episode.displayRuntime?.let {
+                    Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (isLocked) {
+                Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)) {
+                    Text(
+                        "VIP",
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+            }
+            Icon(
+                imageVector = if (isExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (isExpanded) "Recolher detalhes do episódio" else "Ver detalhes do episódio",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .clickable(onClick = onToggleExpand)
+                    .padding(4.dp),
+            )
+        }
+
+        // Área expandida: thumbnail + título + sinopse — só existe quando
+        // isExpanded, e some de novo ao tocar a seta outra vez.
+        if (isExpanded) {
+            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable(onClick = onPlay),
+                ) {
+                    if (episode.still_path != null) {
+                        AsyncImage(
+                            model = "$TMDB_STILL_BASE${episode.still_path}",
+                            contentDescription = episode.displayName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
+                if (!episode.overview.isNullOrBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        episode.overview,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 17.sp,
+                    )
+                }
             }
-            episode.displayRuntime?.let { runtime ->
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "⏱ $runtime",
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (!episode.overview.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    episode.overview,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+        }
+    }
+}
+
+/**
+ * Botão de entrada pra Comentários — mesma posição/estilo que o print de
+ * referência mostra (logo abaixo da lista de episódios/fontes), com ícone
+ * de balão e seta indicando que abre algo. Reaproveitado tanto por filme
+ * quanto série, já que comentário não depende de temporada/episódio.
+ */
+@Composable
+private fun CommentsEntryButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("💬", fontSize = 16.sp)
+            Spacer(Modifier.width(10.dp))
+            Text("Comentários", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        }
+        Text("›", fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/**
+ * Modal fullscreen de comentários — lista + campo de digitar embaixo
+ * (só aparece pra quem está logado; deslogado vê um convite pra entrar).
+ * Autor VIP ganha um selinho ao lado do nome, igual o comportamento
+ * descrito: "aparece do lado se usuário for VIP".
+ */
+@Composable
+private fun CommentsModal(
+    comments: List<com.streamflixvip.app.network.TitleComment>,
+    isLoading: Boolean,
+    isPosting: Boolean,
+    isVip: Boolean,
+    canPost: Boolean,
+    onDismiss: () -> Unit,
+    onPost: (text: String, onResult: (Boolean) -> Unit) -> Unit,
+) {
+    var draft by remember { mutableStateOf("") }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Comentários", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    // Seta pra fechar o modal — pedido explícito: "tem seta
+                    // pra fecha modal tela inteira".
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "Fechar comentários",
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(androidx.compose.foundation.shape.CircleShape)
+                            .clickable(onClick = onDismiss)
+                            .padding(2.dp),
+                    )
+                }
+
+                Box(modifier = Modifier.weight(1f)) {
+                    when {
+                        isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                        comments.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                "Nenhum comentário ainda. Seja o primeiro!",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        else -> LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        ) {
+                            items(comments) { comment ->
+                                Column(Modifier.padding(vertical = 10.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(comment.displayAuthor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                        if (comment.is_vip_author) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                            ) {
+                                                Text(
+                                                    "VIP",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(Modifier.height(3.dp))
+                                    Text(comment.comment_text, fontSize = 13.sp, lineHeight = 18.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Campo de digitar: só aparece pra quem está logado — sem
+                // login, mostra convite simples em vez de campo desabilitado
+                // (mais claro do que um campo cinza sem explicação).
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (canPost) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedTextField(
+                                value = draft,
+                                onValueChange = { draft = it },
+                                placeholder = { Text("Escreva um comentário...") },
+                                modifier = Modifier.weight(1f),
+                                maxLines = 3,
+                                shape = RoundedCornerShape(20.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            if (isPosting) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Enviar comentário",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .graphicsLayer { rotationZ = 180f }
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .clickable(enabled = draft.isNotBlank()) {
+                                            onPost(draft) { success -> if (success) draft = "" }
+                                        }
+                                        .padding(4.dp),
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            "Entre na sua conta para comentar.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                    }
+                }
             }
         }
     }
@@ -592,6 +874,9 @@ private fun DetailHeader(
     onToggleFavorite: () -> Unit,
     showWatchNowButton: Boolean,
     onWatchNowClick: () -> Unit,
+    onBack: () -> Unit,
+    trailerKey: String?,
+    onTrailerClick: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -617,6 +902,37 @@ private fun DetailHeader(
                         ),
                     ),
             )
+        }
+
+        // Barra de topo discreta: seta de voltar (à esquerda) e botão de
+        // trailer (à direita, só aparece quando a TMDB retornou um). Fica
+        // sobre a status bar, no mesmo espírito do CineVerse — cobre o
+        // caso de gesto de "voltar" não funcionar ou não existir (alguns
+        // launchers/dispositivos), sem depender só do botão físico/gesto
+        // do Android.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 44.dp)
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            CircleIconButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                tint = androidx.compose.ui.graphics.Color.White,
+                contentDescription = "Voltar",
+                onClick = onBack,
+                size = 38.dp,
+            )
+            if (trailerKey != null) {
+                CircleIconButton(
+                    icon = Icons.Filled.PlayArrow,
+                    tint = androidx.compose.ui.graphics.Color.White,
+                    contentDescription = "Assistir trailer",
+                    onClick = onTrailerClick,
+                    size = 38.dp,
+                )
+            }
         }
 
         // Botões de ação flutuando sobre o backdrop, um em cada canto —
@@ -791,16 +1107,17 @@ private fun CircleIconButton(
     tint: androidx.compose.ui.graphics.Color,
     contentDescription: String,
     onClick: () -> Unit,
+    size: androidx.compose.ui.unit.Dp = 42.dp,
 ) {
     Box(
         modifier = Modifier
-            .size(42.dp)
+            .size(size)
             .clip(androidx.compose.foundation.shape.CircleShape)
             .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.4f))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(size * 0.48f))
     }
 }
 

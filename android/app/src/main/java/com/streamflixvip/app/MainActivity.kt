@@ -178,7 +178,15 @@ private fun MainAppScaffold(
                 val resumeSeconds = entry.arguments?.getInt("resume") ?: 0
                 val viewModel: DetailViewModel = viewModel(
                     factory = viewModelFactory {
-                        DetailViewModel(tmdbId, mediaType, initialSeason = initialSeason, initialEpisode = initialEpisode)
+                        DetailViewModel(
+                            tmdbId,
+                            mediaType,
+                            initialSeason = initialSeason,
+                            initialEpisode = initialEpisode,
+                            userId = userId,
+                            accessToken = accessToken,
+                            userDisplayName = userEmail?.substringBefore("@"),
+                        )
                     },
                 )
                 DetailScreen(

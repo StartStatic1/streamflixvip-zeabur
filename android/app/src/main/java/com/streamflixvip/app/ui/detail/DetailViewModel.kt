@@ -48,7 +48,30 @@ sealed interface DetailUiState {
         // principais, sem bloquear a tela por ela (ver loadSimilarTitles).
         // Vazia por padrão: a seção só aparece quando há algo pra mostrar.
         val similarTitles: List<TmdbItem> = emptyList(),
+        // Controla o menu flutuante de escolha de temporada (estilo
+        // CineVerse: um dropdown "Temporada N ▾" no lugar da lista de
+        // "Temporada 1, 2, 3..." solta na tela) — não confundir com
+        // expandedSeason, que é QUAL temporada está selecionada.
+        val showSeasonPicker: Boolean = false,
+        // Dentro da temporada selecionada, qual episódio está com o card
+        // expandido mostrando thumbnail/sinopse. Diferente de
+        // selectedEpisode (que é o episódio escolhido pra ASSISTIR) — dá
+        // pra expandir um episódio só pra ler a sinopse sem tocar nele.
+        val expandedEpisodeNumber: Int? = null,
+        // Comentários: lista carregada da tabela title_comments no
+        // Supabase, e se o modal fullscreen de comentários está aberto.
+        val showComments: Boolean = false,
+        val comments: List<com.streamflixvip.app.network.TitleComment> = emptyList(),
+        val isLoadingComments: Boolean = false,
+        val isPostingComment: Boolean = false,
+        // Se a pessoa está logada — controla se o campo de "escrever
+        // comentário" aparece dentro do modal ou se, em vez dele, aparece
+        // um convite pra fazer login primeiro (ver CommentsModal).
+        val canPostComments: Boolean = false,
     ) : DetailUiState {
+        /** Chave do YouTube pro trailer, se a TMDB tiver um cadastrado. */
+        val trailerKey: String? get() = details.trailerKey
+
         /** Decide se o FILME deve mostrar cadeado em vez da lista de fontes. */
         fun movieIsLocked(isVip: Boolean): Boolean = !isVip && requiresVip(vipConfig, episodeNumber = null)
 
@@ -65,7 +88,14 @@ class DetailViewModel(
     // busca das fontes daquele episódio em vez de forçar escolher de novo.
     private val initialSeason: Int = -1,
     private val initialEpisode: Int = -1,
+    // Sessão do usuário logado (null se ninguém estiver logado) — só
+    // usados pra postar comentário, que exige autenticação (RLS via
+    // auth.uid()). Ler comentários funciona sem login.
+    private val userId: String? = null,
+    private val accessToken: String? = null,
+    private val userDisplayName: String? = null,
     private val repository: CatalogRepository = CatalogRepository(),
+    private val commentsRepository: com.streamflixvip.app.data.CommentsRepository = com.streamflixvip.app.data.CommentsRepository(),
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
@@ -102,19 +132,22 @@ class DetailViewModel(
                     tmdbId = tmdbId,
                     movieSources = movieSources,
                     vipConfig = vipConfig,
+                    canPostComments = userId != null && accessToken != null,
                 )
 
                 if (mediaType == "tv") {
-                    // Diferente de antes: NÃO abre a temporada 1 sozinha ao
-                    // entrar na tela. Lista de temporadas fica recolhida por
-                    // padrão (só os títulos "Temporada 1", "Temporada 2"...
-                    // visíveis), igual à referência do CineVerse — exige 1
-                    // toque pra expandir e ver os episódios. Exceção: vindo
-                    // de "Continuar assistindo", aí sim abre direto na
-                    // temporada/episódio que a pessoa já estava vendo,
-                    // porque nesse caso a intenção já é clara.
+                    // Modelo novo: o dropdown de temporada (estilo CineVerse)
+                    // sempre tem UMA temporada ativa/selecionada — não existe
+                    // mais o estado "nada expandido" de antes. Por padrão
+                    // abre a temporada 1; se a pessoa veio de "Continuar
+                    // assistindo", abre direto na temporada/episódio que ela
+                    // já estava vendo.
+                    val seasons = details.seasons.orEmpty().filter { it.season_number > 0 }
+                    val seasonToOpen = if (initialSeason > 0) initialSeason else seasons.firstOrNull()?.season_number
+                    if (seasonToOpen != null) {
+                        expandSeason(seasonToOpen)
+                    }
                     if (initialSeason > 0) {
-                        expandSeason(initialSeason)
                         // Aqui é só preparar a tela ao abrir vindo de "Continuar
                         // assistindo" — a pessoa não tocou em nada ainda, então
                         // não deve abrir sheet nem tocar nada sozinho. Por isso
@@ -270,5 +303,112 @@ class DetailViewModel(
     fun closeServerPicker() {
         val current = _uiState.value as? DetailUiState.Success ?: return
         _uiState.value = current.copy(showServerPickerForEpisode = null)
+    }
+
+    /** Abre/fecha o menu flutuante de escolha de temporada (estilo CineVerse). */
+    fun toggleSeasonPicker() {
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        _uiState.value = current.copy(showSeasonPicker = !current.showSeasonPicker)
+    }
+
+    /**
+     * Escolhe uma temporada a partir do menu flutuante — diferente de
+     * expandSeason (que é usado pela versão antiga em lista/accordion),
+     * aqui trocar de temporada sempre TROCA pra essa temporada (nunca
+     * fecha tudo), porque no dropdown sempre existe uma temporada
+     * "selecionada" — não existe estado de "nenhuma temporada aberta".
+     */
+    fun selectSeasonFromPicker(season: Int) {
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        if (current.expandedSeason == season) {
+            // já é a temporada ativa — só fecha o menu, não recarrega nada.
+            _uiState.value = current.copy(showSeasonPicker = false)
+            return
+        }
+        _uiState.value = current.copy(
+            showSeasonPicker = false,
+            expandedEpisodeNumber = null,
+            expandedSeason = season,
+            episodesOfExpandedSeason = emptyList(),
+            isLoadingEpisodes = true,
+        )
+        viewModelScope.launch {
+            val episodes = repository.getSeasonEpisodes(tmdbId, season)
+            val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+            if (stillCurrent.expandedSeason == season) {
+                _uiState.value = stillCurrent.copy(episodesOfExpandedSeason = episodes, isLoadingEpisodes = false)
+            }
+        }
+    }
+
+    /**
+     * Expande/recolhe o card de UM episódio específico dentro da lista —
+     * segunda camada de accordion (a primeira é a temporada). Mostra
+     * thumbnail + sinopse só do episódio expandido, mantendo os outros
+     * como linha compacta (nome + S1E2 + tags), igual à referência do
+     * CineVerse. Reabrir o mesmo episódio fecha de novo.
+     */
+    fun toggleEpisodeExpanded(episodeNumber: Int) {
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        _uiState.value = current.copy(
+            expandedEpisodeNumber = if (current.expandedEpisodeNumber == episodeNumber) null else episodeNumber,
+        )
+    }
+
+    /** Abre o modal fullscreen de comentários, carregando a lista se ainda não tiver sido buscada. */
+    fun openComments() {
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        _uiState.value = current.copy(showComments = true)
+        if (current.comments.isNotEmpty() || current.isLoadingComments) return
+        _uiState.value = (_uiState.value as DetailUiState.Success).copy(isLoadingComments = true)
+        viewModelScope.launch {
+            val comments = commentsRepository.getComments(tmdbId, mediaType)
+            val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+            _uiState.value = stillCurrent.copy(comments = comments, isLoadingComments = false)
+        }
+    }
+
+    fun closeComments() {
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        _uiState.value = current.copy(showComments = false)
+    }
+
+    /**
+     * Publica um comentário novo. Exige login — quem chama (a UI) já
+     * deve ter checado userId/accessToken != null antes de mostrar o
+     * campo de digitar; aqui é só a garantia de não tentar postar sem
+     * sessão válida. onResult recebe true/false pra UI limpar o campo de
+     * texto só em caso de sucesso.
+     */
+    fun postComment(text: String, isVip: Boolean, onResult: (Boolean) -> Unit) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty() || userId == null || accessToken == null) {
+            onResult(false)
+            return
+        }
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        _uiState.value = current.copy(isPostingComment = true)
+        viewModelScope.launch {
+            val success = commentsRepository.postComment(
+                accessToken = accessToken,
+                userId = userId,
+                userDisplayName = userDisplayName,
+                isVipAuthor = isVip,
+                tmdbId = tmdbId,
+                mediaType = mediaType,
+                text = trimmed,
+            )
+            val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+            if (success) {
+                // Recarrega a lista pra mostrar o comentário novo — mais
+                // simples e confiável que montar o objeto localmente sem
+                // saber o id/created_at que o Postgres gerou.
+                val comments = commentsRepository.getComments(tmdbId, mediaType)
+                _uiState.value = stillCurrent.copy(comments = comments, isPostingComment = false)
+            } else {
+                _uiState.value = stillCurrent.copy(isPostingComment = false)
+            }
+            onResult(success)
+        }
     }
 }

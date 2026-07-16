@@ -60,6 +60,11 @@ data class TmdbResponse(
     val seasons: List<TmdbSeason>? = null,
     val tagline: String? = null,
     val runtime: Int? = null, // em minutos; só filme retorna isso direto no endpoint de detalhe
+    // Só preenchido quando a query usa append_to_response=videos — ver
+    // CatalogRepository.getMovieDetails/getSeriesDetails, que já pedem
+    // isso junto pra não precisar de uma segunda chamada de rede só pro
+    // trailer.
+    val videos: TmdbVideosResponse? = null,
 ) {
     /** Duração formatada (ex: "1h 40m"), ou null se a API não informou (comum em séries). */
     val displayRuntime: String?
@@ -68,7 +73,28 @@ data class TmdbResponse(
             val m = it % 60
             if (h > 0) "${h}h ${m}m" else "${m}min"
         }
+
+    /**
+     * Chave do YouTube pro trailer oficial, se houver. Prioriza um vídeo
+     * do tipo "Trailer" explicitamente marcado; cai pra "Teaser" se não
+     * houver trailer completo cadastrado. Só considera YouTube — a TMDB
+     * às vezes lista vídeos de outros sites que não temos como embutir.
+     */
+    val trailerKey: String?
+        get() {
+            val results = videos?.results.orEmpty().filter { it.site == "YouTube" }
+            return results.firstOrNull { it.type == "Trailer" }?.key
+                ?: results.firstOrNull { it.type == "Teaser" }?.key
+        }
 }
+
+data class TmdbVideosResponse(val results: List<TmdbVideo>? = null)
+
+data class TmdbVideo(
+    val key: String,
+    val site: String,
+    val type: String,
+)
 
 data class TmdbItem(
     val id: Int,
