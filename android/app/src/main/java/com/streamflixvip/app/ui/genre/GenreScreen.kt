@@ -60,7 +60,7 @@ fun GenreScreen(
             "Gêneros",
             fontSize = 26.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, top = 16.dp, bottom = 12.dp),
+            modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp),
         )
 
         // Pills de filtro — sempre visíveis mesmo durante o carregamento,
