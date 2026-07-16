@@ -102,7 +102,7 @@ private fun GenreCardView(
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .padding(start = if (i > 0) (-26).dp else 0.dp)
+                        .offset(x = if (i > 0) (-26).dp else 0.dp)
                         .width(58.dp)
                         .aspectRatio(2f / 3f)
                         .clip(RoundedCornerShape(topStart = 8.dp))
