@@ -102,6 +102,17 @@ class CatalogRepository {
      * específico. Retorna null se o título nunca foi marcado (= sem
      * bloqueio nenhum, comportamento padrão pra todo título novo).
      */
+    suspend fun getVipTitleConfig(tmdbId: Int, mediaType: String): com.streamflixvip.app.network.VipTitleConfig? =
+        try {
+            supabase.getVipTitleConfig(
+                apiKey = anonKey,
+                tmdbIdFilter = PostgrestFilter.eq(tmdbId),
+                mediaTypeFilter = PostgrestFilter.eq(mediaType),
+            ).firstOrNull()
+        } catch (e: Exception) {
+            null
+        }
+
     /**
      * Títulos de um gênero específico, pra grade da aba Gêneros. mediaType
      * decide o endpoint discover certo (filme e série têm listas de
