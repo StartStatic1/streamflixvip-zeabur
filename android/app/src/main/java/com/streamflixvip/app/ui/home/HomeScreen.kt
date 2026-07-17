@@ -79,20 +79,20 @@ fun HomeScreen(
                 (1f - (scrollOffset.value.toFloat() / 1000f)).coerceIn(0f, 1f)
             }
             
-            val parallaxOffset = if (firstVisibleItemIndex.value > 0) 0f else {
-                (scrollOffset.value.toFloat() * 0.5f)
-            }
+            val scrollY = if (firstVisibleItemIndex.value > 0) 5000f else scrollOffset.value.toFloat()
+            // Fade suave: começa a sumir logo no início do scroll e some totalmente em 400px
+            val fadeAlpha = (1f - (scrollY / 400f)).coerceIn(0f, 1f)
 
             Box(modifier = Modifier.fillMaxSize()) {
-                // 1. Banner com Parallax e Fade
+                // 1. Banner que SOBE e SOME (Fade) junto com a lista
                 if (s.heroItems.isNotEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(bannerHeight)
                             .graphicsLayer {
-                                translationY = -parallaxOffset
-                                this.alpha = alpha
+                                translationY = -scrollY // Sobe síncrono
+                                this.alpha = fadeAlpha // Aplica o fade que você gostou
                             }
                     ) {
                         HeroBanner(
@@ -102,11 +102,11 @@ fun HomeScreen(
                     }
                 }
 
-                // 2. Lista que desliza de forma organizada
+                // 2. Lista que começa abaixo do banner e sobe
                 LazyColumn(
                     state = scrollState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 440.dp, bottom = 16.dp),
+                    contentPadding = PaddingValues(top = 480.dp, bottom = 16.dp),
                 ) {
                     if (s.continueWatching.isNotEmpty()) {
                         item {
