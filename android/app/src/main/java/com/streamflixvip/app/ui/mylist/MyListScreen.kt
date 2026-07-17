@@ -27,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.FavoriteEntry
 
@@ -44,6 +46,15 @@ fun MyListScreen(
     onSearchClick: () -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // Recarrega a lista sempre que a tela volta a ficar visível — sem
+    // isso, favoritar um título na tela de Detalhe e voltar pra cá não
+    // atualizava a grade, porque o ViewModel desta aba é reaproveitado
+    // (não recriado) ao trocar de aba pela bottom bar, então o load()
+    // do init{} só rodava uma vez na vida do app.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.load()
+    }
 
     when (val s = state) {
         is MyListUiState.Loading -> {
