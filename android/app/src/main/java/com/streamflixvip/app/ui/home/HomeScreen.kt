@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -47,6 +48,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
     onContinueWatchingClick: (WatchProgressEntry) -> Unit,
+    onSeeAllClick: (HomeRowExploreLink) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
 
@@ -93,7 +95,7 @@ fun HomeScreen(
                     }
                 }
                 items(s.rows) { row ->
-                    ContentRow(row = row, onItemClick = onItemClick)
+                    ContentRow(row = row, onItemClick = onItemClick, onSeeAllClick = onSeeAllClick)
                     Spacer(Modifier.height(24.dp))
                 }
             }
@@ -379,20 +381,45 @@ private fun ContinueWatchingCard(
 private fun ContentRow(
     row: HomeRow,
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
+    onSeeAllClick: (HomeRowExploreLink) -> Unit,
 ) {
     Column {
-        Text(
-            text = row.title,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = row.title,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f),
+            )
+            // "Ver mais" só aparece quando a fileira tem um filtro
+            // equivalente na aba Explorar (gênero+ano) — fileiras como
+            // Trending/Populares usam endpoints próprios da TMDB sem
+            // correspondência direta em discover, então não expõem isso.
+            row.exploreLink?.let { link ->
+                Text(
+                    text = "Ver mais",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { onSeeAllClick(link) },
+                )
+            }
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(row.items) { item ->
-                PosterCard(item = item, onClick = { onItemClick(item.id, row.mediaType) })
+            itemsIndexed(row.items) { index, item ->
+                PosterCard(
+                    item = item,
+                    onClick = { onItemClick(item.id, row.mediaType) },
+                    rank = if (row.isRanked) index + 1 else null,
+                )
             }
         }
     }
@@ -402,15 +429,29 @@ private fun ContentRow(
 private fun PosterCard(
     item: TmdbItem,
     onClick: () -> Unit,
+    rank: Int? = null,
 ) {
     val posterUrl = item.poster_path?.let { TMDB_POSTER_BASE + it }
 
-    Column(
-        modifier = Modifier
-            .width(120.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick),
-    ) {
+    // Cards ranqueados (Top 10) ganham um espaço extra à esquerda pro
+    // número gigante — sem isso, o número ficaria cortado ou sobreposto
+    // de um jeito ruim em cima do próprio pôster.
+    Row(verticalAlignment = Alignment.Bottom) {
+        if (rank != null) {
+            Text(
+                text = "$rank",
+                fontSize = 64.sp,
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.offset(x = 12.dp),
+            )
+        }
+        Column(
+            modifier = Modifier
+                .width(120.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .clickable(onClick = onClick),
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -457,6 +498,7 @@ private fun PosterCard(
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
         }
     }
 }

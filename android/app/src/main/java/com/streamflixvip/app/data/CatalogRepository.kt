@@ -35,6 +35,16 @@ class CatalogRepository {
         tmdb.request(path = "/movie/now_playing", page = page).results.orEmpty()
 
     /**
+     * Top da semana — usa o endpoint trending/all/week da própria TMDB
+     * (mistura filme+série, ordenado pela nota de "quanto está bombando"
+     * calculada por eles), em vez de tentarmos calcular popularidade por
+     * conta própria. mediaType de cada item já vem certo na resposta,
+     * então essa fileira consegue navegar pra Detail sem ambiguidade.
+     */
+    suspend fun getTrendingWeek(page: Int = 1): List<TmdbItem> =
+        tmdb.request(path = "/trending/all/week", page = page).results.orEmpty()
+
+    /**
      * Pesquisa geral independente da descoberta por filtros. A consulta usa
      * os endpoints de busca da TMDB e remove resultados que não são títulos
      * assistíveis no catálogo, como pessoas e coleções sem capa.

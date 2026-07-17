@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -37,6 +38,7 @@ import com.streamflixvip.app.ui.detail.DetailScreen
 import com.streamflixvip.app.ui.detail.DetailViewModel
 import com.streamflixvip.app.ui.explore.ExploreScreen
 import com.streamflixvip.app.ui.explore.ExploreViewModel
+import com.streamflixvip.app.ui.explore.PendingExploreFilter
 import com.streamflixvip.app.ui.home.HomeScreen
 import com.streamflixvip.app.ui.home.HomeViewModel
 import com.streamflixvip.app.ui.mylist.MyListScreen
@@ -168,6 +170,20 @@ private fun MainAppScaffold(
                             "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
                         )
                     },
+                    onSeeAllClick = { link ->
+                        PendingExploreFilter.set(
+                            com.streamflixvip.app.ui.explore.ExploreFilters(
+                                category = link.category,
+                                genre = link.genreId?.let { id -> com.streamflixvip.app.data.TMDB_GENRES.find { it.id == id } },
+                                year = link.year,
+                            ),
+                        )
+                        navController.navigate("explore") {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
                 )
             }
 
@@ -180,7 +196,16 @@ private fun MainAppScaffold(
             }
 
             composable("explore") {
-                val viewModel: ExploreViewModel = viewModel()
+                val viewModel: ExploreViewModel = viewModel(
+                    factory = viewModelFactory {
+                        // Lê e imediatamente limpa o filtro pendente (se
+                        // veio do "Ver mais" da Home) — assim, reabrir a
+                        // aba Explorar pela bottom bar depois não fica
+                        // "grudada" no último filtro usado.
+                        val pending = PendingExploreFilter.consume()
+                        ExploreViewModel(initialFilters = pending ?: com.streamflixvip.app.ui.explore.ExploreFilters())
+                    },
+                )
                 ExploreScreen(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },

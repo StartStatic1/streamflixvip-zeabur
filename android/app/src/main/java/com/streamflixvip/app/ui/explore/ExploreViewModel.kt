@@ -31,6 +31,7 @@ sealed interface ExploreUiState {
 }
 
 class ExploreViewModel(
+    initialFilters: ExploreFilters = ExploreFilters(),
     private val repository: CatalogRepository = CatalogRepository(),
 ) : ViewModel() {
 
@@ -38,7 +39,7 @@ class ExploreViewModel(
     val uiState: StateFlow<ExploreUiState> = _uiState
 
     private var currentPage = 1
-    private var currentFilters = ExploreFilters()
+    private var currentFilters = initialFilters
 
     init {
         load(currentFilters)
