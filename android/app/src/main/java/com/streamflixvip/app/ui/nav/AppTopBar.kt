@@ -39,16 +39,9 @@ fun AppTopBar(onSearchClick: () -> Unit) {
             .fillMaxWidth()
             .statusBarsPadding() // Adiciona padding para a barra de status
             .padding(horizontal = 16.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween, // Alinha o texto à esquerda e a lupa à direita
+        horizontalArrangement = Arrangement.End, // Alinha a lupa à direita
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = "Encontre algo para assistir",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f) // Ocupa o espaço restante
-        )
-
         IconButton(
             onClick = onSearchClick,
             modifier = Modifier

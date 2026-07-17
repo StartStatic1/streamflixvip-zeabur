@@ -68,25 +68,30 @@ fun HomeScreen(
             }
         }
         is HomeUiState.Success -> {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = 480.dp, bottom = 16.dp), // Inicia o conteúdo abaixo do Hero Banner
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // 1. Banner Fixo no Fundo
                 if (s.heroItems.isNotEmpty()) {
-                    item {
-                        HeroBanner(items = s.heroItems, onClick = { item -> onItemClick(item.id, item.resolvedMediaType) })
-                        // O Spacer foi removido e o padding do LazyColumn ajustado para o banner ser full-bleed
-                    }
+                    HeroBanner(
+                        items = s.heroItems,
+                        onClick = { item -> onItemClick(item.id, item.resolvedMediaType) }
+                    )
                 }
-                if (s.continueWatching.isNotEmpty()) {
-                    item {
-                        ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick)
+
+                // 2. Lista que desliza POR CIMA do banner
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 420.dp, bottom = 16.dp), // Padding para mostrar o banner, mas permitir sobreposição
+                ) {
+                    if (s.continueWatching.isNotEmpty()) {
+                        item {
+                            ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick)
+                            Spacer(Modifier.height(24.dp))
+                        }
+                    }
+                    items(s.rows) { row ->
+                        ContentRow(row = row, onItemClick = onItemClick)
                         Spacer(Modifier.height(24.dp))
                     }
-                }
-                items(s.rows) { row ->
-                    ContentRow(row = row, onItemClick = onItemClick)
-                    Spacer(Modifier.height(24.dp))
                 }
             }
         }
