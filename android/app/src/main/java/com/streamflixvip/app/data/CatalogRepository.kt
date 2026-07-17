@@ -5,6 +5,9 @@ import com.streamflixvip.app.network.PostgrestFilter
 import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.VipSource
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 /**
  * Repositório central: combina metadados (TMDB, via proxy Express) com
@@ -150,18 +153,16 @@ class CatalogRepository {
         year: Int?,
         page: Int = 1,
     ): List<TmdbItem> {
-        return if (category == GenreCategory.ALL) {
-            kotlinx.coroutines.coroutineScope {
-                val movies = kotlinx.coroutines.async {
-                    fetchExploreCatalog("movie", null, genreId, year, page)
-                }
-                val series = kotlinx.coroutines.async {
-                    fetchExploreCatalog("tv", null, genreId, year, page)
-                }
-                (movies.await() + series.await()).sortedByDescending { item -> item.popularity ?: 0.0 }
-            }
-        } else {
-            fetchExploreCatalog(category.mediaTypeOrDefault, category.originalLanguage, genreId, year, page)
+        if (category != GenreCategory.ALL) {
+            return fetchExploreCatalog(category.mediaTypeOrDefault, category.originalLanguage, genreId, year, page)
+        }
+        return coroutineScope {
+            val moviesDeferred: Deferred<List<TmdbItem>> =
+                async { fetchExploreCatalog("movie", null, genreId, year, page) }
+            val seriesDeferred: Deferred<List<TmdbItem>> =
+                async { fetchExploreCatalog("tv", null, genreId, year, page) }
+            val combined: List<TmdbItem> = moviesDeferred.await() + seriesDeferred.await()
+            combined.sortedByDescending { item: TmdbItem -> item.popularity ?: 0.0 }
         }
     }
 
