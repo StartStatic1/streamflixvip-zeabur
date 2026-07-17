@@ -3,6 +3,7 @@ package com.streamflixvip.app.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixvip.app.data.CatalogRepository
+import com.streamflixvip.app.data.GenreCategory
 import com.streamflixvip.app.data.ProgressRepository
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.WatchProgressEntry
@@ -57,15 +58,32 @@ class HomeViewModel(
                     emptyList()
                 }
 
+                // Clássicos: filmes de décadas passadas (80s/90s), pra dar
+                // uma opção de nostalgia sem misturar com os lançamentos
+                // recentes das fileiras "populares" de cima.
+                val classics = runCatching {
+                    repository.exploreCatalog(category = GenreCategory.MOVIES, genreId = null, year = 1988)
+                }.getOrElse { emptyList() }
+
+                // Trash/Cult: terror categoria B — mesmo filtro de gênero
+                // usado na aba Gêneros, mas com um ano mais antigo pra
+                // puxar títulos de nicho em vez dos mesmos lançamentos de
+                // terror recentes que já aparecem em outros lugares do app.
+                val trash = runCatching {
+                    repository.exploreCatalog(category = GenreCategory.MOVIES, genreId = 27, year = 1987)
+                }.getOrElse { emptyList() }
+
                 _uiState.value = HomeUiState.Success(
                     continueWatching = continueWatching,
                     // Os 5 primeiros "em cartaz" viram o banner rotativo do
                     // topo — mais impacto visual que uma fileira comum, e
                     // evita repetir os mesmos pôsteres duas vezes na tela.
                     heroItems = nowPlaying.take(5),
-                    rows = listOf(
+                    rows = listOfNotNull(
                         HomeRow("Filmes populares", popularMovies, "movie"),
                         HomeRow("Séries populares", popularSeries, "tv"),
+                        classics.takeIf { it.isNotEmpty() }?.let { HomeRow("Clássicos", it, "movie") },
+                        trash.takeIf { it.isNotEmpty() }?.let { HomeRow("Trash & Cult", it, "movie") },
                     )
                 )
             } catch (e: Exception) {

@@ -19,11 +19,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,55 +67,34 @@ fun HomeScreen(
         }
         is HomeUiState.Success -> {
             val scrollState = rememberLazyListState()
-            
-            // Cálculo do Parallax e Fade
-            val bannerHeight = 480.dp
-            val scrollOffset = remember { derivedStateOf { scrollState.firstVisibleItemScrollOffset } }
-            val firstVisibleItemIndex = remember { derivedStateOf { scrollState.firstVisibleItemIndex } }
-            
-            val alpha = if (firstVisibleItemIndex.value > 0) 0f else {
-                (1f - (scrollOffset.value.toFloat() / 1000f)).coerceIn(0f, 1f)
-            }
-            
-            val scrollY = if (firstVisibleItemIndex.value > 0) 5000f else scrollOffset.value.toFloat()
-            // Fade suave: começa a sumir logo no início do scroll e some totalmente em 400px
-            val fadeAlpha = (1f - (scrollY / 400f)).coerceIn(0f, 1f)
 
-            Box(modifier = Modifier.fillMaxSize()) {
-                // 1. Banner que SOBE e SOME (Fade) junto com a lista
+            LazyColumn(
+                state = scrollState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 16.dp),
+            ) {
+                // Banner como item de verdade da lista — sobe e some com o
+                // scroll naturalmente, sem precisar simular posição manual
+                // nem deixar espaço vazio reservado quando ele desaparece.
                 if (s.heroItems.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(bannerHeight)
-                            .graphicsLayer {
-                                translationY = -scrollY // Sobe síncrono
-                                this.alpha = fadeAlpha // Aplica o fade que você gostou
-                            }
-                    ) {
+                    item {
                         HeroBanner(
                             items = s.heroItems,
-                            onClick = { item -> onItemClick(item.id, item.resolvedMediaType) }
+                            onClick = { item -> onItemClick(item.id, item.resolvedMediaType) },
                         )
                     }
                 }
 
-                // 2. Lista que começa abaixo do banner e sobe
-                LazyColumn(
-                    state = scrollState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 480.dp, bottom = 16.dp),
-                ) {
-                    if (s.continueWatching.isNotEmpty()) {
-                        item {
-                            ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick)
-                            Spacer(Modifier.height(24.dp))
-                        }
-                    }
-                    items(s.rows) { row ->
-                        ContentRow(row = row, onItemClick = onItemClick)
+                if (s.continueWatching.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(24.dp))
+                        ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick)
                         Spacer(Modifier.height(24.dp))
                     }
+                }
+                items(s.rows) { row ->
+                    ContentRow(row = row, onItemClick = onItemClick)
+                    Spacer(Modifier.height(24.dp))
                 }
             }
         }
@@ -155,7 +132,7 @@ private fun HeroBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(480.dp) // Aumenta a altura para ser mais imersivo
+            .height(380.dp) // Imersivo mas sem dominar a tela inteira no celular
     ) {
         HorizontalPager(
             state = pagerState,
