@@ -33,41 +33,19 @@ import androidx.compose.ui.unit.sp
  */
 @Composable
 fun AppTopBar(userDisplayName: String?, onSearchClick: () -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.primary) {
-        Row(
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Icon(
+            Icons.Filled.Search,
+            contentDescription = "Pesquisa Geral",
+            tint = Color.White,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                val initial = userDisplayName?.trim()?.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .background(Color(0xFF6C4FE0), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(initial, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                }
-                if (userDisplayName != null) {
-                    Text(
-                        userDisplayName.uppercase(),
-                        color = Color.White.copy(alpha = 0.9f),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-            }
-            Icon(
-                Icons.Filled.Search,
-                contentDescription = "Explorar e buscar",
-                tint = Color.White,
-                modifier = Modifier
-                    .size(26.dp)
-                    .clickable(onClick = onSearchClick),
-            )
-        }
+                .size(28.dp)
+                .align(Alignment.CenterEnd)
+                .clickable(onClick = onSearchClick),
+        )
     }
 }

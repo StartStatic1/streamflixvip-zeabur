@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -119,72 +120,65 @@ private fun HeroBanner(
         }
     }
 
-    Box {
-        HorizontalPager(state = pagerState) { page ->
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(440.dp)
+            .padding(top = 20.dp)
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(horizontal = 60.dp),
+            pageSpacing = (-20).dp, // Efeito de sobreposição leve
+        ) { page ->
             val item = items[page]
-            val backdropUrl = (item.backdrop_path ?: item.poster_path)?.let { TMDB_BACKDROP_BASE + it }
+            val posterUrl = item.poster_path?.let { TMDB_POSTER_BASE + it }
+            
+            // Cálculo para efeito de "carta" (escala e rotação leve baseada no scroll)
+            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+            val scale = 1f - (kotlin.math.abs(pageOffset) * 0.15f).coerceIn(0f, 0.25f)
+            val rotation = pageOffset * 5f // Rotação leve lateral
 
-            Box(
+            Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(420.dp)
-                    .clickable { onClick(item) },
-            ) {
-                AsyncImage(
-                    model = backdropUrl,
-                    contentDescription = item.displayTitle,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
-                                startY = 120f,
-                            ),
-                        ),
-                )
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(horizontal = 16.dp, vertical = 20.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        item.displayRating?.let { rating ->
-                            Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(rating, fontSize = 13.sp, color = Color.White)
-                            Spacer(Modifier.width(10.dp))
-                        }
-                        item.displayYear?.let { year ->
-                            Text(year, fontSize = 13.sp, color = Color.White.copy(alpha = 0.8f))
-                        }
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        rotationZ = rotation
+                        alpha = 1f - (kotlin.math.abs(pageOffset) * 0.3f).coerceIn(0f, 0.8f)
                     }
-                    Spacer(Modifier.height(6.dp))
+                    .clickable { onClick(item) },
+                shape = RoundedCornerShape(28.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AsyncImage(
+                        model = posterUrl, // Usando Poster para estilo de carta
+                        contentDescription = item.displayTitle,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
+                                    startY = 400f,
+                                ),
+                            ),
+                    )
                     Text(
                         text = item.displayTitle,
-                        fontSize = 24.sp,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp),
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
-                        maxLines = 2,
+                        maxLines = 1,
                     )
-                    item.overview?.let { overview ->
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            text = overview,
-                            fontSize = 13.sp,
-                            color = Color.White.copy(alpha = 0.85f),
-                            maxLines = 2,
-                        )
-                    }
-                    Spacer(Modifier.height(14.dp))
-                    Button(onClick = { onClick(item) }) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Ver detalhes")
-                    }
                 }
             }
         }

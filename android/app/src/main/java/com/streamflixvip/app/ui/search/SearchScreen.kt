@@ -31,12 +31,13 @@ private const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w342"
 @Composable
 fun SearchScreen(onItemClick: (tmdbId: Int, mediaType: String) -> Unit) {
     var query by remember { mutableStateOf("") }
+    var selectedType by remember { mutableStateOf("all") }
     var results by remember { mutableStateOf<List<TmdbItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     val repository = remember { CatalogRepository() }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(query) {
+    LaunchedEffect(query, selectedType) {
         if (query.isBlank()) {
             results = emptyList()
             return@LaunchedEffect
@@ -44,8 +45,13 @@ fun SearchScreen(onItemClick: (tmdbId: Int, mediaType: String) -> Unit) {
         delay(500) // debounce
         isLoading = true
         try {
+            val path = when (selectedType) {
+                "movie" -> "/search/movie"
+                "tv" -> "/search/tv"
+                else -> "/search/multi"
+            }
             val response = com.streamflixvip.app.network.NetworkModule.tmdbApi.request(
-                path = "/search/multi",
+                path = path,
                 query = query,
                 page = 1,
             )
@@ -65,8 +71,31 @@ fun SearchScreen(onItemClick: (tmdbId: Int, mediaType: String) -> Unit) {
             placeholder = { Text("Buscar filmes e séries...") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
         )
-        Spacer(Modifier.height(16.dp))
+        
+        Spacer(Modifier.height(12.dp))
+        
+        // Opções de escolha para a pesquisa
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val types = listOf("all" to "Todos", "movie" to "Filmes", "tv" to "Séries")
+            types.forEach { (id, label) ->
+                FilterChip(
+                    selected = selectedType == id,
+                    onClick = { selectedType = id },
+                    label = { Text(label) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = Color.Black
+                    )
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
 
         if (isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {

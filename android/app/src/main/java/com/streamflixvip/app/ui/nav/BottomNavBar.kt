@@ -4,7 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -26,7 +26,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
  */
 sealed class BottomNavItem(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     data object Home : BottomNavItem("home", "Início", Icons.Filled.Home)
-    data object Search : BottomNavItem("search", "Explorar", Icons.Filled.Search)
+    data object Search : BottomNavItem("search", "Explorar", Icons.Filled.Explore)
     data object Genres : BottomNavItem("genres", "Gêneros", Icons.Filled.Sell)
     data object MyList : BottomNavItem("mylist", "Favoritos", Icons.Filled.Favorite)
     data object Profile : BottomNavItem("profile", "Perfil", Icons.Filled.Person)
