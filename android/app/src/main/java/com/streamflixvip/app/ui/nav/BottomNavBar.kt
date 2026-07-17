@@ -1,10 +1,10 @@
 package com.streamflixvip.app.ui.nav
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -18,15 +18,18 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 
 /**
- * Barra de navegação inferior fixa — Início, Buscar, Gêneros, Favoritos,
- * Perfil. A aba Social (posts/comentários) foi substituída por Gêneros a
- * pedido: navegação por gênero tem uso imediato (grade de cards com
- * capas), enquanto Social ainda era só placeholder sem conteúdo real por
- * trás.
+ * Navegação principal focada nas áreas recorrentes do app. A pesquisa geral
+ * não ocupa uma aba: ela é uma ação global acessível pela lupa do cabeçalho.
+ * Isso evita confundi-la com Explorar, que é a experiência de descoberta por
+ * filtros, categorias e listas de catálogo.
  */
-sealed class BottomNavItem(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
+sealed class BottomNavItem(
+    val route: String,
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+) {
     data object Home : BottomNavItem("home", "Início", Icons.Filled.Home)
-    data object Search : BottomNavItem("search", "Explorar", Icons.Filled.Explore)
+    data object Explore : BottomNavItem("explore", "Explorar", Icons.Filled.Explore)
     data object Genres : BottomNavItem("genres", "Gêneros", Icons.Filled.Sell)
     data object MyList : BottomNavItem("mylist", "Favoritos", Icons.Filled.Favorite)
     data object Profile : BottomNavItem("profile", "Perfil", Icons.Filled.Person)
@@ -34,7 +37,7 @@ sealed class BottomNavItem(val route: String, val label: String, val icon: andro
 
 val bottomNavItems = listOf(
     BottomNavItem.Home,
-    BottomNavItem.Search,
+    BottomNavItem.Explore,
     BottomNavItem.Genres,
     BottomNavItem.MyList,
     BottomNavItem.Profile,
@@ -51,14 +54,25 @@ fun StreamFlixBottomBar(navController: NavController) {
             NavigationBarItem(
                 selected = selected,
                 onClick = {
-                    navController.navigate(item.route) {
-                        // Evita empilhar múltiplas cópias da mesma aba ao
-                        // alternar entre elas repetidamente.
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
+                    if (selected) return@NavigationBarItem
+
+                    // Primeiro tenta voltar a uma aba que já esteja na pilha.
+                    // Assim, tocar em Início vindo de outra área volta
+                    // imediatamente para Home, sem deixar a pessoa presa no
+                    // gesto de voltar e sem duplicar destinos na navegação.
+                    val restoredExistingDestination = navController.popBackStack(
+                        route = item.route,
+                        inclusive = false,
+                    )
+
+                    if (!restoredExistingDestination) {
+                        navController.navigate(item.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
                 },
                 icon = { Icon(item.icon, contentDescription = item.label) },

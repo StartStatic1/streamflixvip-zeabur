@@ -22,11 +22,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -108,53 +108,48 @@ private fun HeroBanner(
 ) {
     val pagerState = rememberPagerState(pageCount = { items.size })
 
-    // Auto-avança o carrossel, mas não briga com o dedo do usuário: se a
-    // pessoa está arrastando manualmente, pula a troca automática desse ciclo.
+    // Autoavança apenas quando há mais de um destaque e nunca interrompe o
+    // arraste manual. O pager ocupa a largura inteira; não há cartas laterais
+    // recortadas nem sobrepostas ao conteúdo principal.
     LaunchedEffect(pagerState, items) {
+        if (items.size <= 1) return@LaunchedEffect
         while (true) {
             delay(6_000)
             if (!pagerState.isScrollInProgress) {
-                val next = (pagerState.currentPage + 1) % items.size
-                pagerState.animateScrollToPage(next)
+                pagerState.animateScrollToPage((pagerState.currentPage + 1) % items.size)
             }
         }
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .height(440.dp)
-            .padding(top = 20.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         HorizontalPager(
             state = pagerState,
-            contentPadding = PaddingValues(horizontal = 60.dp),
-            pageSpacing = (-20).dp, // Efeito de sobreposição leve
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(390.dp),
+            contentPadding = PaddingValues(0.dp),
+            pageSpacing = 0.dp,
         ) { page ->
             val item = items[page]
-            val posterUrl = item.poster_path?.let { TMDB_POSTER_BASE + it }
-            
-            // Cálculo para efeito de "carta" (escala e rotação leve baseada no scroll)
-            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-            val scale = 1f - (kotlin.math.abs(pageOffset) * 0.15f).coerceIn(0f, 0.25f)
-            val rotation = pageOffset * 5f // Rotação leve lateral
+            val heroImage = item.backdrop_path?.let { TMDB_BACKDROP_BASE + it }
+                ?: item.poster_path?.let { TMDB_POSTER_BASE + it }
+            val overview = item.overview?.takeIf { it.isNotBlank() }
+                ?: "Confira detalhes, nota e opções para assistir."
 
             Card(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        rotationZ = rotation
-                        alpha = 1f - (kotlin.math.abs(pageOffset) * 0.3f).coerceIn(0f, 0.8f)
-                    }
                     .clickable { onClick(item) },
-                shape = RoundedCornerShape(28.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     AsyncImage(
-                        model = posterUrl, // Usando Poster para estilo de carta
+                        model = heroImage,
                         contentDescription = item.displayTitle,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
@@ -164,47 +159,119 @@ private fun HeroBanner(
                             .fillMaxSize()
                             .background(
                                 Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
-                                    startY = 400f,
+                                    colors = listOf(
+                                        Color.Black.copy(alpha = 0.08f),
+                                        Color.Black.copy(alpha = 0.34f),
+                                        Color.Black.copy(alpha = 0.94f),
+                                    ),
+                                    startY = 80f,
                                 ),
                             ),
                     )
-                    Text(
-                        text = item.displayTitle,
+                    Column(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(16.dp),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        maxLines = 1,
-                    )
+                            .align(Alignment.BottomStart)
+                            .padding(20.dp),
+                    ) {
+                        Text(
+                            text = item.displayMediaLabel,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.16f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = item.displayTitle,
+                            color = Color.White,
+                            fontSize = 27.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            item.displayYear?.let { year ->
+                                Text(year, color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
+                            }
+                            if (item.displayYear != null && item.displayRating != null) {
+                                Text(" • ", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                            }
+                            item.displayRating?.let { rating ->
+                                Icon(
+                                    imageVector = Icons.Filled.Star,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(15.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                                Spacer(Modifier.width(3.dp))
+                                Text(rating, color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            text = overview,
+                            color = Color.White.copy(alpha = 0.88f),
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { onClick(item) },
+                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = Color.Black,
+                            ),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                modifier = Modifier.size(19.dp),
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Assistir", fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }
 
-        // Indicadores de página (dots), mesmo padrão de carrossel dos apps
-        // de referência — mostra qual slide está ativo sem precisar de texto.
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            items.indices.forEach { index ->
-                val isActive = pagerState.currentPage == index
-                val width by animateFloatAsState(if (isActive) 18f else 6f, label = "dotWidth")
-                Box(
-                    modifier = Modifier
-                        .height(6.dp)
-                        .width(width.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(if (isActive) Color.White else Color.White.copy(alpha = 0.4f)),
-                )
+        if (items.size > 1) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                items.indices.forEach { index ->
+                    val isActive = pagerState.currentPage == index
+                    val width by animateFloatAsState(
+                        targetValue = if (isActive) 22f else 7f,
+                        label = "heroIndicatorWidth",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 3.dp)
+                            .height(6.dp)
+                            .width(width.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(
+                                if (isActive) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                            ),
+                    )
+                }
             }
         }
     }
 }
+
 
 @Composable
 private fun ContinueWatchingRow(

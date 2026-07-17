@@ -126,6 +126,8 @@ data class TmdbItem(
     // agrupados: todo filme antes de toda série, em vez de intercalados
     // por relevância).
     val popularity: Double? = null,
+    // Necessário para separar resultados de animes na pesquisa geral.
+    val original_language: String? = null,
 ) {
     /** Nome de exibição: filme usa `title`, série usa `name`. */
     val displayTitle: String get() = title ?: name ?: "Sem título"
@@ -138,6 +140,14 @@ data class TmdbItem(
 
     /** Nota formatada com 1 casa decimal (ex: "7.8"), ou null se o TMDB ainda não tem votos suficientes. */
     val displayRating: String? get() = vote_average?.takeIf { it > 0 }?.let { "%.1f".format(it) }
+
+    /** Rótulo curto para a interface, com destaque correto para animes. */
+    val displayMediaLabel: String
+        get() = when {
+            resolvedMediaType == "tv" && original_language == "ja" -> "ANIME"
+            resolvedMediaType == "movie" -> "FILME"
+            else -> "SÉRIE"
+        }
 }
 
 data class TmdbGenre(val id: Int, val name: String)

@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -35,6 +34,8 @@ import com.streamflixvip.app.ui.auth.AuthScreen
 import com.streamflixvip.app.ui.auth.AuthViewModel
 import com.streamflixvip.app.ui.detail.DetailScreen
 import com.streamflixvip.app.ui.detail.DetailViewModel
+import com.streamflixvip.app.ui.explore.ExploreScreen
+import com.streamflixvip.app.ui.explore.ExploreViewModel
 import com.streamflixvip.app.ui.home.HomeScreen
 import com.streamflixvip.app.ui.home.HomeViewModel
 import com.streamflixvip.app.ui.mylist.MyListScreen
@@ -44,6 +45,7 @@ import com.streamflixvip.app.ui.player.PlayerScreen
 import com.streamflixvip.app.ui.player.VipWaitScreen
 import com.streamflixvip.app.ui.profile.ProfileScreen
 import com.streamflixvip.app.ui.search.SearchScreen
+import com.streamflixvip.app.ui.search.SearchViewModel
 import com.streamflixvip.app.ui.genre.GenreDetailScreen
 import com.streamflixvip.app.ui.genre.GenreScreen
 import com.streamflixvip.app.ui.genre.GenreViewModel
@@ -110,11 +112,10 @@ private fun MainAppScaffold(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute in listOf("home", "search", "genres", "mylist", "profile")
-    // A lupa/topo aparece nas mesmas abas principais, EXCETO em "search"
-    // (a própria tela de Explorar já tem a lupa como conceito — mostrar
-    // de novo lá seria redundante e sem função clara: já se está
-    // buscando/filtrando naquela tela).
+    val showBottomBar = currentRoute in listOf("home", "search", "explore", "genres", "mylist", "profile")
+    // A lupa aparece nas abas principais. Pesquisa Geral e Explorar têm
+    // cabeçalhos próprios porque são fluxos diferentes: uma localiza títulos
+    // por texto; a outra descobre conteúdo por filtros e categorias.
     val showTopBar = currentRoute in listOf("home", "genres", "mylist", "profile")
 
     // Popula o status VIP em memória assim que o app abre logado — assim,
@@ -170,8 +171,16 @@ private fun MainAppScaffold(
             }
 
             composable("search") {
-                val viewModel: com.streamflixvip.app.ui.explore.ExploreViewModel = viewModel()
-                com.streamflixvip.app.ui.explore.ExploreScreen(
+                val viewModel: SearchViewModel = viewModel()
+                SearchScreen(
+                    viewModel = viewModel,
+                    onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
+                )
+            }
+
+            composable("explore") {
+                val viewModel: ExploreViewModel = viewModel()
+                ExploreScreen(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
                 )
@@ -216,11 +225,7 @@ private fun MainAppScaffold(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
                     onSearchClick = {
-                        navController.navigate("search") {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
+                        navController.navigate("search") { launchSingleTop = true }
                     },
                 )
             }

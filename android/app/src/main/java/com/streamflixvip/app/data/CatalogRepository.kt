@@ -35,6 +35,40 @@ class CatalogRepository {
         tmdb.request(path = "/movie/now_playing", page = page).results.orEmpty()
 
     /**
+     * Pesquisa geral independente da descoberta por filtros. A consulta usa
+     * os endpoints de busca da TMDB e remove resultados que não são títulos
+     * assistíveis no catálogo, como pessoas e coleções sem capa.
+     *
+     * @param mediaType null mistura filmes e séries; "movie" e "tv" limitam
+     * a pesquisa ao tipo selecionado.
+     * @param originalLanguage permite o recorte de animes pelo idioma
+     * original japonês, sem misturar essa lógica com a tela Explorar.
+     */
+    suspend fun searchCatalog(
+        query: String,
+        mediaType: String? = null,
+        originalLanguage: String? = null,
+    ): List<TmdbItem> {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isBlank()) return emptyList()
+
+        val path = when (mediaType) {
+            "movie" -> "/search/movie"
+            "tv" -> "/search/tv"
+            else -> "/search/multi"
+        }
+
+        return tmdb.request(path = path, query = normalizedQuery, page = 1)
+            .results.orEmpty()
+            .asSequence()
+            .filter { it.poster_path != null }
+            .filter { it.resolvedMediaType in setOf("movie", "tv") }
+            .filter { originalLanguage == null || it.original_language == originalLanguage }
+            .distinctBy { "${it.id}_${it.resolvedMediaType}" }
+            .toList()
+    }
+
+    /**
      * Detalhes completos de um filme (sinopse, gêneros, nota, etc), já
      * incluindo os vídeos (trailer/teaser do YouTube) na mesma chamada —
      * append_to_response evita uma segunda requisição só pro trailer.
