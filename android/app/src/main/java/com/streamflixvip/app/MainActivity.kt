@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -37,6 +38,7 @@ import com.streamflixvip.app.ui.detail.DetailViewModel
 import com.streamflixvip.app.ui.home.HomeScreen
 import com.streamflixvip.app.ui.home.HomeViewModel
 import com.streamflixvip.app.ui.mylist.MyListScreen
+import com.streamflixvip.app.ui.mylist.MyListViewModel
 import com.streamflixvip.app.ui.nav.StreamFlixBottomBar
 import com.streamflixvip.app.ui.player.PlayerScreen
 import com.streamflixvip.app.ui.player.VipWaitScreen
@@ -183,7 +185,20 @@ private fun MainAppScaffold(
             }
 
             composable("mylist") {
-                MyListScreen()
+                val viewModel: MyListViewModel = viewModel(
+                    factory = viewModelFactory { MyListViewModel(userId = userId, accessToken = accessToken) },
+                )
+                MyListScreen(
+                    viewModel = viewModel,
+                    onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
+                    onSearchClick = {
+                        navController.navigate("search") {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
             }
 
             composable("profile") {

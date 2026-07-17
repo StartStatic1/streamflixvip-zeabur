@@ -24,6 +24,7 @@ class FavoritesRepository {
         mediaType: String,
         title: String?,
         posterPath: String?,
+        originalLanguage: String? = null,
     ): Boolean =
         try {
             api.addFavorite(
@@ -35,6 +36,7 @@ class FavoritesRepository {
                     media_type = mediaType,
                     title = title,
                     poster_path = posterPath,
+                    original_language = originalLanguage,
                 ),
             )
             true

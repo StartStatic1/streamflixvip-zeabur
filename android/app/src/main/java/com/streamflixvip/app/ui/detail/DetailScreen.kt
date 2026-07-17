@@ -127,6 +127,7 @@ fun DetailScreen(
                 onOpenComments = viewModel::openComments,
                 onDismissComments = viewModel::closeComments,
                 onPostComment = { text, onResult -> viewModel.postComment(text, isVip = com.streamflixvip.app.data.VipStatusHolder.isVip.value, onResult = onResult) },
+                onToggleFavorite = viewModel::toggleFavorite,
             )
 
             if (showMovieServerPicker) {
@@ -202,6 +203,7 @@ private fun DetailContent(
     onOpenComments: () -> Unit,
     onDismissComments: () -> Unit,
     onPostComment: (text: String, onResult: (Boolean) -> Unit) -> Unit,
+    onToggleFavorite: () -> Unit,
 ) {
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
@@ -209,7 +211,6 @@ private fun DetailContent(
     val backdropUrl = details.backdrop_path?.let { TMDB_BACKDROP_BASE + it }
     val posterUrl = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
-    var isFavorite by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
     // Botão fixo "Assistir Agora" no header: só existe pra FILME. Série
@@ -233,8 +234,8 @@ private fun DetailContent(
                 rating = details.vote_average,
                 year = (details.release_date ?: details.first_air_date)?.take(4),
                 runtimeLabel = details.displayRuntime,
-                isFavorite = isFavorite,
-                onToggleFavorite = { isFavorite = !isFavorite },
+                isFavorite = state.isFavorite,
+                onToggleFavorite = onToggleFavorite,
                 showWatchNowButton = heroWatchEnabled,
                 onWatchNowClick = onWatchMovieNow,
                 onBack = onBack,

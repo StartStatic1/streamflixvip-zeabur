@@ -68,6 +68,12 @@ sealed interface DetailUiState {
         // comentário" aparece dentro do modal ou se, em vez dele, aparece
         // um convite pra fazer login primeiro (ver CommentsModal).
         val canPostComments: Boolean = false,
+        // Estado do coração (favoritos) — carregado ao abrir a tela (se
+        // logado) e alterado de forma otimista ao tocar (ver
+        // DetailViewModel.toggleFavorite). isTogglingFavorite trava
+        // múltiplos toques rápidos disparando 2 chamadas simultâneas.
+        val isFavorite: Boolean = false,
+        val isTogglingFavorite: Boolean = false,
     ) : DetailUiState {
         /** Chave do YouTube pro trailer, se a TMDB tiver um cadastrado. */
         val trailerKey: String? get() = details.trailerKey
@@ -96,6 +102,7 @@ class DetailViewModel(
     private val userDisplayName: String? = null,
     private val repository: CatalogRepository = CatalogRepository(),
     private val commentsRepository: com.streamflixvip.app.data.CommentsRepository = com.streamflixvip.app.data.CommentsRepository(),
+    private val favoritesRepository: com.streamflixvip.app.data.FavoritesRepository = com.streamflixvip.app.data.FavoritesRepository(),
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
@@ -134,6 +141,17 @@ class DetailViewModel(
                     vipConfig = vipConfig,
                     canPostComments = userId != null && accessToken != null,
                 )
+
+                // Checa se já está favoritado — só faz sentido com sessão
+                // ativa. Roda depois de já mostrar a tela principal, pra
+                // não atrasar sinopse/pôster/fontes esperando essa consulta.
+                if (userId != null && accessToken != null) {
+                    launch {
+                        val favorited = favoritesRepository.isFavorite(accessToken, userId, tmdbId, mediaType)
+                        val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+                        _uiState.value = stillCurrent.copy(isFavorite = favorited)
+                    }
+                }
 
                 if (mediaType == "tv") {
                     // Modelo novo: o dropdown de temporada (estilo CineVerse)
@@ -409,6 +427,52 @@ class DetailViewModel(
                 _uiState.value = stillCurrent.copy(isPostingComment = false)
             }
             onResult(success)
+        }
+    }
+
+    /**
+     * Adiciona ou remove este título dos Favoritos. Sem sessão (userId
+     * ou accessToken ausentes), não faz nada — a tela deveria evitar
+     * mostrar o coração clicável nesse caso, mas fica defensivo aqui
+     * também.
+     *
+     * Otimista: o coração muda visualmente na hora, sem esperar a rede.
+     * Se a chamada falhar de verdade, desfaz e volta ao estado anterior.
+     */
+    fun toggleFavorite() {
+        val current = _uiState.value as? DetailUiState.Success ?: return
+        val uid = userId ?: return
+        val token = accessToken ?: return
+        if (current.isTogglingFavorite) return // evita duplo toque disparando 2 chamadas
+
+        val wasFavorite = current.isFavorite
+        val title = current.details.title ?: current.details.name
+        val posterPath = current.details.poster_path
+        val originalLanguage = current.details.original_language
+
+        _uiState.value = current.copy(isFavorite = !wasFavorite, isTogglingFavorite = true)
+
+        viewModelScope.launch {
+            val success = if (wasFavorite) {
+                favoritesRepository.removeFavorite(token, uid, tmdbId, mediaType)
+            } else {
+                favoritesRepository.addFavorite(
+                    accessToken = token,
+                    userId = uid,
+                    tmdbId = tmdbId,
+                    mediaType = mediaType,
+                    title = title,
+                    posterPath = posterPath,
+                    originalLanguage = originalLanguage,
+                )
+            }
+            val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+            _uiState.value = if (success) {
+                stillCurrent.copy(isTogglingFavorite = false)
+            } else {
+                // Falhou de verdade (não só ausência de rede momentânea) — desfaz a mudança otimista.
+                stillCurrent.copy(isFavorite = wasFavorite, isTogglingFavorite = false)
+            }
         }
     }
 }

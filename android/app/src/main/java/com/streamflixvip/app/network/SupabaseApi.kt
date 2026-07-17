@@ -216,6 +216,7 @@ data class WatchProgressEntry(
  *     media_type text not null,
  *     title text,
  *     poster_path text,
+ *     original_language text,
  *     created_at timestamptz not null default now(),
  *     primary key (user_id, tmdb_id, media_type)
  *   );
@@ -226,6 +227,9 @@ data class WatchProgressEntry(
  *     with check (auth.uid() = user_id);
  *   create policy "favorites_delete_own" on favorites for delete
  *     using (auth.uid() = user_id);
+ *
+ * Se a tabela já existir sem a coluna original_language, rode antes:
+ *   alter table favorites add column original_language text;
  */
 interface FavoritesApi {
 
@@ -272,6 +276,11 @@ data class FavoriteUpsert(
     val media_type: String,
     val title: String?,
     val poster_path: String?,
+    // Idioma original TMDB (ex: "ja", "ko", "en") — usado só pra
+    // aproximar os filtros Animes/Doramas dentro de Favoritos, já que a
+    // TMDB não tem um "tipo" separado pra isso (mesma abordagem já usada
+    // na aba Gêneros, ver GenreCategory).
+    val original_language: String? = null,
 )
 
 data class FavoriteEntry(
@@ -279,9 +288,17 @@ data class FavoriteEntry(
     val media_type: String,
     val title: String?,
     val poster_path: String?,
+    val original_language: String? = null,
 ) {
     val displayTitle: String get() = title ?: "Sem título"
+
+    /** Aproximação de "é anime": série de idioma original japonês. */
+    val isAnime: Boolean get() = media_type == "tv" && original_language == "ja"
+
+    /** Aproximação de "é dorama": série de idioma original coreano. */
+    val isDorama: Boolean get() = media_type == "tv" && original_language == "ko"
 }
+
 
 /**
  * Comentários por título (tabela title_comments) — mesma tabela que a

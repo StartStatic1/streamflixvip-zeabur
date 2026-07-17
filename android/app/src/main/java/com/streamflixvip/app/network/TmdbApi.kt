@@ -62,6 +62,10 @@ data class TmdbResponse(
     val seasons: List<TmdbSeason>? = null,
     val tagline: String? = null,
     val runtime: Int? = null, // em minutos; só filme retorna isso direto no endpoint de detalhe
+    // Idioma original TMDB (ex: "ja", "ko", "en") — usado ao favoritar,
+    // pra classificar Animes/Doramas dentro da aba Favoritos (mesma
+    // aproximação por idioma já usada na aba Gêneros).
+    val original_language: String? = null,
     // Só preenchido quando a query usa append_to_response=videos — ver
     // CatalogRepository.getMovieDetails/getSeriesDetails, que já pedem
     // isso junto pra não precisar de uma segunda chamada de rede só pro
