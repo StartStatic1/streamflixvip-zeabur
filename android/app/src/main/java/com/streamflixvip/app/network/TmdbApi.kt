@@ -23,6 +23,11 @@ interface TmdbApi {
         @Query("append_to_response") appendToResponse: String? = null,
         @Query("with_genres") withGenres: String? = null,
         @Query("with_original_language") withOriginalLanguage: String? = null,
+        // Filtro de ano: a TMDB usa params diferentes pra filme e série,
+        // por isso os dois — CatalogRepository.exploreCatalog só preenche
+        // o que for pertinente ao mediaType da chamada.
+        @Query("primary_release_year") primaryReleaseYear: Int? = null,
+        @Query("first_air_date_year") firstAirDateYear: Int? = null,
     ): TmdbResponse
 
     /**
@@ -116,6 +121,11 @@ data class TmdbItem(
     // filme e série no mesmo array — usado pra saber pra onde navegar
     // ao clicar num resultado de busca.
     val media_type: String? = null,
+    // Usado só pra ordenar a lista combinada filme+série da aba
+    // Explorar quando o filtro é "Tudo" (sem isso, os resultados vêm
+    // agrupados: todo filme antes de toda série, em vez de intercalados
+    // por relevância).
+    val popularity: Double? = null,
 ) {
     /** Nome de exibição: filme usa `title`, série usa `name`. */
     val displayTitle: String get() = title ?: name ?: "Sem título"

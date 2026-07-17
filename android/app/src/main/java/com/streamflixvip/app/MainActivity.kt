@@ -150,7 +150,11 @@ private fun MainAppScaffold(
             }
 
             composable("search") {
-                SearchScreen(onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") })
+                val viewModel: com.streamflixvip.app.ui.explore.ExploreViewModel = viewModel()
+                com.streamflixvip.app.ui.explore.ExploreScreen(
+                    viewModel = viewModel,
+                    onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
+                )
             }
 
             composable("genres") {

@@ -134,6 +134,42 @@ class CatalogRepository {
             withOriginalLanguage = category.originalLanguage,
         ).results.orEmpty()
     }
+
+    /**
+     * Busca combinada da aba Explorar: categoria (Tudo/Filmes/Séries/
+     * Animes/Doramas) + gênero opcional + ano opcional, com paginação.
+     *
+     * Quando category == ALL, chama discover/movie E discover/tv em
+     * paralelo e intercala os resultados — sem isso, "Tudo" mostraria só
+     * filmes (mediaTypeOrDefault cai pra "movie"), o que não bate com a
+     * expectativa de um filtro "Tudo" de verdade.
+     */
+    suspend fun exploreCatalog(
+        category: GenreCategory,
+        genreId: Int?,
+        year: Int?,
+        page: Int = 1,
+    ): List<TmdbItem> {
+        suspend fun fetch(mediaType: String, originalLanguage: String?): List<TmdbItem> =
+            tmdb.request(
+                path = "/discover/$mediaType",
+                page = page,
+                withGenres = genreId?.toString(),
+                withOriginalLanguage = originalLanguage,
+                primaryReleaseYear = if (mediaType == "movie") year else null,
+                firstAirDateYear = if (mediaType == "tv") year else null,
+            ).results.orEmpty()
+
+        return if (category == GenreCategory.ALL) {
+            kotlinx.coroutines.coroutineScope {
+                val movies = kotlinx.coroutines.async { fetch("movie", null) }
+                val series = kotlinx.coroutines.async { fetch("tv", null) }
+                (movies.await() + series.await()).sortedByDescending { it.popularity ?: 0.0 }
+            }
+        } else {
+            fetch(category.mediaTypeOrDefault, category.originalLanguage)
+        }
+    }
 }
 
 /** Gênero fixo pra grade da aba Gêneros — nome + IDs oficiais da TMDB (iguais pra filme e série). */
