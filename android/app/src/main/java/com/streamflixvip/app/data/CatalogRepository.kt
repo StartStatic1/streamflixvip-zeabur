@@ -150,26 +150,43 @@ class CatalogRepository {
         year: Int?,
         page: Int = 1,
     ): List<TmdbItem> {
-        suspend fun fetch(mediaType: String, originalLanguage: String?): List<TmdbItem> =
-            tmdb.request(
-                path = "/discover/$mediaType",
-                page = page,
-                withGenres = genreId?.toString(),
-                withOriginalLanguage = originalLanguage,
-                primaryReleaseYear = if (mediaType == "movie") year else null,
-                firstAirDateYear = if (mediaType == "tv") year else null,
-            ).results.orEmpty()
-
         return if (category == GenreCategory.ALL) {
             kotlinx.coroutines.coroutineScope {
-                val movies = kotlinx.coroutines.async { fetch("movie", null) }
-                val series = kotlinx.coroutines.async { fetch("tv", null) }
-                (movies.await() + series.await()).sortedByDescending { it.popularity ?: 0.0 }
+                val movies = kotlinx.coroutines.async {
+                    fetchExploreCatalog("movie", null, genreId, year, page)
+                }
+                val series = kotlinx.coroutines.async {
+                    fetchExploreCatalog("tv", null, genreId, year, page)
+                }
+                (movies.await() + series.await()).sortedByDescending { item -> item.popularity ?: 0.0 }
             }
         } else {
-            fetch(category.mediaTypeOrDefault, category.originalLanguage)
+            fetchExploreCatalog(category.mediaTypeOrDefault, category.originalLanguage, genreId, year, page)
         }
     }
+
+    /**
+     * Extraída como método próprio (em vez de função local suspend dentro
+     * de exploreCatalog) — funções suspend locais chamadas de dentro de
+     * um lambda de async{} podem confundir a inferência de tipo do
+     * compilador Kotlin em alguns casos, o que quebrava o build aqui.
+     * Como método normal da classe, não tem essa ambiguidade.
+     */
+    private suspend fun fetchExploreCatalog(
+        mediaType: String,
+        originalLanguage: String?,
+        genreId: Int?,
+        year: Int?,
+        page: Int,
+    ): List<TmdbItem> =
+        tmdb.request(
+            path = "/discover/$mediaType",
+            page = page,
+            withGenres = genreId?.toString(),
+            withOriginalLanguage = originalLanguage,
+            primaryReleaseYear = if (mediaType == "movie") year else null,
+            firstAirDateYear = if (mediaType == "tv") year else null,
+        ).results.orEmpty()
 }
 
 /** Gênero fixo pra grade da aba Gêneros — nome + IDs oficiais da TMDB (iguais pra filme e série). */

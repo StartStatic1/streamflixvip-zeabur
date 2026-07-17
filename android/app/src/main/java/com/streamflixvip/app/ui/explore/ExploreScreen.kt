@@ -39,6 +39,7 @@ private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
  * seleção única cada). Um resumo textual mostra os filtros ativos acima
  * da grade, que rola infinitamente conforme a pessoa desce.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExploreScreen(
     viewModel: ExploreViewModel,

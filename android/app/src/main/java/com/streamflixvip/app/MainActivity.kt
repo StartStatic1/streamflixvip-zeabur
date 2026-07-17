@@ -111,6 +111,11 @@ private fun MainAppScaffold(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute in listOf("home", "search", "genres", "mylist", "profile")
+    // A lupa/topo aparece nas mesmas abas principais, EXCETO em "search"
+    // (a própria tela de Explorar já tem a lupa como conceito — mostrar
+    // de novo lá seria redundante e sem função clara: já se está
+    // buscando/filtrando naquela tela).
+    val showTopBar = currentRoute in listOf("home", "genres", "mylist", "profile")
 
     // Popula o status VIP em memória assim que o app abre logado — assim,
     // MESMO que o usuário nunca visite a aba Perfil, a tela de Detalhes já
@@ -125,6 +130,16 @@ private fun MainAppScaffold(
     }
 
     Scaffold(
+        topBar = {
+            if (showTopBar) {
+                com.streamflixvip.app.ui.nav.AppTopBar(
+                    userDisplayName = userEmail?.substringBefore("@"),
+                    onSearchClick = {
+                        navController.navigate("search") { launchSingleTop = true }
+                    },
+                )
+            }
+        },
         bottomBar = {
             if (showBottomBar) StreamFlixBottomBar(navController)
         },
@@ -132,7 +147,12 @@ private fun MainAppScaffold(
         NavHost(
             navController = navController,
             startDestination = "home",
-            modifier = Modifier.padding(if (showBottomBar) innerPadding else PaddingValues(0.dp)),
+            // innerPadding já reflete corretamente topBar e bottomBar
+            // juntos (o Scaffold calcula isso sozinho a partir do que
+            // topBar/bottomBar acima realmente desenharam) — não precisa
+            // de lógica condicional aqui, só zerar padding nas telas que
+            // não têm NENHUMA das duas (Detail/Player, tela cheia).
+            modifier = Modifier.padding(if (showBottomBar || showTopBar) innerPadding else PaddingValues(0.dp)),
         ) {
             composable("home") {
                 val viewModel: HomeViewModel = viewModel(
