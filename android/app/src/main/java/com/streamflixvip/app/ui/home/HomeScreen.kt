@@ -70,12 +70,12 @@ fun HomeScreen(
         is HomeUiState.Success -> {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 16.dp),
+                contentPadding = PaddingValues(top = 480.dp, bottom = 16.dp), // Inicia o conteúdo abaixo do Hero Banner
             ) {
                 if (s.heroItems.isNotEmpty()) {
                     item {
-                        HeroBanner(items = s.heroItems, onClick = { item -> onItemClick(item.id, "movie") })
-                        Spacer(Modifier.height(24.dp))
+                        HeroBanner(items = s.heroItems, onClick = { item -> onItemClick(item.id, item.resolvedMediaType) })
+                        // O Spacer foi removido e o padding do LazyColumn ajustado para o banner ser full-bleed
                     }
                 }
                 if (s.continueWatching.isNotEmpty()) {
@@ -121,16 +121,16 @@ private fun HeroBanner(
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .height(480.dp) // Aumenta a altura para ser mais imersivo
     ) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(390.dp),
+                .fillMaxSize(), // Ocupa todo o Box pai
+
             contentPadding = PaddingValues(0.dp),
             pageSpacing = 0.dp,
         ) { page ->
@@ -171,7 +171,9 @@ private fun HeroBanner(
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .padding(20.dp),
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 24.dp), // Aumenta o padding interno
+                        horizontalAlignment = Alignment.Start,
                     ) {
                         Text(
                             text = item.displayMediaLabel,
@@ -246,7 +248,8 @@ private fun HeroBanner(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp),
+                    .padding(bottom = 16.dp) // Ajusta o padding para os indicadores
+                    .align(Alignment.BottomCenter), // Alinha os indicadores na parte inferior do Box
                 horizontalArrangement = Arrangement.Center,
             ) {
                 items.indices.forEach { index ->
@@ -271,7 +274,6 @@ private fun HeroBanner(
         }
     }
 }
-
 
 @Composable
 private fun ContinueWatchingRow(

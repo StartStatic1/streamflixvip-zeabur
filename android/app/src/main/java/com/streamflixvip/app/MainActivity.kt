@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -134,7 +135,7 @@ private fun MainAppScaffold(
         topBar = {
             if (showTopBar) {
                 com.streamflixvip.app.ui.nav.AppTopBar(
-                    userDisplayName = userEmail?.substringBefore("@"),
+                    // userDisplayName = userEmail?.substringBefore("@"), // Removido a pedido do usuário
                     onSearchClick = {
                         navController.navigate("search") { launchSingleTop = true }
                     },
@@ -153,7 +154,7 @@ private fun MainAppScaffold(
             // topBar/bottomBar acima realmente desenharam) — não precisa
             // de lógica condicional aqui, só zerar padding nas telas que
             // não têm NENHUMA das duas (Detail/Player, tela cheia).
-            modifier = Modifier.padding(if (showBottomBar || showTopBar) innerPadding else PaddingValues(0.dp)),
+            modifier = Modifier.padding(innerPadding),
         ) {
             composable("home") {
                 val viewModel: HomeViewModel = viewModel(
