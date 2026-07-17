@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,15 +16,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,19 +68,45 @@ fun HomeScreen(
             }
         }
         is HomeUiState.Success -> {
+            val scrollState = rememberLazyListState()
+            
+            // Cálculo do Parallax e Fade
+            val bannerHeight = 480.dp
+            val scrollOffset = remember { derivedStateOf { scrollState.firstVisibleItemScrollOffset } }
+            val firstVisibleItemIndex = remember { derivedStateOf { scrollState.firstVisibleItemIndex } }
+            
+            val alpha = if (firstVisibleItemIndex.value > 0) 0f else {
+                (1f - (scrollOffset.value.toFloat() / 1000f)).coerceIn(0f, 1f)
+            }
+            
+            val parallaxOffset = if (firstVisibleItemIndex.value > 0) 0f else {
+                (scrollOffset.value.toFloat() * 0.5f)
+            }
+
             Box(modifier = Modifier.fillMaxSize()) {
-                // 1. Banner Fixo no Fundo
+                // 1. Banner com Parallax e Fade
                 if (s.heroItems.isNotEmpty()) {
-                    HeroBanner(
-                        items = s.heroItems,
-                        onClick = { item -> onItemClick(item.id, item.resolvedMediaType) }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(bannerHeight)
+                            .graphicsLayer {
+                                translationY = -parallaxOffset
+                                this.alpha = alpha
+                            }
+                    ) {
+                        HeroBanner(
+                            items = s.heroItems,
+                            onClick = { item -> onItemClick(item.id, item.resolvedMediaType) }
+                        )
+                    }
                 }
 
-                // 2. Lista que desliza POR CIMA do banner
+                // 2. Lista que desliza de forma organizada
                 LazyColumn(
+                    state = scrollState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 420.dp, bottom = 16.dp), // Padding para mostrar o banner, mas permitir sobreposição
+                    contentPadding = PaddingValues(top = 440.dp, bottom = 16.dp),
                 ) {
                     if (s.continueWatching.isNotEmpty()) {
                         item {
