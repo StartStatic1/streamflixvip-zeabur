@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Mantém a tela acesa durante a reprodução — sem isso o Android
+         apaga a tela no meio do filme, comportamento clássico que
+         denuncia app mal feito. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Torna visíveis os apps capazes de abrir vídeo via ACTION_VIEW —
+         necessário a partir do Android 11 (API 30) pro seletor de
+         "Player externo" (VLC, MX Player etc.) funcionar de forma
+         confiável em todos os fabricantes, mesmo usando createChooser. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="video/*" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".StreamFlixApp"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="StreamFlixVIP"
+        android:theme="@style/Theme.StreamFlixVIP"
+        android:usesCleartextTraffic="false">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="unspecified"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+</manifest>
