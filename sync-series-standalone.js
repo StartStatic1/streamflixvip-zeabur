@@ -114,7 +114,23 @@ async function downloadM3U(source) {
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   let res;
   try {
-    res = await fetch(url, { signal: controller.signal });
+    // Muitos provedores Xtream Codes bloqueiam com HTTP 403 qualquer
+    // request sem um User-Agent reconhecido como player de IPTV — é
+    // proteção deles contra scraping/redistribuição, não algo específico
+    // desta fonte. Por isso funciona no navegador (manda UA de Chrome) e
+    // no VLC/testador de playlist (manda UA de VLC), mas falhava aqui:
+    // o fetch() puro do Node não manda nenhum User-Agent por padrão.
+    // "IPTVSmarters" é aceito pela grande maioria dos provedores porque é
+    // o app mais usado do mercado; os outros headers (Accept, Connection)
+    // completam o perfil de um cliente de playlist real.
+    res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'IPTVSmarters/1.0 (Linux; Android)',
+        Accept: '*/*',
+        Connection: 'keep-alive',
+      },
+    });
   } finally {
     clearTimeout(timeoutId);
   }
