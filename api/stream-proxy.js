@@ -25,6 +25,7 @@ const EXTRA_ALLOWED_HOSTS = [
   'www.fontedecanais.club', 
   'sosbrazil.xyz',
   'rumxb.top:80', 
+  'vd2onebm.fun',
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
