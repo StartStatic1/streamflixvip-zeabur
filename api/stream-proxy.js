@@ -21,6 +21,7 @@ const EXTRA_ALLOWED_HOSTS = [
   'cdnbr02.com',
   'sosbrazil.xyz',
   '178.63.61.173',
+  'cldx-rio-go.top',
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
