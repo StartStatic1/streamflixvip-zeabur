@@ -113,6 +113,25 @@ data class VipSource(
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
         return "${apiBaseUrl}api/stream-proxy?url=$encoded"
     }
+
+    /**
+     * As URLs candidatas pra tocar essa fonte, uma por backend
+     * (Koyeb + Zeabur) — usadas pelo StreamUrlResolver pra descobrir
+     * qual responde primeiro antes de entregar ao ExoPlayer. Fontes que
+     * já apontam pro próprio proxy ou são CDN confiável (.b-cdn.net)
+     * retornam uma lista de 1 item só (mesmo valor nos dois backends,
+     * já que nesse caso a URL não depende de qual backend a serviu).
+     */
+    fun candidatePlaybackUrls(koyebBaseUrl: String, zeaburBaseUrl: String): List<String> {
+        if (source_url.contains("/stream-proxy") || source_url.startsWith("https://") && source_url.contains(".b-cdn.net")) {
+            return listOf(source_url)
+        }
+        val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
+        return listOf(
+            "${koyebBaseUrl}api/stream-proxy?url=$encoded",
+            "${zeaburBaseUrl}api/stream-proxy?url=$encoded",
+        )
+    }
 }
 
 /** Helpers pra formatar os filtros no formato que o PostgREST espera. */
