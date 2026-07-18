@@ -143,19 +143,12 @@ async function downloadM3U(source) {
   return tmpPath;
 }
 
-async function runOnce({ serviceKey, tmdbApiKey, startTime }) {
-  const timeLeft = () => MAX_RUNTIME_MS - (Date.now() - startTime);
-
-  const sources = await sbSelect(
-    serviceKey,
-    'iptv_sources',
-    'is_active=eq.true&select=*&order=last_batch_at.asc.nullsfirst&limit=1'
-  );
-  if (!sources.length) {
-    console.log('[sync-standalone] Nenhuma fonte IPTV ativa cadastrada.');
-    return { done: true };
-  }
-  const source = sources[0];
+/**
+ * Processa UMA fonte específica já escolhida — parse do M3U, casamento
+ * com TMDB, upsert em lote. Extraído de runOnce pra poder ser chamado
+ * várias vezes em sequência (uma por fonte) sem duplicar essa lógica.
+ */
+async function processSource({ source, serviceKey, tmdbApiKey, timeLeft }) {
   console.log(`[sync-standalone] Processando fonte: ${source.name || source.id}`);
 
   const filePath = await downloadM3U(source);
@@ -262,6 +255,55 @@ async function runOnce({ serviceKey, tmdbApiKey, startTime }) {
   console.log(`[sync-standalone] Ciclo concluído: ${processedThisRun} processados, ${matched} encontrados, ${unmatchedCount} não encontrados, ${errors} erros. isLastBatch=${isLastBatch}`);
 
   return { done: isLastBatch, processedThisRun };
+}
+
+async function runOnce({ serviceKey, tmdbApiKey, startTime }) {
+  const timeLeft = () => MAX_RUNTIME_MS - (Date.now() - startTime);
+
+  // Busca TODAS as fontes ativas (não só a mais atrasada) — se a
+  // primeira falhar, precisamos ter as outras à mão pra tentar em
+  // seguida, sem fazer uma consulta nova ao Supabase pra cada tentativa.
+  const sources = await sbSelect(
+    serviceKey,
+    'iptv_sources',
+    'is_active=eq.true&select=*&order=last_batch_at.asc.nullsfirst'
+  );
+  if (!sources.length) {
+    console.log('[sync-standalone] Nenhuma fonte IPTV ativa cadastrada.');
+    return { done: true };
+  }
+
+  // Tenta cada fonte em ordem (mais atrasada primeiro). Se uma falhar
+  // (ex: 403 de bloqueio por IP de datacenter), grava o erro nela —
+  // isso atualiza last_batch_at, então ela deixa de ser "a mais
+  // atrasada" e vai pro fim da fila — e PASSA PRA PRÓXIMA em vez de
+  // travar o ciclo inteiro. Antes, um erro numa única fonte matava o
+  // processo com process.exit(1) e as fontes saudáveis nunca chegavam
+  // a ser tentadas nessa execução.
+  for (const source of sources) {
+    if (timeLeft() <= 5000) {
+      return { done: false };
+    }
+    try {
+      return await processSource({ source, serviceKey, tmdbApiKey, timeLeft });
+    } catch (err) {
+      console.error(`[sync-standalone] Fonte "${source.name || source.id}" falhou (${err.message}), pulando para a próxima fonte.`);
+      try {
+        await sbUpdate(serviceKey, 'iptv_sources', `id=eq.${source.id}`, {
+          last_batch_at: new Date().toISOString(),
+          sync_phase: 'error',
+        });
+      } catch (patchErr) {
+        // Não deixa uma falha ao GRAVAR o erro derrubar o ciclo — só loga
+        // e segue tentando a próxima fonte de qualquer forma.
+        console.error('[sync-standalone] Falha ao registrar erro da fonte:', patchErr.message);
+      }
+      // continua o for — próxima fonte da fila
+    }
+  }
+
+  console.log('[sync-standalone] Todas as fontes ativas falharam ou o tempo acabou neste ciclo.');
+  return { done: false };
 }
 
 async function main() {
