@@ -20,6 +20,7 @@ const EXTRA_ALLOWED_HOSTS = [
   'sventank.com',
   'cdnbr02.com',
   'sosbrazil.xyz',
+  '178.63.61.173',
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
