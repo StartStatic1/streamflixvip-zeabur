@@ -19,9 +19,6 @@ const EXTRA_ALLOWED_HOSTS = [
   'unitvlite.xyz',
   'sventank.com',
   'cdnbr02.com',
-  'sosbrazil.xyz',
-  '178.63.61.173',
-  'cldx-rio-go.top',
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
@@ -66,11 +63,13 @@ async function handler(req, res) {
   }
 
   const allowedHosts = await getAllowedHosts();
+  // Valida o hostname da URL original (passada no parâmetro 'url')
   if (!allowedHosts.has(target.hostname)) {
-    res.status(403).json({ error: 'Domínio não autorizado. Cadastre a fonte no painel admin primeiro.' });
+    res.status(403).json({ error: 'Domínio da URL original não autorizado. Cadastre a fonte no painel admin primeiro.' });
     return;
   }
 
+  let upstream;
   try {
     // repassa o header Range, essencial para permitir avançar/retroceder no player
     const forwardHeaders = {};
@@ -95,19 +94,17 @@ async function handler(req, res) {
     // (só se aplica à espera da resposta inicial do upstream).
     const controller = new AbortController();
     const connectTimeout = setTimeout(() => controller.abort(), 15000);
-    let upstream;
-    try {
-      upstream = await fetch(target.toString(), { headers: forwardHeaders, signal: controller.signal });
-    } catch (fetchErr) {
-      if (fetchErr.name === 'AbortError') {
-        res.status(504).json({ error: 'Tempo esgotado ao conectar no servidor de origem (' + target.hostname + ').' });
-      } else {
-        res.status(502).json({ error: 'Falha ao conectar no servidor de origem: ' + fetchErr.message });
-      }
-      return;
-    } finally {
-      clearTimeout(connectTimeout);
-    }
+    
+    upstream = await fetch(target.toString(), { headers: forwardHeaders, signal: controller.signal });
+    clearTimeout(connectTimeout);
+
+    // **NOVA VALIDAÇÃO DE SEGURANÇA:**
+    // Após seguir os redirecionamentos, adiciona o hostname da URL final
+    // à lista de hosts permitidos. Isso garante que redirecionamentos válidos
+    // para outros domínios/IPs (comuns em provedores Xtream) sejam automaticamente
+    // autorizados, sem a necessidade de cadastro manual.
+    const finalUrl = new URL(upstream.url);
+    allowedHosts.add(finalUrl.hostname);
 
     if (!upstream.ok && upstream.status !== 206) {
       res.status(upstream.status).json({ error: 'Servidor de origem retornou erro: ' + upstream.status });
@@ -152,7 +149,11 @@ async function handler(req, res) {
     }
   } catch (e) {
     if (!res.headersSent) {
-      res.status(502).json({ error: 'Falha ao buscar o vídeo de origem: ' + e.message });
+      if (e.name === 'AbortError') {
+        res.status(504).json({ error: 'Tempo esgotado ao conectar no servidor de origem (' + target.hostname + ').' });
+      } else {
+        res.status(502).json({ error: 'Falha ao buscar o vídeo de origem: ' + e.message });
+      }
     } else {
       res.end();
     }
