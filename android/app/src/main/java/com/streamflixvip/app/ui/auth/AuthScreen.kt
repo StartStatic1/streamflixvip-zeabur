@@ -28,8 +28,8 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -137,31 +137,19 @@ fun AuthScreen(
 
                 Spacer(Modifier.height(16.dp))
 
-                // "StreamFlix" em branco com sombra dourada
+                // "StreamFlix" em branco
                 Text(
                     text = "StreamFlix",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        shadow = Shadow(
-                            color = Gold.copy(alpha = 0.3f),
-                            blurRadius = 8f
-                        )
-                    )
+                    color = Color.White
                 )
                 // "VIP" em dourado
                 Text(
                     text = "VIP",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = Gold,
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        shadow = Shadow(
-                            color = Gold.copy(alpha = 0.5f),
-                            blurRadius = 12f
-                        )
-                    )
+                    color = Gold
                 )
 
                 Spacer(Modifier.height(8.dp))
@@ -171,8 +159,7 @@ fun AuthScreen(
                     text = "Seu cinema premium na palma da mão",
                     fontSize = 13.sp,
                     color = Color.White.copy(alpha = 0.55f),
-                    textAlign = TextAlign.Center,
-                    letterSpacing = 0.5.sp
+                    textAlign = TextAlign.Center
                 )
 
                 // Linha decorativa
@@ -230,7 +217,7 @@ fun AuthScreen(
                 Spacer(Modifier.height(16.dp))
                 Text(
                     text = state.errorMessage ?: "",
-                    color = MaterialTheme.colorScheme.error,
+                    color = Color(0xFFFF3D3D),
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
@@ -529,7 +516,7 @@ private fun PinInputField(
                 .alpha(0f)
                 .focusRequester(focusRequester)
                 .onFocusChanged { isFocused = it.isFocused },
-            textStyle = TextStyle(fontSize = 0.sp)
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 0.sp)
         )
 
         // 6 caixinhas visuais

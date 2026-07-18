@@ -4,11 +4,9 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,7 +16,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -33,6 +30,8 @@ import kotlinx.coroutines.delay
  * 2. Frase de efeito aparece com delay
  * 3. Partículas brilhantes flutuam ao fundo
  * 4. Fade-out antes de liberar navegação
+ *
+ * NOTA: Não usa MaterialTheme porque roda antes do tema ser carregado.
  */
 @Composable
 fun SplashScreen(onSplashFinished: () -> Unit) {
@@ -111,13 +110,13 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 
     // Partículas flutuantes
     val particles = remember {
-        (0 until 12).map { index ->
+        (0 until 12).map { _ ->
             Particle(
                 startX = (10..90).random().toFloat(),
                 startY = (10..90).random().toFloat(),
-                size = (2..5).random().dp,
+                sizeDp = (2..5).random(),
                 duration = (3000..6000).random(),
-                delay = (0..2000).random(),
+                delayMs = (0..2000).random(),
                 maxOpacity = (0.2f..0.6f).random()
             )
         }
@@ -181,34 +180,21 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 
             Spacer(Modifier.height(28.dp))
 
-            // Logo "StreamFlixVIP"
+            // Logo "StreamFlix" em branco
             Text(
                 text = "StreamFlix",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    shadow = Shadow(
-                        color = Gold.copy(alpha = 0.4f),
-                        blurRadius = 12f,
-                        offset = Offset(0f, 0f)
-                    )
-                )
+                textAlign = TextAlign.Center
             )
+            // Logo "VIP" em dourado
             Text(
                 text = "VIP",
                 fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Gold,
-                textAlign = TextAlign.Center,
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    shadow = Shadow(
-                        color = Gold.copy(alpha = 0.5f),
-                        blurRadius = 10f,
-                        offset = Offset(0f, 0f)
-                    )
-                )
+                textAlign = TextAlign.Center
             )
 
             // Frase de efeito
@@ -219,8 +205,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 fontWeight = FontWeight.Medium,
                 color = Color.White.copy(alpha = 0.7f),
                 alpha = taglineAlpha,
-                textAlign = TextAlign.Center,
-                letterSpacing = 1.5.sp
+                textAlign = TextAlign.Center
             )
         }
 
@@ -242,9 +227,9 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 data class Particle(
     val startX: Float,
     val startY: Float,
-    val size: androidx.compose.ui.unit.Dp,
+    val sizeDp: Int,
     val duration: Int,
-    val delay: Int,
+    val delayMs: Int,
     val maxOpacity: Float
 )
 
@@ -255,7 +240,7 @@ private fun FloatingParticle(particle: Particle, modifier: Modifier = Modifier) 
         initialValue = particle.startY,
         targetValue = particle.startY - 30f,
         animationSpec = infiniteRepeatable(
-            animation = tween(particle.duration, delayMillis = particle.delay),
+            animation = tween(particle.duration, delayMillis = particle.delayMs),
             repeatMode = RepeatMode.Reverse
         ),
         label = "particle_offset"
@@ -272,9 +257,9 @@ private fun FloatingParticle(particle: Particle, modifier: Modifier = Modifier) 
     ) {
         Box(
             modifier = Modifier
-                .size(particle.size)
+                .size(particle.sizeDp.dp)
                 .background(
-                    color = Color(0xFFD4AF37).copy(alpha = particle.maxOpacity),
+                    color = Gold.copy(alpha = particle.maxOpacity),
                     shape = CircleShape
                 )
         )
@@ -283,6 +268,7 @@ private fun FloatingParticle(particle: Particle, modifier: Modifier = Modifier) 
 
 @Composable
 private fun AnimatedDecorativeLine(modifier: Modifier = Modifier) {
+    val Gold = Color(0xFFD4AF37)
     val anim by animateFloatAsState(
         targetValue = 1f,
         animationSpec = tween(durationMillis = 1500),
@@ -296,10 +282,12 @@ private fun AnimatedDecorativeLine(modifier: Modifier = Modifier) {
                 Brush.horizontalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        Color(0xFFD4AF37),
+                        Gold,
                         Color.Transparent
                     )
                 )
             )
     )
 }
+
+private val Gold = Color(0xFFD4AF37)
