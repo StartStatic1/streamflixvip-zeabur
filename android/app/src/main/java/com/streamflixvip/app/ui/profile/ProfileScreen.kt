@@ -268,18 +268,6 @@ fun ProfileScreen(
             // === PREFERÊNCIAS ===
             SectionTitle(title = "Preferências")
 
-            // Dark Mode — Icons.Default.Bedtime (substitui DarkMode que não existe)
-            ProfileToggleCard(
-                icon = Icons.Default.Bedtime,
-                title = "Modo Escuro",
-                subtitle = "Tema escuro do aplicativo",
-                iconTint = Color(0xFF7E57C2),
-                checked = darkModeEnabled,
-                onCheckedChange = { darkModeEnabled = it }
-            )
-
-            Spacer(Modifier.height(8.dp))
-
             // Notificações — persistido em SharedPreferences
             ProfileToggleCard(
                 icon = Icons.Default.Notifications,
@@ -370,7 +358,7 @@ fun ProfileScreen(
 
             // Footer
             Text(
-                text = "StreamFlixVIP © 2025",
+                text = "StreamFlixVIP © 2026",
                 fontSize = 11.sp,
                 color = Color.White.copy(alpha = 0.3f),
                 textAlign = TextAlign.Center,
@@ -428,7 +416,7 @@ Podemos atualizar estes Termos de Uso periodicamente. O uso continuado do aplica
 9. Contato
 Para dúvidas ou suporte, entre em contato pelo e-mail streamflixvip@outlook.com ou pelo Telegram oficial @streamflixofc.
 
-Última atualização: Julho de 2025"""
+Última atualização: Julho de 2026"""
 }
 
 // Texto da Política de Privacidade
@@ -467,7 +455,7 @@ Podemos atualizar esta Política de Privacidade periodicamente. Notificaremos so
 9. Contato
 Para questões sobre privacidade, entre em contato: streamflixvip@outlook.com
 
-Última atualização: Julho de 2025"""
+Última atualização: Julho de 2026"""
 }
 
 // ========== COMPONENTES AUXILIARES ==========

@@ -27,10 +27,10 @@ private val LightColors = lightColorScheme(
 
 @Composable
 fun StreamFlixTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = true, // Sempre dark — app é exclusively dark theme
     content: @Composable () -> Unit,
 ) {
-    val colors = if (darkTheme) DarkColors else LightColors
+    val colors = DarkColors // Não usa light mode
     MaterialTheme(
         colorScheme = colors,
         content = content,

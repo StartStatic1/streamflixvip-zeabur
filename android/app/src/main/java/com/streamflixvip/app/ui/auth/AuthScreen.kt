@@ -500,96 +500,144 @@ private fun PinInputField(
         focusRequester.requestFocus()
     }
 
-    Box(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Campo invisível para capturar digitação
-        BasicTextField(
-            value = code,
-            onValueChange = { input ->
-                // Filtra apenas dígitos
-                val filtered = input.filter { it.isDigit() }
-                onCodeChange(filtered)
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier
-                .size(1.dp)
-                .alpha(0f)
-                .focusRequester(focusRequester)
-                .onFocusChanged { isFocused = it.isFocused },
-            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 0.sp)
-        )
-
-        // 6 caixinhas visuais
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
         ) {
-            repeat(6) { index ->
-                val digit = if (index < code.length) code[index] else null
-                val isActive = index == code.length && isFocused
+            // Campo invisível mas grande o suficiente para capturar digitação e colar
+            BasicTextField(
+                value = code,
+                onValueChange = { input ->
+                    // Filtra apenas dígitos e limita a 6
+                    val filtered = input.filter { it.isDigit() }.take(6)
+                    onCodeChange(filtered)
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                singleLine = true,
+                modifier = Modifier
+                    .width(300.dp)
+                    .height(60.dp)
+                    .alpha(0f)
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { isFocused = it.isFocused },
+                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 24.sp)
+            )
 
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            if (isActive) Color(0xFF1A1A28) else Color(0xFF12121A)
-                        )
-                        .border(
-                            width = if (isActive) 1.5.dp else 1.dp,
-                            color = if (isActive) Gold else Color.White.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(10.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (digit != null) {
-                        Text(
-                            text = "•",
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Gold
-                        )
+            // 6 caixinhas visuais — clicáveis para focar
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.clickable {
+                    focusRequester.requestFocus()
+                }
+            ) {
+                repeat(6) { index ->
+                    val digit = if (index < code.length) code[index] else null
+                    val isActive = index == code.length && isFocused
+
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (isActive) Color(0xFF1A1A28) else Color(0xFF12121A)
+                            )
+                            .border(
+                                width = if (isActive) 1.5.dp else 1.dp,
+                                color = if (isActive) Gold else Color.White.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(10.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (digit != null) {
+                            Text(
+                                text = digit.toString(),
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        } else if (isActive) {
+                            // Cursor piscante
+                            val cursorVisible by rememberInfiniteTransition(label = "cursor").animateFloat(
+                                initialValue = 1f,
+                                targetValue = 0f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(500),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "cursor_blink"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(2.dp)
+                                    .height(24.dp)
+                                    .background(Gold.copy(alpha = cursorVisible))
+                            )
+                        }
                     }
                 }
             }
         }
-    }
 
-    // Botão "Usar teclado" para garantir que o teclado aparece
-    if (!isFocused && code.isEmpty()) {
-        TextButton(
-            onClick = { focusRequester.requestFocus() },
-            modifier = Modifier.padding(top = 16.dp)
-        ) {
+        Spacer(Modifier.height(8.dp))
+
+        // Instrução de colar
+        if (code.isEmpty()) {
             Text(
-                text = "Tocar para digitar o código",
-                color = Gold.copy(alpha = 0.6f),
-                fontSize = 12.sp
+                text = "Toque nas caixinhas e digite ou cole o código",
+                color = Gold.copy(alpha = 0.5f),
+                fontSize = 11.sp
             )
         }
     }
 }
 
-// ========== BACKGROUND FLUTUANTE ==========
+// ========== BACKGROUND FLUTUANTE (PÔSTERES/ENCARTES) ==========
+
+// Encartes com títulos e cores representativas para simular pôsteres
+private val floatingPosters = listOf(
+    "Oppenheimer" to Color(0xFF1A237E),
+    "Barbie" to Color(0xFFE91E63),
+    "Dune: Part Two" to Color(0xFF795548),
+    "The Batman" to Color(0xFF212121),
+    "Interstellar" to Color(0xFF0D47A1),
+    "Breaking Bad" to Color(0xFF2E7D32),
+    "Stranger Things" to Color(0xFFB71C1C),
+    "The Witcher" to Color(0xFF37474F),
+    "House of the Dragon" to Color(0xFF4E342E),
+    "Wednesday" to Color(0xFF1B1B2F),
+    "Squid Game" to Color(0xFF1A237E),
+    "Arcane" to Color(0xFF311B92),
+    "The Last of Us" to Color(0xFF33691E),
+    "Euphoria" to Color(0xFF6A1B9A),
+    "Peaky Blinders" to Color(0xFF263238),
+    "Dark" to Color(0xFF1B1B2F),
+    "Money Heist" to Color(0xFFF44336),
+    "Narcos" to Color(0xFF424242),
+    "Ozark" to Color(0xFF004D40),
+    "Better Call Saul" to Color(0xFF1A237E),
+)
 
 @Composable
 private fun FloatingPosterBackground(modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "bg_floating")
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .padding(vertical = 40.dp)
     ) {
-        // Três linhas de textos flutuantes que rolam
+        // 4 linhas de pôsteres flutuantes
         repeat(4) { rowIndex ->
             val scrollAnim by infiniteTransition.animateFloat(
                 initialValue = 0f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(
-                        durationMillis = 20000 + rowIndex * 3000,
+                        durationMillis = 25000 + rowIndex * 4000,
                         easing = LinearEasing
                     ),
                     repeatMode = RepeatMode.Restart
@@ -598,27 +646,61 @@ private fun FloatingPosterBackground(modifier: Modifier = Modifier) {
             )
 
             val direction = if (rowIndex % 2 == 0) 1f else -1f
-            val textOffset = (scrollAnim * 2f - 1f) * direction
+            val scrollMultiplier = (scrollAnim * 2f - 1f) * direction
+            val offsetX = (scrollMultiplier * 600).dp
 
-            Text(
-                text = buildString {
-                    // Repete os títulos várias vezes para criar efeito de scroll contínuo
-                    for (i in 0 until 3) {
-                        floatingTitles.forEach { title ->
-                            append(title)
-                            append("  •  ")
-                        }
-                    }
-                },
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White,
+            val rowY = (rowIndex * 25).toFloat() // posição vertical percentual
+
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp)
-                    .offset(x = (textOffset * 50).dp),
-                maxLines = 1
-            )
+                    .offset(
+                        x = offsetX,
+                        y = (rowY / 100f * 800).dp // posiciona verticalmente
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Repete 3x para scroll contínuo
+                for (i in 0 until 3) {
+                    floatingPosters.forEach { (title, accentColor) ->
+                        // Card estilo pôster mini
+                        Box(
+                            modifier = Modifier
+                                .width(70.dp)
+                                .height(100.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            accentColor,
+                                            Color(0xFF0A0A10)
+                                        )
+                                    )
+                                )
+                                .alpha(0.12f + (rowIndex % 2) * 0.03f), // opacidade sutil
+                        ) {
+                            // Título do filme embaixo
+                            Text(
+                                text = title,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(4.dp)
+                            )
+                            // Linha decorativa no topo (simula imagem)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .background(accentColor.copy(alpha = 0.5f))
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
