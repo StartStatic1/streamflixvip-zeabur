@@ -97,10 +97,14 @@ data class VipSource(
         }
 
     /**
-     * URL final pra entregar ao ExoPlayer — mantida por compatibilidade
-     * com quem ainda chama essa função direto (ex: player externo/VLC,
-     * que não precisa de race, só de UMA url). Usa sempre o backend
-     * passado em apiBaseUrl, sem tentar o outro.
+     * URL final pra entregar ao ExoPlayer. Fontes .mp4/.m3u8 que apontam
+     * pra origem http:// (comum em provedores Xtream) precisam passar
+     * pelo /api/stream-proxy do backend — o mesmo mecanismo que o site
+     * usa em STREAM_PROXY_ZEABUR — porque o proxy contorna bloqueio de
+     * mixed-content/CORS e adiciona headers (User-Agent/Referer) que
+     * muitos provedores exigem pra não retornar erro. Fontes que já
+     * apontam pro próprio proxy ou já são https de CDN confiável (ex:
+     * Bunny) tocam direto, sem passar por proxy adicional.
      */
     fun resolvedPlaybackUrl(apiBaseUrl: String): String {
         if (source_url.contains("/stream-proxy") || source_url.startsWith("https://") && source_url.contains(".b-cdn.net")) {
@@ -108,25 +112,6 @@ data class VipSource(
         }
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
         return "${apiBaseUrl}api/stream-proxy?url=$encoded"
-    }
-
-    /**
-     * As URLs candidatas pra tocar essa fonte, uma por backend
-     * (Koyeb + Zeabur) — usadas pelo StreamUrlResolver pra descobrir
-     * qual responde primeiro antes de entregar ao ExoPlayer. Fontes que
-     * já apontam pro próprio proxy ou são CDN confiável (.b-cdn.net)
-     * retornam uma lista de 1 item só (mesmo valor nos dois backends,
-     * já que nesse caso a URL não depende de qual backend a serviu).
-     */
-    fun candidatePlaybackUrls(koyebBaseUrl: String, zeaburBaseUrl: String): List<String> {
-        if (source_url.contains("/stream-proxy") || source_url.startsWith("https://") && source_url.contains(".b-cdn.net")) {
-            return listOf(source_url)
-        }
-        val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
-        return listOf(
-            "${koyebBaseUrl}api/stream-proxy?url=$encoded",
-            "${zeaburBaseUrl}api/stream-proxy?url=$encoded",
-        )
     }
 }
 

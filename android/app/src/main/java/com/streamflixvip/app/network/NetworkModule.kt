@@ -18,17 +18,6 @@ import java.util.concurrent.TimeUnit
  */
 object NetworkModule {
 
-    /**
-     * Domínio alternativo do backend, hospedado no Zeabur — mesmo
-     * server.js do Koyeb (BuildConfig.API_BASE_URL), rodando em paralelo
-     * numa plataforma diferente. Existe porque alguns provedores de
-     * vídeo falhavam de forma diferente em cada plataforma (timeout numa,
-     * erro de CORS na outra); em vez de escolher uma só e ficar refém
-     * dela, o player faz os dois tentarem ao mesmo tempo e usa o que
-     * responder primeiro (ver StreamUrlResolver).
-     */
-    const val ZEABUR_BASE_URL = "https://streamflixpro.zeabur.app/"
-
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = if (BuildConfig.DEBUG) {
             HttpLoggingInterceptor.Level.BODY
@@ -41,17 +30,6 @@ object NetworkModule {
         .addInterceptor(loggingInterceptor)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
-        .build()
-
-    /**
-     * Client com timeout bem mais curto, usado só pela race de stream
-     * (StreamUrlResolver) — o objetivo ali é descobrir RÁPIDO qual dos
-     * dois backends está saudável, não esperar o timeout longo padrão
-     * duas vezes em sequência antes de desistir.
-     */
-    val fastProbeClient = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
         .build()
 
     private val moshi = Moshi.Builder()

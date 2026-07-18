@@ -52,7 +52,6 @@ import com.streamflixvip.app.ui.search.SearchViewModel
 import com.streamflixvip.app.ui.genre.GenreDetailScreen
 import com.streamflixvip.app.ui.genre.GenreScreen
 import com.streamflixvip.app.ui.genre.GenreViewModel
-import com.streamflixvip.app.ui.splash.SplashScreen
 import com.streamflixvip.app.ui.theme.StreamFlixTheme
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -91,16 +90,10 @@ private fun AppRoot() {
     val authViewModel: AuthViewModel = viewModel(factory = viewModelFactory { AuthViewModel(authRepository) })
 
     var isLoggedIn by remember { mutableStateOf(sessionStore.isLoggedIn) }
-    var showSplash by remember { mutableStateOf(true) }
 
-    when {
-        showSplash -> {
-            SplashScreen(onSplashFinished = { showSplash = false })
-        }
-        !isLoggedIn -> {
-            AuthScreen(viewModel = authViewModel, onLoggedIn = { isLoggedIn = true })
-        }
-        else -> {
+    if (!isLoggedIn) {
+        AuthScreen(viewModel = authViewModel, onLoggedIn = { isLoggedIn = true })
+    } else {
         MainAppScaffold(
             authViewModel = authViewModel,
             userId = sessionStore.userId,
@@ -108,7 +101,6 @@ private fun AppRoot() {
             accessToken = sessionStore.accessToken,
             onSignedOut = { isLoggedIn = false },
         )
-        }
     }
 }
 
@@ -299,12 +291,10 @@ private fun MainAppScaffold(
                 DetailScreen(
                     viewModel = viewModel,
                     onPlaySource = { source, season, episode, title, posterPath ->
-                        // Codifica a URL ORIGINAL da fonte (source_url), não
-                        // uma URL já resolvida pra um backend específico — a
-                        // race entre Koyeb/Zeabur acontece dentro do
-                        // PlayerScreen, que é quem sabe montar as duas
-                        // variantes via candidatePlaybackUrls().
-                        val encodedUrl = URLEncoder.encode(source.source_url, "UTF-8")
+                        val encodedUrl = URLEncoder.encode(
+                            source.resolvedPlaybackUrl(BuildConfig.API_BASE_URL),
+                            "UTF-8",
+                        )
                         val encodedTitle = URLEncoder.encode(title, "UTF-8")
                         val encodedPoster = URLEncoder.encode(posterPath ?: "none", "UTF-8")
                         navController.navigate(

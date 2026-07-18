@@ -85,10 +85,6 @@ class AuthViewModel(
         }
     }
 
-    fun goBackToEmail() {
-        _uiState.value = _uiState.value.copy(step = AuthStep.EnterEmail, code = "", errorMessage = null)
-    }
-
     fun signOut() {
         repository.signOut()
         _uiState.value = AuthUiState(step = AuthStep.EnterEmail)
