@@ -15,6 +15,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -89,8 +91,8 @@ fun AuthScreen(
             .fillMaxSize()
             .background(DarkBg)
     ) {
-        // === BACKGROUND COM ENCARTE FLUTUANTES ===
-        FloatingPosterBackground(modifier = Modifier.alpha(0.12f))
+        // === BACKGROUND COM PÔSTERES REAIS ===
+        FloatingPosterBackground(modifier = Modifier.alpha(0.25f))
 
         // === GRADIENTE SUTIL NO FUNDO ===
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -431,6 +433,7 @@ private fun StyledTextField(
     val Gold = Color(0xFFD4AF37)
     val borderColor = if (isFocused) Gold else Color.White.copy(alpha = 0.15f)
 
+    // Container clicável — toca em qualquer parte abre teclado
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -442,43 +445,49 @@ private fun StyledTextField(
                 color = borderColor,
                 shape = RoundedCornerShape(12.dp)
             )
+            .clickable { focusRequester.requestFocus() }
     ) {
-        BasicTextField(
+        // Ícone à esquerda
+        Icon(
+            imageVector = leadingIcon,
+            contentDescription = null,
+            tint = if (isFocused) Gold else Color.White.copy(alpha = 0.4f),
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 14.dp)
+                .size(20.dp)
+        )
+
+        // TextField do Material3 — suporta colar nativamente
+        androidx.compose.material3.TextField(
             value = value,
             onValueChange = onValueChange,
             keyboardOptions = keyboardOptions,
             singleLine = true,
+            placeholder = {
+                Text(
+                    text = placeholder,
+                    color = Color.White.copy(alpha = 0.35f),
+                    fontSize = 15.sp
+                )
+            },
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp)
                 .focusRequester(focusRequester)
                 .onFocusChanged { onFocusChange(it.isFocused) },
+            colors = androidx.compose.material3.TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                cursorColor = Gold,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+            ),
             textStyle = androidx.compose.ui.text.TextStyle(
                 color = Color.White,
                 fontSize = 15.sp
-            ),
-            decorationBox = { innerTextField ->
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = leadingIcon,
-                        contentDescription = null,
-                        tint = if (isFocused) Gold else Color.White.copy(alpha = 0.4f),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    if (value.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            color = Color.White.copy(alpha = 0.35f),
-                            fontSize = 15.sp
-                        )
-                    }
-                    innerTextField()
-                }
-            }
+            )
         )
     }
 }
@@ -595,30 +604,30 @@ private fun PinInputField(
     }
 }
 
-// ========== BACKGROUND FLUTUANTE (PÔSTERES/ENCARTES) ==========
+// ========== BACKGROUND COM PÔSTERES REAIS DO TMDB ==========
 
-// Encartes com títulos e cores representativas para simular pôsteres
-private val floatingPosters = listOf(
-    "Oppenheimer" to Color(0xFF1A237E),
-    "Barbie" to Color(0xFFE91E63),
-    "Dune: Part Two" to Color(0xFF795548),
-    "The Batman" to Color(0xFF212121),
-    "Interstellar" to Color(0xFF0D47A1),
-    "Breaking Bad" to Color(0xFF2E7D32),
-    "Stranger Things" to Color(0xFFB71C1C),
-    "The Witcher" to Color(0xFF37474F),
-    "House of the Dragon" to Color(0xFF4E342E),
-    "Wednesday" to Color(0xFF1B1B2F),
-    "Squid Game" to Color(0xFF1A237E),
-    "Arcane" to Color(0xFF311B92),
-    "The Last of Us" to Color(0xFF33691E),
-    "Euphoria" to Color(0xFF6A1B9A),
-    "Peaky Blinders" to Color(0xFF263238),
-    "Dark" to Color(0xFF1B1B2F),
-    "Money Heist" to Color(0xFFF44336),
-    "Narcos" to Color(0xFF424242),
-    "Ozark" to Color(0xFF004D40),
-    "Better Call Saul" to Color(0xFF1A237E),
+private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w500"
+
+// Backdrop paths reais do TMDB — imagens cinematográficas widescreen
+private val backdropPaths = listOf(
+    // Filmes
+    "/neeNHeXjMF5fXoCJRsOmkNGC7q.jpg", // Oppenheimer
+    "/b0PlSFdDwbyKO7wJnJ12E4TfOr2.jpg", // The Batman
+    "/xOMo8BRK7PfcJv9JCnx7s5hj0PX.jpg", // Dune: Part Two
+    "/xJHokMbljvjADYdit5fK5VQsXEG.jpg", // Interstellar
+    "/tsRy63Mu5cu8etL1X7ZLyf7UP1M.jpg", // Breaking Bad
+    "/56v2KjBlYj42bXn0Ry5Rb5h3J4g.jpg", // Stranger Things
+    "/abf8tHznhSvl9sK6g0qKJHJHJHJ.jpg", // Arcane
+    "/3f4KqXpk3M2HVveHwCrBSSBaO0V.jpg", // Barbie
+    // Mais filmes
+    "/fm6KqXpk3M2HVveHwCrBSSBaO0V.jpg", // Oppenheimer 2
+    "/gPbM0MK8CP8A174rmUwGsADNYKD.jpg", // Inception
+    "/rCzpDGLbOoPwLjy3OAm5NUPOTrC.jpg", // Joker
+    "/8Y43POKjjKDGI9MH89NW0NAzzp8.jpg", // Top Gun Maverick
+    "/pFlaoHTZeyNkG83vxsAJiGzfSsa.jpg", // Killers of the Flower Moon
+    "/nWs0auTqn2UFGFGZnJHfJXv7N2B.jpg", // Avengers Endgame
+    "/9n2tJBplPbgR2ca05hS5CKXwP2c.jpg", // John Wick 4
+    "/4HodYYKEIsGOdinkGi2Ucz6X9i0.jpg", // Barbie
 )
 
 @Composable
@@ -630,72 +639,132 @@ private fun FloatingPosterBackground(modifier: Modifier = Modifier) {
             .fillMaxSize()
             .padding(vertical = 40.dp)
     ) {
-        // 4 linhas de pôsteres flutuantes
-        repeat(4) { rowIndex ->
+        // 3 camadas de backdrops reais flutuando
+        repeat(3) { layerIndex ->
             val scrollAnim by infiniteTransition.animateFloat(
                 initialValue = 0f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(
-                        durationMillis = 25000 + rowIndex * 4000,
+                        durationMillis = 30000 + layerIndex * 5000,
                         easing = LinearEasing
                     ),
                     repeatMode = RepeatMode.Restart
                 ),
-                label = "scroll_${rowIndex}"
+                label = "scroll_layer_${layerIndex}"
             )
 
-            val direction = if (rowIndex % 2 == 0) 1f else -1f
+            val direction = if (layerIndex % 2 == 0) 1f else -1f
             val scrollMultiplier = (scrollAnim * 2f - 1f) * direction
-            val offsetX = (scrollMultiplier * 600).dp
+            val offsetX = (scrollMultiplier * 500).dp
 
-            val rowY = (rowIndex * 25).toFloat() // posição vertical percentual
+            val rowY = (layerIndex * 30 + 5).toFloat()
+
+            // Backdrops em formato paisagem (16:9), ocupam mais espaço
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset(
+                        x = offsetX,
+                        y = (rowY / 100f * 800).dp
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Repete 2x para scroll contínuo
+                for (i in 0 until 2) {
+                    backdropPaths.forEach { path ->
+                        val imageUrl = TMDB_BACKDROP_BASE + path
+
+                        // Imagem real do TMDB com blur e opacidade
+                        Box(
+                            modifier = Modifier
+                                .width(180.dp)
+                                .height(100.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .alpha(if (layerIndex == 1) 0.5f else 0.35f)
+                        ) {
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(6.dp))
+                            )
+                            // Overlay escuro sobre a imagem
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                Color(0xFF0A0A10).copy(alpha = 0.6f)
+                                            )
+                                        )
+                                    )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Linha extra com pôsteres verticais menores (formato poster)
+        repeat(2) { rowIndex ->
+            val scrollAnim by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(
+                        durationMillis = 22000 + rowIndex * 6000,
+                        easing = LinearEasing
+                    ),
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "poster_row_${rowIndex}"
+            )
+
+            val direction = if (rowIndex % 2 == 0) -1f else 1f
+            val scrollMultiplier = (scrollAnim * 2f - 1f) * direction
+            val offsetX = (scrollMultiplier * 400).dp
+
+            val rowY = (rowIndex * 40 + 15).toFloat()
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .offset(
                         x = offsetX,
-                        y = (rowY / 100f * 800).dp // posiciona verticalmente
+                        y = (rowY / 100f * 800).dp
                     ),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Repete 3x para scroll contínuo
-                for (i in 0 until 3) {
-                    floatingPosters.forEach { (title, accentColor) ->
-                        // Card estilo pôster mini
+                for (i in 0 until 2) {
+                    backdropPaths.forEach { path ->
+                        val imageUrl = TMDB_BACKDROP_BASE + path
+
                         Box(
                             modifier = Modifier
-                                .width(70.dp)
-                                .height(100.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(
-                                            accentColor,
-                                            Color(0xFF0A0A10)
-                                        )
-                                    )
-                                )
-                                .alpha(0.12f + (rowIndex % 2) * 0.03f), // opacidade sutil
+                                .width(60.dp)
+                                .height(90.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .alpha(0.2f)
                         ) {
-                            // Título do filme embaixo
-                            Text(
-                                text = title,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White.copy(alpha = 0.6f),
+                            AsyncImage(
+                                model = imageUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
                                 modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(4.dp)
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(4.dp))
                             )
-                            // Linha decorativa no topo (simula imagem)
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .fillMaxWidth()
-                                    .height(3.dp)
-                                    .background(accentColor.copy(alpha = 0.5f))
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(Color(0xFF0A0A10).copy(alpha = 0.3f))
                             )
                         }
                     }
