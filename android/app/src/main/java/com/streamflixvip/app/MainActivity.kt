@@ -52,6 +52,7 @@ import com.streamflixvip.app.ui.search.SearchViewModel
 import com.streamflixvip.app.ui.genre.GenreDetailScreen
 import com.streamflixvip.app.ui.genre.GenreScreen
 import com.streamflixvip.app.ui.genre.GenreViewModel
+import com.streamflixvip.app.ui.splash.SplashScreen
 import com.streamflixvip.app.ui.theme.StreamFlixTheme
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -90,10 +91,16 @@ private fun AppRoot() {
     val authViewModel: AuthViewModel = viewModel(factory = viewModelFactory { AuthViewModel(authRepository) })
 
     var isLoggedIn by remember { mutableStateOf(sessionStore.isLoggedIn) }
+    var showSplash by remember { mutableStateOf(true) }
 
-    if (!isLoggedIn) {
-        AuthScreen(viewModel = authViewModel, onLoggedIn = { isLoggedIn = true })
-    } else {
+    when {
+        showSplash -> {
+            SplashScreen(onSplashFinished = { showSplash = false })
+        }
+        !isLoggedIn -> {
+            AuthScreen(viewModel = authViewModel, onLoggedIn = { isLoggedIn = true })
+        }
+        else -> {
         MainAppScaffold(
             authViewModel = authViewModel,
             userId = sessionStore.userId,
@@ -101,6 +108,7 @@ private fun AppRoot() {
             accessToken = sessionStore.accessToken,
             onSignedOut = { isLoggedIn = false },
         )
+        }
     }
 }
 
