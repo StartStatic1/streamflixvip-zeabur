@@ -493,74 +493,78 @@ private fun OtpInput(
     // Posição do cursor
     val cursorPos = minOf(value.length, 6)
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Campo de input invisível que captura digitação e colar
-        BasicTextField(
-            value = value.take(6),
-            onValueChange = { input ->
-                // Filtra só dígitos, máximo 6
-                val digits = input.filter { it.isDigit() }
-                if (digits.length <= 6) {
-                    onValueChange(digits)
-                }
-            },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.NumberPassword
-            ),
-            singleLine = true,
-            modifier = Modifier
-                .size(200.dp) // área grande para tocar
-                .alpha(0f) // invisível
-                .focusRequester(focusRequester)
-                .onFocusChanged { isFocused = it.isFocused }
-        )
-
-        // Caixinhas visuais clicáveis
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            repeat(6) { index ->
-                val digit = if (index < value.length) value[index] else ' '
-                val isActive = isFocused && index == cursorPos
-
-                Box(
-                    modifier = Modifier
-                        .width(48.dp)
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            if (isActive) DarkSurface
-                            else Color(0xFF12121A)
-                        )
-                        .border(
-                            width = if (isActive) 1.5.dp else 1.dp,
-                            color = if (isActive) Gold else Color.White.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        .clickable { focusRequester.requestFocus() },
-                    contentAlignment = Alignment.Center
+    // Campo de input real e visível - abrange toda a área das caixinhas
+    BasicTextField(
+        value = value.take(6),
+        onValueChange = { input ->
+            // Filtra só dígitos, máximo 6
+            val digits = input.filter { it.isDigit() }
+            if (digits.length <= 6) {
+                onValueChange(digits)
+            }
+        },
+        keyboardOptions = KeyboardOptions(
+            keyboardType = KeyboardType.NumberPassword
+        ),
+        singleLine = true,
+        textStyle = androidx.compose.ui.text.TextStyle(
+            color = Color.Transparent, // texto invisível (usamos caixinhas custom)
+            fontSize = 1.sp,
+            lineHeight = 1.sp,
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .focusRequester(focusRequester)
+            .onFocusChanged { isFocused = it.isFocused },
+        decorationBox = { innerTextField ->
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // Caixinhas visuais
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    if (index < value.length) {
-                        // Mostra o dígito digitado
-                        Text(
-                            text = digit.toString(),
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    } else if (isActive) {
-                        // Cursor piscante
+                    repeat(6) { index ->
+                        val digit = if (index < value.length) value[index] else ' '
+                        val isActive = isFocused && index == cursorPos
+
                         Box(
                             modifier = Modifier
-                                .width(2.dp)
-                                .height(28.dp)
-                                .background(Gold)
-                        )
+                                .width(48.dp)
+                                .height(56.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    if (isActive) DarkSurface
+                                    else Color(0xFF12121A)
+                                )
+                                .border(
+                                    width = if (isActive) 1.5.dp else 1.dp,
+                                    color = if (isActive) Gold else Color.White.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable { focusRequester.requestFocus() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (index < value.length) {
+                                Text(
+                                    text = digit.toString(),
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            } else if (isActive) {
+                                Box(
+                                    modifier = Modifier
+                                        .width(2.dp)
+                                        .height(28.dp)
+                                        .background(Gold)
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
-    }
+    )
 
     // Foca automaticamente quando entra na tela de código
     LaunchedEffect(Unit) {
