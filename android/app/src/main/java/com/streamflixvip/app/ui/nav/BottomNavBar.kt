@@ -56,24 +56,23 @@ fun StreamFlixBottomBar(navController: NavController) {
                 onClick = {
                     if (selected) return@NavigationBarItem
 
-                    // Padrão oficial recomendado pelo Google pra bottom nav
-                    // (Navigation Compose docs): sempre navigate() com
-                    // popUpTo no destino inicial do grafo. A versão anterior
-                    // tentava um popBackStack() manual primeiro pra "voltar"
-                    // a uma aba já visitada, mas isso ficava inconsistente
-                    // quando havia telas sem bottom bar empilhadas por cima
-                    // (Detail, Player) — às vezes o Início não respondia ao
-                    // toque porque o popBackStack não encontrava a rota na
-                    // pilha daquele estado específico. navigate() sozinho é
-                    // mais previsível: sempre funciona, e saveState/
-                    // restoreState já cuidam de preservar a posição de
-                    // rolagem de cada aba.
-                    navController.navigate(item.route) {
-                        popUpTo(navController.graph.findStartDestination().id) {
-                            saveState = true
+                    // Primeiro tenta voltar a uma aba que já esteja na pilha.
+                    // Assim, tocar em Início vindo de outra área volta
+                    // imediatamente para Home, sem deixar a pessoa presa no
+                    // gesto de voltar e sem duplicar destinos na navegação.
+                    val restoredExistingDestination = navController.popBackStack(
+                        route = item.route,
+                        inclusive = false,
+                    )
+
+                    if (!restoredExistingDestination) {
+                        navController.navigate(item.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
                 },
                 icon = { Icon(item.icon, contentDescription = item.label) },

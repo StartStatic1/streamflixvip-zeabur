@@ -117,7 +117,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 sizeDp = (2..5).random(),
                 duration = (3000..6000).random(),
                 delayMs = (0..2000).random(),
-                maxOpacity = (0.2f..0.6f).random()
+                maxOpacity = 0.2f + (Math.random() * 0.4).toFloat()
             )
         }
     }
@@ -203,9 +203,8 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 text = "Seu cinema. Seu ritmo.",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.alpha(taglineAlpha),
+                color = Color.White.copy(alpha = 0.7f * taglineAlpha),
+                textAlign = TextAlign.Center
             )
         }
 
