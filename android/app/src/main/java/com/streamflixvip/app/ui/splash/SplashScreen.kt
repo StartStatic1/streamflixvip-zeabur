@@ -204,8 +204,8 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 color = Color.White.copy(alpha = 0.7f),
-                alpha = taglineAlpha,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                modifier = Modifier.alpha(taglineAlpha),
             )
         }
 
