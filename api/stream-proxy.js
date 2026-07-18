@@ -77,21 +77,10 @@ async function handler(req, res) {
 
     // Muitos provedores Xtream redirecionam (302) para uma CDN de entrega
     // real com token temporário na URL (ex: sventank.com -> algumcdn.com).
-    // Essas CDNs costumam ter proteção anti-hotlink que bloqueia ou serve
-    // conteúdo diferente quando a requisição não parece vir de um
-    // navegador real (sem User-Agent, sem Referer) — que é exatamente o
-    // caso do fetch do Node por padrão. Sem isso, a origem responde com
-    // erro (ou o player simplesmente não recebe o vídeo esperado), mesmo
-    // que a mesma URL funcione perfeitamente colada direto no navegador.
     forwardHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
     forwardHeaders['Referer'] = target.origin + '/';
 
-    // Timeout de conexão: sem isso, se o servidor de origem (ex: Svent)
-    // demorar ou não responder, o fetch fica pendurado indefinidamente e
-    // o player do usuário só fica girando pra sempre, sem erro nenhum.
-    // 15s é generoso pro handshake inicial + primeiro byte; depois que o
-    // stream começa a chegar, o corpo já não passa mais por este timeout
-    // (só se aplica à espera da resposta inicial do upstream).
+    // Timeout de conexão: 15s é generoso pro handshake inicial
     const controller = new AbortController();
     const connectTimeout = setTimeout(() => controller.abort(), 15000);
     
@@ -105,10 +94,6 @@ async function handler(req, res) {
     // autorizados, sem a necessidade de cadastro manual.
     const finalUrl = new URL(upstream.url);
     allowedHosts.add(finalUrl.hostname);
-    // A validação de segurança original (if (!allowedHosts.has(finalUrl.hostname))) foi removida
-    // porque o objetivo é permitir automaticamente o redirecionamento se o host original era válido.
-    // Se houver necessidade de bloquear redirecionamentos para hosts específicos,
-    // essa lógica precisaria ser reintroduzida com uma lista de bloqueio explícita.
 
     if (!upstream.ok && upstream.status !== 206) {
       res.status(upstream.status).json({ error: 'Servidor de origem retornou erro: ' + upstream.status });
@@ -126,13 +111,7 @@ async function handler(req, res) {
     res.setHeader('Cache-Control', 'public, max-age=3600');
     res.setHeader('Access-Control-Allow-Origin', '*');
 
-    // IMPORTANTE: repassa o corpo em stream (pipe), sem baixar o arquivo
-    // inteiro pra memória antes de responder. Com arrayBuffer() o vídeo
-    // inteiro (pode passar de 1-2GB) precisa terminar de baixar do servidor
-    // de origem ANTES do navegador receber o primeiro byte — isso estoura
-    // o tempo máximo de execução da function (10s no plano Hobby da Vercel)
-    // e o limite de memória, e o player fica girando pra sempre. Streaming
-    // manda os bytes pro navegador conforme chegam da origem.
+    // IMPORTANTE: repassa o corpo em stream (pipe)
     if (upstream.body) {
       const reader = upstream.body.getReader();
       req.on('close', () => reader.cancel().catch(() => {}));
@@ -147,111 +126,6 @@ async function handler(req, res) {
         res.end();
       }
     } else {
-      // fallback (ambiente sem suporte a stream do fetch): buffer completo
-      const buffer = Buffer.from(await upstream.arrayBuffer());
-      res.send(buffer);
-    }
-  } catch (e) {
-    if (!res.headersSent) {
-      if (e.name === 'AbortError') {
-        res.status(504).json({ error: 'Tempo esgotado ao conectar no servidor de origem (' + target.hostname + ').' });
-      } else {
-        res.status(502).json({ error: 'Falha ao buscar o vídeo de origem: ' + e.message });
-      }
-    } else {
-      res.end();
-    }
-  }
-}
-
-module.exports = handler;
-
-module.exports.config = {
-  api:
-```
-    res.status(403).json({ error: 'Domínio da URL original não autorizado. Cadastre a fonte no painel admin primeiro.' });
-    return;
-  }
-
-  let upstream;
-  try {
-    // repassa o header Range, essencial para permitir avançar/retroceder no player
-    const forwardHeaders = {};
-    if (req.headers.range) forwardHeaders.range = req.headers.range;
-
-    // Muitos provedores Xtream redirecionam (302) para uma CDN de entrega
-    // real com token temporário na URL (ex: sventank.com -> algumcdn.com).
-    // Essas CDNs costumam ter proteção anti-hotlink que bloqueia ou serve
-    // conteúdo diferente quando a requisição não parece vir de um
-    // navegador real (sem User-Agent, sem Referer) — que é exatamente o
-    // caso do fetch do Node por padrão. Sem isso, a origem responde com
-    // erro (ou o player simplesmente não recebe o vídeo esperado), mesmo
-    // que a mesma URL funcione perfeitamente colada direto no navegador.
-    forwardHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
-    forwardHeaders['Referer'] = target.origin + '/';
-
-    // Timeout de conexão: sem isso, se o servidor de origem (ex: Svent)
-    // demorar ou não responder, o fetch fica pendurado indefinidamente e
-    // o player do usuário só fica girando pra sempre, sem erro nenhum.
-    // 15s é generoso pro handshake inicial + primeiro byte; depois que o
-    // stream começa a chegar, o corpo já não passa mais por este timeout
-    // (só se aplica à espera da resposta inicial do upstream).
-    const controller = new AbortController();
-    const connectTimeout = setTimeout(() => controller.abort(), 15000);
-    
-    upstream = await fetch(target.toString(), { headers: forwardHeaders, signal: controller.signal });
-    clearTimeout(connectTimeout);
-
-    // **NOVA VALIDAÇÃO DE SEGURANÇA:**
-    // Após seguir os redirecionamentos, adiciona o hostname da URL final
-    // à lista de hosts permitidos. Isso garante que redirecionamentos válidos
-    // para outros domínios/IPs (comuns em provedores Xtream) sejam automaticamente
-    // autorizados, sem a necessidade de cadastro manual.
-    const finalUrl = new URL(upstream.url);
-    allowedHosts.add(finalUrl.hostname);
-    // A validação de segurança original (if (!allowedHosts.has(finalUrl.hostname))) foi removida
-    // porque o objetivo é permitir automaticamente o redirecionamento se o host original era válido.
-    // Se houver necessidade de bloquear redirecionamentos para hosts específicos,
-    // essa lógica precisaria ser reintroduzida com uma lista de bloqueio explícita.
-
-    if (!upstream.ok && upstream.status !== 206) {
-      res.status(upstream.status).json({ error: 'Servidor de origem retornou erro: ' + upstream.status });
-      return;
-    }
-
-    // repassa os headers relevantes pro player entender duração/tipo/range
-    res.status(upstream.status);
-    const passHeaders = ['content-type', 'content-length', 'content-range', 'accept-ranges'];
-    passHeaders.forEach(h => {
-      const v = upstream.headers.get(h);
-      if (v) res.setHeader(h, v);
-    });
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-
-    // IMPORTANTE: repassa o corpo em stream (pipe), sem baixar o arquivo
-    // inteiro pra memória antes de responder. Com arrayBuffer() o vídeo
-    // inteiro (pode passar de 1-2GB) precisa terminar de baixar do servidor
-    // de origem ANTES do navegador receber o primeiro byte — isso estoura
-    // o tempo máximo de execução da function (10s no plano Hobby da Vercel)
-    // e o limite de memória, e o player fica girando pra sempre. Streaming
-    // manda os bytes pro navegador conforme chegam da origem.
-    if (upstream.body) {
-      const reader = upstream.body.getReader();
-      req.on('close', () => reader.cancel().catch(() => {}));
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const ok = res.write(Buffer.from(value));
-          if (!ok) await new Promise(resolve => res.once('drain', resolve));
-        }
-      } finally {
-        res.end();
-      }
-    } else {
-      // fallback (ambiente sem suporte a stream do fetch): buffer completo
       const buffer = Buffer.from(await upstream.arrayBuffer());
       res.send(buffer);
     }
@@ -272,6 +146,6 @@ module.exports = handler;
 
 module.exports.config = {
   api: {
-    responseLimit: false, // vídeos costumam passar do limite padrão de resposta da Vercel
+    responseLimit: false,
   },
 };
