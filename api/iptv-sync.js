@@ -119,7 +119,16 @@ async function downloadM3U(source) {
   const timeoutId = setTimeout(() => controller.abort(), 20000);
   let res;
   try {
-    res = await fetch(url, { signal: controller.signal });
+    // Adicionado headers de navegador para evitar erro 403 (Forbidden)
+    // Muitos servidores IPTV bloqueiam requisições que não tenham User-Agent.
+    res = await fetch(url, { 
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Connection': 'keep-alive'
+      },
+      signal: controller.signal 
+    });
   } finally {
     clearTimeout(timeoutId);
   }
