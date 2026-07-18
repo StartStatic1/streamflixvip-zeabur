@@ -60,7 +60,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.streamflixvip.app.BuildConfig
 import com.streamflixvip.app.data.ProgressRepository
+import com.streamflixvip.app.network.NetworkModule
+import com.streamflixvip.app.network.StreamUrlResolver
+import com.streamflixvip.app.network.VipSource
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -166,9 +170,44 @@ fun PlayerScreen(
         }
     }
 
+    // Antes de montar o player de verdade, resolve qual dos dois backends
+    // (Koyeb/Zeabur) responde mais rápido pra essa fonte específica — ver
+    // StreamUrlResolver. Fontes de embed (WebView) não passam por essa
+    // race: o iframe de terceiro não tem "backend nosso" nenhum por trás.
+    var resolvedUrl by remember(sourceUrl) { mutableStateOf<String?>(if (isDirectPlayable) null else sourceUrl) }
+    LaunchedEffect(sourceUrl, isDirectPlayable) {
+        if (isDirectPlayable) {
+            val candidates = VipSource(
+                source_url = sourceUrl,
+                source_label = null,
+                priority = null,
+            ).candidatePlaybackUrls(
+                koyebBaseUrl = BuildConfig.API_BASE_URL,
+                zeaburBaseUrl = NetworkModule.ZEABUR_BASE_URL,
+            )
+            resolvedUrl = StreamUrlResolver.resolveFastest(candidates)
+        }
+    }
+
+    val currentResolvedUrl = resolvedUrl
+    if (currentResolvedUrl == null) {
+        // Só aparece por até ~6s (timeout do resolveFastest) enquanto os
+        // dois backends competem — normalmente é bem mais rápido que
+        // isso, já que HEAD é uma requisição leve.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(color = Color.White)
+        }
+        return
+    }
+
     if (isDirectPlayable) {
         NativePlayer(
-            url = sourceUrl,
+            url = currentResolvedUrl,
             userId = userId,
             accessToken = accessToken,
             tmdbId = tmdbId,
@@ -180,7 +219,7 @@ fun PlayerScreen(
             resumeSeconds = resumeSeconds,
         )
     } else {
-        EmbedWebView(url = sourceUrl)
+        EmbedWebView(url = currentResolvedUrl)
     }
 }
 

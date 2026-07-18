@@ -299,10 +299,12 @@ private fun MainAppScaffold(
                 DetailScreen(
                     viewModel = viewModel,
                     onPlaySource = { source, season, episode, title, posterPath ->
-                        val encodedUrl = URLEncoder.encode(
-                            source.resolvedPlaybackUrl(BuildConfig.API_BASE_URL),
-                            "UTF-8",
-                        )
+                        // Codifica a URL ORIGINAL da fonte (source_url), não
+                        // uma URL já resolvida pra um backend específico — a
+                        // race entre Koyeb/Zeabur acontece dentro do
+                        // PlayerScreen, que é quem sabe montar as duas
+                        // variantes via candidatePlaybackUrls().
+                        val encodedUrl = URLEncoder.encode(source.source_url, "UTF-8")
                         val encodedTitle = URLEncoder.encode(title, "UTF-8")
                         val encodedPoster = URLEncoder.encode(posterPath ?: "none", "UTF-8")
                         navController.navigate(
