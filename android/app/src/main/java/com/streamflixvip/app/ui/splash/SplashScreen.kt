@@ -264,11 +264,9 @@ private fun FloatingParticle(particle: Particle, modifier: Modifier = Modifier) 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(
-                start = androidx.compose.ui.unit.dp.times(particle.startX / 10f),
-                top = androidx.compose.ui.unit.dp.times(particle.startY / 10f),
-                end = androidx.compose.ui.unit.dp.times((100f - particle.startX) / 10f),
-                bottom = androidx.compose.ui.unit.dp.times((100f - particle.startY) / 10f)
+            .offset(
+                x = (particle.startX / 100f * 100).dp,
+                y = (offsetY / 100f * 100).dp
             ),
         contentAlignment = Alignment.Center
     ) {
