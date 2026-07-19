@@ -28,6 +28,7 @@ const EXTRA_ALLOWED_HOSTS = [
   'vd2onebm.fun',
   'cdnnetjs.click',
   'sec.slackewn.click',
+  'highcdnvideo.link',
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
