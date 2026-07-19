@@ -1387,7 +1387,7 @@ private fun TrailerModal(
                     },
                 )
 
-                AnimatedVisibility(
+                androidx.compose.animation.AnimatedVisibility(
                     visible = isLoading,
                     enter = fadeIn(),
                     exit = fadeOut(),
