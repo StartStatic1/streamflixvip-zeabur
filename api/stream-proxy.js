@@ -26,6 +26,8 @@ const EXTRA_ALLOWED_HOSTS = [
   'sosbrazil.xyz',
   'rumxb.top:80', 
   'vd2onebm.fun',
+  'cdnnetjs.click',
+  'sec.slackewn.click',
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
