@@ -103,6 +103,20 @@ object NetworkModule {
             .create(CommentsApi::class.java)
     }
 
+    /**
+     * Checagem de versão/update obrigatório — usa o MESMO backend Express
+     * (api/app-version.js) do resto do app, não uma URL separada, pra não
+     * precisar gerenciar mais um domínio/deploy só pra isso.
+     */
+    val appVersionApi: AppVersionApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(AppVersionApi::class.java)
+    }
+
     val favoritesApi: FavoritesApi by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.SUPABASE_URL + "/")
