@@ -1,5 +1,6 @@
 package com.streamflixvip.app.ui.vip
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -96,36 +97,42 @@ fun VipSection(viewModel: VipViewModel) {
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(Modifier.height(16.dp))
-                
-                // Plano 1 Mês
-                Button(
+                Spacer(Modifier.height(20.dp))
+
+                // Plano 1 Mês — entrada, sem destaque especial.
+                VipPlanCard(
+                    title = "1 Mês",
+                    price = "R$ 19,90",
+                    priceSuffix = "/mês",
+                    badge = null,
+                    highlighted = false,
                     onClick = { viewModel.startPayment(19.90, "VIP 30 Dias", 720) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
-                ) {
-                    Text("VIP 1 Mês - R$ 19,90", fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.height(8.dp))
-                
-                // Plano 3 Meses
-                Button(
-                    onClick = { viewModel.startPayment(55.00, "VIP 90 Dias", 2160) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
-                ) {
-                    Text("VIP 3 Meses - R$ 55,00", fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.height(8.dp))
-                
-                // Plano Vitalício (99 anos de VIP)
-                Button(
-                    onClick = { viewModel.startPayment(88.90, "VIP Vitalício", 876000) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37), contentColor = Color.Black)
-                ) {
-                    Text("VIP Vitalício - R$ 88,90", fontWeight = FontWeight.Bold)
-                }
+                )
+                Spacer(Modifier.height(10.dp))
+
+                // Plano 3 Meses — o "meio-termo": mostra o preço por mês
+                // pra deixar claro que sai mais barato que renovar 3x no
+                // plano mensal (19,90 × 3 = 59,70 vs 49,90 aqui).
+                VipPlanCard(
+                    title = "3 Meses",
+                    price = "R$ 49,90",
+                    priceSuffix = "/3 meses",
+                    badge = "Economize R$ 9,80",
+                    highlighted = true,
+                    onClick = { viewModel.startPayment(49.90, "VIP 90 Dias", 2160) },
+                )
+                Spacer(Modifier.height(10.dp))
+
+                // Plano Vitalício — topo de linha, pagamento único.
+                VipPlanCard(
+                    title = "Vitalício",
+                    price = "R$ 99,90",
+                    priceSuffix = "pagamento único",
+                    badge = "Melhor valor",
+                    highlighted = false,
+                    goldOutline = true,
+                    onClick = { viewModel.startPayment(99.90, "VIP Vitalício", 876000) },
+                )
 
                 Spacer(Modifier.height(24.dp))
                 Divider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
@@ -162,6 +169,83 @@ fun VipSection(viewModel: VipViewModel) {
                     color = if (state.redeemSuccess) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Card de plano VIP — usado pelos 3 planos (1 mês / 3 meses / vitalício).
+ * Em vez de três botões idênticos (difícil de comparar rapidamente),
+ * cada card tem: nome do plano, preço em destaque, um selo opcional
+ * ("Economize R$X" / "Melhor valor") e um contorno diferenciado pro
+ * plano mais vantajoso — o olho vai direto pro que compensa mais.
+ */
+@Composable
+private fun VipPlanCard(
+    title: String,
+    price: String,
+    priceSuffix: String,
+    badge: String?,
+    highlighted: Boolean,
+    onClick: () -> Unit,
+    goldOutline: Boolean = false,
+) {
+    val gold = Color(0xFFD4AF37)
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = if (highlighted) gold.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+        border = when {
+            highlighted -> BorderStroke(1.5.dp, gold)
+            goldOutline -> BorderStroke(1.dp, gold.copy(alpha = 0.5f))
+            else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    badge?.let {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = gold.copy(alpha = 0.18f),
+                        ) {
+                            Text(
+                                it,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = gold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(3.dp))
+                Text(
+                    priceSuffix,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                price,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (highlighted || goldOutline) gold else MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
