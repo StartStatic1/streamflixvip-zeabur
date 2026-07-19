@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 data class VipUiState(
+    val userId: String = "",
     val isVip: Boolean = false,
     val expiresAt: String? = null,
     val planLabel: String? = null,
@@ -18,6 +19,11 @@ data class VipUiState(
     val isRedeeming: Boolean = false,
     val redeemMessage: String? = null,
     val redeemSuccess: Boolean = false,
+    // Estado do pagamento
+    val showPaymentSheet: Boolean = false,
+    val paymentAmount: Double = 0.0,
+    val paymentLabel: String = "",
+    val paymentDuration: Int = 0,
 )
 
 class VipViewModel(
@@ -29,7 +35,21 @@ class VipViewModel(
     val uiState: StateFlow<VipUiState> = _uiState
 
     init {
+        _uiState.value = _uiState.value.copy(userId = userId)
         refreshStatus()
+    }
+
+    fun startPayment(amount: Double, label: String, duration: Int) {
+        _uiState.value = _uiState.value.copy(
+            showPaymentSheet = true,
+            paymentAmount = amount,
+            paymentLabel = label,
+            paymentDuration = duration
+        )
+    }
+
+    fun dismissPayment() {
+        _uiState.value = _uiState.value.copy(showPaymentSheet = false)
     }
 
     fun refreshStatus() {

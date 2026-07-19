@@ -24,6 +24,19 @@ import java.time.format.DateTimeParseException
 fun VipSection(viewModel: VipViewModel) {
     val state by viewModel.uiState.collectAsState()
 
+    if (state.showPaymentSheet) {
+        PixPaymentSheet(
+            userId = state.userId,
+            amount = state.paymentAmount,
+            planLabel = state.paymentLabel,
+            durationHours = state.paymentDuration,
+            onDismiss = { 
+                viewModel.dismissPayment()
+                viewModel.refreshStatus() // Atualiza o status ao fechar
+            }
+        )
+    }
+
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -75,7 +88,28 @@ fun VipSection(viewModel: VipViewModel) {
                     Text(plan, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                Text("Você ainda não é VIP", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("Assine o VIP", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Tenha acesso a uma experiência sem anúncios e ajude a manter o app no ar.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(16.dp))
+                
+                Button(
+                    onClick = { viewModel.startPayment(19.90, "VIP 30 Dias", 720) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
+                ) {
+                    Text("Assinar VIP - R$ 19,90", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(Modifier.height(24.dp))
+                Divider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                Spacer(Modifier.height(24.dp))
+
+                Text("Já tem um código?", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = state.redeemCode,
