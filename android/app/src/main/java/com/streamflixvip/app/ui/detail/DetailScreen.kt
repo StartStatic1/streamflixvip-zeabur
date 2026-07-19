@@ -256,8 +256,12 @@ private fun DetailContent(
                     if (state.trailerKey != null) showTrailerModal = true
                 },
                 onShare = {
-                    // Compartilha link do título via Intent nativo do Android.
-                    val shareText = "Assista \"$title\" no StreamFlix!"
+                    // Compartilha link direto do título no site via Intent
+                    // nativo do Android — quem recebe pode abrir na hora,
+                    // não é só o nome do filme solto sem destino nenhum.
+                    val mediaTypeForUrl = if (state.mediaType == "tv") "serie" else "filme"
+                    val shareUrl = "https://streamflixvip.online/titulo/$mediaTypeForUrl/${details.id}"
+                    val shareText = "Assista \"$title\" no StreamFlixVIP! $shareUrl"
                     try {
                         val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                             type = "text/plain"
