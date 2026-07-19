@@ -1273,6 +1273,7 @@ private fun ActionButton(
  */
 private const val TRAILER_BASE_URL = "https://streamflixvip.app"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrailerModal(
     trailerKey: String,
