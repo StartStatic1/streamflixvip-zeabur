@@ -62,6 +62,7 @@ const subtitles      = require('./api/subtitles.js');
 const tmdb           = require('./api/tmdb.js');
 const trackLogin     = require('./api/track-login.js');
 const vipStatus      = require('./api/vip-status.js');
+const mercadopago    = require('./api/mercadopago.js');
 
 // ── Rotas de API ──
 // Cada rota aceita todos os métodos (o próprio handler já checa
@@ -87,6 +88,7 @@ app.all('/api/subtitles',     wrap(subtitles));
 app.all('/api/tmdb',          wrap(tmdb));
 app.all('/api/track-login',   wrap(trackLogin));
 app.all('/api/vip-status',    wrap(vipStatus));
+app.all('/api/mercadopago/*', wrap(mercadopago));
 
 // ── Arquivos estáticos (site, admin, embed) ──
 // STATIC_DIR já resolve automaticamente entre 'public'/'Public' (ver acima).
