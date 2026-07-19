@@ -29,6 +29,7 @@ const EXTRA_ALLOWED_HOSTS = [
   'cdnnetjs.click',
   'sec.slackewn.click',
   'highcdnvideo.link',
+  'rumxb.top',
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
