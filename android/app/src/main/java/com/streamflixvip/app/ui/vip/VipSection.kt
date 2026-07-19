@@ -45,6 +45,30 @@ fun VipSection(viewModel: VipViewModel) {
                 state.expiresAt?.let { expiresAt ->
                     Spacer(Modifier.height(4.dp))
                     Text("Válido até ${formatVipExpiry(expiresAt)}", fontSize = 13.sp)
+
+                    // Aviso de renovação — só aparece nos últimos dias
+                    // antes de expirar, pra pessoa não ser pega de
+                    // surpresa perdendo o acesso sem aviso nenhum.
+                    val daysLeft = daysUntilExpiry(expiresAt)
+                    if (daysLeft != null && daysLeft in 0..5) {
+                        Spacer(Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = if (daysLeft == 0L) {
+                                    "⚠️ Seu VIP expira hoje. Renove pra não perder o acesso."
+                                } else {
+                                    "⚠️ Seu VIP expira em $daysLeft ${if (daysLeft == 1L) "dia" else "dias"}. Renove pra não perder o acesso."
+                                },
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(10.dp),
+                            )
+                        }
+                    }
                 }
                 state.planLabel?.let { plan ->
                     Spacer(Modifier.height(2.dp))
@@ -93,5 +117,16 @@ private fun formatVipExpiry(isoDate: String): String {
         date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
     } catch (_: DateTimeParseException) {
         isoDate
+    }
+}
+
+/** Dias restantes até a expiração (arredondado pra baixo) — null se a data vier num formato inesperado. */
+private fun daysUntilExpiry(isoDate: String): Long? {
+    return try {
+        val expiry = OffsetDateTime.parse(isoDate)
+        val now = OffsetDateTime.now()
+        java.time.Duration.between(now, expiry).toDays()
+    } catch (_: DateTimeParseException) {
+        null
     }
 }

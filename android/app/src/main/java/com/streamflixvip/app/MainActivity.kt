@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -70,6 +71,10 @@ import java.net.URLEncoder
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Precisa vir ANTES de super.onCreate() — a API do
+        // core-splashscreen intercepta a criação da Activity nesse ponto
+        // pra decidir quando a splash sai da tela.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
@@ -91,7 +96,17 @@ private fun AppRoot() {
 
     var isLoggedIn by remember { mutableStateOf(sessionStore.isLoggedIn) }
 
-    if (!isLoggedIn) {
+    // Splash Compose animada — roda logo depois da splash nativa do
+    // sistema (instalada em onCreate). A nativa cobre só o instante de
+    // "app abrindo" antes do Compose montar; esta aqui é a experiência
+    // de marca de verdade (logo, frase de efeito, partículas), rodando
+    // já dentro do próprio Compose. Sem nenhuma ligação com login/sessão
+    // — sempre aparece por alguns segundos, então segue pro fluxo normal.
+    var showSplash by remember { mutableStateOf(true) }
+
+    if (showSplash) {
+        com.streamflixvip.app.ui.splash.SplashScreen(onSplashFinished = { showSplash = false })
+    } else if (!isLoggedIn) {
         AuthScreen(viewModel = authViewModel, onLoggedIn = { isLoggedIn = true })
     } else {
         MainAppScaffold(

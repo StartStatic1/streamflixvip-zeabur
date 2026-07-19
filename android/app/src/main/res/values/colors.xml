@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mesmo tom escuro usado no resto do app (ui/theme/Theme.kt) —
+         garante que a splash nativa e a SplashScreen.kt (Compose) que
+         vem logo em seguida não piscam cores diferentes uma pra outra. -->
+    <color name="splash_background">#0A0A10</color>
+</resources>

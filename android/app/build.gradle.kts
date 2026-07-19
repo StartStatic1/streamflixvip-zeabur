@@ -75,6 +75,13 @@ android {
 }
 
 dependencies {
+    // Splash screen nativa — cobre o instante entre tocar no ícone e o
+    // Compose terminar de montar (janela branca/preta crua do sistema).
+    // A SplashScreen.kt (Compose, com animações) continua rodando DEPOIS
+    // dessa, como a primeira tela do próprio app — as duas se
+    // complementam, não competem.
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
     // Compose
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

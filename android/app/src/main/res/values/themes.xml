@@ -6,4 +6,15 @@
     <style name="Theme.StreamFlixVIP" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:statusBarColor">#0A0A10</item>
     </style>
+
+    <!-- Splash nativa: cobre o instante entre abrir o app e o Compose
+         terminar de montar. Fundo escuro igual ao resto do app + o
+         mesmo ícone de play dourado do launcher, pra não parecer "outro
+         app" por um instante antes da SplashScreen.kt (Compose, animada)
+         assumir. -->
+    <style name="Theme.StreamFlixVIP.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.StreamFlixVIP</item>
+    </style>
 </resources>
