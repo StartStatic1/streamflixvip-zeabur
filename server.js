@@ -51,6 +51,7 @@ app.use(express.json({ limit: '2mb' }));
 // ── Handlers importados (mesma lógica dos arquivos da Vercel) ──
 const activeAds     = require('./api/active-ads.js');
 const adminVip       = require('./api/admin-vip.js');
+const appVersion     = require('./api/app-version.js');
 const comments       = require('./api/comments.js');
 const embedConfig    = require('./api/embed-config.js');
 const iptvSync       = require('./api/iptv-sync.js');
@@ -75,6 +76,7 @@ const wrap = (handler) => (req, res) => {
 
 app.all('/api/active-ads',    wrap(activeAds));
 app.all('/api/admin-vip',     wrap(adminVip));
+app.all('/api/app-version',   wrap(appVersion));
 app.all('/api/comments',      wrap(comments));
 app.all('/api/embed-config',  wrap(embedConfig));
 app.all('/api/iptv-sync',     wrap(iptvSync));
