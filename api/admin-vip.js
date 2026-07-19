@@ -107,7 +107,7 @@ module.exports = async function handler(req, res) {
   // ── LIST USERS (vip_status: todo mundo que já logou, com ou sem VIP) ──
   if (action === 'list-users') {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/vip_status?select=user_id,email,name,first_login_at,last_login_at,expires_at,plan_label,last_code_used&order=last_login_at.desc&limit=500`,
+      `${SUPABASE_URL}/rest/v1/vip_status?select=user_id,email,name,first_login_at,last_login_at,last_seen_at,expires_at,plan_label,last_code_used&order=last_login_at.desc&limit=500`,
       { headers: svcHeaders }
     );
     const rows = await r.json();
