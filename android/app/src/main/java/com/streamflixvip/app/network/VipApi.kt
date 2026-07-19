@@ -20,7 +20,24 @@ interface VipApi {
 
     @POST("api/redeem-vip")
     suspend fun redeemCode(@Body body: RedeemVipRequest): RedeemVipResponse
+
+    @POST("api/mercadopago/create-pix")
+    suspend fun createPix(@Body body: PixRequest): PixResponse
 }
+
+data class PixRequest(
+    val userId: String,
+    val amount: Double,
+    val planLabel: String,
+    val durationHours: Int
+)
+
+data class PixResponse(
+    val paymentId: String,
+    val qrCode: String,
+    val qrCodeBase64: String,
+    val status: String
+)
 
 data class VipStatusResponse(
     val isVip: Boolean,
