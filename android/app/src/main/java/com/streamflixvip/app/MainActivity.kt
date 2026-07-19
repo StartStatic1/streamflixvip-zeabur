@@ -96,6 +96,50 @@ private fun AppRoot() {
 
     var isLoggedIn by remember { mutableStateOf(sessionStore.isLoggedIn) }
 
+    // ── Checagem de atualização obrigatória ──
+    // Roda uma vez, assim que o app abre, ANTES de splash/login — se
+    // existir uma versão mais nova publicada (ver api/app-version.js),
+    // a pessoa é bloqueada aqui até atualizar. Falha de rede/servidor não
+    // trava o app (updateInfo continua null e o fluxo normal segue) —
+    // só bloqueia quando a checagem teve SUCESSO e confirmou desatualização.
+    var updateInfo by remember { mutableStateOf<com.streamflixvip.app.network.AppVersionResponse?>(null) }
+    var isDownloadingUpdate by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        try {
+            val response = com.streamflixvip.app.network.NetworkModule.appVersionApi.getLatestVersion()
+            if (response.forceUpdate && response.versionCode > com.streamflixvip.app.BuildConfig.VERSION_CODE) {
+                updateInfo = response
+            }
+        } catch (_: Exception) {
+            // Sem internet, servidor fora do ar, etc. — não bloqueia o
+            // app por causa disso; a pessoa só não vai saber que existe
+            // update até a próxima abertura com rede disponível.
+        }
+    }
+
+    if (updateInfo != null) {
+        com.streamflixvip.app.ui.update.UpdateRequiredScreen(
+            versionName = updateInfo!!.versionName,
+            releaseNotes = updateInfo!!.releaseNotes ?: "",
+            isDownloading = isDownloadingUpdate,
+            onDownloadClick = {
+                isDownloadingUpdate = true
+                try {
+                    val intent = android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(updateInfo!!.apkUrl),
+                    )
+                    context.startActivity(intent)
+                } catch (_: Exception) {
+                } finally {
+                    isDownloadingUpdate = false
+                }
+            },
+        )
+        return
+    }
+
     // Splash Compose animada — roda logo depois da splash nativa do
     // sistema (instalada em onCreate). A nativa cobre só o instante de
     // "app abrindo" antes do Compose montar; esta aqui é a experiência
