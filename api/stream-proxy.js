@@ -19,6 +19,17 @@ const EXTRA_ALLOWED_HOSTS = [
   'unitvlite.xyz',
   'sventank.com',
   'cdnbr02.com',
+  'cdn99xn----booster.redecanais.blog', 
+  'cldx-rio-go.top', 
+  '178.63.61.173', 
+  'www.fontedecanais.club', 
+  'sosbrazil.xyz',
+  'rumxb.top:80', 
+  'vd2onebm.fun',
+  'cdnnetjs.click',
+  'sec.slackewn.click',
+  'highcdnvideo.link',
+  'rumxb.top',
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
@@ -66,6 +77,21 @@ async function handler(req, res) {
   // Valida o hostname da URL original (passada no parâmetro 'url')
   if (!allowedHosts.has(target.hostname)) {
     res.status(403).json({ error: 'Domínio da URL original não autorizado. Cadastre a fonte no painel admin primeiro.' });
+    return;
+  }
+
+  // Requisições HEAD (usadas pelo StreamUrlResolver do app, que testa
+  // Koyeb vs Zeabur em paralelo pra ver qual responde primeiro) NUNCA
+  // devem repassar um GET completo pro servidor de origem. Muitas CDNs
+  // (a highcdnvideo.link, por ex.) assinam a URL com um token de uso
+  // único/curta duração (?lvtoken=...) — se o probe HEAD já consumisse
+  // esse token buscando o vídeo inteiro, o GET real que o ExoPlayer faz
+  // logo depois chegava com o token já gasto/expirado, e a tela ficava
+  // preta sem erro nenhum visível. Aqui só confirmamos que o host é
+  // permitido e devolvemos 200 vazio — suficiente pro probe decidir qual
+  // backend está de pé, sem gastar o token da fonte real.
+  if (req.method === 'HEAD') {
+    res.status(200).end();
     return;
   }
 
