@@ -39,6 +39,21 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw\"")
     }
 
+    signingConfigs {
+        // Keystore de debug FIXA — sem isso, cada build do GitHub Actions
+        // gera uma chave de assinatura nova e aleatória, e o Android
+        // recusa instalar por cima ("conflito de pacote existente"),
+        // obrigando a desinstalar o app antigo toda vez. Com uma chave
+        // fixa reaproveitada em todo build, updates instalam por cima
+        // normalmente, como qualquer app atualizando.
+        getByName("debug") {
+            storeFile = file(System.getenv("DEBUG_KEYSTORE_PATH") ?: "debug.keystore")
+            storePassword = System.getenv("DEBUG_KEYSTORE_PASSWORD") ?: "streamflixvip123"
+            keyAlias = System.getenv("DEBUG_KEY_ALIAS") ?: "streamflixvip-debug"
+            keyPassword = System.getenv("DEBUG_KEY_PASSWORD") ?: "streamflixvip123"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
