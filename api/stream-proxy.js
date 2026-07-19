@@ -19,19 +19,15 @@ const EXTRA_ALLOWED_HOSTS = [
   'unitvlite.xyz',
   'sventank.com',
   'cdnbr02.com',
-  'cdn99xn----booster.redecanais.blog', 
   'cldx-rio-go.top', 
   '178.63.61.173', 
   'www.fontedecanais.club', 
   'sosbrazil.xyz',
-  'rumxb.top:80', 
   'vd2onebm.fun',
-  'cdnnetjs.click',
+  'cdnnetjs.click:80',
   'sec.slackewn.click',
   'highcdnvideo.link',
-  'rumxb.top',
-  'novafast.pro',
-  'canais.is',
+  'novafast.pro:80', 
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
