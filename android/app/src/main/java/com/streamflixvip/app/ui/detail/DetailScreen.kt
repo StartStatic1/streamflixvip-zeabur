@@ -20,11 +20,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.outlined.Favorite as FavoriteOutlined
-import androidx.compose.material.icons.outlined.FavoriteBorder as FavoriteBorderOutlined
-import androidx.compose.material.icons.outlined.IosShare
-import androidx.compose.material.icons.outlined.PlayCircle
-import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -1081,7 +1077,7 @@ private fun DetailHeader(
                                 ),
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Outlined.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp))
                             Spacer(Modifier.width(10.dp))
                             Text("Assistir Agora", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
                         }
@@ -1101,7 +1097,7 @@ private fun DetailHeader(
             ) {
                 // Botão Favorito
                 ActionButton(
-                    icon = if (isFavorite) FavoriteOutlined else FavoriteBorderOutlined,
+                    icon = if (isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
                     label = if (isFavorite) "Salvo" else "Salvar",
                     tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     onClick = onToggleFavorite,
@@ -1110,7 +1106,7 @@ private fun DetailHeader(
                 // Botão Trailer — só aparece quando a TMDB retornou uma key
                 if (trailerKey != null) {
                     ActionButton(
-                        icon = Videocam,
+                        icon = Icons.Outlined.Videocam,
                         label = "Trailer",
                         tint = MaterialTheme.colorScheme.onSurface,
                         onClick = onTrailerClick,
@@ -1119,7 +1115,7 @@ private fun DetailHeader(
                 }
                 // Botão Compartilhar
                 ActionButton(
-                    icon = IosShare,
+                    icon = Icons.Outlined.IosShare,
                     label = "Compartilhar",
                     tint = MaterialTheme.colorScheme.onSurface,
                     onClick = onShare,
