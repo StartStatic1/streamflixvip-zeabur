@@ -1,7 +1,14 @@
 package com.streamflixvip.app.ui.detail
 
+import android.annotation.SuppressLint
+import android.view.ViewGroup
+import android.webkit.WebSettings
+import android.webkit.WebView
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,12 +17,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Favorite as FavoriteOutlined
+import androidx.compose.material.icons.outlined.FavoriteBorder as FavoriteBorderOutlined
+import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -33,6 +42,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.Popup
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.TmdbEpisode
@@ -224,6 +236,9 @@ private fun DetailContent(
         state.movieSources.isNotEmpty() &&
         !state.movieIsLocked(isVip)
 
+    // Controla se o modal de trailer inline está aberto.
+    var showTrailerModal by remember { mutableStateOf(false) }
+
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             DetailHeader(
@@ -240,22 +255,21 @@ private fun DetailContent(
                 onWatchNowClick = onWatchMovieNow,
                 onBack = onBack,
                 trailerKey = state.trailerKey,
-                onTrailerClick = trailerClick@{
-                    // Deixa o Android decidir: abre no app do YouTube se
-                    // estiver instalado, senão cai pro navegador — mesmo
-                    // princípio de "não escolher por conta própria" que
-                    // openInExternalPlayer já usa pro player externo.
-                    val key = state.trailerKey ?: return@trailerClick
+                onTrailerClick = {
+                    // Abre o trailer em modal fullscreen dentro do próprio
+                    // app — sem sair pro YouTube ou navegador externo.
+                    if (state.trailerKey != null) showTrailerModal = true
+                },
+                onShare = {
+                    // Compartilha link do título via Intent nativo do Android.
+                    val shareText = "Assista \"$title\" no StreamFlix!"
                     try {
-                        val intent = android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://www.youtube.com/watch?v=$key"),
-                        )
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        // Sem app capaz de abrir (situação rara) — falha
-                        // silenciosa, sem travar a tela por causa do trailer.
-                    }
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(intent, "Compartilhar via"))
+                    } catch (_: Exception) { }
                 },
             )
         }
@@ -461,6 +475,16 @@ private fun DetailContent(
             canPost = state.canPostComments,
             onDismiss = onDismissComments,
             onPost = onPostComment,
+        )
+    }
+
+    // Modal de trailer inline — Dialog sobreposto à tela inteira, fora
+    // do LazyColumn, para não ser tratado como item de lista.
+    if (showTrailerModal && state.trailerKey != null) {
+        TrailerModal(
+            trailerKey = state.trailerKey!!,
+            title = title,
+            onDismiss = { showTrailerModal = false },
         )
     }
 }
@@ -878,6 +902,7 @@ private fun DetailHeader(
     onBack: () -> Unit,
     trailerKey: String?,
     onTrailerClick: () -> Unit,
+    onShare: () -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -890,33 +915,48 @@ private fun DetailHeader(
             // não brigar com a imagem, e escurece a base pra que o poster
             // e o texto por cima fiquem sempre legíveis, não importa o
             // quão clara seja a cena do backdrop escolhido.
+            // Gradiente triplo mais refinado:
+            // 1. Escurece o topo para legibilidade da status bar/botão voltar.
+            // 2. Gradiente radial/lateral sutil para focar no centro.
+            // 3. Gradiente vertical longo na base para fusão suave com o conteúdo.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
                         androidx.compose.ui.graphics.Brush.verticalGradient(
                             colorStops = arrayOf(
-                                0.0f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f),
-                                0.5f to androidx.compose.ui.graphics.Color.Transparent,
+                                0.0f to androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.55f),
+                                0.3f to androidx.compose.ui.graphics.Color.Transparent,
+                                0.7f to MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
                                 1.0f to MaterialTheme.colorScheme.background,
+                            ),
+                        ),
+                    ),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            colorStops = arrayOf(
+                                0.0f to MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
+                                0.5f to androidx.compose.ui.graphics.Color.Transparent,
+                                1.0f to MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
                             ),
                         ),
                     ),
             )
         }
 
-        // Barra de topo discreta: seta de voltar (à esquerda) e botão de
-        // trailer (à direita, só aparece quando a TMDB retornou um). Fica
-        // sobre a status bar, no mesmo espírito do CineVerse — cobre o
-        // caso de gesto de "voltar" não funcionar ou não existir (alguns
-        // launchers/dispositivos), sem depender só do botão físico/gesto
-        // do Android.
+        // Barra de topo: apenas a seta de voltar à esquerda.
+        // O botão de trailer foi movido para a barra de ações abaixo do
+        // CTA principal, junto com favorito e compartilhar.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 44.dp)
                 .padding(horizontal = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.Start,
         ) {
             CircleIconButton(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
@@ -925,40 +965,11 @@ private fun DetailHeader(
                 onClick = onBack,
                 size = 38.dp,
             )
-            if (trailerKey != null) {
-                CircleIconButton(
-                    icon = Icons.Filled.PlayArrow,
-                    tint = androidx.compose.ui.graphics.Color.White,
-                    contentDescription = "Assistir trailer",
-                    onClick = onTrailerClick,
-                    size = 38.dp,
-                )
-            }
         }
 
-        // Botões de ação flutuando sobre o backdrop, um em cada canto —
-        // mesmo padrão do CineVerse (coração à esquerda, compartilhar à
-        // direita), fora do fluxo de leitura principal do título.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 195.dp)
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            CircleIconButton(
-                icon = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                tint = if (isFavorite) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.White,
-                contentDescription = if (isFavorite) "Remover dos favoritos" else "Adicionar aos favoritos",
-                onClick = onToggleFavorite,
-            )
-            CircleIconButton(
-                icon = Icons.Filled.Share,
-                tint = androidx.compose.ui.graphics.Color.White,
-                contentDescription = "Compartilhar",
-                onClick = { /* integração de share fica a cargo da Activity host */ },
-            )
-        }
+        // Os botões de ação (favorito, compartilhar, trailer) foram
+        // movidos para baixo do botão "Assistir Agora", em barra horizontal
+        // coesa — mais fácil de alcançar com o polegar e sem poluir o backdrop.
 
         Column(
             modifier = Modifier
@@ -971,12 +982,15 @@ private fun DetailHeader(
             // própria cena de fundo em vez de complementá-la. Agora fica
             // mais discreto/decorativo, deixando o backdrop ser o elemento
             // visual principal do header, como na referência do CineVerse.
-            Box(
+            // Poster com sombra colorida e profundidade (efeito card flutuante)
+            Surface(
                 modifier = Modifier
-                    .width(110.dp)
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .width(115.dp)
+                    .aspectRatio(2f / 3f),
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shadowElevation = 12.dp,
+                tonalElevation = 4.dp,
             ) {
                 AsyncImage(
                     model = posterUrl,
@@ -999,7 +1013,8 @@ private fun DetailHeader(
                     it,
                     fontSize = 13.sp,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Subtítulo em cor âmbar/dourada suave para destacar sem berrar
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 32.dp),
                 )
@@ -1023,19 +1038,95 @@ private fun DetailHeader(
             // ainda, pra não prometer um play que vai falhar.
             if (showWatchNowButton) {
                 Spacer(Modifier.height(16.dp))
+                // Efeito Shimmer/Brilho sutil no botão CTA
+                val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "shimmer")
+                val shimmerX by infiniteTransition.animateFloat(
+                    initialValue = -300f,
+                    targetValue = 600f,
+                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                        animation = androidx.compose.animation.core.tween(durationMillis = 3000, easing = androidx.compose.animation.core.LinearEasing),
+                        repeatMode = androidx.compose.animation.core.RepeatMode.Restart,
+                    ),
+                    label = "shimmerX",
+                )
+
                 Button(
                     onClick = onWatchNowClick,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
-                        .height(52.dp),
+                        .height(54.dp)
+                        .clip(RoundedCornerShape(14.dp)),
                     shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                    ),
                 ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Assistir Agora", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        // O brilho (shimmer) que passa pelo botão
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(60.dp)
+                                .graphicsLayer { translationX = shimmerX }
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        listOf(
+                                            androidx.compose.ui.graphics.Color.Transparent,
+                                            androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f),
+                                            androidx.compose.ui.graphics.Color.Transparent,
+                                        ),
+                                    ),
+                                ),
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(10.dp))
+                            Text("Assistir Agora", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
                 }
             }
+
+            // Barra de ações secundárias: favorito, trailer (se existir) e
+            // compartilhar — alinhados horizontalmente abaixo do CTA principal,
+            // fáceis de alcançar com o polegar e sem poluir o backdrop.
+            Spacer(Modifier.height(if (showWatchNowButton) 12.dp else 20.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            ) {
+                // Botão Favorito
+                ActionButton(
+                    icon = if (isFavorite) FavoriteOutlined else FavoriteBorderOutlined,
+                    label = if (isFavorite) "Salvo" else "Salvar",
+                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    onClick = onToggleFavorite,
+                    modifier = Modifier.weight(1f),
+                )
+                // Botão Trailer — só aparece quando a TMDB retornou uma key
+                if (trailerKey != null) {
+                    ActionButton(
+                        icon = Videocam,
+                        label = "Trailer",
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        onClick = onTrailerClick,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                // Botão Compartilhar
+                ActionButton(
+                    icon = IosShare,
+                    label = "Compartilhar",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    onClick = onShare,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
@@ -1119,6 +1210,147 @@ private fun CircleIconButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(size * 0.48f))
+    }
+}
+
+/**
+ * Botão de ação secundária do hero: ícone outlined + label embaixo.
+ * Substitui os botões genéricos flutuantes do backdrop — agora ficam
+ * alinhados em barra horizontal abaixo do CTA principal, com ícones
+ * mais expressivos e label de texto para clareza imediata.
+ */
+@Composable
+private fun ActionButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: androidx.compose.ui.graphics.Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(24.dp),
+        )
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = tint.copy(alpha = 0.85f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * Modal fullscreen de trailer: abre um WebView com o embed do YouTube
+ * dentro do próprio app, sem sair para o YouTube ou navegador externo.
+ * Mesmo padrão de WebView que o PlayerScreen já usa para fontes iframe.
+ */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun TrailerModal(
+    trailerKey: String,
+    title: String,
+    onDismiss: () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        androidx.compose.material3.Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = androidx.compose.ui.graphics.Color.Black,
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                // Barra de título com botão de fechar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Trailer — $title",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = androidx.compose.ui.graphics.Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    CircleIconButton(
+                        icon = Icons.Filled.KeyboardArrowDown,
+                        tint = androidx.compose.ui.graphics.Color.White,
+                        contentDescription = "Fechar trailer",
+                        onClick = onDismiss,
+                        size = 36.dp,
+                    )
+                }
+
+                // Player WebView com embed do YouTube (16:9 no topo,
+                // fundo preto embaixo para não parecer cortado).
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .background(androidx.compose.ui.graphics.Color.Black),
+                ) {
+                    var isLoading by remember { mutableStateOf(true) }
+                    val embedUrl = "https://www.youtube.com/embed/$trailerKey?autoplay=1&playsinline=1"
+
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { ctx ->
+                            WebView(ctx).apply {
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                )
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.mediaPlaybackRequiresUserGesture = false
+                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                                webViewClient = object : android.webkit.WebViewClient() {
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        isLoading = false
+                                    }
+                                }
+                                loadUrl(embedUrl)
+                            }
+                        },
+                    )
+
+                    AnimatedVisibility(
+                        visible = isLoading,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(androidx.compose.ui.graphics.Color.Black),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
