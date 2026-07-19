@@ -5617,6 +5617,7 @@ document.addEventListener('click', (e) => {
     if (!db) return;
     toggleUserDropdown(false);
     await db.auth.signOut();
+    stopHeartbeat();
     _currentUser = null;
     _vipStatus = { isVip: false, expiresAt: null, planLabel: null };
     // Limpa dados locais ao deslogar
@@ -5990,6 +5991,7 @@ document.addEventListener('click', (e) => {
       updateAuthUI(_currentUser);
       closeAuthModal();
       trackLogin(_currentUser);
+      startHeartbeat();
       // Load cloud data on login
       await syncFromCloud();
       renderContinueRow();
@@ -6025,6 +6027,7 @@ document.addEventListener('click', (e) => {
           showToast('✅ Login realizado com sucesso!');
         }
         trackLogin(_currentUser);
+        startHeartbeat();
         await syncFromCloud();
         renderContinueRow();
         await refreshVipStatus();
@@ -6099,6 +6102,28 @@ document.addEventListener('click', (e) => {
   // bloqueia o fluxo de login, e falhas aqui são silenciosas de propósito
   // — isso é telemetria interna, não pode nunca impedir o usuário de usar
   // o site caso a chamada falhe por qualquer motivo.
+  // "Estou online agora" — chamado a cada 60s enquanto _currentUser
+  // estiver logado, pra api/heartbeat.js marcar last_seen_at. Mesma
+  // filosofia fire-and-forget de trackLogin: nunca trava a experiência
+  // por causa de telemetria.
+  let _heartbeatInterval = null;
+  function sendHeartbeat() {
+    if (!_currentUser) return;
+    fetch('/api/heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: _currentUser.id })
+    }).catch(() => {});
+  }
+  function startHeartbeat() {
+    if (_heartbeatInterval) return; // já rodando, não duplica
+    sendHeartbeat(); // primeiro heartbeat imediato, não espera 60s
+    _heartbeatInterval = setInterval(sendHeartbeat, 60000);
+  }
+  function stopHeartbeat() {
+    if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
+  }
+
   function trackLogin(user) {
     if (!user) return;
     fetch('/api/track-login', {

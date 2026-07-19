@@ -786,8 +786,9 @@
         <div>
           <label>Plano</label>
           <select id="genPlan" onchange="onPlanChange()">
-            <option value="720">30 dias — R$5,99</option>
-            <option value="876000">Vitalício — R$49,90</option>
+            <option value="720">30 dias — R$19,90</option>
+            <option value="2160">3 meses — R$49,90</option>
+            <option value="876000">Vitalício — R$99,90</option>
             <option value="1">Teste 1 hora</option>
             <option value="custom">Personalizado...</option>
           </select>
@@ -866,6 +867,10 @@
           <div class="stat-value red" id="statUsersFree">—</div>
           <div class="stat-label">Sem plano (grátis)</div>
         </div>
+        <div class="stat-card">
+          <div class="stat-value green" id="statUsersOnline">—</div>
+          <div class="stat-label">🟢 Online agora</div>
+        </div>
       </div>
 
       <div class="card">
@@ -875,6 +880,7 @@
           <button class="filter-btn" onclick="setUserFilter('vip', this)">VIP ativo</button>
           <button class="filter-btn" onclick="setUserFilter('expirado', this)">Expirado</button>
           <button class="filter-btn" onclick="setUserFilter('gratis', this)">Grátis</button>
+          <button class="filter-btn" onclick="setUserFilter('online', this)">🟢 Online</button>
           <input type="text" class="search-input" placeholder="Buscar por email ou nome..." oninput="renderUsersTable()" id="userSearchInput"/>
         </div>
         <div class="table-wrap">
@@ -887,11 +893,12 @@
                 <th>Último código</th>
                 <th>1º login</th>
                 <th>Último login</th>
+                <th>Online</th>
                 <th></th>
               </tr>
             </thead>
             <tbody id="usersTableBody">
-              <tr><td colspan="7" class="loading">Carregando...</td></tr>
+              <tr><td colspan="8" class="loading">Carregando...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1655,7 +1662,7 @@
     const hours    = planVal === 'custom'
       ? parseInt(document.getElementById('genCustomHours').value) || 48
       : parseInt(planVal);
-    const planLabel = planVal === '720' ? '30 dias' : planVal === '876000' ? 'Vitalício' : planVal === '1' ? 'Teste 1h' : `${hours}h`;
+    const planLabel = planVal === '720' ? '30 dias' : planVal === '2160' ? '3 meses' : planVal === '876000' ? 'Vitalício' : planVal === '1' ? 'Teste 1h' : `${hours}h`;
 
     const btn = document.getElementById('btnGerar');
     btn.disabled = true;
@@ -1698,11 +1705,25 @@
   // TABS
   // ════════════════════════════════════════════════════════════
   let _moviesLoadedOnce = false;
+  // Auto-refresh da aba Usuários — sem isso, "Online agora" ficaria
+  // parado no valor de quando a aba foi aberta, o que praticamente anula
+  // a utilidade do indicador. Só roda enquanto a aba de Usuários está
+  // de fato visível (para/retoma ao trocar de aba), pra não gastar
+  // requisição à toa em segundo plano.
+  let _usersRefreshInterval = null;
+  function startUsersAutoRefresh() {
+    if (_usersRefreshInterval) return;
+    _usersRefreshInterval = setInterval(loadUsers, 30000);
+  }
+  function stopUsersAutoRefresh() {
+    if (_usersRefreshInterval) { clearInterval(_usersRefreshInterval); _usersRefreshInterval = null; }
+  }
+
   function switchTab(tab, opts = {}) {
     document.querySelectorAll('.panel-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     document.querySelectorAll('.tab-panel').forEach(s => s.style.display = 'none');
     document.getElementById('tab-' + tab).style.display = 'block';
-    if (tab === 'users') loadUsers();
+    if (tab === 'users') { loadUsers(); startUsersAutoRefresh(); } else { stopUsersAutoRefresh(); }
     if (tab === 'movies') {
       // A lista de fontes cadastradas recarrega toda vez que a aba é
       // aberta (dados podem ter mudado). A busca TMDB só é restaurada na
@@ -1761,14 +1782,26 @@
     renderUsersTable();
   }
 
+  // Janela de tolerância pra considerar alguém "online": heartbeat
+  // roda a cada 60s (ver Public/index.html), então 2 minutos dá folga
+  // suficiente pra uma requisição atrasada sem deixar a lista "piscando"
+  // entre online/offline à toa.
+  const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+  function isOnline(u) {
+    if (!u.last_seen_at) return false;
+    return (Date.now() - new Date(u.last_seen_at).getTime()) < ONLINE_WINDOW_MS;
+  }
+
   function updateUserStats() {
     const now = Date.now();
     const total = _allUsers.length;
     const vip   = _allUsers.filter(u => u.expires_at && new Date(u.expires_at).getTime() > now).length;
     const free  = total - vip;
-    document.getElementById('statUsersTotal').textContent = total;
-    document.getElementById('statUsersVip').textContent   = vip;
-    document.getElementById('statUsersFree').textContent  = free;
+    const online = _allUsers.filter(isOnline).length;
+    document.getElementById('statUsersTotal').textContent  = total;
+    document.getElementById('statUsersVip').textContent    = vip;
+    document.getElementById('statUsersFree').textContent   = free;
+    document.getElementById('statUsersOnline').textContent = online;
   }
 
   function setUserFilter(f, el) {
@@ -1810,6 +1843,7 @@
     if (_userFilter === 'vip')      rows = rows.filter(u => u.expires_at && new Date(u.expires_at).getTime() > now);
     if (_userFilter === 'expirado') rows = rows.filter(u => u.expires_at && new Date(u.expires_at).getTime() <= now);
     if (_userFilter === 'gratis')   rows = rows.filter(u => !u.expires_at);
+    if (_userFilter === 'online')   rows = rows.filter(isOnline);
     if (search) rows = rows.filter(u =>
       (u.email || '').toLowerCase().includes(search) || (u.name || '').toLowerCase().includes(search)
     );
@@ -1818,7 +1852,7 @@
     const tbody = document.getElementById('usersTableBody');
 
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum usuário encontrado</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum usuário encontrado</td></tr>';
       return;
     }
 
@@ -1830,6 +1864,10 @@
         : '—';
       const firstLogin = u.first_login_at ? new Date(u.first_login_at).toLocaleDateString('pt-BR') : '—';
       const lastLogin   = u.last_login_at  ? new Date(u.last_login_at).toLocaleDateString('pt-BR')  : '—';
+      const onlineNow = isOnline(u);
+      const onlineCell = onlineNow
+        ? '<span class="badge badge-green">🟢 Online</span>'
+        : '<span style="color:var(--muted);font-size:0.78rem">offline</span>';
       return `
         <tr>
           <td>
@@ -1841,6 +1879,7 @@
           <td style="font-size:0.78rem">${u.last_code_used || '—'}</td>
           <td style="font-size:0.78rem">${firstLogin}</td>
           <td style="font-size:0.78rem">${lastLogin}</td>
+          <td>${onlineCell}</td>
           <td><button class="btn-signout" style="padding:6px 10px;font-size:0.75rem" onclick="viewUserHistory('${u.user_id}', '${(u.email||'').replace(/'/g,"")}')">Histórico</button></td>
         </tr>
       `;
