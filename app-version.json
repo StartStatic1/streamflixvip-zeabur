@@ -1,7 +1,7 @@
 {
-  "versionCode": 3,
+  "versionCode": 4,
   "versionName": "2.1.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Adicionado filtros pesquisa por ano e gênero, funções novas para vips."
+  "releaseNotes": "Novidades."
 }
