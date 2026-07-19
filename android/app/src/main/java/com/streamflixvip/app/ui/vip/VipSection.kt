@@ -98,12 +98,33 @@ fun VipSection(viewModel: VipViewModel) {
                 )
                 Spacer(Modifier.height(16.dp))
                 
+                // Plano 1 Mês
                 Button(
                     onClick = { viewModel.startPayment(19.90, "VIP 30 Dias", 720) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
                 ) {
-                    Text("Assinar VIP - R$ 19,90", fontWeight = FontWeight.Bold)
+                    Text("VIP 1 Mês - R$ 19,90", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(8.dp))
+                
+                // Plano 3 Meses
+                Button(
+                    onClick = { viewModel.startPayment(55.00, "VIP 90 Dias", 2160) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)
+                ) {
+                    Text("VIP 3 Meses - R$ 55,00", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(8.dp))
+                
+                // Plano Vitalício (99 anos de VIP)
+                Button(
+                    onClick = { viewModel.startPayment(88.90, "VIP Vitalício", 876000) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD4AF37), contentColor = Color.Black)
+                ) {
+                    Text("VIP Vitalício - R$ 88,90", fontWeight = FontWeight.Bold)
                 }
 
                 Spacer(Modifier.height(24.dp))
