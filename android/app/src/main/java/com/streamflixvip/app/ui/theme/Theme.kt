@@ -1,9 +1,7 @@
 package com.streamflixvip.app.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
@@ -21,18 +19,19 @@ private val DarkColors = darkColorScheme(
     surfaceVariant = Color(0xFF232330),
 )
 
-private val LightColors = lightColorScheme(
-    primary = Gold,
-)
-
+// ── Tema sempre escuro ──
+// O app StreamFlixVIP usa exclusivamente o esquema escuro, independente
+// do modo do sistema operacional. Isso evita telas brancas/em branco
+// quando o usuário tem o modo claro ativado no celular, e garante
+// identidade visual consistente em qualquer dispositivo.
+// Não há seletor de tema nem perfil de usuário para isso — é uma decisão
+// de produto: o app é dark-only, igual ao site.
 @Composable
 fun StreamFlixTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colors = if (darkTheme) DarkColors else LightColors
     MaterialTheme(
-        colorScheme = colors,
+        colorScheme = DarkColors,
         content = content,
     )
 }
