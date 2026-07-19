@@ -35,7 +35,15 @@ jobs:
       - name: Dar permissão de execução ao gradlew
         run: chmod +x gradlew
 
+      - name: Restaurar keystore de debug fixa (evita conflito de assinatura ao atualizar)
+        run: echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > app/debug.keystore
+
       - name: Buildar APK de debug (instalável direto, sem assinatura de loja)
+        env:
+          DEBUG_KEYSTORE_PATH: debug.keystore
+          DEBUG_KEYSTORE_PASSWORD: streamflixvip123
+          DEBUG_KEY_ALIAS: streamflixvip-debug
+          DEBUG_KEY_PASSWORD: streamflixvip123
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Enviar APK como artefato para download
