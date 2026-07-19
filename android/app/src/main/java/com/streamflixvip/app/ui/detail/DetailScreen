@@ -1262,97 +1262,123 @@ private fun TrailerModal(
 ) {
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+        ),
     ) {
         androidx.compose.material3.Surface(
             modifier = Modifier.fillMaxSize(),
-            color = androidx.compose.ui.graphics.Color.Black,
+            color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.95f),
         ) {
-            Column(Modifier.fillMaxSize()) {
-                // Barra de título com botão de fechar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = "Trailer — $title",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = androidx.compose.ui.graphics.Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    CircleIconButton(
-                        icon = Icons.Filled.KeyboardArrowDown,
-                        tint = androidx.compose.ui.graphics.Color.White,
-                        contentDescription = "Fechar trailer",
-                        onClick = onDismiss,
-                        size = 36.dp,
-                    )
-                }
-
-                // Player WebView com embed do YouTube (16:9 no topo,
-                // fundo preto embaixo para não parecer cortado).
+            Box(Modifier.fillMaxSize()) {
+                // Fundo com blur sutil ou apenas escurecido para focar no player central
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .background(androidx.compose.ui.graphics.Color.Black),
-                ) {
-                    var isLoading by remember { mutableStateOf(true) }
-                    val embedUrl = "https://www.youtube.com/embed/$trailerKey?autoplay=1&playsinline=1&enablejsapi=1&origin=https://www.youtube.com"
+                        .fillMaxSize()
+                        .clickable(onClick = onDismiss)
+                )
 
-                    AndroidView(
-                        modifier = Modifier.fillMaxSize(),
-                        factory = { ctx ->
-                            WebView(ctx).apply {
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                )
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.databaseEnabled = true
-                                settings.mediaPlaybackRequiresUserGesture = false
-                                // Forçar User Agent de mobile para evitar bloqueios de desktop embed
-                                settings.userAgentString = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
-                                settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-                                
-                                webViewClient = object : android.webkit.WebViewClient() {
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        isLoading = false
-                                    }
-                                }
-                                
-                                // O YouTube exige um cabeçalho de 'Referer' ou 'Origin' válido para alguns vídeos
-                                val extraHeaders = mutableMapOf<String, String>()
-                                extraHeaders["Referer"] = "https://www.youtube.com"
-                                loadUrl(embedUrl, extraHeaders)
-                            }
-                        },
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Título do Trailer acima do player
+                    Text(
+                        text = title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier.padding(bottom = 12.dp)
                     )
 
-                    // Usando a versão explícita do AnimatedVisibility para evitar conflito
-                    // de escopo entre ColumnScope e o receptor implícito do Box.
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isLoading,
-                        enter = fadeIn(),
-                        exit = fadeOut(),
+                    // Container do Player centralizado
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .background(androidx.compose.ui.graphics.Color.Black)
+                            .clip(RoundedCornerShape(8.dp))
                     ) {
-                        Box(
-                            Modifier
-                                .fillMaxSize()
-                                .background(androidx.compose.ui.graphics.Color.Black),
-                            contentAlignment = Alignment.Center,
+                        var isLoading by remember { mutableStateOf(true) }
+                        
+                        // DEEP FIX YOUTUBE 153: 
+                        // 1. Usar a URL base do youtube-nocookie para evitar alguns bloqueios de privacidade.
+                        // 2. Parâmetros de API reforçados.
+                        val embedUrl = "https://www.youtube-nocookie.com/embed/$trailerKey?autoplay=1&modestbranding=1&rel=0&showinfo=0&enablejsapi=1&origin=https://www.youtube.com"
+
+                        AndroidView(
+                            modifier = Modifier.fillMaxSize(),
+                            factory = { ctx ->
+                                WebView(ctx).apply {
+                                    layoutParams = ViewGroup.LayoutParams(
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                        ViewGroup.LayoutParams.MATCH_PARENT,
+                                    )
+                                    
+                                    // Configurações críticas de WebView para YouTube
+                                    settings.javaScriptEnabled = true
+                                    settings.domStorageEnabled = true
+                                    settings.databaseEnabled = true
+                                    settings.mediaPlaybackRequiresUserGesture = false
+                                    settings.loadWithOverviewMode = true
+                                    settings.useWideViewPort = true
+                                    settings.allowFileAccess = true
+                                    settings.allowContentAccess = true
+                                    
+                                    // Simular um User Agent de navegador desktop para enganar o bloqueio de embed mobile
+                                    settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+                                    
+                                    settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                                    
+                                    webViewClient = object : android.webkit.WebViewClient() {
+                                        override fun onPageFinished(view: WebView?, url: String?) {
+                                            isLoading = false
+                                        }
+                                        
+                                        // Interceptar erros e tentar recarregar se necessário
+                                        override fun onReceivedError(view: WebView?, request: android.webkit.WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                                            super.onReceivedError(view, request, error)
+                                        }
+                                    }
+                                    
+                                    // Headers reforçados
+                                    val extraHeaders = mutableMapOf<String, String>()
+                                    extraHeaders["Referer"] = "https://www.youtube.com"
+                                    extraHeaders["Origin"] = "https://www.youtube.com"
+                                    loadUrl(embedUrl, extraHeaders)
+                                }
+                            },
+                        )
+
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isLoading,
+                            enter = fadeIn(),
+                            exit = fadeOut(),
                         ) {
-                            CircularProgressIndicator(color = androidx.compose.ui.graphics.Color.White)
+                            Box(
+                                Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                            }
                         }
+                    }
+
+                    // Botão de fechar abaixo do player para facilitar o polegar
+                    Spacer(Modifier.height(24.dp))
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.2f),
+                            contentColor = androidx.compose.ui.graphics.Color.White
+                        ),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Fechar Trailer")
                     }
                 }
             }
