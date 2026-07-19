@@ -40,7 +40,7 @@ module.exports = async function handler(req, res) {
  * POST /api/mercadopago/create-pix
  * Body: { userId: "...", amount: 19.90, planLabel: "VIP 30 Dias", durationHours: 720 }
  */
-async fun createPix(req, res) {
+async function createPix(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const accessToken = process.env.MP_ACCESS_TOKEN;
@@ -101,7 +101,7 @@ async fun createPix(req, res) {
  * WEBHOOK DE NOTIFICAÇÃO
  * POST /api/mercadopago/webhook
  */
-async fun handleWebhook(req, res) {
+async function handleWebhook(req, res) {
   const accessToken = process.env.MP_ACCESS_TOKEN;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
