@@ -30,6 +30,8 @@ const EXTRA_ALLOWED_HOSTS = [
   'sec.slackewn.click',
   'highcdnvideo.link',
   'rumxb.top',
+  'novafast.pro',
+  'canais.is',
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
