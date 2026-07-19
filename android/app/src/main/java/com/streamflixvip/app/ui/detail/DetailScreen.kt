@@ -1334,7 +1334,9 @@ private fun TrailerModal(
                         },
                     )
 
-                    AnimatedVisibility(
+                    // Usando a versão explícita do AnimatedVisibility para evitar conflito
+                    // de escopo entre ColumnScope e o receptor implícito do Box.
+                    androidx.compose.animation.AnimatedVisibility(
                         visible = isLoading,
                         enter = fadeIn(),
                         exit = fadeOut(),
