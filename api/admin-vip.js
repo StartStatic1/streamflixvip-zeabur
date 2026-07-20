@@ -528,8 +528,16 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'list-iptv-sources') {
+    // source_type distingue fonte M3U (get.php, sincronizada por
+    // sync-standalone.js / sync-series-standalone.js) de fonte API Xtream
+    // JSON (player_api.php, sincronizada por xtream-sync-standalone.js).
+    // Fontes antigas (criadas antes dessa coluna existir) têm
+    // source_type = NULL, que tratamos como 'm3u' em todo o admin.
+    // Os campos xtream_* (progresso da API) são separados dos campos
+    // sync_*/last_* (progresso do M3U) porque os dois cursores avançam
+    // de forma independente, mesmo numa fonte só.
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/iptv_sources?select=id,name,xtream_host,xtream_user,priority,is_active,sync_phase,sync_cursor,last_batch_at,last_synced_at,last_sync_stats&order=created_at.desc`,
+      `${SUPABASE_URL}/rest/v1/iptv_sources?select=id,name,xtream_host,xtream_user,priority,is_active,source_type,sync_phase,sync_cursor,last_batch_at,last_synced_at,last_sync_stats,xtream_sync_cursor,xtream_series_sync_cursor,xtream_last_batch_at,xtream_last_synced_at,xtream_last_sync_stats,xtream_series_last_sync_stats&order=created_at.desc`,
       { headers: svcHeaders }
     );
     const rows = await r.json();
@@ -550,6 +558,7 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify({
         name, xtream_host: xtreamHost, xtream_user: xtreamUser, xtream_pass: xtreamPass,
         priority: priority ?? 5,
+        source_type: 'm3u',
       }),
     });
     const created = await r.json();
@@ -563,6 +572,41 @@ module.exports = async function handler(req, res) {
         return;
       }
       res.status(502).json({ error: 'Erro ao criar fonte IPTV', detail: created });
+      return;
+    }
+    res.status(200).json({ success: true, source: created[0] });
+    return;
+  }
+
+  // Cadastro de fonte via API Xtream (player_api.php), separado do
+  // create-iptv-source (M3U/get.php) acima. Usa a MESMA tabela
+  // iptv_sources (mesmos campos xtream_host/user/pass — a API Xtream usa
+  // as mesmas credenciais), só muda source_type pra 'xtream_api', que é
+  // o que faz o xtream-sync-standalone.js (GitHub Action separado)
+  // pegar essa fonte em vez do sync M3U.
+  if (action === 'create-xtream-source') {
+    const { name, xtreamHost, xtreamUser, xtreamPass, priority } = body;
+    if (!name || !xtreamHost || !xtreamUser || !xtreamPass) {
+      res.status(400).json({ error: 'Informe name, xtreamHost, xtreamUser e xtreamPass' });
+      return;
+    }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/iptv_sources`, {
+      method: 'POST',
+      headers: { ...svcHeaders, Prefer: 'return=representation' },
+      body: JSON.stringify({
+        name, xtream_host: xtreamHost, xtream_user: xtreamUser, xtream_pass: xtreamPass,
+        priority: priority ?? 5,
+        source_type: 'xtream_api',
+      }),
+    });
+    const created = await r.json();
+    if (!r.ok) {
+      const detailStr = JSON.stringify(created);
+      if (detailStr.includes('duplicate key') || detailStr.includes('idx_iptv_sources_name_unique')) {
+        res.status(409).json({ error: `Já existe uma fonte chamada "${name}". Escolha outro nome ou exclua a antiga primeiro.` });
+        return;
+      }
+      res.status(502).json({ error: 'Erro ao criar fonte API Xtream', detail: created });
       return;
     }
     res.status(200).json({ success: true, source: created[0] });
