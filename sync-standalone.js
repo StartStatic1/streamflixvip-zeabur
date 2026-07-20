@@ -25,7 +25,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const DEFAULT_SOURCE_LABEL_PREFIX = 'StreamFliXtream';
+const DEFAULT_SOURCE_LABEL_PREFIX = 'MegaEmbed VIP';
 
 // Orçamento de tempo generoso (55 minutos) — bem acima do necessário pra
 // uma playlist típica, mas evita que o job fique preso indefinidamente

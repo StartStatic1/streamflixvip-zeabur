@@ -21,7 +21,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const DEFAULT_SOURCE_LABEL_PREFIX = 'StreamFliXtream';
+const DEFAULT_SOURCE_LABEL_PREFIX = 'MegaEmbed VIP';
 
 // Orçamento de tempo generoso (55 minutos) — mesmo padrão do sync de filmes.
 const MAX_RUNTIME_MS = 55 * 60 * 1000;
