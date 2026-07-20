@@ -22,6 +22,7 @@ const EXTRA_ALLOWED_HOSTS = [
   'cldx-rio-go.top', 
   '178.63.61.173', 
   'www.fontedecanais.club', 
+  'https://mgeb.top', 
   'sosbrazil.xyz',
   'vd2onebm.fun',
   'cdnnetjs.click:80',
