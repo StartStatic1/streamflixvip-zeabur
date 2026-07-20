@@ -151,6 +151,16 @@ async function xtreamFetch(baseUrl, username, password, action, params = {}) {
 /**
  * Processa filmes (VOD) de UMA fonte Xtream, com cursor próprio
  * (xtream_sync_cursor) sobre a lista já retornada pela API.
+ *
+ * PREFERÊNCIA DE FORMATO: quando o mesmo filme (mesmo tmdb_id) aparece em
+ * mais de um stream_id na API Xtream — comum quando o provedor cadastrou
+ * a mesma obra duas vezes, uma servida em .mp4 e outra em .m3u8 — mantemos
+ * só UMA fonte por filme por servidor, preferindo .mp4. Motivo: .mp4 é
+ * arquivo direto (sem manifesto, sem segmentos, sem depender de reescrita
+ * de proxy) e por isso mais resiliente; .m3u8 só é usado quando aquele
+ * filme não tiver nenhuma versão .mp4 disponível na fonte. Isso resolve a
+ * causa raiz das duplicatas tipo "M3GAN 2.0 com 8 fontes" — antes, cada
+ * stream_id virava uma linha própria porque tinha source_url diferente.
  */
 async function processMovies({ source, serviceKey, tmdbApiKey, timeLeft }) {
   console.log(`[xtream-sync-standalone] Buscando filmes (get_vod_streams) de "${source.name}"`);
@@ -162,8 +172,16 @@ async function processMovies({ source, serviceKey, tmdbApiKey, timeLeft }) {
 
   let cursor = source.xtream_sync_cursor >= vods.length ? 0 : (source.xtream_sync_cursor || 0);
   let matched = 0, unmatchedCount = 0, errors = 0, processedThisRun = 0;
-  let vipSourcesRows = [];
+
+  // tmdb_id -> { vod, found, extension } — a melhor entrada vista até agora
+  // pra esse filme nesta fonte. "Melhor" = .mp4 vence .m3u8; entre duas do
+  // mesmo tipo, a primeira encontrada fica (ordem estável, sem preferência
+  // adicional já que ambas serviriam igualmente bem).
+  const bestByTmdbId = new Map();
   let unmatchedRows = [];
+
+  const EXT_RANK = { mp4: 0, mkv: 1, avi: 1 }; // menor = preferido; qualquer extensão fora daqui (inclui m3u8) fica em 2
+  const rankOf = (ext) => (ext in EXT_RANK ? EXT_RANK[ext] : 2);
 
   const CONCURRENCY = 10;
 
@@ -188,20 +206,13 @@ async function processMovies({ source, serviceKey, tmdbApiKey, timeLeft }) {
       }
       if (found) {
         matched++;
-        const extension = vod.container_extension || 'mp4';
-        const playbackUrl = `${source.xtream_host.replace(/\/+$/, '')}/movie/${source.xtream_user}/${source.xtream_pass}/${vod.stream_id}.${extension}`;
-        vipSourcesRows.push({
-          tmdb_id: found.id,
-          media_type: 'movie',
-          season: null,
-          episode: null,
-          title: found.title || title,
-          poster_path: found.poster_path || null,
-          source_url: playbackUrl,
-          source_label: source.name || DEFAULT_SOURCE_LABEL_PREFIX,
-          priority: source.priority,
-          is_active: true,
-        });
+        const extension = (vod.container_extension || 'mp4').toLowerCase();
+        const existing = bestByTmdbId.get(found.id);
+        if (!existing || rankOf(extension) < rankOf(existing.extension)) {
+          bestByTmdbId.set(found.id, { vod, found, title, extension });
+        }
+        // Se já existe uma entrada melhor ou igual pra esse tmdb_id, esta é
+        // descartada silenciosamente — é a mesma obra, outro stream_id.
       } else {
         unmatchedCount++;
         unmatchedRows.push({
@@ -217,10 +228,6 @@ async function processMovies({ source, serviceKey, tmdbApiKey, timeLeft }) {
     cursor += chunk.length;
     processedThisRun += chunk.length;
 
-    if (vipSourcesRows.length >= 100) {
-      await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,source_url');
-      vipSourcesRows = [];
-    }
     if (unmatchedRows.length >= 100) {
       await sbUpsert(serviceKey, 'iptv_unmatched_items', unmatchedRows, 'source_id,stream_url');
       unmatchedRows = [];
@@ -230,7 +237,29 @@ async function processMovies({ source, serviceKey, tmdbApiKey, timeLeft }) {
     }
   }
 
-  await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,source_url');
+  // Só agora, com a "melhor" entrada por filme já decidida, montamos as
+  // linhas finais pro Supabase — uma por tmdb_id nesta fonte, no máximo.
+  let vipSourcesRows = [];
+  for (const { vod, found, title, extension } of bestByTmdbId.values()) {
+    const playbackUrl = `${source.xtream_host.replace(/\/+$/, '')}/movie/${source.xtream_user}/${source.xtream_pass}/${vod.stream_id}.${extension}`;
+    vipSourcesRows.push({
+      tmdb_id: found.id,
+      media_type: 'movie',
+      season: null,
+      episode: null,
+      title: found.title || title,
+      poster_path: found.poster_path || null,
+      source_url: playbackUrl,
+      source_label: source.name || DEFAULT_SOURCE_LABEL_PREFIX,
+      priority: source.priority,
+      is_active: true,
+    });
+    if (vipSourcesRows.length >= 100) {
+      await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
+      vipSourcesRows = [];
+    }
+  }
+  await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
   await sbUpsert(serviceKey, 'iptv_unmatched_items', unmatchedRows, 'source_id,stream_url');
 
   const isLastBatch = cursor >= vods.length;
@@ -336,7 +365,7 @@ async function processSeries({ source, serviceKey, tmdbApiKey, timeLeft, seriesC
     processedThisRun += chunk.length;
 
     if (vipSourcesRows.length >= 100) {
-      await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season,episode,source_url');
+      await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
       vipSourcesRows = [];
     }
     if (unmatchedRows.length >= 100) {
@@ -348,7 +377,7 @@ async function processSeries({ source, serviceKey, tmdbApiKey, timeLeft, seriesC
     }
   }
 
-  await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season,episode,source_url');
+  await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
   await sbUpsert(serviceKey, 'iptv_unmatched_items', unmatchedRows, 'source_id,stream_url');
 
   const isLastBatch = cursor >= seriesList.length;

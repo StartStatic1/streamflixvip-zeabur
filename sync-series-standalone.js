@@ -241,7 +241,7 @@ async function processSource({ source, serviceKey, tmdbApiKey, timeLeft, seriesC
     processedThisRun += chunk.length;
 
     if (vipSourcesRows.length >= 100) {
-      await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season,episode,source_url');
+      await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
       vipSourcesRows = [];
     }
     if (unmatchedRows.length >= 100) {
@@ -254,7 +254,7 @@ async function processSource({ source, serviceKey, tmdbApiKey, timeLeft, seriesC
     }
   }
 
-  await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season,episode,source_url');
+  await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
   await sbUpsert(serviceKey, 'iptv_unmatched_items', unmatchedRows, 'source_id,stream_url');
 
   const isLastBatch = cursor >= allEpisodes.length;
