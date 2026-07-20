@@ -261,7 +261,7 @@ async function runIptvSync({ timeBudgetMs = 50_000 } = {}) {
 
       // Grava em lotes de 100 pra não acumular tudo em memória até o fim
       if (vipSourcesRows.length >= 100) {
-        await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,source_url');
+        await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
         vipSourcesRows = [];
       }
       if (unmatchedRows.length >= 100) {
@@ -271,7 +271,7 @@ async function runIptvSync({ timeBudgetMs = 50_000 } = {}) {
     }
 
     // Descarrega o que sobrou nos buffers
-    await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,source_url');
+    await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
     await sbUpsert(serviceKey, 'iptv_unmatched_items', unmatchedRows, 'source_id,stream_url');
 
     const isLastBatch = cursor >= allMovies.length;
