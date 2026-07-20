@@ -1035,6 +1035,38 @@
       </div>
 
       <div class="card" style="margin-top:24px">
+        <div class="card-title">🔌 Nova fonte API Xtream</div>
+        <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">
+          Use isto (em vez do formulário acima) para provedores que só respondem em
+          <code>player_api.php</code> (JSON), sem <code>get.php</code>/M3U — caso do MegaEmbed.
+          Sincroniza pelo mesmo mecanismo automático, só que falando o protocolo Xtream direto
+          (filmes e séries, com metadados já vindos prontos da API).
+        </p>
+
+        <label>Nome (aparece como nome do servidor pro usuário)</label>
+        <input type="text" id="xtreamApiNameInput" placeholder="ex: MegaEmbed"/>
+
+        <label style="margin-top:14px">Host (sem /player_api.php, sem usuário/senha)</label>
+        <input type="text" id="xtreamApiHostInput" placeholder="ex: https://mgeb.top"/>
+
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <div style="flex:1">
+            <label>Usuário</label>
+            <input type="text" id="xtreamApiUserInput" placeholder="usuário da API"/>
+          </div>
+          <div style="flex:1">
+            <label>Senha</label>
+            <input type="text" id="xtreamApiPassInput" placeholder="senha da API"/>
+          </div>
+        </div>
+
+        <label style="margin-top:14px">Prioridade (menor número aparece primeiro)</label>
+        <input type="number" id="xtreamApiPriorityInput" value="5"/>
+
+        <button class="btn-primary" style="margin-top:16px" id="saveXtreamApiBtn" onclick="saveXtreamApiSource()">Salvar fonte API Xtream</button>
+      </div>
+
+      <div class="card" style="margin-top:24px">
         <div class="card-title">📋 Fontes cadastradas</div>
         <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">
           O progresso avança sozinho (cron diário). "Pausar" impede novas sincronizações
@@ -2798,7 +2830,35 @@
     renderIptvList();
   }
 
+  // 'm3u' é o padrão pra fontes antigas (criadas antes da coluna
+  // source_type existir, então vêm com source_type = NULL do banco).
+  function iptvSourceType(source) {
+    return source.source_type || 'm3u';
+  }
+
   function iptvProgressLabel(source) {
+    if (iptvSourceType(source) === 'xtream_api') {
+      // Progresso da API Xtream: filmes e séries têm cursor/estatística
+      // próprios (xtream_sync_cursor / xtream_series_sync_cursor), pois
+      // rodam como duas fases dentro do mesmo GitHub Action.
+      const movieStats = source.xtream_last_sync_stats;
+      const seriesStats = source.xtream_series_last_sync_stats;
+      const parts = [];
+      if (movieStats && !movieStats.error) {
+        parts.push(`🎬 ${movieStats.last_run_matched} filmes ok, ${movieStats.last_run_unmatched} sem match`);
+      } else if (source.xtream_sync_cursor > 0) {
+        parts.push(`🎬 em andamento: posição ${source.xtream_sync_cursor}`);
+      } else if (movieStats && movieStats.error) {
+        parts.push(`❌ erro: ${movieStats.error}`);
+      }
+      if (seriesStats) {
+        parts.push(`📺 ${seriesStats.last_run_matched} séries ok, ${seriesStats.last_run_unmatched} sem match`);
+      } else if (source.xtream_series_sync_cursor > 0) {
+        parts.push(`📺 em andamento: posição ${source.xtream_series_sync_cursor}`);
+      }
+      if (!parts.length) return '⏳ Aguardando primeira sincronização (roda automaticamente a cada 30min)';
+      return parts.join(' · ');
+    }
     const stats = source.last_sync_stats;
     if (source.sync_phase === 'done' && stats) {
       return `✅ Volta completa: ${stats.last_run_matched} encontrados, ${stats.last_run_unmatched} não encontrados (de ${stats.total_movies_in_playlist})`;
@@ -2820,6 +2880,7 @@
         <thead>
           <tr>
             <th>Nome</th>
+            <th>Tipo</th>
             <th>Host</th>
             <th>Prioridade</th>
             <th>Progresso</th>
@@ -2831,6 +2892,7 @@
           ${_allIptvSources.map(s => `
             <tr>
               <td>${escapeHtml(s.name)}</td>
+              <td><span class="pill" style="background:${iptvSourceType(s) === 'xtream_api' ? 'var(--accent, #2563eb)' : '#555'};color:#fff">${iptvSourceType(s) === 'xtream_api' ? 'API Xtream' : 'M3U'}</span></td>
               <td style="font-size:0.75rem;color:var(--muted)">${escapeHtml(s.xtream_host)}</td>
               <td>${s.priority}</td>
               <td style="font-size:0.75rem;max-width:220px">${iptvProgressLabel(s)}</td>
@@ -2884,6 +2946,41 @@
     document.getElementById('iptvUserInput').value = '';
     document.getElementById('iptvPassInput').value = '';
     document.getElementById('iptvPriorityInput').value = '5';
+    loadIptvSources();
+  }
+
+  async function saveXtreamApiSource() {
+    const name = document.getElementById('xtreamApiNameInput').value.trim();
+    const xtreamHost = document.getElementById('xtreamApiHostInput').value.trim().replace(/\/+$/, '');
+    const xtreamUser = document.getElementById('xtreamApiUserInput').value.trim();
+    const xtreamPass = document.getElementById('xtreamApiPassInput').value.trim();
+    const priority = parseInt(document.getElementById('xtreamApiPriorityInput').value, 10) || 5;
+
+    if (!name || !xtreamHost || !xtreamUser || !xtreamPass) {
+      showToast('Preencha nome, host, usuário e senha.');
+      return;
+    }
+    if (!/^https?:\/\//i.test(xtreamHost)) {
+      showToast('⚠️ O host precisa começar com http:// ou https://');
+      return;
+    }
+
+    const btn = document.getElementById('saveXtreamApiBtn');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+
+    const result = await api('create-xtream-source', { name, xtreamHost, xtreamUser, xtreamPass, priority });
+
+    btn.disabled = false;
+    btn.textContent = 'Salvar fonte API Xtream';
+    if (result.error) { showToast('❌ ' + (result.error?.message || result.error)); return; }
+
+    showToast('✅ Fonte API Xtream cadastrada! A sincronização começa automaticamente (a cada 30min).');
+    document.getElementById('xtreamApiNameInput').value = '';
+    document.getElementById('xtreamApiHostInput').value = '';
+    document.getElementById('xtreamApiUserInput').value = '';
+    document.getElementById('xtreamApiPassInput').value = '';
+    document.getElementById('xtreamApiPriorityInput').value = '5';
     loadIptvSources();
   }
 
