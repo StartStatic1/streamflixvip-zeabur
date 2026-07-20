@@ -3,5 +3,5 @@
   "versionName": "2.2.1",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Adicionado filmes banidos e raros a seção VIP, Otimizações."
+  "releaseNotes": "Arrumado bug na aba animes onde crash."
 }
