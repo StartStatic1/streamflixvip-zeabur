@@ -15,6 +15,15 @@ on:
     - cron: '*/30 * * * *'
   workflow_dispatch: {}
 
+# Impede que uma nova execução comece em cima de uma anterior que ainda
+# está rodando (ex: se uma rodada travar/demorar mais que os 30 min do
+# cron, isso empilharia execuções concorrentes disputando as mesmas
+# linhas no Supabase). cancel-in-progress:false = a nova espera a
+# anterior terminar em vez de cancelá-la no meio.
+concurrency:
+  group: xtream-sync
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
