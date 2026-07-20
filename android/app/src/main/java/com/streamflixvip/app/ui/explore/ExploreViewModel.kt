@@ -57,7 +57,7 @@ class ExploreViewModel(
             _uiState.value = ExploreUiState.Loading
             val items = runCatching {
                 repository.exploreCatalog(filters.category, filters.genre?.id, filters.year, page = 1)
-            }.getOrElse { emptyList() }
+            }.getOrElse { emptyList() }.distinctBy { "${it.id}_${it.resolvedMediaType}" }
             _uiState.value = ExploreUiState.Success(filters = filters, items = items)
         }
     }
@@ -79,7 +79,14 @@ class ExploreViewModel(
                 stillCurrent.copy(isLoadingMore = false, reachedEnd = true)
             } else {
                 currentPage = nextPage
-                stillCurrent.copy(items = stillCurrent.items + more, isLoadingMore = false)
+                // distinctBy por id+tipo — a API de paginação (discover
+                // por gênero, ex: Anime) pode devolver o mesmo título em
+                // duas páginas quando há empate de ranking/popularidade
+                // entre elas. Sem isso, o LazyVerticalGrid quebra com
+                // "Key already used" porque a key do Compose usa esse
+                // mesmo par id+tipo (ver ExploreScreen.kt).
+                val merged = (stillCurrent.items + more).distinctBy { "${it.id}_${it.resolvedMediaType}" }
+                stillCurrent.copy(items = merged, isLoadingMore = false)
             }
         }
     }
