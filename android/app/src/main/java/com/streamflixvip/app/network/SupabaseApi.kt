@@ -107,7 +107,7 @@ data class VipSource(
      * Bunny) tocam direto, sem passar por proxy adicional.
      */
     fun resolvedPlaybackUrl(apiBaseUrl: String): String {
-        if (source_url.contains("/stream-proxy") || source_url.startsWith("https://") && source_url.contains(".b-cdn.net")) {
+        if (source_url.contains("/stream-proxy")) {
             return source_url
         }
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
@@ -123,7 +123,7 @@ data class VipSource(
      * já que nesse caso a URL não depende de qual backend a serviu).
      */
     fun candidatePlaybackUrls(koyebBaseUrl: String, zeaburBaseUrl: String): List<String> {
-        if (source_url.contains("/stream-proxy") || source_url.startsWith("https://") && source_url.contains(".b-cdn.net")) {
+        if (source_url.contains("/stream-proxy")) {
             return listOf(source_url)
         }
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
