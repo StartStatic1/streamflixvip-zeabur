@@ -31,7 +31,28 @@ interface SupabaseAuthApi {
         @retrofit2.http.Header("apikey") apiKey: String,
         @Body body: VerifyOtpRequest,
     ): AuthSession
+
+    /**
+     * Troca um refresh_token por uma sessão nova (access_token renovado).
+     * O JWT do Supabase expira (padrão: 1h) — sem chamar isso quando o
+     * token expira, toda chamada autenticada (favoritar, checar
+     * progresso, etc) passa a falhar silenciosamente pela RLS: o
+     * Supabase não retorna erro óbvio pro app, só age como se a pessoa
+     * não tivesse permissão — na prática parece "não salvou nada", que é
+     * exatamente o bug do coração/favoritos não persistindo depois de um
+     * tempo de uso.
+     */
+    @Headers("Content-Type: application/json")
+    @POST("auth/v1/token?grant_type=refresh_token")
+    suspend fun refreshToken(
+        @retrofit2.http.Header("apikey") apiKey: String,
+        @Body body: RefreshTokenRequest,
+    ): AuthSession
 }
+
+data class RefreshTokenRequest(
+    val refresh_token: String,
+)
 
 data class SendOtpRequest(
     val email: String,

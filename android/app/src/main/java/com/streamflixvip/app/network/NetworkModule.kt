@@ -29,6 +29,15 @@ object NetworkModule {
      */
     const val ZEABUR_BASE_URL = "https://streamflixpro.zeabur.app/"
 
+    /**
+     * Preenchido pelo MainActivity assim que o Context da Activity está
+     * disponível — precisa existir ANTES de qualquer chamada autenticada
+     * ser feita, porque authenticator (abaixo) depende dele pra ler e
+     * salvar o refresh_token. Nulo só nos instantes antes do app montar
+     * a UI, quando nenhuma chamada autenticada ainda teria sido disparada.
+     */
+    var sessionStore: com.streamflixvip.app.data.SessionStore? = null
+
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = if (BuildConfig.DEBUG) {
             HttpLoggingInterceptor.Level.BODY
@@ -37,8 +46,54 @@ object NetworkModule {
         }
     }
 
+    /**
+     * Renova o access_token automaticamente sempre que uma chamada volta
+     * com 401 — o JWT do Supabase expira (padrão: 1h), e sem isso toda
+     * chamada autenticada (favoritar, checar progresso, etc) passa a
+     * falhar silenciosamente pela RLS depois desse tempo: o Supabase não
+     * retorna erro óbvio, só age como se a pessoa não tivesse permissão,
+     * o que na prática parecia "não salvou nada" — esse era o bug do
+     * coração/favoritos não persistindo depois de um tempo de uso.
+     *
+     * authenticate() do OkHttp já existe pra exatamente esse cenário:
+     * roda de forma síncrona quando o servidor responde 401, antes de a
+     * chamada original ser considerada "falhada" — se retornar uma
+     * nova Request com o header atualizado, o OkHttp repete a chamada
+     * automaticamente com esse novo header, de forma transparente pra
+     * quem chamou (o ViewModel nem sabe que um refresh aconteceu).
+     */
+    private val tokenAuthenticator = okhttp3.Authenticator { _, response ->
+        // Evita loop infinito: se a MESMA request já tentou renovar antes
+        // (marcada via header interno) e voltou 401 de novo, desiste —
+        // token de fato inválido/revogado, não adianta tentar de novo.
+        if (response.request.header("X-Retry-After-Refresh") != null) {
+            return@Authenticator null
+        }
+        val store = sessionStore ?: return@Authenticator null
+        val refreshToken = store.refreshToken ?: return@Authenticator null
+
+        val newSession = try {
+            kotlinx.coroutines.runBlocking {
+                supabaseAuthApi.refreshToken(
+                    apiKey = supabaseAnonKey,
+                    body = RefreshTokenRequest(refreshToken),
+                )
+            }
+        } catch (_: Exception) {
+            null
+        } ?: return@Authenticator null
+
+        store.updateTokens(newSession.access_token, newSession.refresh_token)
+
+        response.request.newBuilder()
+            .header("Authorization", "Bearer ${newSession.access_token}")
+            .header("X-Retry-After-Refresh", "true")
+            .build()
+    }
+
     private val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
+        .authenticator(tokenAuthenticator)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()

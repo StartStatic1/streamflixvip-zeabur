@@ -90,7 +90,15 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppRoot() {
     val context = LocalContext.current
-    val sessionStore = remember { SessionStore(context) }
+    val sessionStore = remember {
+        SessionStore(context).also {
+            // Atribuição síncrona, não em LaunchedEffect — precisa estar
+            // pronto ANTES da primeira composição de qualquer tela poder
+            // disparar uma chamada de rede autenticada (ex: HomeScreen
+            // carregando "continuar assistindo" já no primeiro frame).
+            com.streamflixvip.app.network.NetworkModule.sessionStore = it
+        }
+    }
     val authRepository = remember { AuthRepository(sessionStore) }
     val authViewModel: AuthViewModel = viewModel(factory = viewModelFactory { AuthViewModel(authRepository) })
 
