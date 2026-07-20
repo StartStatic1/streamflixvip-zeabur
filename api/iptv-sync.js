@@ -40,14 +40,37 @@ async function sbSelect(serviceKey, table, query) {
   return r.json();
 }
 
+// Uma linha problemática (conflito não resolvido, schema cache do
+// PostgREST desatualizado após um ALTER TABLE recente, etc.) NÃO PODE
+// derrubar o lote inteiro — antes, um erro aqui fazia processMovies/
+// processSeries jogar a exceção pra cima ANTES de salvar o cursor,
+// então a próxima execução recomeçava do zero, refazia o mesmo trabalho
+// (buscar todos os títulos de novo, casar com TMDB de novo) e batia no
+// mesmo erro de novo — um loop infinito que nunca avança nem termina.
+// Agora: se o lote falhar, tenta linha a linha; loga e PULA só a linha
+// que realmente falhar, sem nunca lançar erro pra quem chamou.
 async function sbUpsert(serviceKey, table, rows, onConflict) {
   if (!rows.length) return;
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${onConflict}`, {
-    method: 'POST',
-    headers: { ...supabaseHeaders(serviceKey), Prefer: 'resolution=merge-duplicates' },
-    body: JSON.stringify(rows),
-  });
-  if (!r.ok) throw new Error(`Supabase upsert falhou (${table}): ${r.status} ${await r.text()}`);
+  const post = async (payload) => {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${onConflict}`, {
+      method: 'POST',
+      headers: { ...supabaseHeaders(serviceKey), Prefer: 'resolution=merge-duplicates' },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  };
+  try {
+    await post(rows);
+  } catch (batchErr) {
+    console.error(`[sync] upsert em lote falhou (${table}): ${batchErr.message}. Tentando linha a linha para não perder o lote inteiro...`);
+    for (const row of rows) {
+      try {
+        await post([row]);
+      } catch (rowErr) {
+        console.error(`[sync] linha ignorada em "${table}" (tmdb_id=${row.tmdb_id ?? '?'}, source_label=${row.source_label ?? '?'}): ${rowErr.message}`);
+      }
+    }
+  }
 }
 
 async function sbUpdate(serviceKey, table, filter, patch) {
