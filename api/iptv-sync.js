@@ -22,7 +22,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const DEFAULT_SOURCE_LABEL_PREFIX = 'StreamFliXtream'; // prefixo padrão; cada fonte pode ter seu próprio nome via iptv_sources.name
+const DEFAULT_SOURCE_LABEL_PREFIX = 'MegaEmbed VIP'; // prefixo padrão; cada fonte pode ter seu próprio nome via iptv_sources.name
 
 function supabaseHeaders(serviceKey) {
   return {
