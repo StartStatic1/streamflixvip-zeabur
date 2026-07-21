@@ -1,4 +1,15 @@
-name: Build Android APK (StreamFlixVIP)
+name: Build Android APK - Debug (StreamFlixVIP)
+
+# Roda SOZINHO a cada push que mexe em android/ — é o seu fluxo de
+# sempre pra testar mudanças rapidamente (corrigir bug, subir pelo
+# Termux, baixar o APK gerado aqui no Actions). Não mexe em versão,
+# não publica no site, não faz commit — só builda e disponibiliza
+# pra download como artefato, igual sempre funcionou.
+#
+# Pra PUBLICAR oficialmente uma nova versão pros usuários (a que o
+# app vai detectar e pedir pra atualizar), use o outro workflow:
+# "Build Android APK - Release (Publicar)", que precisa ser acionado
+# manualmente na aba Actions.
 
 on:
   workflow_dispatch: {}
@@ -12,6 +23,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Pula esta run se o push veio do commit automático do workflow de
+    # release (mensagens "release: v...") — nesse caso o release já foi
+    # buildado, rodar o debug de novo em cima seria só gastar minutos
+    # do Actions à toa.
+    if: ${{ !startsWith(github.event.head_commit.message, 'release:') }}
     defaults:
       run:
         working-directory: android
@@ -35,10 +51,10 @@ jobs:
       - name: Dar permissão de execução ao gradlew
         run: chmod +x gradlew
 
-      - name: Restaurar keystore de debug fixa (evita conflito de assinatura ao atualizar)
+      - name: Restaurar keystore fixa (evita conflito de assinatura ao instalar por cima)
         run: echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > app/debug.keystore
 
-      - name: Buildar APK de debug (instalável direto, sem assinatura de loja)
+      - name: Buildar APK de debug (rápido, só pra testar — não publica)
         env:
           DEBUG_KEYSTORE_PATH: debug.keystore
           DEBUG_KEYSTORE_PASSWORD: streamflixvip123
