@@ -1,7 +1,7 @@
 {
-  "versionCode": 8,
-  "versionName": "4.3.0",
+  "versionCode": 9,
+  "versionName": "5.0.1",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Adicionado novo servidor Premium."
+  "releaseNotes": "Correções Bugs"
 }
