@@ -1,7 +1,7 @@
 {
-  "versionCode": 9,
-  "versionName": "5.0.1",
+  "versionCode": 10,
+  "versionName": "5.0.2",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Correções Bugs"
+  "releaseNotes": "Correções Bugs, arrumado app fechando sozinho erro do novato :) "
 }
