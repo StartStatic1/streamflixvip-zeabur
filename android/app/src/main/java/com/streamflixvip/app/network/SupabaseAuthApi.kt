@@ -1,5 +1,6 @@
 package com.streamflixvip.app.network
 
+import com.squareup.moshi.JsonClass
 import retrofit2.http.Body
 import retrofit2.http.Headers
 import retrofit2.http.POST
@@ -50,10 +51,12 @@ interface SupabaseAuthApi {
     ): AuthSession
 }
 
+@JsonClass(generateAdapter = true)
 data class RefreshTokenRequest(
     val refresh_token: String,
 )
 
+@JsonClass(generateAdapter = true)
 data class SendOtpRequest(
     val email: String,
     // shouldCreateUser: true — cria a conta automaticamente no primeiro
@@ -61,6 +64,7 @@ data class SendOtpRequest(
     val create_user: Boolean = true,
 )
 
+@JsonClass(generateAdapter = true)
 data class VerifyOtpRequest(
     val email: String,
     val token: String,
@@ -72,12 +76,14 @@ data class VerifyOtpRequest(
  * "quem está logado" e poder anexar o token nas próximas chamadas que
  * exigirem usuário autenticado (ex: /api/vip-status, /api/redeem-vip).
  */
+@JsonClass(generateAdapter = true)
 data class AuthSession(
     val access_token: String,
     val refresh_token: String,
     val user: AuthUser,
 )
 
+@JsonClass(generateAdapter = true)
 data class AuthUser(
     val id: String,
     val email: String?,

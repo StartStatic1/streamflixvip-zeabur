@@ -122,25 +122,31 @@ class CatalogRepository {
      * Fontes de vídeo cadastradas pra um FILME — mesma query que
      * fetchCustomSources(tmdbId, 'movie', null, null) faz no index.html.
      */
-    suspend fun getSourcesForMovie(tmdbId: Int): List<VipSource> =
-        supabase.getSourcesForMovie(
+    suspend fun getSourcesForMovie(tmdbId: Int): List<VipSource> {
+        val sources = supabase.getSourcesForMovie(
             apiKey = anonKey,
             tmdbIdFilter = PostgrestFilter.eq(tmdbId),
             mediaTypeFilter = PostgrestFilter.eq("movie"),
         )
+        // Prioriza MegaEmbed VIP no topo da lista
+        return sources.sortedByDescending { it.source_label == "MegaEmbed VIP" }
+    }
 
     /**
      * Fontes de vídeo cadastradas pra um EPISÓDIO específico de série —
      * mesma query que fetchCustomSources(tmdbId, 'tv', season, episode)
      * faz no index.html.
      */
-    suspend fun getSourcesForEpisode(tmdbId: Int, season: Int, episode: Int): List<VipSource> =
-        supabase.getSourcesForEpisode(
+    suspend fun getSourcesForEpisode(tmdbId: Int, season: Int, episode: Int): List<VipSource> {
+        val sources = supabase.getSourcesForEpisode(
             apiKey = anonKey,
             tmdbIdFilter = PostgrestFilter.eq(tmdbId),
             seasonFilter = PostgrestFilter.eq(season),
             episodeFilter = PostgrestFilter.eq(episode),
         )
+        // Prioriza MegaEmbed VIP no topo da lista
+        return sources.sortedByDescending { it.source_label == "MegaEmbed VIP" }
+    }
 
     /**
      * Config de bloqueio VIP do título inteiro (filme OU série), vinda da

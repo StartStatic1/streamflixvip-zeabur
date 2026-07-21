@@ -1,7 +1,6 @@
 package com.streamflixvip.app.data
 
 import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.RedeemVipRequest
 import com.streamflixvip.app.network.RedeemVipResponse
@@ -22,7 +21,10 @@ sealed class RedeemResult {
 class VipRepository {
 
     private val api = NetworkModule.vipApi
-    private val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    // Sem KotlinJsonAdapterFactory (reflection) — Moshi.Builder() puro já
+    // encontra o adapter gerado por codegen (KSP) pra RedeemVipResponse,
+    // já que ela está anotada com @JsonClass(generateAdapter = true).
+    private val moshi = Moshi.Builder().build()
     private val errorAdapter = moshi.adapter(RedeemVipResponse::class.java)
 
     suspend fun getStatus(userId: String): VipStatusResponse =

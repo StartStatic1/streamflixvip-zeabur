@@ -1,5 +1,6 @@
 package com.streamflixvip.app.network
 
+import com.squareup.moshi.JsonClass
 import retrofit2.http.GET
 import retrofit2.http.Query
 
@@ -49,6 +50,7 @@ interface TmdbApi {
  * precisam ler — assim não é necessário modelar cada endpoint da TMDB
  * inteiro, só o que a UI usa.
  */
+@JsonClass(generateAdapter = true)
 data class TmdbResponse(
     val page: Int? = null,
     val results: List<TmdbItem>? = null,
@@ -99,14 +101,17 @@ data class TmdbResponse(
         }
 }
 
+@JsonClass(generateAdapter = true)
 data class TmdbVideosResponse(val results: List<TmdbVideo>? = null)
 
+@JsonClass(generateAdapter = true)
 data class TmdbVideo(
     val key: String,
     val site: String,
     val type: String,
 )
 
+@JsonClass(generateAdapter = true)
 data class TmdbItem(
     val id: Int,
     val title: String? = null,      // filmes usam "title"
@@ -150,8 +155,10 @@ data class TmdbItem(
         }
 }
 
+@JsonClass(generateAdapter = true)
 data class TmdbGenre(val id: Int, val name: String)
 
+@JsonClass(generateAdapter = true)
 data class TmdbSeason(
     val season_number: Int,
     val episode_count: Int,
@@ -164,11 +171,13 @@ data class TmdbSeason(
  * imagem e duração (o endpoint /tv/{id} sozinho só traz o resumo das
  * temporadas, sem detalhar episódio por episódio).
  */
+@JsonClass(generateAdapter = true)
 data class TmdbSeasonDetail(
     val season_number: Int,
     val episodes: List<TmdbEpisode>? = null,
 )
 
+@JsonClass(generateAdapter = true)
 data class TmdbEpisode(
     val episode_number: Int,
     val name: String? = null,

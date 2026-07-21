@@ -1,5 +1,6 @@
 package com.streamflixvip.app.network
 
+import com.squareup.moshi.JsonClass
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
@@ -67,11 +68,13 @@ interface SupabaseApi {
 }
 
 /** Config de bloqueio de um título inteiro, vinda da tabela vip_titles (1 linha por tmdb_id+media_type). */
+@JsonClass(generateAdapter = true)
 data class VipTitleConfig(
     val vip_lock: Boolean? = null,
     val vip_free_episode_limit: Int? = null,
 )
 
+@JsonClass(generateAdapter = true)
 data class VipSource(
     val source_url: String,
     val source_label: String?,
@@ -107,7 +110,7 @@ data class VipSource(
      * Bunny) tocam direto, sem passar por proxy adicional.
      */
     fun resolvedPlaybackUrl(apiBaseUrl: String): String {
-        if (source_url.contains("/stream-proxy") || source_url.startsWith("https://") && source_url.contains(".b-cdn.net")) {
+        if (source_url.contains("/stream-proxy")) {
             return source_url
         }
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
@@ -123,7 +126,7 @@ data class VipSource(
      * já que nesse caso a URL não depende de qual backend a serviu).
      */
     fun candidatePlaybackUrls(koyebBaseUrl: String, zeaburBaseUrl: String): List<String> {
-        if (source_url.contains("/stream-proxy") || source_url.startsWith("https://") && source_url.contains(".b-cdn.net")) {
+        if (source_url.contains("/stream-proxy")) {
             return listOf(source_url)
         }
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
@@ -193,6 +196,7 @@ interface WatchProgressApi {
     )
 }
 
+@JsonClass(generateAdapter = true)
 data class WatchProgressUpsert(
     val user_id: String,
     val tmdb_id: Int,
@@ -205,6 +209,7 @@ data class WatchProgressUpsert(
     val duration_seconds: Int,
 )
 
+@JsonClass(generateAdapter = true)
 data class WatchProgressEntry(
     val tmdb_id: Int,
     val media_type: String,
@@ -289,6 +294,7 @@ interface FavoritesApi {
     )
 }
 
+@JsonClass(generateAdapter = true)
 data class FavoriteUpsert(
     val user_id: String,
     val tmdb_id: Int,
@@ -302,6 +308,7 @@ data class FavoriteUpsert(
     val original_language: String? = null,
 )
 
+@JsonClass(generateAdapter = true)
 data class FavoriteEntry(
     val tmdb_id: Int,
     val media_type: String,
@@ -347,6 +354,7 @@ interface CommentsApi {
     )
 }
 
+@JsonClass(generateAdapter = true)
 data class TitleComment(
     val id: Long,
     val user_display_name: String?,
@@ -357,6 +365,7 @@ data class TitleComment(
     val displayAuthor: String get() = user_display_name?.takeIf { it.isNotBlank() } ?: "Usuário"
 }
 
+@JsonClass(generateAdapter = true)
 data class TitleCommentInsert(
     val tmdb_id: Int,
     val media_type: String,

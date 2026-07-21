@@ -20,7 +20,7 @@
 
     <application
         android:name=".StreamFlixApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="StreamFlixVIP"
         android:theme="@style/Theme.StreamFlixVIP"

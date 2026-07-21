@@ -28,8 +28,8 @@ android {
         applicationId = "com.streamflixvip.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 5
-        versionName = "2.2.1"
+        versionCode = 9
+        versionName = "5.0.1"
 
         // URL base do backend Express — o MESMO domínio que o site usa
         // hoje (Koyeb). Trocar aqui se o domínio mudar de novo no futuro,
@@ -58,6 +58,13 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Mesma keystore fixa do debug (ver signingConfigs.debug acima)
+            // — reaproveitada aqui só porque é a que você já tem gerada e
+            // guardada como Secret no GitHub. Se algum dia quiser trocar
+            // por uma keystore separada exclusiva de produção, é só criar
+            // um novo signingConfigs.getByName("release") com outro
+            // arquivo/senha e apontar pra ele aqui.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -128,7 +135,14 @@ dependencies {
     // do Supabase (mesma anon key pública que o site usa no navegador)
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
-    implementation("com.squareup.moshi:moshi-kotlin:1.15.1")
+    // moshi-kotlin-codegen (KSP) em vez de moshi-kotlin (reflection):
+    // gera os adapters em tempo de compilação, então não depende de
+    // kotlin-reflect em runtime. Isso evita o R8 ter que processar a lib
+    // de reflection inteira no minifyRelease (causa do
+    // ConcurrentModificationException no build de release) e deixa o
+    // APK bem menor.
+    implementation("com.squareup.moshi:moshi:1.15.1")
+    ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // Carregamento de imagem (pôsteres/backdrops do TMDB)

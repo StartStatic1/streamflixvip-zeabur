@@ -1,5 +1,6 @@
 package com.streamflixvip.app.network
 
+import com.squareup.moshi.JsonClass
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -25,6 +26,7 @@ interface VipApi {
     suspend fun createPix(@Body body: PixRequest): PixResponse
 }
 
+@JsonClass(generateAdapter = true)
 data class PixRequest(
     val userId: String,
     val amount: Double,
@@ -32,6 +34,7 @@ data class PixRequest(
     val durationHours: Int
 )
 
+@JsonClass(generateAdapter = true)
 data class PixResponse(
     val paymentId: String,
     val qrCode: String,
@@ -39,17 +42,20 @@ data class PixResponse(
     val status: String
 )
 
+@JsonClass(generateAdapter = true)
 data class VipStatusResponse(
     val isVip: Boolean,
     val expiresAt: String?,
     val planLabel: String?,
 )
 
+@JsonClass(generateAdapter = true)
 data class RedeemVipRequest(
     val code: String,
     val userId: String,
 )
 
+@JsonClass(generateAdapter = true)
 data class RedeemVipResponse(
     val expiresAt: String? = null,
     val planLabel: String? = null,

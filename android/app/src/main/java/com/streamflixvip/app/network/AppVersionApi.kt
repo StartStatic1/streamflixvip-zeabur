@@ -1,5 +1,6 @@
 package com.streamflixvip.app.network
 
+import com.squareup.moshi.JsonClass
 import retrofit2.http.GET
 
 /**
@@ -13,6 +14,7 @@ interface AppVersionApi {
     suspend fun getLatestVersion(): AppVersionResponse
 }
 
+@JsonClass(generateAdapter = true)
 data class AppVersionResponse(
     val versionCode: Int,
     val versionName: String,

@@ -1,7 +1,6 @@
 package com.streamflixvip.app.network
 
 import com.squareup.moshi.Moshi
-import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import com.streamflixvip.app.BuildConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -109,8 +108,10 @@ object NetworkModule {
         .readTimeout(5, TimeUnit.SECONDS)
         .build()
 
+    // Sem KotlinJsonAdapterFactory (reflection) — todas as data classes de
+    // rede estão anotadas com @JsonClass(generateAdapter = true), então o
+    // Moshi encontra os adapters gerados em tempo de compilação (KSP).
     private val moshi = Moshi.Builder()
-        .add(KotlinJsonAdapterFactory())
         .build()
 
     val tmdbApi: TmdbApi by lazy {
