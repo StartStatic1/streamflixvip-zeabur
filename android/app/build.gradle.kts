@@ -58,6 +58,13 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Mesma keystore fixa do debug (ver signingConfigs.debug acima)
+            // — reaproveitada aqui só porque é a que você já tem gerada e
+            // guardada como Secret no GitHub. Se algum dia quiser trocar
+            // por uma keystore separada exclusiva de produção, é só criar
+            // um novo signingConfigs.getByName("release") com outro
+            // arquivo/senha e apontar pra ele aqui.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
