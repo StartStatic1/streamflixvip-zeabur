@@ -4041,16 +4041,9 @@
   // roda em datacenter, ela não contorna esse bloqueio — só adicionava
   // um salto de rede extra sem resolver o problema real. Deixando vazia,
   // o player usa direto o proxy do próprio servidor (Zeabur/Render).
-  const STREAM_PROXY_VERCEL = '';
-  // URL relativa: usa o próprio domínio que está servindo a página (então
-  // funciona tanto no Zeabur quanto no Render, sem precisar trocar nada
-  // aqui ao migrar de servidor).
+  // URL relativa: usa o próprio domínio que está servindo a página (Zeabur).
+  // Funciona em qualquer domínio, sem precisar trocar nada ao migrar.
   const STREAM_PROXY_ZEABUR = '/api/stream-proxy?url=';
-  // Bunny CDN (Pull Zone) — cacheia os streams IPTV (HTTP) e entrega mais
-  // rápido pro player. Deixe '' pra desativar e voltar a usar o proxy
-  // direto do Zeabur (STREAM_PROXY_VERCEL acima).
-  // Exemplo: 'https://streamflixvip.b-cdn.net/api/stream-proxy?url='
-  const STREAM_PROXY_BUNNY = '';
   let hlsInstance = null;
 
   // ── Fallback automático de servidor (só pro <video> nativo) ──
@@ -4666,13 +4659,12 @@ document.addEventListener('click', (e) => {
   }
   function isM3u8(url) { return /\.m3u8(\?|#|$)/i.test(url); }
   function resolvePlayableUrl(url) {
-    const isHttp = url.startsWith('http://');
-    const pageIsHttps = window.location.protocol === 'https:';
-    if (isHttp && pageIsHttps) {
-      // Prioridade: Bunny CDN (cacheia e entrega mais rápido) > proxy próprio do Zeabur
-      const proxyBase = STREAM_PROXY_BUNNY || STREAM_PROXY_VERCEL || STREAM_PROXY_ZEABUR;
-      if (proxyBase) return proxyBase + encodeURIComponent(url);
-      return url;
+    // SEMPRE usa o proxy, seja a URL http:// ou https://,
+    // porque os servidores de origem costumam bloquear hotlinks diretos
+    // (403) e exigem os headers (User-Agent/Referer) que o proxy envia.
+    const proxyBase = STREAM_PROXY_ZEABUR;
+    if (proxyBase) {
+      return proxyBase + encodeURIComponent(url);
     }
     return url;
   }

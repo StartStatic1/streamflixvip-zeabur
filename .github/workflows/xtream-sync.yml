@@ -1,7 +1,10 @@
-name: Sincronização IPTV (standalone)
+name: Sincronização Xtream API (standalone)
 
-# Roda automaticamente a cada 30 minutos, e também pode ser disparado
-# manualmente pela aba "Actions" do GitHub (botão "Run workflow").
+# Irmão do "Sincronização IPTV (standalone)" (iptv-sync.yml), mas pra
+# fontes cadastradas como API Xtream (player_api.php) em vez de M3U.
+# Roda separado de propósito: usa seus próprios cursores no banco
+# (xtream_sync_cursor / xtream_series_sync_cursor), então não disputa
+# progresso nem tempo com a sincronização M3U.
 #
 # IMPORTANTE — antes de usar, configure os Secrets do repositório em:
 # Settings > Secrets and variables > Actions > New repository secret
@@ -18,7 +21,7 @@ on:
 # linhas no Supabase). cancel-in-progress:false = a nova espera a
 # anterior terminar em vez de cancelá-la no meio.
 concurrency:
-  group: iptv-sync
+  group: xtream-sync
   cancel-in-progress: false
 
 jobs:
@@ -34,8 +37,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Rodar sincronização IPTV
+      - name: Rodar sincronização Xtream API
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
-        run: node sync-standalone.js
+        run: node xtream-sync-standalone.js

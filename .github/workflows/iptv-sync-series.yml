@@ -18,6 +18,11 @@ on:
     - cron: '15 */1 * * *'   # roda 1x por hora, no minuto 15 (deslocado do sync de filmes pra não competir por rede/CPU no mesmo instante)
   workflow_dispatch: {}
 
+# Mesma proteção contra empilhamento dos outros dois workflows de sync.
+concurrency:
+  group: iptv-sync-series
+  cancel-in-progress: false
+
 jobs:
   sync-series:
     runs-on: ubuntu-latest

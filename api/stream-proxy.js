@@ -21,13 +21,19 @@ const EXTRA_ALLOWED_HOSTS = [
   'cdnbr02.com',
   'cldx-rio-go.top', 
   '178.63.61.173', 
-  'www.fontedecanais.club', 
+  'fontedecanais.club', 
+  'auth.urltech.gy',
+  'urltech.gy', 
+  'cdnspro.playerscdn.xyz',
   'sosbrazil.xyz',
   'vd2onebm.fun',
   'cdnnetjs.click:80',
   'sec.slackewn.click',
   'highcdnvideo.link',
   'novafast.pro:80', 
+  // Hook só pra teste automatizado local (test_e2e_proxy.js) — nunca
+  // setado em produção, então não afeta o comportamento real.
+  ...(process.env.STREAM_PROXY_TEST_EXTRA_HOST ? [process.env.STREAM_PROXY_TEST_EXTRA_HOST] : []),
 ];
 
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
@@ -55,6 +61,66 @@ async function getAllowedHosts() {
   return _hostsCache.hosts;
 }
 
+// ── Reescrita de manifesto M3U8 ──
+//
+// Este é o motivo pelo qual .m3u8 tocava no site (via hls.js) mas não no
+// app nativo (ExoPlayer). Um arquivo .m3u8 não é o vídeo — é uma playlist
+// de TEXTO que aponta para outros arquivos (segmentos .ts, ou sub-listas
+// de qualidade). Quando o proxy só repassava os BYTES do .m3u8 sem tocar
+// no conteúdo, as URLs de segmento dentro dele continuavam apontando
+// direto pro servidor de origem (ex: mgeb.top), sem o User-Agent/Referer
+// que o proxy adiciona. No navegador o hls.js resolve isso sozinho,
+// reescrevendo as URLs internamente antes de pedir cada segmento — mas o
+// ExoPlayer, ao receber a playlist JÁ PRONTA do proxy, tentava buscar os
+// .ts direto na origem e tomava 403 (exatamente o "Erro: -403" da tela).
+//
+// A correção: sempre que a resposta for um manifesto M3U8 (detectado pelo
+// content-type OU pela extensão .m3u8/.m3u da URL final), interceptamos o
+// corpo como texto, e para cada linha que não é comentário (não começa
+// com #) e representa uma URL de segmento/sub-playlist, resolvemos essa
+// URL relativa/absoluta contra a URL de origem e a substituímos por uma
+// nova chamada ao próprio /api/stream-proxy — assim TODO segmento também
+// passa pelos mesmos headers, e nada tenta ir direto na origem.
+function isM3u8Response(finalUrl, contentType) {
+  if (contentType && /mpegurl|m3u8/i.test(contentType)) return true;
+  return /\.m3u8?(\?|#|$)/i.test(finalUrl);
+}
+
+function rewriteM3u8(body, baseUrl, proxyOrigin) {
+  const lines = body.split('\n');
+  const rewritten = lines.map((rawLine) => {
+    const line = rawLine.replace(/\r$/, '');
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+
+    // Linhas de tag que também carregam URI="..." (ex: mapas de mídia,
+    // chaves de criptografia, faixas de áudio/legenda alternativas).
+    if (trimmed.startsWith('#')) {
+      const uriMatch = trimmed.match(/URI="([^"]+)"/);
+      if (uriMatch) {
+        try {
+          const resolved = new URL(uriMatch[1], baseUrl).toString();
+          const proxied = `${proxyOrigin}/api/stream-proxy?url=${encodeURIComponent(resolved)}`;
+          return line.replace(uriMatch[1], proxied);
+        } catch (_) {
+          return line;
+        }
+      }
+      return line;
+    }
+
+    // Linha "solta" = URL de segmento .ts ou de sub-playlist (variantes de
+    // qualidade). Pode vir relativa ("1269590_1.ts") ou absoluta.
+    try {
+      const resolved = new URL(trimmed, baseUrl).toString();
+      return `${proxyOrigin}/api/stream-proxy?url=${encodeURIComponent(resolved)}`;
+    } catch (_) {
+      return line; // não parece URL válida — deixa como está, não trava o manifesto inteiro
+    }
+  });
+  return rewritten.join('\n');
+}
+
 async function handler(req, res) {
   const { url } = req.query;
 
@@ -72,8 +138,16 @@ async function handler(req, res) {
   }
 
   const allowedHosts = await getAllowedHosts();
-  // Valida o hostname da URL original (passada no parâmetro 'url')
-  if (!allowedHosts.has(target.hostname)) {
+  // Valida o hostname da URL original (passada no parâmetro 'url'). Além
+  // do match exato, também aceita subdomínios de um host já liberado (ex:
+  // "cdn2.mgeb.top" quando "mgeb.top" está liberado) — comum em manifestos
+  // M3U8 cujos segmentos/sub-playlists de qualidade vêm de um CDN irmão do
+  // domínio principal, mesmo provedor. Sem isso, cada CDN novo dentro do
+  // próprio manifesto reescrito tomaria 403 na primeira vez que o
+  // ExoPlayer tentasse buscá-lo pelo proxy.
+  const hostAllowed = allowedHosts.has(target.hostname) ||
+    [...allowedHosts].some((h) => target.hostname.endsWith('.' + h));
+  if (!hostAllowed) {
     res.status(403).json({ error: 'Domínio da URL original não autorizado. Cadastre a fonte no painel admin primeiro.' });
     return;
   }
@@ -121,6 +195,25 @@ async function handler(req, res) {
 
     if (!upstream.ok && upstream.status !== 206) {
       res.status(upstream.status).json({ error: 'Servidor de origem retornou erro: ' + upstream.status });
+      return;
+    }
+
+    const contentType = upstream.headers.get('content-type');
+    const isManifest = isM3u8Response(finalUrl.toString(), contentType);
+
+    if (isManifest) {
+      // Manifesto: precisa ser lido inteiro como TEXTO e reescrito — não
+      // dá pra fazer stream de bytes crus aqui, porque o conteúdo em si
+      // muda (cada URL de segmento vira uma chamada ao proxy).
+      const text = await upstream.text();
+      const proxyOrigin = `${req.protocol || 'https'}://${req.get ? req.get('host') : req.headers.host}`;
+      const rewritten = rewriteM3u8(text, finalUrl.toString(), proxyOrigin);
+
+      res.status(upstream.status);
+      res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+      res.setHeader('Cache-Control', 'no-cache'); // manifesto pode mudar (segmentos novos ao vivo); nunca cachear
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.send(rewritten);
       return;
     }
 
