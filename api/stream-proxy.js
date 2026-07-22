@@ -23,7 +23,7 @@ const EXTRA_ALLOWED_HOSTS = [
   '178.63.61.173', 
   'fontedecanais.club', 
   'auth.urltech.gy',
-  'urltech.gy', 
+  'mnba.shop', 
   'cdnspro.playerscdn.xyz',
   'sosbrazil.xyz',
   'vd2onebm.fun',
