@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        Permite tráfego HTTP puro (cleartext) para QUALQUER domínio.
+        Necessário porque muitos provedores de IPTV/Xtream servem suas
+        listas m3u8/mp4 via http:// sem certificado, e o Android 9+
+        bloqueia esse tráfego por padrão — por isso o erro
+        ERROR_CODE_IO_CLEARTEXT_NOT_PERMITTED aparecia no player interno
+        mesmo com o link correto.
+    -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
