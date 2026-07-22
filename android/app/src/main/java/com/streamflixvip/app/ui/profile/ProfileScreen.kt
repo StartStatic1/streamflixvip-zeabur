@@ -31,8 +31,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.streamflixvip.app.data.IptvStore
 import com.streamflixvip.app.data.PreferencesStore
 import com.streamflixvip.app.ui.auth.AuthViewModel
+import androidx.compose.material.icons.filled.SettingsInputComponent
 import com.streamflixvip.app.ui.vip.VipSection
 import com.streamflixvip.app.ui.vip.VipViewModel
 
@@ -60,10 +62,13 @@ fun ProfileScreen(
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
     val preferencesStore = remember { PreferencesStore(context) }
+    val iptvStore = remember { IptvStore(context) }
 
     var notificationsEnabled by remember { mutableStateOf(preferencesStore.notificationsEnabled) }
     var showTermsDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showIptvDialog by remember { mutableStateOf(false) }
+    var isIptvActive by remember { mutableStateOf(iptvStore.hasCredentials) }
 
     val displayName = userEmail?.substringBefore("@") ?: "—"
 
@@ -157,6 +162,17 @@ fun ProfileScreen(
 
         // === PREFERÊNCIAS ===
         SectionTitle("Preferências")
+        
+        ProfileInfoCard(
+            icon = Icons.Filled.SettingsInputComponent,
+            title = "Leitor IPTV Nativo",
+            subtitle = if (isIptvActive) "Ativado (${iptvStore.xtreamUser})" else "Configurar Host, Login e Senha",
+            iconTint = if (isIptvActive) Gold else Color(0xFF4CAF50),
+            onClick = { showIptvDialog = true },
+        )
+        
+        Spacer(Modifier.height(8.dp))
+
         // Notificações — persiste de verdade: ao tocar, salva no
         // PreferencesStore na hora, então sobrevive a fechar e reabrir o
         // app (diferente de um estado só em memória, que resetaria pra
@@ -259,6 +275,14 @@ fun ProfileScreen(
                 "seu histórico de \"continuar assistindo\" e sua lista de favoritos — tudo " +
                 "vinculado só à sua conta. Não vendemos nem compartilhamos esses dados com terceiros.",
             onDismiss = { showPrivacyDialog = false },
+        )
+    }
+
+    if (showIptvDialog) {
+        IptvLoginDialog(
+            iptvStore = iptvStore,
+            onDismiss = { showIptvDialog = false },
+            onSuccess = { isIptvActive = iptvStore.hasCredentials }
         )
     }
 }
