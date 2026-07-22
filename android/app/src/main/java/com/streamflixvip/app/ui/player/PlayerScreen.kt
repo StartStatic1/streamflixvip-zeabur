@@ -61,6 +61,8 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.mp4.Mp4Extractor
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -282,7 +284,12 @@ private fun NativePlayer(
                 "Icy-MetaData" to "1"
             ))
 
-        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+        // Configura extratores para serem mais tolerantes com formatos IPTV (ex: TS dentro de MP4)
+        val extractorsFactory = DefaultExtractorsFactory()
+            .setConstantBitrateSeekingEnabled(true)
+            .setMp4ExtractorFlags(Mp4Extractor.FLAG_READ_SAMPLE_TABLE_DIRECTLY)
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
             .setDataSourceFactory(httpDataSourceFactory)
 
         val mediaItem = MediaItem.fromUri(url)
@@ -290,7 +297,7 @@ private fun NativePlayer(
             HlsMediaSource.Factory(httpDataSourceFactory)
                 .createMediaSource(mediaItem)
         } else {
-            ProgressiveMediaSource.Factory(httpDataSourceFactory)
+            ProgressiveMediaSource.Factory(httpDataSourceFactory, extractorsFactory)
                 .createMediaSource(mediaItem)
         }
 
