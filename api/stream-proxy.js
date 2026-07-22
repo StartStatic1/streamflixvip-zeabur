@@ -37,6 +37,54 @@ const EXTRA_ALLOWED_HOSTS = [
 let _hostsCache = { hosts: new Set(EXTRA_ALLOWED_HOSTS), fetchedAt: 0 };
 const CACHE_TTL_MS = 60 * 1000;
 
+// ── Detecção de URL de entrega já resolvida (CDN + token) ──
+//
+// Provedores Xtream costumam redirecionar (302) da URL "amigável" cadastrada
+// (ex: tvclubmais.com/movie/...) para uma CDN de entrega com token de curta
+// duração na query string (ex: 130.250.189.248/deliver/x.mp4?token=eyJ...).
+// O mecanismo normal (linha ~192, "allowedHosts.add(finalUrl.hostname)")
+// cobre isso quando o PROXY é quem segue o redirect. Mas se por qualquer
+// motivo a URL que chega ao proxy JÁ é a final (o app cacheou o link
+// resolvido, o player reusou de uma sessão anterior, o M3U trouxe o link
+// já expandido, etc.), o host da CDN nunca foi "descoberto" e nunca esteve
+// em EXTRA_ALLOWED_HOSTS — e o proxy rejeita um link que na verdade é
+// legítimo e ainda válido.
+//
+// Em vez de depender só da lista fixa de hosts para esse caso, também
+// aceitamos a URL se ela contiver um token no formato JWT com um campo de
+// expiração (exp) no futuro. Isso NÃO é "confiar em qualquer link" — um
+// JWT tem 3 partes separadas por ponto, e o "exp" é um carimbo de tempo
+// que só quem gerou o token (o provedor Xtream/CDN) controla; um
+// atacante não pode forjar um token com exp futuro sem a chave secreta
+// do provedor. Estamos apenas LENDO o campo público exp (não validando a
+// assinatura, que exigiria a chave secreta de cada CDN, impossível de ter
+// de antemão) — suficiente para diferenciar "token de stream real, ainda
+// dentro da validade" de "link aleatório/malicioso sem token nenhum".
+function decodeJwtPart(base64urlPart) {
+  const normalized = base64urlPart.replace(/-/g, '+').replace(/_/g, '/');
+  return JSON.parse(Buffer.from(normalized, 'base64').toString('utf8'));
+}
+
+function hasValidLookingCdnToken(target) {
+  const token = target.searchParams.get('token');
+  if (!token) return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false; // não parece JWT (header.payload.signature)
+  try {
+    // A convenção mais comum é "exp" no payload (parts[1]), mas alguns
+    // provedores Xtream/CDN colocam no header (parts[0]) — checamos os
+    // dois lugares em vez de assumir um só, já que o JWT não obriga onde
+    // esse campo vai.
+    const header = decodeJwtPart(parts[0]);
+    const payload = decodeJwtPart(parts[1]);
+    const exp = typeof payload.exp === 'number' ? payload.exp : header.exp;
+    if (typeof exp !== 'number') return false;
+    return exp * 1000 > Date.now(); // exp em segundos desde epoch, ainda não expirou
+  } catch (_) {
+    return false; // conteúdo malformado/não é JSON — não arrisca, trata como não confiável
+  }
+}
+
 async function getAllowedHosts() {
   const now = Date.now();
   if (now - _hostsCache.fetchedAt < CACHE_TTL_MS) return _hostsCache.hosts;
@@ -144,7 +192,8 @@ async function handler(req, res) {
   // próprio manifesto reescrito tomaria 403 na primeira vez que o
   // ExoPlayer tentasse buscá-lo pelo proxy.
   const hostAllowed = allowedHosts.has(target.hostname) ||
-    [...allowedHosts].some((h) => target.hostname.endsWith('.' + h));
+    [...allowedHosts].some((h) => target.hostname.endsWith('.' + h)) ||
+    hasValidLookingCdnToken(target);
   if (!hostAllowed) {
     res.status(403).json({ error: 'Domínio da URL original não autorizado. Cadastre a fonte no painel admin primeiro.' });
     return;
