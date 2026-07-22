@@ -113,6 +113,9 @@ data class VipSource(
         if (source_url.contains("/stream-proxy")) {
             return source_url
         }
+        if (source_url.startsWith("https://", ignoreCase = true)) {
+            return source_url
+        }
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
         return "${apiBaseUrl}api/stream-proxy?url=$encoded"
     }
@@ -127,6 +130,9 @@ data class VipSource(
      */
     fun candidatePlaybackUrls(koyebBaseUrl: String, zeaburBaseUrl: String): List<String> {
         if (source_url.contains("/stream-proxy")) {
+            return listOf(source_url)
+        }
+        if (source_url.startsWith("https://", ignoreCase = true)) {
             return listOf(source_url)
         }
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
