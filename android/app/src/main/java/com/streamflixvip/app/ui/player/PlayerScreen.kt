@@ -56,9 +56,13 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
-import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.exoplayer.trackselection.TrackSelectionOverride
 import androidx.media3.ui.PlayerView
 import com.streamflixvip.app.BuildConfig
 import com.streamflixvip.app.data.ProgressRepository
@@ -263,11 +267,33 @@ private fun NativePlayer(
     var controlsVisible by remember { mutableStateOf(true) }
 
     val exoPlayer = remember {
+        // Injeta headers de player IPTV profissional para evitar erro 403 (Forbidden)
+        // em provedores que exigem User-Agent conhecido (ex: Smarters/VLC).
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("IPTVSmarters/1.0 (Linux; Android)")
+            .setDefaultRequestProperties(mapOf(
+                "Referer" to url,
+                "Connection" to "keep-alive"
+            ))
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(httpDataSourceFactory)
+
+        val mediaItem = MediaItem.fromUri(url)
+        val mediaSource = if (url.contains(".m3u8")) {
+            HlsMediaSource.Factory(httpDataSourceFactory)
+                .createMediaSource(mediaItem)
+        } else {
+            ProgressiveMediaSource.Factory(httpDataSourceFactory)
+                .createMediaSource(mediaItem)
+        }
+
         ExoPlayer.Builder(context)
             .setTrackSelector(trackSelector)
+            .setMediaSourceFactory(mediaSourceFactory)
             .build()
             .apply {
-                setMediaItem(MediaItem.fromUri(url))
+                setMediaSource(mediaSource)
                 prepare()
                 playWhenReady = true
                 // Retoma de onde a pessoa parou — só faz sentido pular pra
