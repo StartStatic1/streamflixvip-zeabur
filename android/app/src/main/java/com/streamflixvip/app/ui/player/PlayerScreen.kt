@@ -287,7 +287,6 @@ private fun NativePlayer(
         // Configura extratores para serem mais tolerantes com formatos IPTV (ex: TS dentro de MP4)
         val extractorsFactory = DefaultExtractorsFactory()
             .setConstantBitrateSeekingEnabled(true)
-            .setMp4ExtractorFlags(Mp4Extractor.FLAG_READ_SAMPLE_TABLE_DIRECTLY)
 
         val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory)
             .setDataSourceFactory(httpDataSourceFactory)
