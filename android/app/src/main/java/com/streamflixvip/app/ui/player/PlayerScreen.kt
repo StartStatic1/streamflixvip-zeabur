@@ -266,15 +266,17 @@ private fun NativePlayer(
     // toque) — assim nossa barra de chips soma/aparece exatamente junto,
     // em vez de ficar fixa na tela competindo com o vídeo.
     var controlsVisible by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val exoPlayer = remember {
         // Injeta headers de player IPTV profissional para evitar erro 403 (Forbidden)
         // em provedores que exigem User-Agent conhecido (ex: Smarters/VLC).
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("IPTVSmarters/1.0 (Linux; Android)")
+            .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
             .setDefaultRequestProperties(mapOf(
                 "Referer" to url,
-                "Connection" to "keep-alive"
+                "Connection" to "keep-alive",
+                "Icy-MetaData" to "1"
             ))
 
         val mediaSourceFactory = DefaultMediaSourceFactory(context)
@@ -304,6 +306,12 @@ private fun NativePlayer(
                     seekTo(resumeSeconds * 1000L)
                 }
                 addListener(object : Player.Listener {
+                    override fun onPlayerError(error: PlaybackException) {
+                        super.onPlayerError(error)
+                        android.util.Log.e("PlayerScreen", "Erro de reprodução: ${error.errorCodeName} (${error.errorCode})", error)
+                        errorMessage = "Falha ao carregar vídeo: ${error.errorCodeName}"
+                    }
+
                     override fun onTracksChanged(tracks: Tracks) {
                         val subtitles = mutableListOf<TrackOption>()
                         val audios = mutableListOf<TrackOption>()
@@ -454,7 +462,7 @@ private fun NativePlayer(
         }
     }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = {
@@ -495,8 +503,23 @@ private fun NativePlayer(
                 }
             },
             update = { view -> view.resizeMode = aspectMode.resizeMode },
-        )
+                )
 
+        errorMessage?.let { msg ->
+            Surface(
+                color = Color.Black.copy(alpha = 0.8f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = msg,
+                    color = Color.Red,
+                    modifier = Modifier.padding(16.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        
         // Botão único de configurações — substitui a engrenagem nativa do
         // ExoPlayer (escondida acima) na MESMA posição (canto inferior
         // direito, na altura da barra de tempo/seek), em vez da fileira de
