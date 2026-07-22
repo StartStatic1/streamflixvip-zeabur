@@ -113,7 +113,14 @@ data class VipSource(
         if (source_url.contains("/stream-proxy")) {
             return source_url
         }
-        if (source_url.startsWith("https://", ignoreCase = true)) {
+        // Desvio inteligente: URLs de IPTV (Xtream Codes) tocam direto no app
+        // agora que temos os headers de VLC configurados. Isso evita erros de 
+        // "Domínio não autorizado" no proxy e economiza banda do servidor.
+        val isIptv = source_url.contains("/movie/") || 
+                     source_url.contains("/series/") || 
+                     source_url.contains("/live/")
+                     
+        if (isIptv || source_url.startsWith("https://", ignoreCase = true)) {
             return source_url
         }
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
@@ -132,7 +139,11 @@ data class VipSource(
         if (source_url.contains("/stream-proxy")) {
             return listOf(source_url)
         }
-        if (source_url.startsWith("https://", ignoreCase = true)) {
+        val isIptv = source_url.contains("/movie/") || 
+                     source_url.contains("/series/") || 
+                     source_url.contains("/live/")
+
+        if (isIptv || source_url.startsWith("https://", ignoreCase = true)) {
             return listOf(source_url)
         }
         val encoded = java.net.URLEncoder.encode(source_url, "UTF-8")
