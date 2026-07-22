@@ -626,6 +626,28 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  // Atualiza só a prioridade de uma fonte IPTV já cadastrada — separado do
+  // rename de propósito, pra não precisar reenviar/validar nome toda vez
+  // que só se quer reordenar. Essa prioridade é a mesma usada pra decidir
+  // quais servidores ficam liberados de graça pra quem não é VIP no app
+  // (ver FREE_SERVER_SLOTS em DetailScreen.kt): quanto maior a prioridade,
+  // mais "na frente" a fonte aparece e mais chance de estar liberada.
+  if (action === 'update-iptv-source-priority') {
+    const { sourceId, priority } = body;
+    if (!sourceId || priority === undefined || priority === null || isNaN(parseInt(priority, 10))) {
+      res.status(400).json({ error: 'Informe sourceId e priority' });
+      return;
+    }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/iptv_sources?id=eq.${encodeURIComponent(sourceId)}`, {
+      method: 'PATCH',
+      headers: svcHeaders,
+      body: JSON.stringify({ priority: parseInt(priority, 10) }),
+    });
+    if (!r.ok) { const detail = await r.text(); res.status(502).json({ error: 'Erro ao atualizar prioridade da fonte IPTV', detail }); return; }
+    res.status(200).json({ success: true });
+    return;
+  }
+
   // Renomeia uma fonte IPTV já cadastrada, sem perder o cursor de progresso
   // do sync (diferente de excluir e recriar, que zera sync_cursor/
   // xtream_sync_cursor e obriga o sync a começar do zero de novo).
