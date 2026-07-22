@@ -68,6 +68,7 @@ fun DetailScreen(
     onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
+    val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
 
     // Fonte já decidida (única disponível, ou escolhida no sheet de
     // servidor) aguardando a pessoa decidir COMO assistir — player
@@ -139,6 +140,7 @@ fun DetailScreen(
 
             if (showMovieServerPicker) {
                 val sheetState = rememberModalBottomSheetState()
+                var showPremiumSheet by remember { mutableStateOf(false) }
                 ModalBottomSheet(onDismissRequest = { showMovieServerPicker = false }, sheetState = sheetState) {
                     Column(Modifier.padding(bottom = 24.dp)) {
                         Text(
@@ -149,18 +151,27 @@ fun DetailScreen(
                         )
                         Column(Modifier.padding(horizontal = 20.dp)) {
                             s.movieSources.forEachIndexed { index, source ->
+                                val lockedForFree = !isVip && index >= FREE_SERVER_SLOTS
                                 SourceRow(
                                     source = source,
                                     isRecommended = index == 0,
+                                    isLockedForFree = lockedForFree,
                                     onClick = {
                                         showMovieServerPicker = false
                                         pendingWatch = PendingSource(source, 0, 0)
                                     },
+                                    onLockedClick = { showPremiumSheet = true },
                                 )
                                 Spacer(Modifier.height(8.dp))
                             }
                         }
                     }
+                }
+                if (showPremiumSheet) {
+                    PremiumServerSheet(
+                        onDismiss = { showPremiumSheet = false },
+                        onUpgradeClick = onUpgradeClick,
+                    )
                 }
             }
         }
@@ -437,6 +448,7 @@ private fun DetailContent(
     // tocou direto e nunca chega a marcar showServerPickerForEpisode.
     if (state.mediaType == "tv" && state.showServerPickerForEpisode != null) {
         val sheetState = rememberModalBottomSheetState()
+        var showPremiumSheet by remember { mutableStateOf(false) }
         ModalBottomSheet(
             onDismissRequest = onDismissServerPicker,
             sheetState = sheetState,
@@ -450,18 +462,27 @@ private fun DetailContent(
                 )
                 Column(Modifier.padding(horizontal = 20.dp)) {
                     state.episodeSources.forEachIndexed { index, source ->
+                        val lockedForFree = !isVip && index >= FREE_SERVER_SLOTS
                         SourceRow(
                             source = source,
                             isRecommended = index == 0,
+                            isLockedForFree = lockedForFree,
                             onClick = {
                                 onDismissServerPicker()
                                 onRequestWatch(source, state.selectedSeason ?: 0, state.selectedEpisode ?: 0)
                             },
+                            onLockedClick = { showPremiumSheet = true },
                         )
                         Spacer(Modifier.height(8.dp))
                     }
                 }
             }
+        }
+        if (showPremiumSheet) {
+            PremiumServerSheet(
+                onDismiss = { showPremiumSheet = false },
+                onUpgradeClick = onUpgradeClick,
+            )
         }
     }
 
@@ -1561,14 +1582,41 @@ private fun qualityBadge(label: String?): String? {
         ?.let { if (it == "2160P") "4K" else it }
 }
 
+/**
+ * Quantos servidores ficam liberados de graça pra quem não é VIP —
+ * sempre os N primeiros por ordem de `priority` (o mesmo campo que já
+ * define a ordem de exibição/recomendação, ver VipSource). Reaproveitar
+ * esse campo em vez de criar uma flag "is_free" separada evita trabalho
+ * extra de cadastro: quem já é o servidor melhor/recomendado também é o
+ * que aparece de graça, e mudar quem é grátis é só reordenar prioridade
+ * no painel — não editar cada fonte uma a uma.
+ */
+private const val FREE_SERVER_SLOTS = 2
+
 @Composable
-private fun SourceRow(source: VipSource, isRecommended: Boolean, onClick: () -> Unit) {
+private fun SourceRow(
+    source: VipSource,
+    isRecommended: Boolean,
+    isLockedForFree: Boolean,
+    onClick: () -> Unit,
+    onLockedClick: () -> Unit,
+) {
     val badge = qualityBadge(source.source_label)
+    val gold = MaterialTheme.colorScheme.primary
 
     Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
-        color = if (isRecommended) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        onClick = if (isLockedForFree) onLockedClick else onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = when {
+            isLockedForFree -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            isRecommended -> MaterialTheme.colorScheme.primaryContainer
+            else -> MaterialTheme.colorScheme.surfaceVariant
+        },
+        border = if (isLockedForFree) {
+            androidx.compose.foundation.BorderStroke(1.dp, gold.copy(alpha = 0.35f))
+        } else null,
+        tonalElevation = if (isRecommended) 3.dp else 0.dp,
+        shadowElevation = if (isRecommended) 2.dp else 0.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
@@ -1577,36 +1625,151 @@ private fun SourceRow(source: VipSource, isRecommended: Boolean, onClick: () -> 
         ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(
+                        if (isLockedForFree) gold.copy(alpha = 0.14f)
+                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                if (isLockedForFree) {
+                    Icon(
+                        Icons.Outlined.Lock,
+                        contentDescription = null,
+                        tint = gold,
+                        modifier = Modifier.size(17.dp),
+                    )
+                } else {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(source.displayName, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                if (isRecommended) {
-                    Text(
-                        "Recomendado",
-                        fontSize = 11.sp,
+                Text(
+                    source.displayName,
+                    fontSize = 14.sp,
+                    fontWeight = if (isLockedForFree) FontWeight.Normal else FontWeight.SemiBold,
+                    color = if (isLockedForFree) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f) else MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(2.dp))
+                when {
+                    isLockedForFree -> PremiumTag(gold)
+                    isRecommended -> Text(
+                        "RECOMENDADO",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
             }
             badge?.let {
+                Spacer(Modifier.width(8.dp))
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 1.dp,
                 ) {
                     Text(
                         it,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
+                        color = if (isLockedForFree) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Selo "PREMIUM" — mesma cor dourada (primary) usada em VipLockCard pra
+ * comunicar "exclusivo, não erro". Reaproveita a linguagem visual que já
+ * existe no app em vez de inventar um vermelho/cinza de "bloqueado" novo.
+ */
+@Composable
+private fun PremiumTag(gold: androidx.compose.ui.graphics.Color) {
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = gold.copy(alpha = 0.16f),
+    ) {
+        Text(
+            "PREMIUM",
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 0.6.sp,
+            color = gold,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+        )
+    }
+}
+
+/**
+ * Bottom sheet leve mostrado ao tocar num servidor travado — explica o
+ * porquê sem tirar a pessoa da lista de servidores (ela decide se quer
+ * seguir pro upgrade ou continuar vendo as opções liberadas).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState()
+    val gold = MaterialTheme.colorScheme.primary
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 28.dp, top = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(gold.copy(alpha = 0.14f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.Lock,
+                    contentDescription = null,
+                    tint = gold,
+                    modifier = Modifier.size(26.dp),
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            PremiumTag(gold)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Este servidor é exclusivo VIP",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Assine o VIP para desbloquear todos os servidores, com mais velocidade e estabilidade.",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+            Spacer(Modifier.height(20.dp))
+            Button(
+                onClick = { onDismiss(); onUpgradeClick() },
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text("Seja VIP agora", fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Continuar com os servidores gratuitos",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
