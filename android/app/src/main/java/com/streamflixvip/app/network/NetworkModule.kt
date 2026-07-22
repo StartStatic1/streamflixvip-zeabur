@@ -26,7 +26,7 @@ object NetworkModule {
      * dela, o player faz os dois tentarem ao mesmo tempo e usa o que
      * responder primeiro (ver StreamUrlResolver).
      */
-    const val ZEABUR_BASE_URL = "https://streamflixpro.zeabur.app/"
+    const val ZEABUR_BASE_URL = "https://www.streamflixvip.online/"
 
     /**
      * Preenchido pelo MainActivity assim que o Context da Activity está
