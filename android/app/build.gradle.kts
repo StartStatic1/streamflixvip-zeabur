@@ -34,7 +34,7 @@ android {
         // URL base do backend Express — o MESMO domínio que o site usa
         // hoje (Koyeb). Trocar aqui se o domínio mudar de novo no futuro,
         // sem precisar caçar a string espalhada pelo código.
-        buildConfigField("String", "API_BASE_URL", "\"https://logical-canidae-meu-bot-cinema-39259a5d.koyeb.app/\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://www.streamflixvip.online/\"")
         buildConfigField("String", "SUPABASE_URL", "\"https://gkujbjpvphuvrejpvvtz.supabase.co\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw\"")
     }
