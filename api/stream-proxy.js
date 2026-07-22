@@ -28,9 +28,7 @@ const EXTRA_ALLOWED_HOSTS = [
   'sosbrazil.xyz',
   'vd2onebm.fun',
   'cdnnetjs.click:80',
-  'sec.slackewn.click',
-  'highcdnvideo.link',
-  'novafast.pro:80', 
+  'tvclubmais.com', 
   // Hook só pra teste automatizado local (test_e2e_proxy.js) — nunca
   // setado em produção, então não afeta o comportamento real.
   ...(process.env.STREAM_PROXY_TEST_EXTRA_HOST ? [process.env.STREAM_PROXY_TEST_EXTRA_HOST] : []),
