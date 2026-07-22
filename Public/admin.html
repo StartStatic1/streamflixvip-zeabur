@@ -2902,6 +2902,7 @@
                 </span>
               </td>
               <td style="white-space:nowrap">
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="renameIptvSource('${s.id}', '${escapeHtml(s.name).replace(/'/g, "\\'")}')" title="Renomear fonte (mantém o progresso da sincronização)">✏️</button>
                 <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleIptvSource('${s.id}', ${!s.is_active})" title="${s.is_active ? 'Pausar' : 'Reativar'}">
                   ${s.is_active ? '⏸️' : '▶️'}
                 </button>
@@ -2981,6 +2982,18 @@
     document.getElementById('xtreamApiUserInput').value = '';
     document.getElementById('xtreamApiPassInput').value = '';
     document.getElementById('xtreamApiPriorityInput').value = '5';
+    loadIptvSources();
+  }
+
+  async function renameIptvSource(sourceId, currentName) {
+    const newName = prompt('Novo nome para a fonte:', currentName);
+    if (newName === null) return; // cancelou
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === currentName) return;
+
+    const result = await api('update-iptv-source', { sourceId, name: trimmed });
+    if (result.error) { showToast('❌ ' + result.error); return; }
+    showToast(`✅ Fonte renomeada para "${trimmed}" (filmes já cadastrados foram atualizados junto)`);
     loadIptvSources();
   }
 
