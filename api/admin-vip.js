@@ -626,6 +626,77 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  // Renomeia uma fonte IPTV já cadastrada, sem perder o cursor de progresso
+  // do sync (diferente de excluir e recriar, que zera sync_cursor/
+  // xtream_sync_cursor e obriga o sync a começar do zero de novo).
+  //
+  // CUIDADO: source_label em vip_sources é gravado como o NOME da fonte no
+  // momento da importação (ver api/iptv-sync.js e xtream-sync-standalone.js:
+  // "source_label: source.name"), não o id. Se só renomearmos iptv_sources
+  // sem propagar, os filmes já importados ficam com o source_label ANTIGO
+  // enquanto a fonte mostra o nome NOVO — o painel passaria a mostrar dois
+  // "servidores" onde antes tinha um (o antigo com os filmes órfãos, o novo
+  // zerado). Por isso esta ação atualiza os dois em sequência.
+  if (action === 'update-iptv-source') {
+    const { sourceId, name: newName } = body;
+    if (!sourceId || !newName || !newName.trim()) {
+      res.status(400).json({ error: 'Informe sourceId e name' });
+      return;
+    }
+
+    const sourceRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/iptv_sources?id=eq.${encodeURIComponent(sourceId)}&select=name`,
+      { headers: svcHeaders }
+    );
+    const sourceRows = await sourceRes.json();
+    if (!sourceRes.ok || !sourceRows.length) {
+      res.status(404).json({ error: 'Fonte IPTV não encontrada' });
+      return;
+    }
+    const oldName = sourceRows[0].name;
+    const trimmedNewName = newName.trim();
+
+    if (oldName === trimmedNewName) {
+      res.status(200).json({ success: true, unchanged: true });
+      return;
+    }
+
+    // 1) renomeia a fonte
+    const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/iptv_sources?id=eq.${encodeURIComponent(sourceId)}`, {
+      method: 'PATCH',
+      headers: svcHeaders,
+      body: JSON.stringify({ name: trimmedNewName }),
+    });
+    if (!updateRes.ok) {
+      const detail = await updateRes.text();
+      const detailStr = detail;
+      if (detailStr.includes('duplicate key') || detailStr.includes('idx_iptv_sources_name_unique')) {
+        res.status(409).json({ error: `Já existe uma fonte chamada "${trimmedNewName}". Escolha outro nome.` });
+        return;
+      }
+      res.status(502).json({ error: 'Erro ao renomear fonte IPTV', detail });
+      return;
+    }
+
+    // 2) propaga o novo nome para os filmes já importados dessa fonte, para
+    // não deixá-los órfãos sob o source_label antigo
+    const propagateRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/vip_sources?source_label=eq.${encodeURIComponent(oldName)}`,
+      { method: 'PATCH', headers: svcHeaders, body: JSON.stringify({ source_label: trimmedNewName }) }
+    );
+    if (!propagateRes.ok) {
+      const detail = await propagateRes.text();
+      res.status(502).json({
+        error: 'Fonte renomeada, mas houve erro ao atualizar os filmes já importados com o nome antigo',
+        detail,
+      });
+      return;
+    }
+
+    res.status(200).json({ success: true, oldName, newName: trimmedNewName });
+    return;
+  }
+
   // Exclui a fonte IPTV inteira + TODOS os filmes que vieram dela em
   // vip_sources (identificados pelo source_label = nome da fonte) + os
   // itens não encontrados associados. É a versão "1 clique" do que os
