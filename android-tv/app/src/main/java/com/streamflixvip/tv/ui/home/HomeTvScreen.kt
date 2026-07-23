@@ -61,7 +61,10 @@ enum class TvCategory(val label: String) {
 }
 
 @Composable
-fun HomeTvScreen(viewModel: HomeTvViewModel = HomeTvViewModel()) {
+fun HomeTvScreen(
+    viewModel: HomeTvViewModel = HomeTvViewModel(),
+    onItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
+) {
     val state by viewModel.uiState.collectAsState()
     var selectedCategory by remember { mutableStateOf(TvCategory.RECOMENDACOES) }
 
@@ -87,7 +90,7 @@ fun HomeTvScreen(viewModel: HomeTvViewModel = HomeTvViewModel()) {
                     Text("Carregando...", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                PosterGrid(items = state.items)
+                PosterGrid(items = state.items, onItemClick = onItemClick)
             }
         }
     }
@@ -150,27 +153,34 @@ private fun CategoryTabs(selected: TvCategory, onSelect: (TvCategory) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 32.dp, top = 28.dp, bottom = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(32.dp),
+            .padding(start = 24.dp, top = 24.dp, bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         TvCategory.entries.forEach { category ->
             val isSelected = category == selected
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    category.label,
-                    fontSize = 18.sp,
-                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .background(Color.Transparent)
-                        .padding(bottom = 6.dp),
-                )
-                if (isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .width(28.dp)
-                            .height(3.dp)
-                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
+            Card(
+                onClick = { onSelect(category) },
+                colors = CardDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier.padding(horizontal = 4.dp),
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        category.label,
+                        fontSize = 18.sp,
+                        color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 6.dp),
                     )
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .width(28.dp)
+                                .height(3.dp)
+                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
+                        )
+                    }
                 }
             }
         }
@@ -183,7 +193,7 @@ private fun CategoryTabs(selected: TvCategory, onSelect: (TvCategory) -> Unit) {
  * bastante entre 720p/1080p/4K), diferente de um número fixo de colunas.
  */
 @Composable
-private fun PosterGrid(items: List<TmdbItem>) {
+private fun PosterGrid(items: List<TmdbItem>, onItemClick: (Int, String) -> Unit) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 150.dp),
         contentPadding = PaddingValues(horizontal = 28.dp, vertical = 8.dp),
@@ -191,7 +201,7 @@ private fun PosterGrid(items: List<TmdbItem>) {
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         items(items) { item ->
-            PosterCard(item)
+            PosterCard(item, onClick = { onItemClick(item.id, item.resolvedMediaType) })
         }
     }
 }
@@ -202,10 +212,10 @@ private fun PosterGrid(items: List<TmdbItem>) {
  * destaque de foco/D-pad.
  */
 @Composable
-private fun PosterCard(item: TmdbItem) {
+private fun PosterCard(item: TmdbItem, onClick: () -> Unit) {
     Column {
         Card(
-            onClick = { /* TODO: navegar pra tela de detalhe quando ela existir */ },
+            onClick = onClick,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f),

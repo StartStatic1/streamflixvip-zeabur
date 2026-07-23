@@ -78,6 +78,11 @@ data class TmdbResponse(
     // isso junto pra não precisar de uma segunda chamada de rede só pro
     // trailer.
     val videos: TmdbVideosResponse? = null,
+    // Só preenchido quando a query usa append_to_response=credits (ver
+    // DetailTvViewModel) — elenco principal pra exibir na tela de
+    // detalhe, na mesma chamada que já traz sinopse/gêneros/duração, sem
+    // request extra.
+    val credits: TmdbCredits? = null,
 ) {
     /** Duração formatada (ex: "1h 40m"), ou null se a API não informou (comum em séries). */
     val displayRuntime: String?
@@ -109,6 +114,17 @@ data class TmdbVideo(
     val key: String,
     val site: String,
     val type: String,
+)
+
+/** Elenco e equipe — só usamos "cast" na tela de detalhe; "crew" (diretor etc.) fica de fora por ora. */
+@JsonClass(generateAdapter = true)
+data class TmdbCredits(val cast: List<TmdbCastMember>? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbCastMember(
+    val name: String,
+    val character: String? = null,
+    val profile_path: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
