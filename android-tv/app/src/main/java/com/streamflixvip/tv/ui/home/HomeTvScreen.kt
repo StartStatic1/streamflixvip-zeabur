@@ -160,7 +160,7 @@ private fun SidebarIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, s
         colors = CardDefaults.colors(
             containerColor = if (selected) Color(0xFFD4AF37).copy(alpha = 0.15f) else Color.Transparent,
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
@@ -242,7 +242,7 @@ private fun HeroSection(hero: HeroItem, onPlayClick: () -> Unit) {
                 onClick = onPlayClick,
                 modifier = Modifier.height(48.dp),
                 colors = CardDefaults.colors(containerColor = Color(0xFFD4AF37)),
-                shape = RoundedCornerShape(24.dp),
+                shape = CardDefaults.shape(RoundedCornerShape(24.dp)),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
@@ -311,7 +311,7 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier.width(160.dp).aspectRatio(2f / 3f),
         colors = CardDefaults.colors(containerColor = Color(0xFF1E1E2E)),
-        shape = RoundedCornerShape(10.dp),
+        shape = CardDefaults.shape(RoundedCornerShape(10.dp)),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(

@@ -121,7 +121,7 @@ fun DetailTvScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth().height(60.dp),
                                     colors = CardDefaults.colors(containerColor = Color(0xFF232330)),
-                                    shape = RoundedCornerShape(12.dp)
+                                    shape = CardDefaults.shape(RoundedCornerShape(12.dp))
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -141,7 +141,7 @@ fun DetailTvScreen(
                             onClick = { viewModel.dismissServerPicker() },
                             modifier = Modifier.fillMaxWidth().height(50.dp),
                             colors = CardDefaults.colors(containerColor = Color.White.copy(alpha = 0.1f)),
-                            shape = RoundedCornerShape(25.dp)
+                            shape = CardDefaults.shape(RoundedCornerShape(25.dp))
                         ) {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("Cancelar", color = Color.White)
@@ -189,7 +189,7 @@ private fun DetailContent(
                             colors = CardDefaults.colors(
                                 containerColor = if (s == selectedSeason) Color(0xFFD4AF37) else Color(0xFF1E1E2E)
                             ),
-                            shape = RoundedCornerShape(8.dp)
+                            shape = CardDefaults.shape(RoundedCornerShape(8.dp))
                         ) {
                             Text("T$s", modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp), 
                                  color = if (s == selectedSeason) Color.Black else Color.White)
@@ -230,7 +230,7 @@ private fun HeroHeader(details: TmdbResponse, onBack: () -> Unit, onPlay: () -> 
             Text(details.title ?: details.name ?: "", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Spacer(modifier = Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Card(onClick = onPlay, colors = CardDefaults.colors(containerColor = Color(0xFFD4AF37)), shape = RoundedCornerShape(24.dp)) {
+                Card(onClick = onPlay, colors = CardDefaults.colors(containerColor = Color(0xFFD4AF37)), shape = CardDefaults.shape(RoundedCornerShape(24.dp))) {
                     Row(modifier = Modifier.padding(horizontal = 32.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.PlayArrow, null, tint = Color.Black)
                         Spacer(modifier = Modifier.width(8.dp))
@@ -238,7 +238,7 @@ private fun HeroHeader(details: TmdbResponse, onBack: () -> Unit, onPlay: () -> 
                     }
                 }
                 Spacer(modifier = Modifier.width(16.dp))
-                Card(onClick = onBack, colors = CardDefaults.colors(containerColor = Color.White.copy(alpha = 0.1f)), shape = RoundedCornerShape(24.dp)) {
+                Card(onClick = onBack, colors = CardDefaults.colors(containerColor = Color.White.copy(alpha = 0.1f)), shape = CardDefaults.shape(RoundedCornerShape(24.dp))) {
                     Text("Voltar", modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp), color = Color.White)
                 }
             }
@@ -252,7 +252,7 @@ private fun EpisodeItem(ep: TmdbEpisode, onClick: () -> Unit) {
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp, vertical = 6.dp),
         colors = CardDefaults.colors(containerColor = Color(0xFF15151F)),
-        shape = RoundedCornerShape(12.dp)
+        shape = CardDefaults.shape(RoundedCornerShape(12.dp))
     ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
