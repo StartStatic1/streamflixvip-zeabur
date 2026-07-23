@@ -31,7 +31,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.tv.material3.HorizontalDivider
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import androidx.tv.material3.MaterialTheme
@@ -426,33 +425,33 @@ fun PlayerTvScreen(
                                 SettingsRow(label = "Proporção", value = aspectMode.label) {
                                     aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
                                 }
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
                             }
                             item {
                                 SettingsRow(label = "Legenda", value = selectedSubtitleLabel) {
                                     settingsPanel = SettingsPanel.SUBTITLE
                                 }
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
                             }
                             if (audioOptions.isNotEmpty()) {
                                 item {
                                     SettingsRow(label = "Áudio", value = selectedAudioLabel) {
                                         settingsPanel = SettingsPanel.AUDIO
                                     }
-                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
                                 }
                             }
                             item {
                                 SettingsRow(label = "Qualidade", value = selectedQualityLabel) {
                                     settingsPanel = SettingsPanel.QUALITY
                                 }
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
                             }
                             item {
                                 SettingsRow(label = "Velocidade", value = "${playbackSpeed}x") {
                                     settingsPanel = SettingsPanel.SPEED
                                 }
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
                             }
                             item {
                                 SettingsRow(label = "Abrir no VLC", value = "") {
@@ -660,7 +659,7 @@ private fun SubmenuHeader(title: String, onBack: () -> Unit) {
         Text("←", color = Color.White, fontSize = 18.sp, modifier = Modifier.padding(end = 12.dp))
         Text(title, color = Color.White, fontSize = 16.sp)
     }
-    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.1f)))
 }
 
 @Composable
