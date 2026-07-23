@@ -2,7 +2,6 @@ package com.streamflixvip.tv.ui.player
 
 import android.annotation.SuppressLint
 import android.view.ViewGroup
-import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -10,24 +9,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -45,11 +35,10 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import androidx.tv.material3.Text
-import androidx.tv.material3.Surface
-import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.*
 import com.streamflixvip.tv.network.VipSource
 import com.streamflixvip.tv.BuildConfig
+import kotlinx.coroutines.delay
 
 @OptIn(UnstableApi::class)
 @SuppressLint("SetJavaScriptEnabled")
@@ -78,23 +67,54 @@ fun PlayerTvScreen(
 
     var playbackUrl by remember { mutableStateOf<String?>(null) }
     var controlsVisible by remember { mutableStateOf(true) }
+    var isPlaying by remember { mutableStateOf(true) }
+    var currentPosition by remember { mutableLongStateOf(0L) }
+    var duration by remember { mutableLongStateOf(0L) }
+
+    // Efeito para atualizar progresso
+    LaunchedEffect(isPlaying) {
+        while (isPlaying) {
+            currentPosition = exoPlayer.currentPosition
+            duration = exoPlayer.duration.coerceAtLeast(0L)
+            delay(1000)
+        }
+    }
+
+    // Auto-hide controls
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible) {
+            delay(5000)
+            controlsVisible = false
+        }
+    }
 
     DisposableEffect(source) {
         val url = source.resolvedPlaybackUrl(apiBaseUrl)
         playbackUrl = url
         
-        if (url.endsWith(".m3u8") || url.contains(".m3u8?")) {
-            val hlsSource = HlsMediaSource.Factory(DefaultHttpDataSource.Factory()).createMediaSource(MediaItem.fromUri(url))
-            exoPlayer.setMediaSource(hlsSource)
+        val mediaItem = MediaItem.fromUri(url)
+        val mediaSource = if (url.endsWith(".m3u8") || url.contains(".m3u8?")) {
+            HlsMediaSource.Factory(DefaultHttpDataSource.Factory()).createMediaSource(mediaItem)
         } else {
-            val progSource = ProgressiveMediaSource.Factory(DefaultHttpDataSource.Factory()).createMediaSource(MediaItem.fromUri(url))
-            exoPlayer.setMediaSource(progSource)
+            ProgressiveMediaSource.Factory(DefaultHttpDataSource.Factory()).createMediaSource(mediaItem)
         }
         
+        exoPlayer.setMediaSource(mediaSource)
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
         
-        onDispose { exoPlayer.release() }
+        val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) duration = exoPlayer.duration
+            }
+        }
+        exoPlayer.addListener(listener)
+        
+        onDispose { 
+            exoPlayer.removeListener(listener)
+            exoPlayer.release() 
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -114,7 +134,7 @@ fun PlayerTvScreen(
             )
         }
 
-        // Overlay de Controles Simples e Funcional para TV
+        // HUD PROFISSIONAL DE TV
         Box(
             modifier = Modifier.fillMaxSize().clickable(
                 indication = null,
@@ -122,22 +142,70 @@ fun PlayerTvScreen(
             ) { controlsVisible = !controlsVisible }
         ) {
             AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
-                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f))) {
-                    Column(modifier = Modifier.align(Alignment.TopStart).padding(40.dp)) {
-                        Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        if (season > 0) Text("S${season}E${episode}", fontSize = 18.sp, color = Color.White.copy(alpha = 0.7f))
-                    }
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f))) {
                     
-                    Row(modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                        // Botão Voltar focado no D-pad
+                    // Top Bar: Título e Voltar
+                    Row(
+                        modifier = Modifier.align(Alignment.TopStart).fillMaxWidth().padding(40.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Surface(
                             onClick = onBack,
-                            modifier = Modifier.height(50.dp).padding(horizontal = 20.dp),
-                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(25.dp)),
-                            colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFFD4AF37))
+                            modifier = Modifier.size(48.dp),
+                            shape = ClickableSurfaceDefaults.shape(CircleShape),
+                            colors = ClickableSurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.1f))
                         ) {
-                            Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-                                Text("Sair do Player", color = Color.Black, fontWeight = FontWeight.Bold)
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Filled.ArrowBack, null, tint = Color.White)
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(24.dp))
+                        Column {
+                            Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            if (season > 0) Text("S${season}E${episode}", fontSize = 16.sp, color = Color.White.copy(alpha = 0.6f))
+                        }
+                    }
+
+                    // Bottom Bar: Controles e Progresso
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 60.dp, vertical = 40.dp)
+                    ) {
+                        // Barra de Progresso
+                        Box(modifier = Modifier.fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(2.dp))) {
+                            val progress = if (duration > 0) currentPosition.toFloat() / duration else 0f
+                            Box(modifier = Modifier.fillMaxWidth(progress).fillMaxHeight().background(Color(0xFFD4AF37), RoundedCornerShape(2.dp)))
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(formatTime(currentPosition), color = Color.White, fontSize = 14.sp)
+                                Text(" / " + formatTime(duration), color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
+                            }
+                            
+                            // Controles Centrais
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                                PlayerIconButton(Icons.Filled.Replay10) { exoPlayer.seekTo(currentPosition - 10000) }
+                                
+                                Surface(
+                                    onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
+                                    modifier = Modifier.size(64.dp),
+                                    shape = ClickableSurfaceDefaults.shape(CircleShape),
+                                    colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFFD4AF37))
+                                ) {
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(32.dp))
+                                    }
+                                }
+                                
+                                PlayerIconButton(Icons.Filled.Forward10) { exoPlayer.seekTo(currentPosition + 10000) }
+                            }
+                            
+                            // Settings
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                PlayerIconButton(Icons.Filled.Subtitles) { /* Abrir legendas */ }
+                                PlayerIconButton(Icons.Filled.Settings) { /* Abrir settings */ }
                             }
                         }
                     }
@@ -145,6 +213,28 @@ fun PlayerTvScreen(
             }
         }
     }
+}
+
+@Composable
+private fun PlayerIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.size(48.dp),
+        shape = ClickableSurfaceDefaults.shape(CircleShape),
+        colors = ClickableSurfaceDefaults.colors(containerColor = Color.White.copy(alpha = 0.1f))
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSecs = ms / 1000
+    val hours = totalSecs / 3600
+    val mins = (totalSecs % 3600) / 60
+    val secs = totalSecs % 60
+    return if (hours > 0) "%d:%02d:%02d".format(hours, mins, secs) else "%02d:%02d".format(mins, secs)
 }
 
 @SuppressLint("SetJavaScriptEnabled")
@@ -157,7 +247,6 @@ private fun EmbedWebView(url: String) {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.mediaPlaybackRequiresUserGesture = false
-                settings.userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.101 Mobile Safari/537.36"
                 loadUrl(url)
             }
         }
