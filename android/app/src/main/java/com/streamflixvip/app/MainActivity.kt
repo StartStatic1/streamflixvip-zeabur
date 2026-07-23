@@ -56,6 +56,8 @@ import com.streamflixvip.app.ui.genre.GenreViewModel
 import com.streamflixvip.app.ui.theme.StreamFlixTheme
 import java.net.URLDecoder
 import java.net.URLEncoder
+import com.startapp.sdk.adsbase.StartAppAd
+import com.startapp.sdk.adsbase.StartAppSDK
 
 /**
  * Activity única hospedando toda a navegação via Compose Navigation.
@@ -76,6 +78,12 @@ class MainActivity : ComponentActivity() {
         // pra decidir quando a splash sai da tela.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        
+        // Inicializar Start.io SDK
+        StartAppSDK.init(this, "206908168", true)
+        // Desativar splash screen automática da Start.io (já temos a nossa)
+        StartAppAd.disableSplash()
+        
         enableEdgeToEdge()
         setContent {
             StreamFlixTheme {
