@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.WatchProgressEntry
+import com.startapp.sdk.ads.banner.Banner
+import com.streamflixvip.app.data.VipStatusHolder
+import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 
 private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
@@ -94,9 +97,16 @@ fun HomeScreen(
                         Spacer(Modifier.height(24.dp))
                     }
                 }
-                items(s.rows) { row ->
+                itemsIndexed(s.rows) { index, row ->
                     ContentRow(row = row, onItemClick = onItemClick, onSeeAllClick = onSeeAllClick)
                     Spacer(Modifier.height(24.dp))
+                    
+                    // Inserir banner de anúncio a cada 3 fileiras para usuários NÃO VIP
+                    val isVip by VipStatusHolder.isVip.collectAsState()
+                    if (!isVip && (index + 1) % 3 == 0) {
+                        StartIoBanner()
+                        Spacer(Modifier.height(24.dp))
+                    }
                 }
             }
         }
@@ -282,6 +292,31 @@ private fun HeroBanner(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StartIoBanner() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = "Patrocinado",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        AndroidView(
+            modifier = Modifier.fillMaxWidth(),
+            factory = { context ->
+                Banner(context).apply {
+                    // O Banner da Start.io se auto-ajusta ao tamanho do container
+                }
+            }
+        )
     }
 }
 
