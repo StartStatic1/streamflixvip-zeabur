@@ -28,8 +28,8 @@ android {
         applicationId = "com.streamflixvip.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 11
-        versionName = "5.0.3"
+        versionCode = 19
+        versionName = "5.2.0"
 
         // URL base do backend Express — o MESMO domínio que o site usa
         // hoje (Koyeb). Trocar aqui se o domínio mudar de novo no futuro,
@@ -103,7 +103,7 @@ dependencies {
     // dessa, como a primeira tela do próprio app — as duas se
     // complementam, não competem.
     implementation("androidx.core:core-splashscreen:1.0.1")
-
+    implementation("com.startapp:inapp-sdk:5.1.0")
     // Compose
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

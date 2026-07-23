@@ -2902,6 +2902,7 @@
                 </span>
               </td>
               <td style="white-space:nowrap">
+                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="renameIptvSource('${s.id}', '${escapeHtml(s.name).replace(/'/g, "\\'")}', ${parseInt(s.priority, 10) || 1})" title="Editar nome e prioridade (mantém o progresso da sincronização)">✏️</button>
                 <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleIptvSource('${s.id}', ${!s.is_active})" title="${s.is_active ? 'Pausar' : 'Reativar'}">
                   ${s.is_active ? '⏸️' : '▶️'}
                 </button>
@@ -2981,6 +2982,33 @@
     document.getElementById('xtreamApiUserInput').value = '';
     document.getElementById('xtreamApiPassInput').value = '';
     document.getElementById('xtreamApiPriorityInput').value = '5';
+    loadIptvSources();
+  }
+
+  async function renameIptvSource(sourceId, currentName, currentPriority) {
+    const newName = prompt('Novo nome para a fonte:', currentName);
+    if (newName === null) return; // cancelou
+    const trimmed = newName.trim();
+
+    const newPriorityRaw = prompt('Prioridade da fonte (número, maior = aparece antes):', String(currentPriority ?? 1));
+    if (newPriorityRaw === null) return; // cancelou
+    const newPriority = parseInt(newPriorityRaw, 10);
+    if (isNaN(newPriority)) { showToast('❌ Prioridade precisa ser um número.'); return; }
+
+    const nameChanged = trimmed && trimmed !== currentName;
+    const priorityChanged = newPriority !== currentPriority;
+    if (!nameChanged && !priorityChanged) return;
+
+    if (nameChanged) {
+      const result = await api('update-iptv-source', { sourceId, name: trimmed });
+      if (result.error) { showToast('❌ ' + result.error); return; }
+    }
+    if (priorityChanged) {
+      const result = await api('update-iptv-source-priority', { sourceId, priority: newPriority });
+      if (result.error) { showToast('❌ ' + result.error); return; }
+    }
+
+    showToast('✅ Fonte atualizada' + (nameChanged ? ' (filmes já cadastrados foram atualizados junto)' : ''));
     loadIptvSources();
   }
 
