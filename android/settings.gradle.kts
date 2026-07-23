@@ -1,6 +1,5 @@
 pluginManagement {
     repositories {
-        maven { url = uri("https://maven.start.io/artifactory/libs-release-local") }
         google()
         mavenCentral()
         gradlePluginPortal()
@@ -11,6 +10,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // ADICIONE ESTA LINHA AQUI EMBAIXO TAMBÉM:
+        maven { url = uri("https://maven.start.io/artifactory/libs-release-local") }
     }
 }
 
