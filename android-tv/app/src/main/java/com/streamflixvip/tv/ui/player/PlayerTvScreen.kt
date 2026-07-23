@@ -47,6 +47,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Text
 import androidx.tv.material3.Surface
+import androidx.tv.material3.ClickableSurfaceDefaults
 import com.streamflixvip.tv.network.VipSource
 import com.streamflixvip.tv.BuildConfig
 
@@ -132,8 +133,8 @@ fun PlayerTvScreen(
                         Surface(
                             onClick = onBack,
                             modifier = Modifier.height(50.dp).padding(horizontal = 20.dp),
-                            shape = RoundedCornerShape(25.dp),
-                            color = Color(0xFFD4AF37)
+                            shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(25.dp)),
+                            colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFFD4AF37))
                         ) {
                             Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
                                 Text("Sair do Player", color = Color.Black, fontWeight = FontWeight.Bold)

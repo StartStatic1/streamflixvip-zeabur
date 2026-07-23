@@ -43,6 +43,7 @@ import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import coil.compose.AsyncImage
 import com.streamflixvip.tv.network.TmdbCastMember
 import com.streamflixvip.tv.network.TmdbEpisode
@@ -105,7 +106,7 @@ fun DetailTvScreen(
                         .align(Alignment.CenterEnd)
                         .fillMaxHeight()
                         .width(360.dp),
-                    color = Color(0xFF15151F),
+                    colors = androidx.tv.material3.SurfaceDefaults.colors(containerColor = Color(0xFF15151F)),
                 ) {
                     Column(modifier = Modifier.padding(32.dp)) {
                         Text("Escolha o Servidor", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
