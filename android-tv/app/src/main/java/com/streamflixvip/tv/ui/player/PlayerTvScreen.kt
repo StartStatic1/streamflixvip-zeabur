@@ -31,7 +31,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
+import androidx.tv.material3.HorizontalDivider
+import androidx.tv.material3.Surface
+import androidx.tv.material3.Text
+import androidx.tv.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
@@ -415,7 +418,6 @@ fun PlayerTvScreen(
             ) {
                 LazyColumn(
                     modifier = Modifier
-                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 ) {
                     when (settingsPanel) {
@@ -704,21 +706,7 @@ private fun SettingsRow(label: String, value: String, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun Surface(
-    color: Color,
-    shape: RoundedCornerShape,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .background(color, shape)
-            .padding(8.dp),
-    ) {
-        content()
-    }
-}
+// Surface agora usa o import da tv.material3
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
