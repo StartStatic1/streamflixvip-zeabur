@@ -1,0 +1,65 @@
+name: Build Android TV APK - Debug (StreamFlixVIP TV)
+
+# Mesmo padrão do build-android-apk.yml (app de celular), só que
+# observando a pasta android-tv/ em vez de android/ — os dois workflows
+# rodam de forma independente, cada push só builda o app que de fato
+# mudou (path filter abaixo).
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - 'android-tv/**'
+      - '.github/workflows/build-android-tv-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ !startsWith(github.event.head_commit.message, 'release:') }}
+    defaults:
+      run:
+        working-directory: android-tv
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Gerar wrapper do Gradle (versão fixa 8.7)
+        run: |
+          curl -sL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.7/bin/gradle wrapper --gradle-version 8.7
+
+      - name: Dar permissão de execução ao gradlew
+        run: chmod +x gradlew
+
+      # Reaproveita o MESMO secret de keystore do app de celular
+      # (DEBUG_KEYSTORE_BASE64) — os dois apps têm applicationId
+      # diferentes, então não há conflito em usar a mesma chave de
+      # assinatura de debug pros dois. Se preferir chaves separadas no
+      # futuro, troque por um secret TV_DEBUG_KEYSTORE_BASE64 dedicado.
+      - name: Restaurar keystore fixa (evita conflito de assinatura ao instalar por cima)
+        run: echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > app/debug.keystore
+
+      - name: Buildar APK de debug (rápido, só pra testar — não publica)
+        env:
+          DEBUG_KEYSTORE_PATH: debug.keystore
+          DEBUG_KEYSTORE_PASSWORD: streamflixvip123
+          DEBUG_KEY_ALIAS: streamflixvip-debug
+          DEBUG_KEY_PASSWORD: streamflixvip123
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Enviar APK como artefato para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: streamflixvip-tv-debug-apk
+          path: android-tv/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

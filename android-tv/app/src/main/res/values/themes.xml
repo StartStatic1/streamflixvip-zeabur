@@ -1,0 +1,9 @@
+<resources>
+    <!-- Mesma lógica do app de celular: tema XML mínimo, só pra existir
+         algo referenciável no Manifest antes do Compose montar. A UI real
+         fica em ui/theme/TvTheme.kt. -->
+    <style name="Theme.StreamFlixVIP.TV" parent="Theme.Leanback">
+        <item name="android:windowBackground">#0A0A10</item>
+        <item name="android:colorBackground">#0A0A10</item>
+    </style>
+</resources>
