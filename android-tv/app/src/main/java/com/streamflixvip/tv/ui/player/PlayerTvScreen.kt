@@ -197,11 +197,9 @@ fun PlayerTvScreen(
                 val newSubs = mutableListOf<TrackOption>()
                 val newAudio = mutableListOf<TrackOption>()
                 val newQuality = mutableListOf<TrackOption>()
-                val trackNameProvider = DefaultTrackNameProvider(context.resources)
 
                 for (group in tracks.groups) {
                     val type = group.type
-                    val label = trackNameProvider.getTrackName(group.mediaTrackGroup, 0)
                     for (i in 0 until group.length) {
                         val format = group.getTrackFormat(i)
                         val trackLabel = when (type) {

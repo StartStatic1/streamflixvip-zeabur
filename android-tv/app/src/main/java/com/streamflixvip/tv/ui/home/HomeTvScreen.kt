@@ -215,7 +215,7 @@ private fun SidebarIcon(
         colors = CardDefaults.colors(
             containerColor = if (selected) Color(0xFFD4AF37).copy(alpha = 0.15f) else Color.Transparent,
         ),
-        shape = RoundedCornerShape(12.dp),
+        shape = CardDefaults.shape(shape = RoundedCornerShape(12.dp)),
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
@@ -317,7 +317,7 @@ private fun HeroSection(hero: HeroItem, onPlayClick: () -> Unit) {
                     onClick = onPlayClick,
                     modifier = Modifier.height(44.dp),
                     colors = CardDefaults.colors(containerColor = Color(0xFFD4AF37)),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(22.dp)),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
@@ -335,7 +335,7 @@ private fun HeroSection(hero: HeroItem, onPlayClick: () -> Unit) {
                     onClick = { },
                     modifier = Modifier.height(44.dp),
                     colors = CardDefaults.colors(containerColor = Color.Transparent),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(22.dp)),
                 ) {
                     Row(
                         modifier = Modifier
@@ -353,7 +353,7 @@ private fun HeroSection(hero: HeroItem, onPlayClick: () -> Unit) {
                     onClick = { },
                     modifier = Modifier.size(44.dp),
                     colors = CardDefaults.colors(containerColor = Color.White.copy(alpha = 0.12f)),
-                    shape = CircleShape,
+                    shape = CardDefaults.shape(shape = CircleShape),
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("+", color = Color.White, fontSize = 20.sp)
@@ -421,7 +421,7 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit) {
             onClick = onClick,
             modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
             colors = CardDefaults.colors(containerColor = Color(0xFF1E1E2E)),
-            shape = RoundedCornerShape(8.dp),
+            shape = CardDefaults.shape(shape = RoundedCornerShape(8.dp)),
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(

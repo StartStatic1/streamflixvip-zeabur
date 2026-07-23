@@ -238,8 +238,8 @@ private fun DetailContent(
             // Temporadas e episódios (só séries)
             if (!isMovie && seasonEpisodes.isNotEmpty()) {
                 items(
-                    keys = seasonEpisodes.keys.sorted(),
-                    count = seasonEpisodes.keys.size,
+                    items = seasonEpisodes.keys.sorted(),
+                    key = { it },
                 ) { seasonNum ->
                     SeasonSection(
                         seasonNumber = seasonNum,
@@ -334,7 +334,7 @@ private fun HeroBackdrop(
                     .align(Alignment.TopStart)
                     .size(40.dp),
                 colors = CardDefaults.colors(containerColor = Color.Black.copy(alpha = 0.5f)),
-                shape = CircleShape,
+                shape = CardDefaults.shape(shape = CircleShape),
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Icon(
@@ -417,7 +417,7 @@ private fun HeroBackdrop(
                             onClick = onPlay,
                             modifier = Modifier.height(42.dp),
                             colors = CardDefaults.colors(containerColor = Color(0xFFD4AF37)),
-                            shape = RoundedCornerShape(21.dp),
+                            shape = CardDefaults.shape(shape = RoundedCornerShape(21.dp)),
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
@@ -440,7 +440,7 @@ private fun HeroBackdrop(
                                 onClick = { onPlayTrailer(trailerKey) },
                                 modifier = Modifier.height(42.dp),
                                 colors = CardDefaults.colors(containerColor = Color.Transparent),
-                                shape = RoundedCornerShape(21.dp),
+                                shape = CardDefaults.shape(shape = RoundedCornerShape(21.dp)),
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -598,7 +598,7 @@ private fun EpisodeCard(
         onClick = onExpand,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.colors(containerColor = Color(0xFF15151F)),
-        shape = RoundedCornerShape(8.dp),
+        shape = CardDefaults.shape(shape = RoundedCornerShape(8.dp)),
     ) {
         Row(modifier = Modifier.padding(12.dp)) {
             // Still do episódio
@@ -663,7 +663,7 @@ private fun EpisodeCard(
                     onClick = onPlay,
                     modifier = Modifier.height(34.dp),
                     colors = CardDefaults.colors(containerColor = Color(0xFFD4AF37)),
-                    shape = RoundedCornerShape(17.dp),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(17.dp)),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
@@ -697,7 +697,7 @@ private fun SimilarRow(items: List<TmdbItem>, onOpenTitle: (Int, String) -> Unit
                     onClick = { onOpenTitle(item.id, item.resolvedMediaType) },
                     modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
                     colors = CardDefaults.colors(containerColor = Color(0xFF1E1E2E)),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(8.dp)),
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         AsyncImage(
@@ -775,7 +775,7 @@ private fun ServerPickerSheet(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                     colors = CardDefaults.colors(containerColor = Color(0xFF252536)),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = CardDefaults.shape(shape = RoundedCornerShape(10.dp)),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -804,7 +804,7 @@ private fun ServerPickerSheet(
                 onClick = onDismiss,
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.colors(containerColor = Color.Transparent),
-                shape = RoundedCornerShape(10.dp),
+                shape = CardDefaults.shape(shape = RoundedCornerShape(10.dp)),
             ) {
                 Box(
                     modifier = Modifier
