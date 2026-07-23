@@ -635,10 +635,9 @@ private fun openInExternalPlayer(context: Context, url: String) {
 
 /** Aspect ratio disponível no player. */
 enum class AspectMode(val label: String, val resizeMode: Int) {
-    FIT("16:9", AspectRatioFrameLayout.ASPECT_RATIO_MODE_FIT),
+    FIT("Original", AspectRatioFrameLayout.ASPECT_RATIO_MODE_FIT),
     FILL("Preencher", AspectRatioFrameLayout.ASPECT_RATIO_MODE_FILL),
     ZOOM("Zoom", AspectRatioFrameLayout.ASPECT_RATIO_MODE_ZOOM),
-    FIXED_21("21:9", AspectRatioFrameLayout.ASPECT_RATIO_MODE_FIXED_WIDTH),
 }
 
 /** Painéis do menu de configurações. */
