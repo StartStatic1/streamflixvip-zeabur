@@ -243,13 +243,6 @@ fun PlayerTvScreen(
                 qualityOptions.clear()
                 qualityOptions.addAll(newQuality)
             }
-
-            override fun onPlaybackStateChanged(state: Int) {
-                // Auto-hide controls após 4s de play
-                if (state == Player.STATE_READY) {
-                    exoPlayer.addPauseListener()
-                }
-            }
         }
         exoPlayer.addListener(listener)
         onDispose { exoPlayer.removeListener(listener) }
