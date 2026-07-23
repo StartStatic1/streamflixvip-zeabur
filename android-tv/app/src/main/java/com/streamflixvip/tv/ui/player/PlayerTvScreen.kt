@@ -32,8 +32,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import androidx.tv.material3.MaterialTheme
+import android.graphics.Color as AndroidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
@@ -290,11 +292,11 @@ fun PlayerTvScreen(
                         // Configura estilo das legendas
                         subtitleView?.setStyle(
                             CaptionStyleCompat(
-                                Color.White,
-                                Color.Transparent,
-                                Color.Transparent,
+                                AndroidColor.WHITE,
+                                AndroidColor.TRANSPARENT,
+                                AndroidColor.TRANSPARENT,
                                 CaptionStyleCompat.EDGE_TYPE_OUTLINE,
-                                Color.Black,
+                                AndroidColor.BLACK,
                                 null,
                             )
                         )
@@ -312,7 +314,7 @@ fun PlayerTvScreen(
         // Mensagem de erro
         errorMessage?.let { msg ->
             Surface(
-                color = Color.Black.copy(alpha = 0.8f),
+                colors = SurfaceDefaults.colors(containerColor = Color.Black.copy(alpha = 0.8f)),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .align(Alignment.Center)
