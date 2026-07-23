@@ -11,7 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SignalCellularAlt
+// Ícone estendido removido
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -135,7 +135,7 @@ private fun ServerCard(source: VipSource, onClick: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Estável", color = Color(0xFF4CAF50), fontSize = 12.sp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Icon(Icons.Filled.SignalCellularAlt, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(12.dp))
+                    Icon(Icons.Filled.Star, null, tint = Color(0xFF4CAF50), modifier = Modifier.size(12.dp))
                 }
             }
             Box(modifier = Modifier.background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 4.dp)) {

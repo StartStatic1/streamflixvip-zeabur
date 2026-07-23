@@ -13,7 +13,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -186,7 +191,7 @@ fun PlayerTvScreen(
                             
                             // Controles Centrais
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                                PlayerIconButton(Icons.Filled.Replay10) { exoPlayer.seekTo(currentPosition - 10000) }
+                                PlayerIconButton(Icons.Filled.Refresh) { exoPlayer.seekTo(currentPosition - 10000) }
                                 
                                 Surface(
                                     onClick = { if (isPlaying) exoPlayer.pause() else exoPlayer.play() },
@@ -195,16 +200,16 @@ fun PlayerTvScreen(
                                     colors = ClickableSurfaceDefaults.colors(containerColor = Color(0xFFD4AF37))
                                 ) {
                                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                        Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(32.dp))
+                                        Icon(if (isPlaying) Icons.Filled.Clear else Icons.Filled.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(32.dp))
                                     }
                                 }
                                 
-                                PlayerIconButton(Icons.Filled.Forward10) { exoPlayer.seekTo(currentPosition + 10000) }
+                                PlayerIconButton(Icons.Filled.Refresh) { exoPlayer.seekTo(currentPosition + 10000) }
                             }
                             
                             // Settings
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                PlayerIconButton(Icons.Filled.Subtitles) { /* Abrir legendas */ }
+                                PlayerIconButton(Icons.Filled.Menu) { /* Abrir legendas */ }
                                 PlayerIconButton(Icons.Filled.Settings) { /* Abrir settings */ }
                             }
                         }
