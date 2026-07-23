@@ -5,97 +5,171 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.foundation.lazy.list.TvLazyRow
-import androidx.tv.foundation.lazy.list.items
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.streamflixvip.tv.network.TmdbItem
 
 /**
- * Home do app de TV — carrosséis horizontais focáveis por D-pad, cada
- * item usando androidx.tv.material3.Card (não o Card comum do Compose):
- * essa versão já implementa o destaque visual de foco (escala + borda)
- * e o comportamento de "entrar no item" com o botão OK do controle sem
- * nenhum código extra — é exatamente o que faltava no app de celular
- * rodando no Fire Stick (ver conversa sobre isDirectPlayable/D-pad).
- *
- * Layout deliberadamente simples nesta primeira versão: uma seção
- * "Em Alta" carregada da TMDB via o mesmo proxy que o app de celular já
- * usa (TmdbApi.request). Novas seções (Continuar Assistindo, Séries,
- * Animes) seguem o mesmo padrão de MovieRow, só trocando o `path` da
- * chamada.
+ * Categorias exibidas na barra de abas superior. "Recomendações" carrega
+ * a lista de "Em Alta" (trending); as demais mapeiam pra endpoints TMDB
+ * distintos (ver HomeTvViewModel.loadCategory). Baseado no padrão visual
+ * de players de IPTV/TV existentes que o usuário já usa como referência
+ * (abas de categoria no topo + sidebar de navegação fixa à esquerda).
  */
+enum class TvCategory(val label: String) {
+    RECOMENDACOES("Recomendações"),
+    FILMES("Filmes"),
+    SERIES("Séries"),
+    CRIANCAS("Crianças"),
+    ANIMES("Animes"),
+}
+
 @Composable
 fun HomeTvScreen(viewModel: HomeTvViewModel = HomeTvViewModel()) {
     val state by viewModel.uiState.collectAsState()
+    var selectedCategory by remember { mutableStateOf(TvCategory.RECOMENDACOES) }
 
-    LaunchedEffect(Unit) {
-        viewModel.loadHome()
+    LaunchedEffect(selectedCategory) {
+        viewModel.loadCategory(selectedCategory)
     }
 
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        LazyColumn(
-            contentPadding = PaddingValues(vertical = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(32.dp),
-        ) {
-            item {
-                Text(
-                    "StreamFlixVIP",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 28.sp,
-                    modifier = Modifier.padding(start = 48.dp),
-                )
-            }
+        SidebarNav()
 
-            if (state.trending.isNotEmpty()) {
-                item {
-                    MovieRow(title = "Em Alta", items = state.trending)
-                }
-            }
-
-            if (state.popularMovies.isNotEmpty()) {
-                item {
-                    MovieRow(title = "Filmes Populares", items = state.popularMovies)
-                }
-            }
-
-            if (state.popularSeries.isNotEmpty()) {
-                item {
-                    MovieRow(title = "Séries Populares", items = state.popularSeries)
-                }
-            }
+        Column(modifier = Modifier.fillMaxSize()) {
+            CategoryTabs(
+                selected = selectedCategory,
+                onSelect = { selectedCategory = it },
+            )
 
             if (state.isLoading) {
-                item {
-                    Text(
-                        "Carregando...",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 48.dp),
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("Carregando...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                PosterGrid(items = state.items)
+            }
+        }
+    }
+}
+
+/**
+ * Sidebar fina fixa à esquerda — mesma ideia visual das referências
+ * (ícones empilhados verticalmente, sem texto, sempre visível). Cada
+ * ícone é focável por D-pad; navegação entre eles fica a cargo do
+ * FocusManager padrão do Compose for TV (movimento vertical natural
+ * dentro da Column).
+ */
+@Composable
+private fun SidebarNav() {
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(72.dp)
+            .background(MaterialTheme.colorScheme.surface),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Top,
+    ) {
+        Box(modifier = Modifier.height(24.dp))
+        SidebarIcon(Icons.Filled.Search, "Buscar")
+        SidebarIcon(Icons.Filled.Home, "Início", selected = true)
+        SidebarIcon(Icons.Filled.Person, "Perfil")
+        SidebarIcon(Icons.Filled.Settings, "Configurações")
+    }
+}
+
+@Composable
+private fun SidebarIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean = false) {
+    Card(
+        onClick = { /* TODO: navegação entre seções quando existirem */ },
+        modifier = Modifier
+            .padding(vertical = 10.dp)
+            .size(44.dp),
+        colors = CardDefaults.colors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent,
+        ),
+    ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Barra de abas de categoria no topo — mesma ideia das referências
+ * (Recomendações / Filmes / Séries / Crianças / Animes lado a lado,
+ * aba ativa com destaque de cor/sublinhado).
+ */
+@Composable
+private fun CategoryTabs(selected: TvCategory, onSelect: (TvCategory) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 32.dp, top = 28.dp, bottom = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(32.dp),
+    ) {
+        TvCategory.entries.forEach { category ->
+            val isSelected = category == selected
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    category.label,
+                    fontSize = 18.sp,
+                    color = if (isSelected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .background(Color.Transparent)
+                        .padding(bottom = 6.dp),
+                )
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .width(28.dp)
+                            .height(3.dp)
+                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)),
                     )
                 }
             }
@@ -103,67 +177,88 @@ fun HomeTvScreen(viewModel: HomeTvViewModel = HomeTvViewModel()) {
     }
 }
 
+/**
+ * Grid de pôsteres — GridCells.Adaptive deixa o número de colunas se
+ * ajustar à largura da tela (importante em TV, já que resoluções variam
+ * bastante entre 720p/1080p/4K), diferente de um número fixo de colunas.
+ */
 @Composable
-private fun MovieRow(title: String, items: List<TmdbItem>) {
-    Column {
-        Text(
-            title,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 18.sp,
-            modifier = Modifier.padding(start = 48.dp, bottom = 12.dp),
-        )
-        TvLazyRow(
-            contentPadding = PaddingValues(horizontal = 48.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            items(items) { item ->
-                PosterCard(item)
-            }
+private fun PosterGrid(items: List<TmdbItem>) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 150.dp),
+        contentPadding = PaddingValues(horizontal = 28.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
+    ) {
+        items(items) { item ->
+            PosterCard(item)
         }
     }
 }
 
 /**
- * Card focável de pôster. androidx.tv.material3.Card já cuida de:
- * - Escalar/realçar quando recebe foco do D-pad (sem precisar de
- *   onFocusChanged manual)
- * - Disparar onClick ao apertar OK/Enter no controle remoto
- * - Ordem de navegação entre itens da mesma TvLazyRow (esquerda/direita)
+ * Card de pôster com badge de nota (estrela) no canto superior — mesmo
+ * padrão visual das referências. androidx.tv.material3.Card já cuida do
+ * destaque de foco/D-pad.
  */
 @Composable
 private fun PosterCard(item: TmdbItem) {
-    Card(
-        onClick = { /* TODO: navegar pra tela de detalhe quando ela existir */ },
-        modifier = Modifier
-            .width(160.dp)
-            .aspectRatio(2f / 3f),
-        colors = CardDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surface,
-        ),
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = item.poster_path?.let { "https://image.tmdb.org/t/p/w342$it" },
-                contentDescription = item.displayTitle,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .align(Alignment.BottomCenter)
-                    .background(Color.Black.copy(alpha = 0.55f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    item.displayTitle,
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 8.dp),
+    Column {
+        Card(
+            onClick = { /* TODO: navegar pra tela de detalhe quando ela existir */ },
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f),
+            colors = CardDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = item.poster_path?.let { "https://image.tmdb.org/t/p/w342$it" },
+                    contentDescription = item.displayTitle,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
                 )
+                item.displayRating?.let { rating ->
+                    RatingBadge(rating, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+                }
             }
         }
+        Spacer_(height = 6.dp)
+        Text(
+            item.displayTitle,
+            fontSize = 13.sp,
+            maxLines = 1,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
+}
+
+/** Badge amarelo com estrela + nota, replicando o selo visto nas referências (ex: "⭐ 6.0"). */
+@Composable
+private fun RatingBadge(rating: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(Color(0xFFFFC107), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.Star,
+                contentDescription = null,
+                tint = Color.Black,
+                modifier = Modifier.size(11.dp),
+            )
+            Text(
+                " $rating",
+                fontSize = 11.sp,
+                color = Color.Black,
+            )
+        }
+    }
+}
+
+/** Pequeno espaçador vertical — evitando importar Spacer do foundation por nome já usado acima como Composable local. */
+@Composable
+private fun Spacer_(height: androidx.compose.ui.unit.Dp) {
+    Box(modifier = Modifier.height(height))
 }

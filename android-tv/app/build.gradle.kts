@@ -107,6 +107,12 @@ dependencies {
     implementation("androidx.tv:tv-foundation:1.0.0-alpha10")
     implementation("androidx.tv:tv-material:1.0.0")
 
+    // Ícones (Home, Search, Person, Settings, Star) usados na sidebar e
+    // no badge de nota dos pôsteres — mesmo artefato "core" que o app de
+    // celular usa via material-icons-extended, mas aqui só o core basta
+    // (os ícones usados são todos do conjunto básico).
+    implementation("androidx.compose.material:material-icons-core")
+
     // Player nativo — mesmas libs do app de celular
     implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.3.1")
