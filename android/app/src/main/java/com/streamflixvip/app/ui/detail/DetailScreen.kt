@@ -46,6 +46,7 @@ import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.TmdbSeason
 import com.streamflixvip.app.network.VipSource
+import com.startapp.sdk.adsbase.StartAppAd
 
 private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 private const val TMDB_STILL_BASE = "https://image.tmdb.org/t/p/w300"
@@ -264,7 +265,13 @@ private fun DetailContent(
                 onTrailerClick = {
                     // Abre o trailer em modal fullscreen dentro do próprio
                     // app — sem sair pro YouTube ou navegador externo.
-                    if (state.trailerKey != null) showTrailerModal = true
+                    if (state.trailerKey != null) {
+                        // Se não for VIP, mostra um anúncio antes do trailer
+                        if (!isVip) {
+                            StartAppAd.showAd(context)
+                        }
+                        showTrailerModal = true
+                    }
                 },
                 onShare = {
                     // Compartilha link direto do título no site via Intent
