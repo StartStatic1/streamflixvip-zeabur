@@ -13,6 +13,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,9 +29,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.tv.material3.*
 import coil.compose.AsyncImage
 import com.streamflixvip.tv.network.NetworkModule
@@ -38,7 +38,6 @@ import kotlinx.coroutines.launch
 
 private const val TMDB_POSTER_W342 = "https://image.tmdb.org/t/p/w342"
 
-// Filtros disponíveis
 val GENRES = mapOf(
     0 to "Todos",
     28 to "Ação",
@@ -61,7 +60,6 @@ val GENRES = mapOf(
 )
 
 val YEARS = listOf(0, 2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015)
-
 val TYPES = listOf("Todos", "Filmes", "Séries", "Animes")
 
 @Composable
@@ -78,24 +76,19 @@ fun SearchTvScreen(
     val coroutineScope = rememberCoroutineScope()
     val searchBarFocus = remember { FocusRequester() }
 
-    // Focar na barra de pesquisa ao entrar
     LaunchedEffect(Unit) {
         searchBarFocus.requestFocus()
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A10))) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Top bar com busca
             SearchTopBar(
                 query = query,
-                onQueryChange = { newQuery ->
-                    query = newQuery
-                },
+                onQueryChange = { query = it },
                 onBack = onBack,
                 focusRequester = searchBarFocus,
             )
 
-            // Filtros
             FilterBar(
                 selectedType = selectedType,
                 onTypeSelected = { selectedType = it },
@@ -107,92 +100,103 @@ fun SearchTvScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Botão Pesquisar
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                var isSearchBtnFocused by remember { mutableStateOf(false) }
-                Card(
-                    onClick = {
-                        coroutineScope.launch {
-                            isLoading = true
-                            results = performSearch(
-                                query = query,
-                                type = selectedType,
-                                genre = selectedGenre,
-                                year = selectedYear,
-                            )
-                            isLoading = false
-                        }
-                    },
-                    modifier = Modifier
-                        .height(42.dp)
-                        .scale(if (isSearchBtnFocused) 1.05f else 1f)
-                        .onFocusChanged { isSearchBtnFocused = it.isFocused },
-                    colors = CardDefaults.colors(
-                        containerColor = Color(0xFFD4AF37),
-                        focusedContainerColor = Color(0xFFFFD700)
-                    ),
-                    shape = CardDefaults.shape(RoundedCornerShape(21.dp)),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(Icons.Filled.Search, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                        Text("Pesquisar", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            SearchButton(
+                onClick = {
+                    coroutineScope.launch {
+                        isLoading = true
+                        results = performSearch(query, selectedType, selectedGenre, selectedYear)
+                        isLoading = false
                     }
                 }
-            }
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Resultados
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Color(0xFFD4AF37))
-                }
-            } else if (results.isEmpty() && query.isNotBlank()) {
-                // Mostrar mensagem de "sem resultados" ou "marque os filtros"
-                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Text(
-                        if (query.isBlank()) "Marque os filtros e clique em Pesquisar" else "Nenhum resultado encontrado",
-                        color = Color.White.copy(alpha = 0.5f),
-                        fontSize = 16.sp,
-                    )
-                }
-            } else if (results.isNotEmpty()) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    items(results) { item ->
-                        SearchResultCard(item) { onItemClick(item.id, item.resolvedMediaType) }
-                    }
-                }
-            } else {
-                // Estado inicial - mostrar instruções
-                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Busca e Filtros", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Use a barra de pesquisa e os filtros abaixo.\nMarque Tipo, Gênero e Ano para refinar resultados.",
-                            color = Color.White.copy(alpha = 0.5f),
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp,
-                        )
-                    }
-                }
+            SearchResultsArea(
+                isLoading = isLoading,
+                results = results,
+                query = query,
+                onItemClick = onItemClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun SearchButton(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp),
+        horizontalArrangement = Arrangement.End,
+    ) {
+        var isSearchBtnFocused by remember { mutableStateOf(false) }
+        Card(
+            onClick = onClick,
+            modifier = Modifier
+                .height(42.dp)
+                .scale(if (isSearchBtnFocused) 1.05f else 1f)
+                .onFocusChanged { isSearchBtnFocused = it.isFocused },
+            colors = CardDefaults.colors(
+                containerColor = Color(0xFFD4AF37),
+                focusedContainerColor = Color(0xFFFFD700)
+            ),
+            shape = CardDefaults.shape(RoundedCornerShape(21.dp)),
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Icon(Icons.Filled.Search, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                Text("Pesquisar", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
     }
 }
 
-// ─── BARRA DE PESQUISA ──────────────────────────────────────────────────────────
+@Composable
+private fun SearchResultsArea(
+    isLoading: Boolean,
+    results: List<TmdbItem>,
+    query: String,
+    onItemClick: (Int, String) -> Unit
+) {
+    if (isLoading) {
+        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = Color(0xFFD4AF37))
+        }
+    } else if (results.isEmpty() && query.isNotBlank()) {
+        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Text(
+                "Nenhum resultado encontrado",
+                color = Color.White.copy(alpha = 0.5f),
+                fontSize = 16.sp,
+            )
+        }
+    } else if (results.isNotEmpty()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            items(results) { item ->
+                SearchResultCard(item) { onItemClick(item.id, item.resolvedMediaType) }
+            }
+        }
+    } else {
+        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Busca e Filtros", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Use a barra de pesquisa e os filtros acima.\nMarque Tipo, Gênero e Ano para refinar resultados.",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun SearchTopBar(
@@ -217,7 +221,6 @@ private fun SearchTopBar(
                 Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar", tint = Color.White)
             }
 
-            // Campo de pesquisa
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
@@ -253,8 +256,6 @@ private fun SearchTopBar(
     }
 }
 
-// ─── BARRA DE FILTROS ───────────────────────────────────────────────────────────
-
 @Composable
 private fun FilterBar(
     selectedType: String,
@@ -265,7 +266,6 @@ private fun FilterBar(
     onYearSelected: (Int) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Tipo
         Text(
             "Tipo",
             fontSize = 13.sp,
@@ -288,7 +288,6 @@ private fun FilterBar(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Gênero
         Text(
             "Gênero",
             fontSize = 13.sp,
@@ -311,7 +310,6 @@ private fun FilterBar(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Ano
         Text(
             "Ano",
             fontSize = 13.sp,
@@ -333,8 +331,6 @@ private fun FilterBar(
         }
     }
 }
-
-// ─── CHIP DE FILTRO ─────────────────────────────────────────────────────────────
 
 @Composable
 private fun FilterChip(
@@ -367,8 +363,6 @@ private fun FilterChip(
     }
 }
 
-// ─── CARD DE RESULTADO ──────────────────────────────────────────────────────────
-
 @Composable
 private fun SearchResultCard(item: TmdbItem, onClick: () -> Unit) {
     var isFocused by remember { mutableStateOf(false) }
@@ -391,7 +385,6 @@ private fun SearchResultCard(item: TmdbItem, onClick: () -> Unit) {
             modifier = Modifier.fillMaxSize().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Poster
             AsyncImage(
                 model = item.poster_path?.let { "$TMDB_POSTER_W342$it" },
                 contentDescription = item.displayTitle,
@@ -400,7 +393,6 @@ private fun SearchResultCard(item: TmdbItem, onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Info
             Column(modifier = Modifier.weight(1f)) {
                 Text(item.displayTitle, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                 Spacer(modifier = Modifier.height(4.dp))
@@ -415,7 +407,6 @@ private fun SearchResultCard(item: TmdbItem, onClick: () -> Unit) {
                 }
             }
 
-            // Ícone
             Icon(
                 Icons.Filled.PlayCircleFilled,
                 contentDescription = null,
@@ -443,8 +434,6 @@ private fun RatingPillSmall(rating: String) {
     }
 }
 
-// ─── BUSCA PARALELA COM FILTROS ─────────────────────────────────────────────────
-
 private suspend fun performSearch(
     query: String,
     type: String,
@@ -452,8 +441,6 @@ private suspend fun performSearch(
     year: Int,
 ): List<TmdbItem> {
     val results = mutableListOf<TmdbItem>()
-
-    // Busca geral (query + filtros)
     val searchPath = when (type) {
         "Filmes" -> "/search/movie"
         "Séries" -> "/search/tv"
@@ -474,7 +461,6 @@ private suspend fun performSearch(
         results.addAll(response.results.orEmpty())
     }
 
-    // Se query está vazia, fazer busca por filtros de gênero/ano
     if (query.isBlank() && genre > 0) {
         val discoverPath = when (type) {
             "Filmes" -> "/discover/movie"
