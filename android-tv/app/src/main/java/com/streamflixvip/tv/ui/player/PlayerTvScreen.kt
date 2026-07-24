@@ -161,7 +161,7 @@ fun PlayerTvScreen(
                 }
             },
     ) {
-        // PlayerView (v\u00eddeo)
+        // PlayerView (vídeo)
         player?.let { exoPlayer ->
             AndroidView(
                 factory = { ctx ->
@@ -193,7 +193,7 @@ fun PlayerTvScreen(
             }
         }
 
-        // Erro de reprodu\u00e7\u00e3o
+        // Erro de reprodução
         AnimatedVisibility(
             visible = playbackError != null,
             enter = fadeIn(),
@@ -232,24 +232,28 @@ fun PlayerTvScreen(
             exit = fadeOut(),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                // Topo - T\u00edtulo
+                // Topo - Título
                 Box(modifier = Modifier.fillMaxWidth().height(80.dp).background(Color(0xFF0A0A10).copy(alpha = 0.8f))) {
                     Row(
                         modifier = Modifier.fillMaxWidth().align(Alignment.CenterStart).padding(horizontal = 24.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                     ) {
-                        TextButton(onClick = onBack) {
+                        Button(
+                            onClick = onBack,
+                            colors = ButtonDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.White.copy(alpha = 0.1f)),
+                            shape = ButtonDefaults.shape(RoundedCornerShape(8.dp))
+                        ) {
                             Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar", tint = Color.White)
                         }
                         Text(title, fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Medium, maxLines = 1)
                     }
                 }
 
-                // Centro - Espa\u00e7ador (\u00e1rea de D-pad para navega\u00e7\u00e3o)
+                // Centro - Espaçador (área de D-pad para navegação)
                 Box(modifier = Modifier.fillMaxWidth().weight(1f))
 
-                // Bottom - Barra de progresso + bot\u00f5es
+                // Bottom - Barra de progresso + botões
                 Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(Color(0xFF0A0A10).copy(alpha = 0.85f))) {
                     Row(
                         modifier = Modifier.fillMaxWidth().align(Alignment.Center).padding(horizontal = 24.dp),
@@ -342,8 +346,6 @@ fun PlayerTvScreen(
     }
 }
 
-// \u2500\u2500\u2500 BOT\u00c3O DE CONTROLE DO PLAYER \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-
 @Composable
 private fun PlayerControlBtn(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -370,8 +372,6 @@ private fun PlayerControlBtn(
     }
 }
 
-// \u2500\u2500\u2500 PAINEL DE LEGENDAS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-
 @Composable
 private fun BoxScope.SubtitlesPanel(
     player: ExoPlayer?,
@@ -390,15 +390,19 @@ private fun BoxScope.SubtitlesPanel(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Legendas", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                TextButton(onClick = onClose) {
+                Button(
+                    onClick = onClose,
+                    colors = ButtonDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.White.copy(alpha = 0.1f))
+                ) {
                     Text("Fechar", color = Color(0xFFD4AF37))
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Op\u00e7\u00e3o: Desligar legendas
+            // Opção: Desligar legendas
             var isFocusedOff by remember { mutableStateOf(false) }
             Card(
                 onClick = {
@@ -419,15 +423,17 @@ private fun BoxScope.SubtitlesPanel(
                 ),
                 shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
             ) {
-                Text(
-                    "Desligar",
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                    color = Color.White,
-                )
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+                    Text(
+                        "Desligar",
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        color = Color.White,
+                    )
+                }
             }
 
             Text(
-                "Legendas externas n\u00e3o dispon\u00edveis neste formato.",
+                "Legendas externas não disponíveis neste formato.",
                 fontSize = 14.sp,
                 color = Color.White.copy(alpha = 0.5f),
                 modifier = Modifier.padding(top = 12.dp),
@@ -435,8 +441,6 @@ private fun BoxScope.SubtitlesPanel(
         }
     }
 }
-
-// \u2500\u2500\u2500 PAINEL DE SERVIDORES \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 @Composable
 private fun BoxScope.ServersPanel(
@@ -458,15 +462,20 @@ private fun BoxScope.ServersPanel(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Escolher Servidor", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                TextButton(onClick = onClose) {
+                Button(
+                    onClick = onClose,
+                    colors = ButtonDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.White.copy(alpha = 0.1f))
+                ) {
                     Text("Fechar", color = Color(0xFFD4AF37))
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
 
-            sources.forEach { srv ->
+            // CORREÇÃO: Usar for loop em vez de forEach para evitar erro de contexto Composable
+            for (srv in sources) {
                 ServerItem(
                     srv = srv,
                     isCurrent = srv.source_url == currentSource.source_url,
@@ -519,8 +528,6 @@ private fun ServerItem(
         }
     }
 }
-
-// \u2500\u2500\u2500 HELPERS \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 private fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000

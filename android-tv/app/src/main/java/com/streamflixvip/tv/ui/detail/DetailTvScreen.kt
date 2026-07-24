@@ -50,15 +50,15 @@ fun DetailTvScreen(
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A10))) {
         if (state.isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = Color(0xFFD4AF37))
             }
-            return
+            return@Box
         }
 
         if (state.showError != null) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(state.showError, color = Color.White.copy(alpha = 0.6f), fontSize = 18.sp)
+                    Text(state.showError!!, color = Color.White.copy(alpha = 0.6f), fontSize = 18.sp)
                     Spacer(modifier = Modifier.height(16.dp))
                     Card(
                         onClick = { viewModel.retryLoad() },
@@ -69,10 +69,10 @@ fun DetailTvScreen(
                     }
                 }
             }
-            return
+            return@Box
         }
 
-        val details = state.details ?: return
+        val details = state.details ?: return@Box
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -136,8 +136,6 @@ fun DetailTvScreen(
         }
     }
 }
-
-// ─── HERO DETAIL ────────────────────────────────────────────────────────────────
 
 @Composable
 private fun DetailHero(
@@ -221,7 +219,8 @@ private fun DetailHero(
 
             // Gêneros
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                genres.take(4).forEach { genre ->
+                // CORREÇÃO: Usar for loop
+                for (genre in genres.take(4)) {
                     Box(
                         modifier = Modifier
                             .background(Color(0xFFD4AF37).copy(alpha = 0.15f), RoundedCornerShape(6.dp))
@@ -264,8 +263,6 @@ private fun DetailHero(
         }
     }
 }
-
-// ─── SEÇÃO DE EPISÓDIOS ─────────────────────────────────────────────────────────
 
 @Composable
 private fun SeriesEpisodesSection(
@@ -326,7 +323,8 @@ private fun SeriesEpisodesSection(
         Text("Episódios", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.8f))
         Spacer(modifier = Modifier.height(8.dp))
 
-        episodes.forEach { episode ->
+        // CORREÇÃO: Usar for loop
+        for (episode in episodes) {
             EpisodeItem(
                 episode = episode,
                 onPlay = { onPlayEpisode(selectedSeason, episode.episode_number) },
@@ -361,129 +359,75 @@ private fun EpisodeItem(episode: TmdbEpisode, onPlay: () -> Unit) {
                     model = "https://image.tmdb.org/t/p/w300${episode.still_path}",
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.width(120.dp).height(68.dp).clip(RoundedCornerShape(8.dp)),
+                    modifier = Modifier.width(140.dp).height(80.dp).clip(RoundedCornerShape(8.dp)),
                 )
             } else {
-                Box(
-                    modifier = Modifier.width(120.dp).height(68.dp).clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF2E2E3E)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White.copy(alpha = 0.3f))
-                }
+                Box(modifier = Modifier.width(140.dp).height(80.dp).background(Color.DarkGray, RoundedCornerShape(8.dp)))
             }
             Spacer(modifier = Modifier.width(16.dp))
 
-            // Info
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "S${episode.episode_number.toString().padStart(2, '0')}. ${episode.displayName}",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    maxLines = 1,
-                )
+                Text("E${episode.episode_number} - ${episode.name}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 episode.overview?.let {
-                    Text(
-                        it,
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.5f),
-                        maxLines = 2,
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    episode.displayRuntime?.let {
-                        Text(it, fontSize = 11.sp, color = Color.White.copy(alpha = 0.4f))
-                    }
-                    episode.air_date?.let {
-                        Text(it, fontSize = 11.sp, color = Color.White.copy(alpha = 0.4f))
-                    }
+                    Text(it, fontSize = 13.sp, color = Color.White.copy(alpha = 0.6f), maxLines = 2)
                 }
             }
-
-            // Ícone de play
-            Icon(
-                Icons.Filled.PlayCircleFilled,
-                contentDescription = "Assistir",
-                tint = if (isFocused) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.4f),
-                modifier = Modifier.size(36.dp),
-            )
         }
     }
 }
 
-// ─── BOTÃO FILME ────────────────────────────────────────────────────────────────
-
 @Composable
 private fun MoviePlayButton(onPlay: () -> Unit) {
     var isFocused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "movie_play_scale")
+    val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "play_scale")
 
     Card(
         onClick = onPlay,
         modifier = Modifier
-            .height(48.dp)
+            .height(54.dp)
             .scale(scale)
             .onFocusChanged { isFocused = it.isFocused },
         colors = CardDefaults.colors(
             containerColor = Color(0xFFD4AF37),
             focusedContainerColor = Color(0xFFFFD700)
         ),
-        shape = CardDefaults.shape(RoundedCornerShape(24.dp)),
+        shape = CardDefaults.shape(RoundedCornerShape(27.dp)),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 12.dp),
+            modifier = Modifier.padding(horizontal = 32.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
-            Text("Assistir", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.Black, modifier = Modifier.size(24.dp))
+            Text("Assistir Agora", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         }
     }
 }
 
-// ─── MAIS INFORMAÇÕES (substitui Elenco e Trailer) ──────────────────────────────
-
 @Composable
-private fun MoreInfoSection(
-    year: String?,
-    runtime: String?,
-    rating: Double?,
-    genres: List<String>,
-) {
-    Column {
-        Text("Mais Informações", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+private fun MoreInfoSection(year: String?, runtime: String?, rating: Double?, genres: List<String>) {
+    Column(modifier = Modifier.padding(top = 16.dp)) {
+        Text("Informações", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth()) {
+            InfoColumn("Lançamento", year ?: "N/A", Modifier.weight(1f))
+            InfoColumn("Duração", runtime ?: "N/A", Modifier.weight(1f))
+            InfoColumn("Avaliação", if (rating != null && rating > 0) "%.1f".format(rating) else "N/A", Modifier.weight(1f))
+        }
         Spacer(modifier = Modifier.height(16.dp))
-
-        Column(modifier = Modifier.fillMaxWidth().background(Color(0xFF15151C), RoundedCornerShape(12.dp)).padding(20.dp)) {
-            if (year != null) {
-                InfoRow("Ano", year)
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            if (runtime != null) {
-                InfoRow("Duração", runtime)
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            if (rating != null && rating > 0) {
-                InfoRow("Avaliação", "${"%.1f".format(rating)} / 10")
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-            if (genres.isNotEmpty()) {
-                InfoRow("Gêneros", genres.joinToString(", "))
-            }
-        }
+        Text("Gêneros", fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
+        Text(genres.joinToString(", "), fontSize = 15.sp, color = Color.White)
     }
 }
 
 @Composable
-private fun InfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, fontSize = 14.sp, color = Color.White.copy(alpha = 0.5f))
-        Text(value, fontSize = 14.sp, color = Color.White, fontWeight = FontWeight.Medium)
+private fun InfoColumn(label: String, value: String, modifier: Modifier) {
+    Column(modifier = modifier) {
+        Text(label, fontSize = 13.sp, color = Color.White.copy(alpha = 0.5f))
+        Text(value, fontSize = 16.sp, color = Color.White, fontWeight = FontWeight.Medium)
     }
 }
-
-// ─── SERVER PICKER ──────────────────────────────────────────────────────────────
 
 @Composable
 private fun ServerPickerRow(
@@ -492,15 +436,7 @@ private fun ServerPickerRow(
     onSelect: (VipSource) -> Unit,
     onBack: () -> Unit,
 ) {
-    // Server picker como overlay modal
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 48.dp)
-            .padding(top = 16.dp)
-            .background(Color(0xFF1E1E2E), RoundedCornerShape(12.dp))
-            .padding(20.dp)
-    ) {
+    Column(modifier = Modifier.padding(horizontal = 48.dp, vertical = 24.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Escolha o Servidor", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
             TextButton(onClick = onClose) {
@@ -508,41 +444,22 @@ private fun ServerPickerRow(
             }
         }
         Spacer(modifier = Modifier.height(12.dp))
-
-        sources.forEach { source ->
-            var isFocused by remember { mutableStateOf(false) }
-            Card(
-                onClick = { onSelect(source) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .padding(vertical = 4.dp)
-                    .onFocusChanged { isFocused = it.isFocused },
-                colors = CardDefaults.colors(
-                    containerColor = if (isFocused) Color(0xFF2E2E3E) else Color(0xFF15151C),
-                    focusedContainerColor = Color(0xFF2E2E3E)
-                ),
-                shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(source.displayName, fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Medium)
-                    Icon(
-                        Icons.Filled.PlayArrow,
-                        contentDescription = null,
-                        tint = Color(0xFFD4AF37),
-                        modifier = Modifier.size(20.dp),
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(sources) { source ->
+                var isFocused by remember { mutableStateOf(false) }
+                Card(
+                    onClick = { onSelect(source) },
+                    modifier = Modifier.onFocusChanged { isFocused = it.isFocused },
+                    colors = CardDefaults.colors(
+                        containerColor = if (isFocused) Color(0xFFD4AF37) else Color(0xFF1E1E2E)
                     )
+                ) {
+                    Text(source.displayName, modifier = Modifier.padding(16.dp), color = if (isFocused) Color.Black else Color.White)
                 }
             }
         }
     }
 }
-
-// ─── PILLS ──────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun MetaPill(text: String) {
