@@ -160,39 +160,41 @@ private fun SearchResultsArea(
     query: String,
     onItemClick: (Int, String) -> Unit
 ) {
-    if (isLoading) {
-        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = Color(0xFFD4AF37))
-        }
-    } else if (results.isEmpty() && query.isNotBlank()) {
-        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            Text(
-                "Nenhum resultado encontrado",
-                color = Color.White.copy(alpha = 0.5f),
-                fontSize = 16.sp,
-            )
-        }
-    } else if (results.isNotEmpty()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            items(results) { item ->
-                SearchResultCard(item) { onItemClick(item.id, item.resolvedMediaType) }
+    Box(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = Color(0xFFD4AF37))
             }
-        }
-    } else {
-        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Busca e Filtros", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Spacer(modifier = Modifier.height(8.dp))
+        } else if (results.isEmpty() && query.isNotBlank()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
-                    "Use a barra de pesquisa e os filtros acima.\nMarque Tipo, Gênero e Ano para refinar resultados.",
+                    "Nenhum resultado encontrado",
                     color = Color.White.copy(alpha = 0.5f),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
+                    fontSize = 16.sp,
                 )
+            }
+        } else if (results.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                items(results) { item ->
+                    SearchResultCard(item) { onItemClick(item.id, item.resolvedMediaType) }
+                }
+            }
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Busca e Filtros", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Use a barra de pesquisa e os filtros acima.\nMarque Tipo, Gênero e Ano para refinar resultados.",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                    )
+                }
             }
         }
     }
@@ -393,7 +395,7 @@ private fun SearchResultCard(item: TmdbItem, onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.width(16.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Text(item.displayTitle, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
                 Spacer(modifier = Modifier.height(4.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

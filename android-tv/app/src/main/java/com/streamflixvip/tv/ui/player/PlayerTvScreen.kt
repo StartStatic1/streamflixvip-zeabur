@@ -247,7 +247,7 @@ fun PlayerTvScreen(
                 }
 
                 // Centro - Espaçador (área de D-pad para navegação)
-                Spacer(modifier = Modifier.weight(1f))
+                Box(modifier = Modifier.fillMaxWidth().fillMaxHeight().weight(1f, fill = true))
 
                 // Bottom - Barra de progresso + botões
                 Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(Color(0xFF0A0A10).copy(alpha = 0.85f))) {

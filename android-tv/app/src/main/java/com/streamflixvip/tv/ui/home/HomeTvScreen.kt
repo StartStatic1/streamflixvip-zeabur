@@ -48,7 +48,7 @@ fun HomeTvScreen(
         Row(modifier = Modifier.fillMaxSize()) {
             SidebarNav(onNavigateToSearch = onNavigateToSearch)
 
-            Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
+            Column(modifier = Modifier.fillMaxHeight().fillMaxWidth()) {
                 if (state.isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
