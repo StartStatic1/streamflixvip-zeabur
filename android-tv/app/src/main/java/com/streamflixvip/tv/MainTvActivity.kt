@@ -47,6 +47,7 @@ class MainTvActivity : ComponentActivity() {
 
                 // State compartilhado para passar source do Detail pro Player
                 var pendingSource by remember { mutableStateOf<VipSource?>(null) }
+                var pendingSources by remember { mutableStateOf<List<VipSource>>(emptyList()) }
                 var pendingSeason by remember { mutableStateOf(0) }
                 var pendingEpisode by remember { mutableStateOf(0) }
                 var pendingTitle by remember { mutableStateOf("Sem título") }
@@ -89,8 +90,9 @@ class MainTvActivity : ComponentActivity() {
                         DetailTvScreen(
                             tmdbId = tmdbId,
                             mediaType = mediaType,
-                            onPlayClick = { source, season, episode, title ->
+                            onPlayClick = { source, sources, season, episode, title ->
                                 pendingSource = source
+                                pendingSources = sources
                                 pendingSeason = season
                                 pendingEpisode = episode
                                 pendingTitle = title
@@ -111,16 +113,19 @@ class MainTvActivity : ComponentActivity() {
                         if (source != null) {
                             PlayerTvScreen(
                                 source = source,
+                                sources = pendingSources,
                                 season = pendingSeason,
                                 episode = pendingEpisode,
                                 title = pendingTitle,
                                 onBack = {
                                     pendingSource = null
+                                    pendingSources = emptyList()
                                     navController.popBackStack()
                                 },
                                 onServerFailed = {
                                     // Volta pro detail para re-selecionar servidor
                                     pendingSource = null
+                                    pendingSources = emptyList()
                                     navController.popBackStack()
                                 },
                             )

@@ -448,6 +448,10 @@ private suspend fun performSearch(
         "Séries" -> "/search/tv"
         "Animes" -> "/search/tv"
         else -> "/search/multi"
+        // Nota: o endpoint /search/multi do TMDB não aceita filtro de ano.
+        // Se o usuário digitar uma busca com Tipo = "Todos" e selecionar um Ano,
+        // o ano é ignorado pela API do TMDB nesse caso específico (limitação da API,
+        // não é um bug do app). Selecionar "Filmes", "Séries" ou "Animes" resolve.
     }
 
     runCatching {
@@ -455,7 +459,7 @@ private suspend fun performSearch(
             path = searchPath,
             query = query.takeIf { it.isNotBlank() },
             withGenres = if (genre > 0) genre.toString() else null,
-            primaryReleaseYear = if (type == "Filmes" && year > 0) year else null,
+            primaryReleaseYear = if (type != "Séries" && type != "Animes" && year > 0) year else null,
             firstAirDateYear = if ((type == "Séries" || type == "Animes") && year > 0) year else null,
             withOriginalLanguage = if (type == "Animes") "ja" else null,
         )
@@ -463,7 +467,7 @@ private suspend fun performSearch(
         results.addAll(response.results.orEmpty())
     }
 
-    if (query.isBlank() && genre > 0) {
+    if (query.isBlank() && (genre > 0 || year > 0)) {
         val discoverPath = when (type) {
             "Filmes" -> "/discover/movie"
             "Séries" -> "/discover/tv"
@@ -473,8 +477,8 @@ private suspend fun performSearch(
         runCatching {
             NetworkModule.tmdbApi.request(
                 path = discoverPath,
-                withGenres = genre.toString(),
-                primaryReleaseYear = if (type == "Filmes" && year > 0) year else null,
+                withGenres = if (genre > 0) genre.toString() else null,
+                primaryReleaseYear = if (type != "Séries" && type != "Animes" && year > 0) year else null,
                 firstAirDateYear = if ((type == "Séries" || type == "Animes") && year > 0) year else null,
                 withOriginalLanguage = if (type == "Animes") "ja" else null,
             )

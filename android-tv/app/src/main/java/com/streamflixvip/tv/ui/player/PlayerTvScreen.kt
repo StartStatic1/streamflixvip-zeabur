@@ -15,11 +15,17 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +50,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PlayerTvScreen(
     source: VipSource,
+    sources: List<VipSource> = listOf(source),
     season: Int,
     episode: Int,
     title: String,
@@ -62,17 +69,38 @@ fun PlayerTvScreen(
     var showServersPanel by remember { mutableStateOf(false) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var currentSource by remember { mutableStateOf(source) }
-    val sources by remember { mutableStateOf(listOf(source)) }
+    val sourcesList by remember { mutableStateOf(sources.ifEmpty { listOf(source) }) }
     val focusRequester = remember { FocusRequester() }
     val pauseBtnFocus = remember { FocusRequester() }
 
-    // Auto-hide dos controles após 5 segundos
+    // Ao reexibir a barra, devolve o foco pro botão de play/pause (padrão de player de TV).
+    // Roda só quando isVisible passa de false -> true, não a cada interação.
     LaunchedEffect(isVisible) {
+        if (isVisible) {
+            pauseBtnFocus.requestFocus()
+        }
+    }
+
+    // Contador que reinicia toda vez que há interação com os controles (troca de valor
+    // força o LaunchedEffect abaixo a reiniciar a contagem de 5s do zero).
+    var hideTrigger by remember { mutableStateOf(0) }
+
+    // Auto-hide dos controles após 5 segundos parado. Reinicia sempre que isVisible vira true
+    // OU quando hideTrigger muda (ou seja, toda interação com os controles adia o sumiço),
+    // mas sem roubar o foco do botão que o usuário estiver navegando.
+    LaunchedEffect(isVisible, hideTrigger) {
         if (isVisible) {
             delay(5000)
             isVisible = false
+            // Ao esconder, devolve o foco pro Box principal, que é quem escuta
+            // o próximo toque do D-pad via onKeyEvent (senão o foco fica "perdido"
+            // no botão que acabou de sumir da árvore de composição)
+            focusRequester.requestFocus()
         }
     }
+
+    // Chame isto de dentro de qualquer ação de controle para adiar o auto-hide
+    val resetHideTimer = { hideTrigger++ }
 
     // Criar e destruir player com lifecycle
     DisposableEffect(context) {
@@ -158,6 +186,44 @@ fun PlayerTvScreen(
             .onFocusChanged { focusState ->
                 if (focusState.isFocused) {
                     isVisible = true
+                }
+            }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type != KeyEventType.KeyUp) {
+                    return@onKeyEvent false
+                }
+
+                val isBack = keyEvent.key == Key.Back
+                val isDpadOrCenter = when (keyEvent.key) {
+                    Key.DirectionUp, Key.DirectionDown,
+                    Key.DirectionLeft, Key.DirectionRight,
+                    Key.DirectionCenter, Key.Enter,
+                    Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> true
+                    else -> false
+                }
+
+                if (isBack) {
+                    if (isVisible) {
+                        // Barra já visível: Back sai do player normalmente.
+                        false
+                    } else {
+                        // Barra escondida: primeiro Back só reexibe os controles,
+                        // não sai do player.
+                        isVisible = true
+                        true // consome o evento
+                    }
+                } else if (!isVisible && isDpadOrCenter) {
+                    // Controles escondidos + qualquer tecla de navegação/OK:
+                    // primeiro toque só reexibe, sem disparar a ação do botão por baixo.
+                    isVisible = true
+                    true
+                } else if (isVisible && isDpadOrCenter) {
+                    // Controles já visíveis: deixa a tecla seguir normalmente,
+                    // mas adia o auto-hide porque houve interação.
+                    resetHideTimer()
+                    false
+                } else {
+                    false
                 }
             },
     ) {
@@ -267,6 +333,7 @@ fun PlayerTvScreen(
                                 onClick = {
                                     if (isPlaying) player?.pause() else player?.play()
                                     isPlaying = !isPlaying
+                                    resetHideTimer()
                                 },
                                 focusRequester = pauseBtnFocus,
                             )
@@ -277,6 +344,7 @@ fun PlayerTvScreen(
                                         val newPos = (it.currentPosition - 10_000).coerceAtLeast(0)
                                         it.seekTo(newPos)
                                     }
+                                    resetHideTimer()
                                 },
                             )
                             PlayerControlBtn(
@@ -286,20 +354,28 @@ fun PlayerTvScreen(
                                         val newPos = (it.currentPosition + 10_000).coerceAtMost(it.duration.coerceAtLeast(0))
                                         it.seekTo(newPos)
                                     }
+                                    resetHideTimer()
                                 },
                             )
                         }
 
-                        // Tempo atual
-                        player?.let { exoPlayer ->
-                            val duration = exoPlayer.duration.coerceAtLeast(0)
-                            val current = exoPlayer.currentPosition.coerceAtLeast(0)
-                            Text(
-                                "${formatTime(current)} / ${formatTime(duration)}",
-                                fontSize = 13.sp,
-                                color = Color.White.copy(alpha = 0.7f),
-                            )
+                        // Tempo atual (atualiza a cada segundo enquanto a barra está visível)
+                        var currentPosMs by remember { mutableStateOf(0L) }
+                        var durationMs by remember { mutableStateOf(0L) }
+                        LaunchedEffect(player, isVisible) {
+                            while (isVisible) {
+                                player?.let {
+                                    currentPosMs = it.currentPosition.coerceAtLeast(0)
+                                    durationMs = it.duration.coerceAtLeast(0)
+                                }
+                                delay(500)
+                            }
                         }
+                        Text(
+                            "${formatTime(currentPosMs)} / ${formatTime(durationMs)}",
+                            fontSize = 13.sp,
+                            color = Color.White.copy(alpha = 0.7f),
+                        )
 
                         // Direita: Legendas + Servidores
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -308,6 +384,7 @@ fun PlayerTvScreen(
                                 onClick = {
                                     showSubtitlesPanel = !showSubtitlesPanel
                                     showServersPanel = false
+                                    resetHideTimer()
                                 },
                             )
                             PlayerControlBtn(
@@ -315,6 +392,7 @@ fun PlayerTvScreen(
                                 onClick = {
                                     showServersPanel = !showServersPanel
                                     showSubtitlesPanel = false
+                                    resetHideTimer()
                                 },
                             )
                         }
@@ -334,7 +412,7 @@ fun PlayerTvScreen(
         // Painel de Servidores
         if (showServersPanel) {
             ServersPanel(
-                sources = sources,
+                sources = sourcesList,
                 currentSource = currentSource,
                 onClose = { showServersPanel = false },
                 onSelect = { newSource ->
@@ -357,8 +435,15 @@ private fun PlayerControlBtn(
 
     IconButton(
         onClick = onClick,
+        colors = IconButtonDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = Color.White,
+            focusedContainerColor = Color(0xFFD4AF37).copy(alpha = 0.25f),
+            focusedContentColor = Color(0xFFD4AF37),
+        ),
         modifier = Modifier
             .size(48.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .scale(scale)
             .onFocusChanged { isFocused = it.isFocused },
