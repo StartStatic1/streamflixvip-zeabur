@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,12 +20,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -33,18 +32,13 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.streamflixvip.tv.network.NetworkModule
-import com.streamflixvip.tv.network.StreamUrlResolver
-import com.streamflixvip.tv.network.VipSource
 import androidx.tv.material3.*
-import kotlinx.coroutines.CoroutineScope
+import com.streamflixvip.tv.network.NetworkModule
+import com.streamflixvip.tv.network.VipSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -58,7 +52,6 @@ fun PlayerTvScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val coroutineScope = rememberCoroutineScope()
 
     // Estado do player
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
@@ -69,7 +62,7 @@ fun PlayerTvScreen(
     var showServersPanel by remember { mutableStateOf(false) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var currentSource by remember { mutableStateOf(source) }
-    var sources by remember { mutableStateOf(listOf(source)) }
+    val sources by remember { mutableStateOf(listOf(source)) }
     val focusRequester = remember { FocusRequester() }
     val pauseBtnFocus = remember { FocusRequester() }
 
@@ -418,9 +411,8 @@ private fun SubtitlesPanel(
             Card(
                 onClick = {
                     player?.let {
-                        val params = it.currentMediaItem?.localConfiguration
                         it.setTrackSelectionParameters(
-                            androidx.media3.common.TrackSelectionParameters.DEFAULT.trackSelectionParameters
+                            androidx.media3.common.TrackSelectionParameters.DEFAULT.buildUpon().build()
                         )
                     }
                     onClose()
@@ -483,42 +475,54 @@ private fun ServersPanel(
             Spacer(modifier = Modifier.height(16.dp))
 
             sources.forEach { srv ->
-                var isFocused by remember { mutableStateOf(false) }
-                val isCurrent = srv.source_url == currentSource.source_url
-                Card(
-                    onClick = { onSelect(srv) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .padding(vertical = 4.dp)
-                        .onFocusChanged { isFocused = it.isFocused },
-                    colors = CardDefaults.colors(
-                        containerColor = if (isCurrent) Color(0xFFD4AF37).copy(alpha = 0.2f)
-                            else if (isFocused) Color(0xFF2E2E3E)
-                            else Color(0xFF15151C),
-                    ),
-                    shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Filled.Dns,
-                                contentDescription = null,
-                                tint = Color(0xFFD4AF37),
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(srv.displayName, fontSize = 15.sp, color = Color.White)
-                        }
-                        if (isCurrent) {
-                            Icon(Icons.Filled.CheckCircle, contentDescription = "Atual", tint = Color(0xFFD4AF37), modifier = Modifier.size(20.dp))
-                        }
-                    }
-                }
+                ServerItem(
+                    srv = srv,
+                    isCurrent = srv.source_url == currentSource.source_url,
+                    onSelect = { onSelect(srv) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServerItem(
+    srv: VipSource,
+    isCurrent: Boolean,
+    onSelect: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    Card(
+        onClick = onSelect,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .padding(vertical = 4.dp)
+            .onFocusChanged { isFocused = it.isFocused },
+        colors = CardDefaults.colors(
+            containerColor = if (isCurrent) Color(0xFFD4AF37).copy(alpha = 0.2f)
+            else if (isFocused) Color(0xFF2E2E3E)
+            else Color(0xFF15151C),
+        ),
+        shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Dns,
+                    contentDescription = null,
+                    tint = Color(0xFFD4AF37),
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(srv.displayName, fontSize = 15.sp, color = Color.White)
+            }
+            if (isCurrent) {
+                Icon(Icons.Filled.CheckCircle, contentDescription = "Atual", tint = Color(0xFFD4AF37), modifier = Modifier.size(20.dp))
             }
         }
     }
