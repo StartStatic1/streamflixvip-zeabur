@@ -49,14 +49,15 @@ fun HomeTvScreen(
             SidebarNav(onNavigateToSearch = onNavigateToSearch)
 
             Column(modifier = Modifier.fillMaxHeight().fillMaxWidth()) {
+                val errorMessage = state.error
                 if (state.isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
-                } else if (state.error != null) {
+                } else if (errorMessage != null) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(state.error, color = Color.White.copy(alpha = 0.6f), fontSize = 18.sp)
+                            Text(errorMessage, color = Color.White.copy(alpha = 0.6f), fontSize = 18.sp)
                             Spacer(modifier = Modifier.height(16.dp))
                             Card(
                                 onClick = { viewModel.loadAll() },
@@ -68,6 +69,13 @@ fun HomeTvScreen(
                         }
                     }
                 } else {
+                    // CORREÇÃO BUG #2: focusRequester para primeira row
+                    // (precisa ser criado aqui fora, em contexto @Composable —
+                    // dentro do LazyColumn { } o escopo é LazyListScope, não Composable)
+                    val firstRow = remember { FocusRequester() }
+                    val secondRow = remember { FocusRequester() }
+                    val thirdRow = remember { FocusRequester() }
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = 60.dp),
@@ -87,11 +95,6 @@ fun HomeTvScreen(
                                 )
                             }
                         }
-
-                        // CORREÇÃO BUG #2: focusRequester para primeira row
-                        val firstRow = remember { FocusRequester() }
-                        val secondRow = remember { FocusRequester() }
-                        val thirdRow = remember { FocusRequester() }
 
                         item(key = "trending") {
                             ContentRow("Em Alta", state.trendingItems, onItemClick, firstRow)

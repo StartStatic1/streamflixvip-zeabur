@@ -121,11 +121,15 @@ fun DetailTvScreen(
                             viewModel.pickServer(source) {
                                 // Re-chama com o source selecionado
                                 if (mediaType == "tv") {
-                                    viewModel.loadEpisodeSources(
-                                        state.selectedSeason,
-                                        state.selectedSeason,
-                                        onPlayClick
-                                    )
+                                    val season = state.selectedSeason
+                                    val episode = state.selectedSeason
+                                    val episodeTitle = state.seasonEpisodes[season]?.firstOrNull { it.episode_number == episode }?.displayName
+                                        ?: "Episódio $episode"
+                                    val fullTitle = "${details.title ?: details.name} - S${season}E${episode} - $episodeTitle"
+                                    onPlayClick(source, season, episode, fullTitle)
+                                } else {
+                                    val movieTitle = details.title ?: details.name ?: "Filme"
+                                    onPlayClick(source, 0, 0, movieTitle)
                                 }
                             }
                         },
@@ -439,7 +443,7 @@ private fun ServerPickerRow(
     Column(modifier = Modifier.padding(horizontal = 48.dp, vertical = 24.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Escolha o Servidor", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            TextButton(onClick = onClose) {
+            Button(onClick = onClose) {
                 Text("Fechar", color = Color(0xFFD4AF37))
             }
         }
