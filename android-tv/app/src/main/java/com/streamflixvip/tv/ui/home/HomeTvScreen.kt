@@ -68,6 +68,13 @@ fun HomeTvScreen(
                         }
                     }
                 } else {
+                    // CORREÇÃO BUG #2: focusRequester para primeira row
+                    // (precisa ser criado aqui fora, em contexto @Composable —
+                    // dentro do LazyColumn { } o escopo é LazyListScope, não Composable)
+                    val firstRow = remember { FocusRequester() }
+                    val secondRow = remember { FocusRequester() }
+                    val thirdRow = remember { FocusRequester() }
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = 60.dp),
@@ -87,11 +94,6 @@ fun HomeTvScreen(
                                 )
                             }
                         }
-
-                        // CORREÇÃO BUG #2: focusRequester para primeira row
-                        val firstRow = remember { FocusRequester() }
-                        val secondRow = remember { FocusRequester() }
-                        val thirdRow = remember { FocusRequester() }
 
                         item(key = "trending") {
                             ContentRow("Em Alta", state.trendingItems, onItemClick, firstRow)
