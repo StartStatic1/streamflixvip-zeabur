@@ -439,7 +439,7 @@ private fun ServerPickerRow(
     Column(modifier = Modifier.padding(horizontal = 48.dp, vertical = 24.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text("Escolha o Servidor", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            TextButton(onClick = onClose) {
+            Button(onClick = onClose) {
                 Text("Fechar", color = Color(0xFFD4AF37))
             }
         }
