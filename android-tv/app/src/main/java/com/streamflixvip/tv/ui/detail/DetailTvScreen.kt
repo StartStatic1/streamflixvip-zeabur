@@ -245,7 +245,7 @@ fun DetailTvScreen(
                             val episodeTitle = state.seasonEpisodes[season]?.firstOrNull { it.episode_number == episode }?.displayName
                                 ?: "Episódio $episode"
                             val fullTitle = "$displayTitle - S${season}E${episode} - $episodeTitle"
-                            onPlayClick(source, season, episode, fullTitle)
+                            onPlayClick(source, state.sources, season, episode, fullTitle)
                         }
                     },
                 )
