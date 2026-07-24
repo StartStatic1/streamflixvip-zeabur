@@ -4,13 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixvip.tv.network.NetworkModule
 import com.streamflixvip.tv.network.TmdbItem
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Estado da Home TV — hero, e múltiplas linhas de conteúdo. */
 data class HomeTvUiState(
     val isLoading: Boolean = true,
     val heroItems: List<TmdbItem> = emptyList(),
@@ -24,14 +26,9 @@ data class HomeTvUiState(
     val scifiItems: List<TmdbItem> = emptyList(),
     val animeItems: List<TmdbItem> = emptyList(),
     val familyItems: List<TmdbItem> = emptyList(),
+    val error: String? = null,
 )
 
-/**
- * ViewModel da Home de TV — carrega múltiplas seções em paralelo,
- * cada uma representando uma linha de carrossel horizontal no layout.
- * As seções seguem o padrão visual das referências (Streambox, serivia,
- * PlayBox): hero grande, trending, gêneros.
- */
 class HomeTvViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeTvUiState())
@@ -46,35 +43,45 @@ class HomeTvViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, error = null) }
 
-            val hero = safeFetch("/trending/all/day")
-            val trending = safeFetch("/trending/all/week")
-            val movies = safeFetch("/movie/popular")
-            val series = safeFetch("/tv/popular")
-            val action = safeFetch("/discover/movie", withGenres = "28")
-            val comedy = safeFetch("/discover/movie", withGenres = "35")
-            val drama = safeFetch("/discover/movie", withGenres = "18")
-            val horror = safeFetch("/discover/movie", withGenres = "27")
-            val scifi = safeFetch("/discover/movie", withGenres = "878")
-            val anime = safeFetch("/discover/tv", withOriginalLanguage = "ja")
-            val family = safeFetch("/discover/movie", withGenres = "10751")
+            try {
+                // CORREÇÃO BUG #10: Carregamento PARALELO com awaitAll
+                val results = coroutineScope {
+                    val hero = async { safeFetch("/trending/all/day") }
+                    val trending = async { safeFetch("/trending/all/week") }
+                    val movies = async { safeFetch("/movie/popular") }
+                    val series = async { safeFetch("/tv/popular") }
+                    val action = async { safeFetch("/discover/movie", withGenres = "28") }
+                    val comedy = async { safeFetch("/discover/movie", withGenres = "35") }
+                    val drama = async { safeFetch("/discover/movie", withGenres = "18") }
+                    val horror = async { safeFetch("/discover/movie", withGenres = "27") }
+                    val scifi = async { safeFetch("/discover/movie", withGenres = "878") }
+                    val anime = async { safeFetch("/discover/tv", withOriginalLanguage = "ja") }
+                    val family = async { safeFetch("/discover/movie", withGenres = "10751") }
+                    awaitAll(hero, trending, movies, series, action, comedy, drama, horror, scifi, anime, family)
+                }
 
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    heroItems = hero,
-                    trendingItems = trending,
-                    popularMovies = movies,
-                    popularSeries = series,
-                    actionItems = action,
-                    comedyItems = comedy,
-                    dramaItems = drama,
-                    horrorItems = horror,
-                    scifiItems = scifi,
-                    animeItems = anime,
-                    familyItems = family,
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        heroItems = results[0],
+                        trendingItems = results[1],
+                        popularMovies = results[2],
+                        popularSeries = results[3],
+                        actionItems = results[4],
+                        comedyItems = results[5],
+                        dramaItems = results[6],
+                        horrorItems = results[7],
+                        scifiItems = results[8],
+                        animeItems = results[9],
+                        familyItems = results[10],
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isLoading = false, error = "Erro ao carregar conteúdo")
+                }
             }
         }
     }

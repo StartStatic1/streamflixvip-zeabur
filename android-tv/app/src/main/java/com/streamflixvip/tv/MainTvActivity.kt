@@ -4,6 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -13,14 +19,21 @@ import com.streamflixvip.tv.network.VipSource
 import com.streamflixvip.tv.ui.detail.DetailTvScreen
 import com.streamflixvip.tv.ui.home.HomeTvScreen
 import com.streamflixvip.tv.ui.player.PlayerTvScreen
+import com.streamflixvip.tv.ui.search.SearchTvScreen
 import com.streamflixvip.tv.ui.theme.StreamFlixTvTheme
 
 /**
- * Activity única do app de TV — Navigation Compose trocando entre
- * Home, Detail e Player. O fluxo completo:
+ * Activity única do app de TV — Navigation Compose com rotas:
  *
- *   Home → click poster → Detail (tmdbId + mediaType)
- *   Detail → "Assistir" → resolve fontes → Player (source + season + episode)
+ *   "home" → HomeTvScreen
+ *   "search" → SearchTvScreen (nova!)
+ *   "profile" → tela placeholder
+ *   "settings" → tela placeholder
+ *   "detail/{mediaType}/{tmdbId}" → DetailTvScreen
+ *   "player" → PlayerTvScreen
+ *
+ * Fluxo:
+ *   Home/Search → click → Detail → Assistir → resolve fontes → Player
  *   Player → volta → Detail → volta → Home
  */
 class MainTvActivity : ComponentActivity() {
@@ -32,11 +45,11 @@ class MainTvActivity : ComponentActivity() {
             StreamFlixTvTheme {
                 val navController = rememberNavController()
 
-                // Estado compartilhado pra passar source do Detail pro Player
-                var pendingSource: VipSource? = null
-                var pendingSeason: Int = 0
-                var pendingEpisode: Int = 0
-                var pendingTitle: String = "Sem título"
+                // State compartilhado para passar source do Detail pro Player
+                var pendingSource by remember { mutableStateOf<VipSource?>(null) }
+                var pendingSeason by remember { mutableStateOf(0) }
+                var pendingEpisode by remember { mutableStateOf(0) }
+                var pendingTitle by remember { mutableStateOf("Sem título") }
 
                 NavHost(navController = navController, startDestination = "home") {
 
@@ -46,6 +59,19 @@ class MainTvActivity : ComponentActivity() {
                             onItemClick = { tmdbId, mediaType ->
                                 navController.navigate("detail/$mediaType/$tmdbId")
                             },
+                            onNavigateToSearch = {
+                                navController.navigate("search")
+                            },
+                        )
+                    }
+
+                    // ── BUSCA ──
+                    composable("search") {
+                        SearchTvScreen(
+                            onItemClick = { tmdbId, mediaType ->
+                                navController.navigate("detail/$mediaType/$tmdbId")
+                            },
+                            onBack = { navController.popBackStack() },
                         )
                     }
 
@@ -76,7 +102,6 @@ class MainTvActivity : ComponentActivity() {
                                     popUpTo("detail/${mediaType}/${tmdbId}") { inclusive = true }
                                 }
                             },
-                            onPlayTrailer = { /* TODO: abrir trailer */ },
                         )
                     }
 
@@ -89,8 +114,21 @@ class MainTvActivity : ComponentActivity() {
                                 season = pendingSeason,
                                 episode = pendingEpisode,
                                 title = pendingTitle,
-                                onBack = { navController.popBackStack() },
+                                onBack = {
+                                    pendingSource = null
+                                    navController.popBackStack()
+                                },
+                                onServerFailed = {
+                                    // Volta pro detail para re-selecionar servidor
+                                    pendingSource = null
+                                    navController.popBackStack()
+                                },
                             )
+                        } else {
+                            // Fallback se chegou aqui sem source
+                            LaunchedEffect(Unit) {
+                                navController.popBackStack()
+                            }
                         }
                     }
                 }
