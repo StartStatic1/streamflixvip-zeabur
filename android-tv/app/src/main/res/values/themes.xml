@@ -1,0 +1,16 @@
+<resources>
+    <!-- Mesma lógica do app de celular: tema XML mínimo, só pra existir
+         algo referenciável no Manifest antes do Compose montar. A UI real
+         fica em ui/theme/TvTheme.kt.
+
+         Theme.Leanback exigiria adicionar a lib androidx.leanback como
+         dependência só por causa do tema — desnecessário aqui porque o
+         app é 100% Compose for TV (androidx.tv.material3), sem nenhuma
+         View/Fragment do Leanback. Usa o tema base padrão da plataforma
+         em vez disso: mesmo efeito visual (fundo custom, sem barra de
+         título), sem a dependência extra. -->
+    <style name="Theme.StreamFlixVIP.TV" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#0A0A10</item>
+        <item name="android:colorBackground">#0A0A10</item>
+    </style>
+</resources>
