@@ -1,0 +1,24 @@
+<resources>
+    <!-- Tema base mínimo — a UI real é toda definida em Compose
+         (ui/theme/Theme.kt). Este XML só existe porque o Android exige
+         um tema referenciado no Manifest antes da Activity montar o
+         Compose.
+         Usa Theme.Material3.Dark.NoActionBar (fixo escuro) em vez de
+         DayNight para evitar flash branco no instante de abertura quando
+         o celular está no modo claro. -->
+    <style name="Theme.StreamFlixVIP" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:statusBarColor">#0A0A10</item>
+        <item name="android:windowBackground">#0A0A10</item>
+    </style>
+
+    <!-- Splash nativa: cobre o instante entre abrir o app e o Compose
+         terminar de montar. Fundo escuro igual ao resto do app + o
+         mesmo ícone de play dourado do launcher, pra não parecer "outro
+         app" por um instante antes da SplashScreen.kt (Compose, animada)
+         assumir. -->
+    <style name="Theme.StreamFlixVIP.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.StreamFlixVIP</item>
+    </style>
+</resources>

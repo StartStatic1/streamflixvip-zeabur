@@ -1,0 +1,226 @@
+[33m3ffbf39[m Merge branch 'main' of https://github.com/StartStatic1/streamflixvip-zeabur
+[33m2193b72[m release: v5.2.0 (versionCode 19)
+[33m21df694[m Add files via upload
+[33m61bd8ff[m Add files via upload
+[33m1dc91e4[m Restore maven repository in settings.gradle.kts
+[33m4c9f6a9[m Add StartApp In-App SDK dependency
+[33m38faad2[m Add Maven repository for Start.io
+[33m0a5e341[m Add files via upload
+[33m07cdee9[m Add files via upload
+[33m114f53a[m Add files via upload
+[33m85af3ac[m Add files via upload
+[33me70da7a[m Add files via upload
+[33m8a5476d[m release: v5.1.0 (versionCode 18)
+[33m357ea55[m Add files via upload
+[33m27595a0[m release: v5.0.9 (versionCode 17)
+[33m577b6a9[m Delete android/app/src/main/res/xml/Uu
+[33m292759b[m Add files via upload
+[33m12027cd[m Add files via upload
+[33mb9d40be[m Create Uu
+[33m1facfb5[m release: v5.0.8 (versionCode 16)
+[33m206996b[m Add files via upload
+[33m5242fa4[m release: v5.0.7 (versionCode 15)
+[33mddb4438[m Add files via upload
+[33m1cafc6b[m Add files via upload
+[33m20d49cf[m release: v5.0.6 (versionCode 14)
+[33mbaa637c[m Add files via upload
+[33m55f24da[m Add files via upload
+[33m9c25095[m Add files via upload
+[33md6d86bc[m release: v5.0.5 (versionCode 13)
+[33me7da1ca[m Delete android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen
+[33m3ddc609[m Add files via upload
+[33meac597a[m Add files via upload
+[33m041b438[m Add files via upload
+[33mbea9ca1[m Add files via upload
+[33mf0db853[m Add files via upload
+[33m36cb6f1[m Add files via upload
+[33m0b928c1[m Add files via upload
+[33m0a20377[m release: v5.0.4 (versionCode 12)
+[33m9677ea9[m Add files via upload
+[33m2dbffff[m Merge remote-tracking branch 'origin/main'
+[33m4d6400a[m update
+[33m55b4f84[m release: v5.0.3 (versionCode 11)
+[33m8cf8fea[m Add files via upload
+[33md2fbbec[m Add files via upload
+[33m3656e37[m release: v5.0.2 (versionCode 10)
+[33m3068142[m fix: resolve conflito e aplica regras de release completas via comando
+[33m3a682cc[m update: android
+[33m8eb23cf[m Add files via upload
+[33mdc9b966[m release: v5.0.1 (versionCode 9)
+[33m240b66c[m Add files via upload
+[33ma7f4560[m Add files via upload
+[33m73b9a55[m Add files via upload
+[33m0adde74[m Bump version code and version name to 8 and 3.3.0
+[33m7e66598[m Add files via upload
+[33m5e6405f[m Update versionCode and versionName in build.gradle.kts
+[33m2fb836e[m Add files via upload
+[33m7dce6fe[m Update version code and version name
+[33mf44d716[m Add files via upload
+[33mfb576ab[m fix: renova token automaticamente - corrige favoritos que paravam de salvar
+[33md4440b3[m Update build.gradle.kts
+[33mc1e7664[m Add files via upload
+[33m6a9a11b[m Bump versionCode and versionName to 4 and 2.2.0
+[33m0f6998a[m Add files via upload
+[33mf4778e9[m Add files via upload
+[33m38bb057[m Update version code and name in build.gradle.kts
+[33mca7f3d1[m Add files via upload
+[33m682a5eb[m Add files via upload
+[33m360602b[m Add files via upload
+[33mf60d99f[m Add files via upload
+[33m6fc604b[m Update versionCode and versionName in build.gradle.kts
+[33mc415143[m Add files via upload
+[33mf26f80c[m Delete android/app/src/main/java/com/streamflixvip/app/ui/update/33
+[33m697981b[m Add files via upload
+[33m9eceaa9[m Create 33
+[33mb36d8a6[m Add files via upload
+[33mafbf384[m Add files via upload
+[33mcd4cb00[m Add files via upload
+[33mfce412f[m Add files via upload
+[33m8cbe933[m Add files via upload
+[33m0bbbc39[m Delete android/app/src/main/java/com/streamflixvip/app/ui/detail/DetailScreen
+[33m2148611[m Add files via upload
+[33m67eb161[m Merge branch 'main' of https://github.com/StartStatic1/streamflixvip-zeabur
+[33m67219e3[m update
+[33mf73bd10[m Add files via upload
+[33m51d319f[m Add files via upload
+[33m6d2be3e[m update
+[33madcfa22[m update
+[33m73040a6[m update
+[33mf019c9f[m feat: conecta splash screen e reconstroi perfil enriquecido
+[33mf860869[m fix: completa integracao da race Koyeb/Zeabur + mantem fix de login
+[33maaf8930[m fix: teclado travado no login + fundo com rolo de posteres
+[33md1d2bb9[m fix: bloqueio VIP le da tabela vip_titles dedicada
+[33m0012dd7[m fix: race entre Koyeb e Zeabur pro stream, evita depender de 1 backend so
+[33m0f347e9[m fix: bloqueio VIP le da tabela vip_titles dedicada
+[33mf2a70ec[m fix: bloqueio VIP le da tabela vip_titles dedicada
+[33m6320db9[m feat: login redesign - fundo cinematografico, campos funcionais
+[33m6c15bcb[m feat: login redesign - fundo cinematografico, campos funcionais
+[33mf6c8a3a[m fix: email field focus/paste, real TMDB posters background
+[33mdf3b0ea[m fix: build failure - imports faltando (ImageVector, alpha) e operador Float*Dp invalido em AuthScreen/ProfileScreen
+[33m025d008[m fix: build failure em SplashScreen - Text nao tem parametro alpha, usar Modifier.alpha
+[33m08431ee[m fix: build failure em SplashScreen - Text nao tem parametro alpha, usar Modifier.alpha
+[33m6e545ee[m fix: splash screen - corrige offset de particulas (dp.times invalido)
+[33m1dd517f[m fix: splash screen - corrige offset de particulas (dp.times invalido)
+[33m86c8244[m feat: splash screen, login com posteres flutuantes, perfil com contato, correcao icones e preferencias persistentes
+[33me83cbea[m feat: top 10 semanal, ver mais linkado ao explorar, anos aleatorios
+[33m2e02c03[m fix: banner home sem espaco vazio + fileiras Classicos e Trash
+[33m1a13871[m fix: hero banner com fade suave e scroll síncrono
+[33m16106ee[m fix: hero banner com parallax e fade profissional
+[33m804b770[m fix: hero banner fixo, topo minimalista e lista sobreposta
+[33m69ee08d[m feat: nova pesquisa geral, banner imersivo e correções de UI/UX
+[33mb303fc9[m feat: nova pesquisa geral, banner informativo e correções de navegação
+[33m2ba9705[m fix: import Color faltando em SearchScreen.kt
+[33m599186f[m fix: build failure definitivo em exploreCatalog - tipar explicitamente Deferred e lista combinada
+[33m302cd34[m fix: build failure definitivo em exploreCatalog - tipar explicitamente Deferred e lista combinada
+[33m59e2951[m fix: build failure em exploreCatalog (suspend fun local em async), falta OptIn em ExploreScreen; feat: lupa/AppTopBar nas abas principais
+[33m50d2731[m feat: aba Explorar com filtros de genero e ano
+[33m63c22c6[m fix: aba Favoritos nao atualizava sem reabrir o app
+[33m2376076[m feat: favoritos reais com filtros Todos/Filmes/Series/Animes/Doramas
+[33m1e9faae[m fix: overload invalido de padding em GenreScreen
+[33m3a53520[m feat: banner destaque, filtros e rolagem infinita em Gêneros
+[33m15b502b[m fix: crash ao abrir Gêneros (padding negativo -> offset)
+[33m267de34[m fix: repor getVipTitleConfig removido por engano + aba Gêneros
+[33m5ec6c5d[m feat: aba Gêneros substituindo Social
+[33m7cc0980[m feat: dropdown temporada estilo CineVerse, episodios expansiveis, comentarios, trailer, botao voltar
+[33m9863232[m fix: label Lista na nav, temporada recolhida por padrao, similares, poster menor no header
+[33m379b4fd[m fix: build failure - falta OptIn ExperimentalMaterial3Api em DetailScreen
+[33m61544ce[m fix: botao Assistir Agora so em filme com seletor de servidor, remove lista duplicada, corrige backdrop e icone Minha Lista
+[33m280d8c5[m fix: crash aba Social (rota nao registrada), icone Minha Lista, botao Assistir Agora, backdrop animado
+[33m2fd4cc5[m fix: import setValue faltando no DetailScreen
+[33mc46b4c8[m fix: adiciona material-icons-extended (Groups, OpenInNew)
+[33mffb3f4e[m feat: modal player interno/externo + tela de detalhes redesenhada
+[33m8c3a3cf[m fix: bloqueio VIP le da tabela vip_titles dedicada
+[33m7d25cf7[m feat: sistema de bloqueio VIP - cadeado, tela de espera e limite de episodios gratis
+[33m1aaae35[m fix: remove cards duplicados de continuar assistindo, mostra temporada/episodio
+[33mc58ffc5[m fix: adiciona OptIn para ExperimentalMaterial3Api no bottom sheet
+[33m9899af6[m fix: corrige padding invalido no bottom sheet de servidores
+[33m7ddcef6[m feat: fluxo de 1 toque para assistir episodio, com sheet de servidor quando ha mais de um
+[33m30326f7[m fix: remove icone Schedule inexistente (usa emoji de relogio)
+[33m5a5aba1[m feat: episodios com thumbnail, titulo, duracao e sinopse
+[33m2781693[m fix: opt-in ExperimentalMaterial3Api pra corrigir erro de compilação do ModalBottomSheet
+[33m548d77e[m fix: opt-in ExperimentalMaterial3Api pra corrigir erro de compilação do ModalBottomSheet
+[33m70e6bcb[m fix: substitui chips espalhados por botao unico de config (bottom sheet), remove engrenagem nativa redundante
+[33mf93bf08[m fix: esconde botao settings nativo do exoplayer que sobrava vazio
+[33m9d93cf4[m fix: sobreposicao entre barra de chips e tempo nativo do player
+[33m7dcc910[m fix: sobreposicao entre barra de chips e tempo nativo do player
+[33mbbeace2[m fix: player landscape automatico, reorganiza controles, marca episodio selecionado
+[33m90cdb5c[m feat: banner na home e onde assistir melhorado
+[33m9eceb4a[m feat: player com aspecto, legenda, qualidade e retomar
+[33mf38e077[m feat: banner na home e onde assistir melhorado
+[33m7301a7c[m merge: mantém versao corrigida
+[33md1608e6[m fix: progresso de reproducao
+[33m19c14b9[m Add import for getValue in BottomNavBar.kt
+[33m4e621a3[m Add files via upload
+[33ma2a9ac3[m Add files via upload
+[33m197ba4f[m Add files via upload
+[33me1e7a46[m Delete android/app/src/main/java/com/streamflixvip/app/ui/nav/3282
+[33m529b40a[m Add files via upload
+[33mc68187c[m Delete android/app/src/main/java/com/streamflixvip/app/ui/search/1=#2
+[33mb8867c8[m Add files via upload
+[33m885a5ba[m Delete android/app/src/main/java/com/streamflixvip/app/ui/mylist/335
+[33m10e5088[m Add files via upload
+[33mce63995[m Delete android/app/src/main/java/com/streamflixvip/app/ui/profile/332
+[33m5653eef[m Add files via upload
+[33mb5dd6eb[m Delete android/app/src/main/java/com/streamflixvip/app/ui/vip/33
+[33m7e68407[m Add files via upload
+[33m80a391f[m Delete android/app/src/main/java/com/streamflixvip/app/ui/auth/#) 2)2
+[33m2ed7f2c[m Add files via upload
+[33mbb45f44[m Create #) 2)2
+[33m885d213[m Create 3282
+[33m902127f[m Create 1=#2
+[33m8e08e88[m Create 335
+[33mf3a0ee7[m Create 332
+[33ma3f75d6[m Create 33
+[33mf83b859[m Add files via upload
+[33m24fad24[m Add files via upload
+[33mefa2df0[m Add files via upload
+[33me056ea5[m Add files via upload
+[33maa27e30[m Add files via upload
+[33mc5b7619[m Change parent theme to android:Theme.Material.NoActionBar
+[33m052a4f1[m Add gradle.properties with configuration settings
+[33m16461d6[m Add files via upload
+[33m3451ec1[m Delete android/app/src/main/java/com/streamflixvip/app/ui/theme/55
+[33mf8f5f16[m Add files via upload
+[33m9d0e50f[m Delete android/app/src/main/java/com/streamflixvip/app/ui/player/Tt
+[33m8c2fc25[m Add files via upload
+[33md794f7f[m Delete android/app/src/main/java/com/streamflixvip/app/ui/home/55
+[33m2cd2862[m Add files via upload
+[33m0186c9e[m Delete android/app/src/main/java/com/streamflixvip/app/ui/detail/55
+[33ma50bd02[m Add files via upload
+[33m5b0f3b4[m Delete android/app/src/main/java/com/streamflixvip/app/network/66
+[33m3939144[m Add files via upload
+[33mbc7fe75[m Delete android/app/src/main/java/com/streamflixvip/app/data/55
+[33m39da302[m Add files via upload
+[33meb7cf8c[m Create 66
+[33mf9b34b6[m Create 55
+[33mb528444[m Create 55
+[33m3161c35[m Create 55
+[33mb120e9d[m Create 55
+[33mca56332[m Delete android/app/src/main/java/com/streamflixvip/app/ui/55
+[33mf7cd6d9[m Create Tt
+[33m71ce36a[m Create 55
+[33m92c973c[m Delete android/app/src/main/java/com/streamflixvip/app/66
+[33m733c5a1[m Add files via upload
+[33mc1d0c29[m Create 66
+[33m69a8a9b[m Delete android/gradle/wrapper/44
+[33m5f1dd7b[m Add files via upload
+[33m42c0ae7[m Create 44
+[33m4809681[m Delete android/app/gradle/wrapper directory
+[33mdd4f7c8[m Delete android/app/gradle/wrapper/55
+[33m4fe965b[m Add files via upload
+[33m908968b[m Create 55
+[33m783a5b1[m Delete android/app/src/main/res/mipmap-anydpi-v26/66
+[33md13d1ad[m Delete android/app/src/main/res/drawable/55
+[33mbb09aba[m Delete android/app/src/main/res/values/44
+[33m028b8f4[m Add files via upload
+[33m1ef1060[m Add files via upload
+[33mea489c8[m Add files via upload
+[33mbf3fa15[m Create 44
+[33m2df06be[m Create 55
+[33m67886f1[m Create 66
+[33m5b598ce[m Delete android/app/src/main/44
+[33ma4fb338[m Add files via upload
+[33m92652fb[m Create 44
+[33me2d6ecc[m Delete android/app/66
+[33mb481620[m Add files via upload
+[33m747c2b4[m Create 66
