@@ -1,13 +1,18 @@
 package com.streamflixvip.tv.ui.player
 
+import android.view.KeyEvent
 import android.view.ViewGroup
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -47,6 +52,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
+// Enum para os modos de Aspect Ratio
+enum class AspectRatioMode(val mode: Int, val label: String) {
+    FIT(AspectRatioFrameLayout.RESIZE_MODE_FIT, "Original"),
+    FILL(AspectRatioFrameLayout.RESIZE_MODE_FILL, "Esticar"),
+    ZOOM(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, "Zoom"),
+    FIXED_HEIGHT(AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, "Alt. Fixa"),
+    FIXED_WIDTH(AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, "Larg. Fixa")
+}
+
+enum class BottomPanelType { ASPECT, SUBTITLES, SERVERS }
+
 @Composable
 fun PlayerTvScreen(
     source: VipSource,
@@ -60,49 +76,47 @@ fun PlayerTvScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // Estado do player
+    // --- Estados do Player ---
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
-    var isVisible by remember { mutableStateOf(true) }
     var isLoading by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
-    var showSubtitlesPanel by remember { mutableStateOf(false) }
-    var showServersPanel by remember { mutableStateOf(false) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var currentSource by remember { mutableStateOf(source) }
     val sourcesList by remember { mutableStateOf(sources.ifEmpty { listOf(source) }) }
-    val focusRequester = remember { FocusRequester() }
+    
+    // --- Estado do Aspect Ratio ---
+    var currentAspectRatio by remember { mutableStateOf(AspectRatioMode.FIT) }
+
+    // --- Estado dos painéis minimalistas ---
+    var activeBottomPanel by remember { mutableStateOf<BottomPanelType?>(null) }
+
+    // --- Visibilidade e Foco ---
+    var controlsVisible by remember { mutableStateOf(true) }
+    var interactionTick by remember { mutableIntStateOf(0) }
+    val rootFocusRequester = remember { FocusRequester() }
     val pauseBtnFocus = remember { FocusRequester() }
 
-    // Ao reexibir a barra, devolve o foco pro botão de play/pause (padrão de player de TV).
-    // Roda só quando isVisible passa de false -> true, não a cada interação.
-    LaunchedEffect(isVisible) {
-        if (isVisible) {
-            pauseBtnFocus.requestFocus()
-        }
+    fun showControls() {
+        controlsVisible = true
+        interactionTick++
     }
 
-    // Contador que reinicia toda vez que há interação com os controles (troca de valor
-    // força o LaunchedEffect abaixo a reiniciar a contagem de 5s do zero).
-    var hideTrigger by remember { mutableStateOf(0) }
-
-    // Auto-hide dos controles após 5 segundos parado. Reinicia sempre que isVisible vira true
-    // OU quando hideTrigger muda (ou seja, toda interação com os controles adia o sumiço),
-    // mas sem roubar o foco do botão que o usuário estiver navegando.
-    LaunchedEffect(isVisible, hideTrigger) {
-        if (isVisible) {
+    // Auto-hide: esconde se não houver interação por 5s e nenhum painel estiver aberto
+    LaunchedEffect(controlsVisible, interactionTick, activeBottomPanel) {
+        if (controlsVisible && activeBottomPanel == null) {
             delay(5000)
-            isVisible = false
-            // Ao esconder, devolve o foco pro Box principal, que é quem escuta
-            // o próximo toque do D-pad via onKeyEvent (senão o foco fica "perdido"
-            // no botão que acabou de sumir da árvore de composição)
-            focusRequester.requestFocus()
+            controlsVisible = false
         }
     }
 
-    // Chame isto de dentro de qualquer ação de controle para adiar o auto-hide
-    val resetHideTimer = { hideTrigger++ }
+    // Gerenciamento de Foco ao mostrar controles
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible && activeBottomPanel == null) {
+            runCatching { pauseBtnFocus.requestFocus() }
+        }
+    }
 
-    // Criar e destruir player com lifecycle
+    // Ciclo de vida do ExoPlayer
     DisposableEffect(context) {
         val exoPlayer = ExoPlayer.Builder(context).build().apply {
             repeatMode = Player.REPEAT_MODE_OFF
@@ -113,7 +127,7 @@ fun PlayerTvScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> exoPlayer.pause()
-                Lifecycle.Event.ON_RESUME -> { /* não resume automaticamente */ }
+                Lifecycle.Event.ON_RESUME -> {}
                 Lifecycle.Event.ON_DESTROY -> {
                     exoPlayer.release()
                     player = null
@@ -130,14 +144,13 @@ fun PlayerTvScreen(
         }
     }
 
-    // Carregar URL do stream
+    // Carregamento do Stream
     LaunchedEffect(currentSource) {
         val exoPlayer = player ?: return@LaunchedEffect
         isLoading = true
         playbackError = null
-        isVisible = true
-        showSubtitlesPanel = false
-        showServersPanel = false
+        showControls()
+        activeBottomPanel = null
 
         try {
             val resolvedUrl = withContext(Dispatchers.IO) {
@@ -153,88 +166,70 @@ fun PlayerTvScreen(
             isLoading = false
         }
 
-        // Listener de erros do player
         exoPlayer.addListener(object : Player.Listener {
-            override fun onIsLoadingChanged(isLoadingNow: Boolean) {
-                isLoading = isLoadingNow
-            }
-
-            override fun onIsPlayingChanged(playing: Boolean) {
-                isPlaying = playing
-            }
-
+            override fun onIsLoadingChanged(isLoadingNow: Boolean) { isLoading = isLoadingNow }
+            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
             override fun onPlayerError(error: PlaybackException) {
                 playbackError = "Erro de reprodução: ${error.message}"
                 isLoading = false
-                isVisible = true
+                showControls()
             }
         })
     }
 
-    // Focar o player ao entrar
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
+    LaunchedEffect(Unit) { rootFocusRequester.requestFocus() }
 
-    // Container principal com D-pad focus
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
             .focusable()
-            .focusRequester(focusRequester)
-            .onFocusChanged { focusState ->
-                if (focusState.isFocused) {
-                    isVisible = true
-                }
-            }
+            .focusRequester(rootFocusRequester)
             .onKeyEvent { keyEvent ->
-                if (keyEvent.type != KeyEventType.KeyUp) {
-                    return@onKeyEvent false
-                }
+                if (keyEvent.type != KeyEventType.KeyUp) return@onKeyEvent false
 
-                val isBack = keyEvent.key == Key.Back
+                val isBack = keyEvent.key == Key.Back || keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ESCAPE
                 val isDpadOrCenter = when (keyEvent.key) {
-                    Key.DirectionUp, Key.DirectionDown,
-                    Key.DirectionLeft, Key.DirectionRight,
-                    Key.DirectionCenter, Key.Enter,
-                    Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> true
-                    else -> false
+                    Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
+                    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> true
+                    else -> keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER
                 }
 
-                if (isBack) {
-                    if (isVisible) {
-                        // Barra já visível: Back sai do player normalmente.
-                        false
-                    } else {
-                        // Barra escondida: primeiro Back só reexibe os controles,
-                        // não sai do player.
-                        isVisible = true
-                        true // consome o evento
+                when {
+                    isBack -> {
+                        when {
+                            activeBottomPanel != null -> {
+                                activeBottomPanel = null
+                                showControls()
+                                true
+                            }
+                            !controlsVisible -> {
+                                showControls()
+                                true
+                            }
+                            else -> false // Propaga para sair da tela
+                        }
                     }
-                } else if (!isVisible && isDpadOrCenter) {
-                    // Controles escondidos + qualquer tecla de navegação/OK:
-                    // primeiro toque só reexibe, sem disparar a ação do botão por baixo.
-                    isVisible = true
-                    true
-                } else if (isVisible && isDpadOrCenter) {
-                    // Controles já visíveis: deixa a tecla seguir normalmente,
-                    // mas adia o auto-hide porque houve interação.
-                    resetHideTimer()
-                    false
-                } else {
-                    false
+                    !controlsVisible && isDpadOrCenter -> {
+                        showControls()
+                        true
+                    }
+                    else -> false
                 }
             },
     ) {
-        // PlayerView (vídeo)
+        // Camada do Vídeo
         player?.let { exoPlayer ->
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
                         this.player = exoPlayer
                         useController = false
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        resizeMode = currentAspectRatio.mode
+                        // Configurações de legenda removendo chamadas problemáticas
+                        subtitleView?.setApplyEmbeddedFontSizes(false)
+                        subtitleView?.setApplyEmbeddedStyles(false)
+                        // Removido: subtitleView?.setFixedTextSize(subtitleView.getTextSize() * 1.2f) para evitar erro de compilação
                         layoutParams = ViewGroup.LayoutParams(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                             ViewGroup.LayoutParams.MATCH_PARENT,
@@ -242,375 +237,212 @@ fun PlayerTvScreen(
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
-                update = { view ->
-                    view.player = exoPlayer
-                },
+                update = { view -> view.resizeMode = currentAspectRatio.mode },
             )
         }
 
-        // Loading indicator
+        // Overlay de Controles (Barra Inferior)
         AnimatedVisibility(
-            visible = isLoading && playbackError == null,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            visible = controlsVisible && playbackError == null,
+            enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
+            exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color(0xFFD4AF37))
-            }
-        }
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.8f))
+                    .padding(vertical = 16.dp)
+            ) {
+                // Título
+                Text(
+                    text = title,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
 
-        // Erro de reprodução
-        AnimatedVisibility(
-            visible = playbackError != null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Barra de Tempo
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    var currentPosMs by remember { mutableStateOf(0L) }
+                    var durationMs by remember { mutableStateOf(0L) }
+                    LaunchedEffect(player, controlsVisible) {
+                        while (controlsVisible) {
+                            player?.let {
+                                currentPosMs = it.currentPosition.coerceAtLeast(0)
+                                durationMs = it.duration.coerceAtLeast(0)
+                            }
+                            delay(500)
+                        }
+                    }
                     Text(
-                        playbackError ?: "Erro desconhecido",
-                        color = Color.White,
-                        fontSize = 16.sp,
+                        "${formatTime(currentPosMs)} / ${formatTime(durationMs)}",
+                        fontSize = 13.sp,
+                        color = Color.White.copy(alpha = 0.7f)
                     )
-                    Spacer(modifier = Modifier.height(20.dp))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Botões
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Card(
-                            onClick = onServerFailed,
-                            colors = CardDefaults.colors(containerColor = Color(0xFFD4AF37)),
-                            shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
-                        ) {
-                            Text(
-                                "Voltar",
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                                color = Color.Black,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
+                        PlayerControlBtn(
+                            icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            onClick = { if (isPlaying) player?.pause() else player?.play(); showControls() },
+                            focusRequester = pauseBtnFocus
+                        )
+                        PlayerControlBtn(icon = Icons.Filled.Replay10, onClick = { player?.seekTo((player?.currentPosition ?: 0) - 10000); showControls() })
+                        PlayerControlBtn(icon = Icons.Filled.Forward10, onClick = { player?.seekTo((player?.currentPosition ?: 0) + 10000); showControls() })
                     }
-                }
-            }
-        }
 
-        // OVERLAY DE CONTROLES
-        AnimatedVisibility(
-            visible = isVisible && playbackError == null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Topo - Título
-                Box(modifier = Modifier.fillMaxWidth().height(80.dp).background(Color(0xFF0A0A10).copy(alpha = 0.8f))) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().align(Alignment.CenterStart).padding(horizontal = 24.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Button(
-                            onClick = onBack,
-                            colors = ButtonDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.White.copy(alpha = 0.1f)),
-                            shape = ButtonDefaults.shape(RoundedCornerShape(8.dp))
-                        ) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar", tint = Color.White)
-                        }
-                        Text(title, fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Medium, maxLines = 1)
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        MenuActionBtn(
+                            label = currentAspectRatio.label,
+                            icon = Icons.Filled.AspectRatio,
+                            isSelected = activeBottomPanel == BottomPanelType.ASPECT,
+                            onClick = { activeBottomPanel = if (activeBottomPanel == BottomPanelType.ASPECT) null else BottomPanelType.ASPECT; showControls() }
+                        )
+                        MenuActionBtn(
+                            label = "Legendas",
+                            icon = Icons.Filled.ClosedCaption,
+                            isSelected = activeBottomPanel == BottomPanelType.SUBTITLES,
+                            onClick = { activeBottomPanel = if (activeBottomPanel == BottomPanelType.SUBTITLES) null else BottomPanelType.SUBTITLES; showControls() }
+                        )
+                        MenuActionBtn(
+                            label = "Servidores",
+                            icon = Icons.Filled.Dns,
+                            isSelected = activeBottomPanel == BottomPanelType.SERVERS,
+                            onClick = { activeBottomPanel = if (activeBottomPanel == BottomPanelType.SERVERS) null else BottomPanelType.SERVERS; showControls() }
+                        )
                     }
                 }
 
-                // Centro - Espaçador (área de D-pad para navegação)
-                Box(modifier = Modifier.fillMaxWidth().weight(1f))
-
-                // Bottom - Barra de progresso + botões
-                Box(modifier = Modifier.fillMaxWidth().height(100.dp).background(Color(0xFF0A0A10).copy(alpha = 0.85f))) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().align(Alignment.Center).padding(horizontal = 24.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        // Esquerda: Pausa/Play + Seek
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PlayerControlBtn(
-                                icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                onClick = {
-                                    if (isPlaying) player?.pause() else player?.play()
-                                    isPlaying = !isPlaying
-                                    resetHideTimer()
-                                },
-                                focusRequester = pauseBtnFocus,
-                            )
-                            PlayerControlBtn(
-                                icon = Icons.Filled.Replay10,
-                                onClick = {
-                                    player?.let {
-                                        val newPos = (it.currentPosition - 10_000).coerceAtLeast(0)
-                                        it.seekTo(newPos)
+                // Abas
+                AnimatedVisibility(visible = activeBottomPanel != null) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+                        Spacer(modifier = Modifier.height(1.dp).fillMaxWidth().background(Color.White.copy(alpha = 0.15f)))
+                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                            when (activeBottomPanel) {
+                                BottomPanelType.ASPECT -> {
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        items(AspectRatioMode.values()) { mode ->
+                                            MenuOptionChip(
+                                                label = mode.label,
+                                                isSelected = currentAspectRatio == mode,
+                                                onClick = { currentAspectRatio = mode; activeBottomPanel = null }
+                                            )
+                                        }
                                     }
-                                    resetHideTimer()
-                                },
-                            )
-                            PlayerControlBtn(
-                                icon = Icons.Filled.Forward10,
-                                onClick = {
-                                    player?.let {
-                                        val newPos = (it.currentPosition + 10_000).coerceAtMost(it.duration.coerceAtLeast(0))
-                                        it.seekTo(newPos)
-                                    }
-                                    resetHideTimer()
-                                },
-                            )
-                        }
-
-                        // Tempo atual (atualiza a cada segundo enquanto a barra está visível)
-                        var currentPosMs by remember { mutableStateOf(0L) }
-                        var durationMs by remember { mutableStateOf(0L) }
-                        LaunchedEffect(player, isVisible) {
-                            while (isVisible) {
-                                player?.let {
-                                    currentPosMs = it.currentPosition.coerceAtLeast(0)
-                                    durationMs = it.duration.coerceAtLeast(0)
                                 }
-                                delay(500)
+                                BottomPanelType.SUBTITLES -> {
+                                    Text("Legendas Internas: Padrão", color = Color.White, fontSize = 14.sp)
+                                }
+                                BottomPanelType.SERVERS -> {
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        items(sourcesList) { srv ->
+                                            MenuOptionChip(
+                                                label = srv.displayName,
+                                                isSelected = srv.source_url == currentSource.source_url,
+                                                onClick = { currentSource = srv; activeBottomPanel = null }
+                                            )
+                                        }
+                                    }
+                                }
+                                null -> {}
                             }
                         }
-                        Text(
-                            "${formatTime(currentPosMs)} / ${formatTime(durationMs)}",
-                            fontSize = 13.sp,
-                            color = Color.White.copy(alpha = 0.7f),
-                        )
-
-                        // Direita: Legendas + Servidores
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PlayerControlBtn(
-                                icon = Icons.Filled.ClosedCaption,
-                                onClick = {
-                                    showSubtitlesPanel = !showSubtitlesPanel
-                                    showServersPanel = false
-                                    resetHideTimer()
-                                },
-                            )
-                            PlayerControlBtn(
-                                icon = Icons.Filled.VideoLibrary,
-                                onClick = {
-                                    showServersPanel = !showServersPanel
-                                    showSubtitlesPanel = false
-                                    resetHideTimer()
-                                },
-                            )
-                        }
                     }
                 }
             }
         }
 
-        // Painel de Legendas
-        if (showSubtitlesPanel) {
-            SubtitlesPanel(
-                player = player,
-                onClose = { showSubtitlesPanel = false },
-            )
+        // Loading/Erro
+        if (isLoading && playbackError == null) {
+            CircularProgressIndicator(color = Color(0xFFD4AF37), modifier = Modifier.align(Alignment.Center))
         }
-
-        // Painel de Servidores
-        if (showServersPanel) {
-            ServersPanel(
-                sources = sourcesList,
-                currentSource = currentSource,
-                onClose = { showServersPanel = false },
-                onSelect = { newSource ->
-                    showServersPanel = false
-                    currentSource = newSource
-                },
-            )
+        
+        if (playbackError != null) {
+            Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(playbackError!!, color = Color.White, fontSize = 16.sp)
+                Spacer(modifier = Modifier.height(20.dp))
+                Button(onClick = onServerFailed) { Text("Voltar", color = Color.Black) }
+            }
         }
     }
 }
 
 @Composable
-private fun PlayerControlBtn(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-    focusRequester: FocusRequester? = null,
-) {
+fun MenuActionBtn(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, isSelected: Boolean, onClick: () -> Unit) {
     var isFocused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (isFocused) 1.15f else 1f, label = "btn_scale")
-
-    IconButton(
+    Surface(
         onClick = onClick,
-        colors = IconButtonDefaults.colors(
-            containerColor = Color.Transparent,
-            contentColor = Color.White,
-            focusedContainerColor = Color(0xFFD4AF37).copy(alpha = 0.25f),
-            focusedContentColor = Color(0xFFD4AF37),
-        ),
         modifier = Modifier
-            .size(48.dp)
-            .clip(androidx.compose.foundation.shape.CircleShape)
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .scale(scale)
-            .onFocusChanged { isFocused = it.isFocused },
+            .onFocusChanged { isFocused = it.isFocused }
+            .clip(RoundedCornerShape(8.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (isSelected) Color(0xFFD4AF37).copy(alpha = 0.2f) else Color.Transparent,
+            focusedContainerColor = Color.White.copy(alpha = 0.15f)
+        )
     ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = if (isFocused) Color(0xFFD4AF37) else Color.White,
-            modifier = Modifier.size(32.dp),
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = if (isFocused || isSelected) Color(0xFFD4AF37) else Color.White, modifier = Modifier.size(20.dp))
+            Text(label, color = if (isFocused || isSelected) Color(0xFFD4AF37) else Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun MenuOptionChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    var isFocused by remember { mutableStateOf(false) }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .onFocusChanged { isFocused = it.isFocused }
+            .clip(RoundedCornerShape(12.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (isSelected) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.08f),
+            focusedContainerColor = if (isSelected) Color(0xFFD4AF37).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.25f)
+        )
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+            color = if (isSelected) Color.Black else Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
         )
     }
 }
 
 @Composable
-private fun BoxScope.SubtitlesPanel(
-    player: ExoPlayer?,
-    onClose: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.4f)
-            .align(Alignment.Center)
-            .padding(horizontal = 60.dp)
-            .background(Color(0xFF1E1E2E), RoundedCornerShape(12.dp))
-            .padding(24.dp),
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Legendas", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Button(
-                    onClick = onClose,
-                    colors = ButtonDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.White.copy(alpha = 0.1f))
-                ) {
-                    Text("Fechar", color = Color(0xFFD4AF37))
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Opção: Desligar legendas
-            var isFocusedOff by remember { mutableStateOf(false) }
-            Card(
-                onClick = {
-                    player?.let {
-                        it.setTrackSelectionParameters(
-                            androidx.media3.common.TrackSelectionParameters.DEFAULT.buildUpon().build()
-                        )
-                    }
-                    onClose()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .padding(vertical = 4.dp)
-                    .onFocusChanged { isFocusedOff = it.isFocused },
-                colors = CardDefaults.colors(
-                    containerColor = if (isFocusedOff) Color(0xFF2E2E3E) else Color(0xFF15151C),
-                ),
-                shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
-            ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
-                    Text(
-                        "Desligar",
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                        color = Color.White,
-                    )
-                }
-            }
-
-            Text(
-                "Legendas externas não disponíveis neste formato.",
-                fontSize = 14.sp,
-                color = Color.White.copy(alpha = 0.5f),
-                modifier = Modifier.padding(top = 12.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun BoxScope.ServersPanel(
-    sources: List<VipSource>,
-    currentSource: VipSource,
-    onClose: () -> Unit,
-    onSelect: (VipSource) -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.5f)
-            .align(Alignment.Center)
-            .padding(horizontal = 60.dp)
-            .background(Color(0xFF1E1E2E), RoundedCornerShape(12.dp))
-            .padding(24.dp),
-    ) {
-        Column {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Escolher Servidor", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Button(
-                    onClick = onClose,
-                    colors = ButtonDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Color.White.copy(alpha = 0.1f))
-                ) {
-                    Text("Fechar", color = Color(0xFFD4AF37))
-                }
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // CORREÇÃO: Usar for loop em vez de forEach para evitar erro de contexto Composable
-            for (srv in sources) {
-                ServerItem(
-                    srv = srv,
-                    isCurrent = srv.source_url == currentSource.source_url,
-                    onSelect = { onSelect(srv) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ServerItem(
-    srv: VipSource,
-    isCurrent: Boolean,
-    onSelect: () -> Unit
-) {
+private fun PlayerControlBtn(icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, focusRequester: FocusRequester? = null) {
     var isFocused by remember { mutableStateOf(false) }
-    Card(
-        onClick = onSelect,
+    IconButton(
+        onClick = onClick,
         modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .padding(vertical = 4.dp)
-            .onFocusChanged { isFocused = it.isFocused },
-        colors = CardDefaults.colors(
-            containerColor = if (isCurrent) Color(0xFFD4AF37).copy(alpha = 0.2f)
-            else if (isFocused) Color(0xFF2E2E3E)
-            else Color(0xFF15151C),
-        ),
-        shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .onFocusChanged { isFocused = it.isFocused }
+            .scale(if (isFocused) 1.15f else 1f),
+        colors = IconButtonDefaults.colors(focusedContainerColor = Color.White.copy(alpha = 0.15f))
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Filled.Dns,
-                    contentDescription = null,
-                    tint = Color(0xFFD4AF37),
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(srv.displayName, fontSize = 15.sp, color = Color.White)
-            }
-            if (isCurrent) {
-                Icon(Icons.Filled.CheckCircle, contentDescription = "Atual", tint = Color(0xFFD4AF37), modifier = Modifier.size(20.dp))
-            }
-        }
+        Icon(icon, contentDescription = null, tint = if (isFocused) Color(0xFFD4AF37) else Color.White, modifier = Modifier.size(32.dp))
     }
 }
 
@@ -619,9 +451,5 @@ private fun formatTime(ms: Long): String {
     val h = totalSeconds / 3600
     val m = (totalSeconds % 3600) / 60
     val s = totalSeconds % 60
-    return if (h > 0) {
-        String.format("%d:%02d:%02d", h, m, s)
-    } else {
-        String.format("%d:%02d", m, s)
-    }
+    return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%d:%02d", m, s)
 }
