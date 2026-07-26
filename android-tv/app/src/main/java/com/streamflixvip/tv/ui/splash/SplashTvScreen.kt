@@ -119,22 +119,15 @@ private fun PosterMarqueeRow(posterPaths: List<String>, reverse: Boolean, durati
     // Duplica a lista pra criar loop contínuo sem "costura" visível.
     val looped = posterPaths + posterPaths
     val transition = rememberInfiniteTransition(label = "marquee")
-    val offset by transition.animateFloatAsState(
-        targetValue = 1f,
-        label = "marquee_offset",
-    ).let {
-        // animateFloatAsState não repete sozinho; usa animateFloat do
-        // rememberInfiniteTransition pra rolagem contínua de verdade.
-        transition.animateFloat(
-            initialValue = 0f,
-            targetValue = if (reverse) -1f else 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMs, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-            label = "marquee_x",
+    val offset by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = if (reverse) -1f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMs, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "marquee_x",
         )
-    }
 
     Row(
         modifier = Modifier
