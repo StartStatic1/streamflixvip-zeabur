@@ -3,6 +3,7 @@ package com.streamflixvip.tv.ui.splash
 import android.media.MediaPlayer
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -36,6 +37,7 @@ import coil.compose.AsyncImage
 import com.streamflixvip.tv.network.NetworkModule
 import com.streamflixvip.tv.network.TmdbItem
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
@@ -73,7 +75,7 @@ fun SplashTvScreen(onFinished: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
-        val minDuration = kotlinx.coroutines.async { delay(2200) }
+        val minDuration = async { delay(2200) }
         val posters = withContext(Dispatchers.IO) {
             runCatching {
                 val trending = NetworkModule.tmdbApi.request(path = "/trending/all/week").results.orEmpty()
