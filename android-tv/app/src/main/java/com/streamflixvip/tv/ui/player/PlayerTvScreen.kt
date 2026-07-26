@@ -83,6 +83,11 @@ fun PlayerTvScreen(
     var playbackError by remember { mutableStateOf<String?>(null) }
     var currentSource by remember { mutableStateOf(source) }
     val sourcesList by remember { mutableStateOf(sources.ifEmpty { listOf(source) }) }
+    // Guarda a posição antes de trocar de servidor (ver troca em
+    // BottomPanelType.SERVERS), pra retomar de onde parou em vez de
+    // reiniciar do zero — sem isso, trocar de servidor no meio do filme
+    // te jogava de volta pro início.
+    var resumePositionMs by remember { mutableStateOf(0L) }
     
     // --- Estado do Aspect Ratio ---
     var currentAspectRatio by remember { mutableStateOf(AspectRatioMode.FIT) }
@@ -159,6 +164,9 @@ fun PlayerTvScreen(
             val mediaItem = MediaItem.fromUri(resolvedUrl)
             exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
+            if (resumePositionMs > 0) {
+                exoPlayer.seekTo(resumePositionMs)
+            }
             exoPlayer.playWhenReady = true
             isLoading = false
         } catch (e: Exception) {
@@ -356,7 +364,11 @@ fun PlayerTvScreen(
                                             MenuOptionChip(
                                                 label = srv.displayName,
                                                 isSelected = srv.source_url == currentSource.source_url,
-                                                onClick = { currentSource = srv; activeBottomPanel = null }
+                                                onClick = {
+                                                    resumePositionMs = player?.currentPosition ?: 0L
+                                                    currentSource = srv
+                                                    activeBottomPanel = null
+                                                }
                                             )
                                         }
                                     }

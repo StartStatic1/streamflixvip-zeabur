@@ -237,9 +237,13 @@ fun DetailTvScreen(
         if (isSeries) {
             Box(modifier = Modifier.fillMaxWidth().background(Color(0xFF0A0A10)).padding(horizontal = 48.dp, vertical = 20.dp)) {
                 SeriesEpisodesSection(
+                    totalSeasons = state.details?.number_of_seasons ?: 1,
                     seasonEpisodes = state.seasonEpisodes,
+                    loadingSeasons = state.loadingSeasons,
                     selectedSeason = state.selectedSeason,
+                    seasonError = state.showError,
                     onSelectSeason = { viewModel.selectSeason(it) },
+                    onRetrySeason = { viewModel.retryCurrentSeason() },
                     onPlayEpisode = { season, episode ->
                         viewModel.loadEpisodeSources(season, episode) { source ->
                             val episodeTitle = state.seasonEpisodes[season]?.firstOrNull { it.episode_number == episode }?.displayName
@@ -359,18 +363,22 @@ private fun ServerSourceCard(source: VipSource, onClick: () -> Unit) {
 
 @Composable
 private fun SeriesEpisodesSection(
+    totalSeasons: Int,
     seasonEpisodes: Map<Int, List<TmdbEpisode>>,
+    loadingSeasons: Set<Int>,
     selectedSeason: Int,
+    seasonError: String?,
     onSelectSeason: (Int) -> Unit,
+    onRetrySeason: () -> Unit,
     onPlayEpisode: (season: Int, episode: Int) -> Unit,
 ) {
-    if (seasonEpisodes.isEmpty()) {
-        Text("Carregando episódios...", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
-        return
-    }
-
     Column {
-        // Seletor de temporada
+        // Seletor de temporada — mostra TODAS as abas desde o início
+        // (1..totalSeasons), não só as já carregadas. Antes, as abas só
+        // apareciam conforme cada temporada terminava de carregar (o que
+        // dava a falsa impressão de "só existem 3 temporadas" quando na
+        // verdade as chamadas seguintes ainda estavam em andamento ou
+        // tinham falhado silenciosamente).
         Text("Temporadas", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -378,7 +386,7 @@ private fun SeriesEpisodesSection(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(bottom = 16.dp),
         ) {
-            items(seasonEpisodes.keys.sorted()) { season ->
+            items((1..totalSeasons).toList()) { season ->
                 var isFocused by remember { mutableStateOf(false) }
                 val isSelected = season == selectedSeason
                 val scale by animateFloatAsState(if (isFocused) 1.05f else 1f, label = "season_scale")
@@ -406,23 +414,55 @@ private fun SeriesEpisodesSection(
             }
         }
 
-        // Lista de episódios
-        val episodes = seasonEpisodes[selectedSeason] ?: emptyList()
-        if (episodes.isEmpty()) {
-            Text("Nenhum episódio disponível", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp)
-            return
-        }
-
-        Text("Episódios", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.8f))
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // CORREÇÃO: Usar for loop
-        for (episode in episodes) {
-            EpisodeItem(
-                episode = episode,
-                onPlay = { onPlayEpisode(selectedSeason, episode.episode_number) },
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+        // Estado da temporada selecionada: carregando, erro (com opção de
+        // tentar de novo) ou lista de episódios.
+        when {
+            loadingSeasons.contains(selectedSeason) -> {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 12.dp)) {
+                    CircularProgressIndicator(color = Color(0xFFD4AF37), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Carregando episódios da Temporada $selectedSeason...", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                }
+            }
+            seasonError != null && !seasonEpisodes.containsKey(selectedSeason) -> {
+                Column(modifier = Modifier.padding(vertical = 12.dp)) {
+                    Text(seasonError, color = Color(0xFFFF6B6B), fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    var isFocused by remember { mutableStateOf(false) }
+                    Card(
+                        onClick = onRetrySeason,
+                        modifier = Modifier.onFocusChanged { isFocused = it.isFocused },
+                        colors = CardDefaults.colors(
+                            containerColor = Color(0xFF1E1E2E),
+                            focusedContainerColor = Color(0xFFD4AF37),
+                        ),
+                        shape = CardDefaults.shape(RoundedCornerShape(8.dp)),
+                    ) {
+                        Text(
+                            "Tentar novamente",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            color = if (isFocused) Color.Black else Color.White,
+                            fontSize = 14.sp,
+                        )
+                    }
+                }
+            }
+            else -> {
+                val episodes = seasonEpisodes[selectedSeason].orEmpty()
+                if (episodes.isEmpty()) {
+                    Text("Nenhum episódio disponível", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
+                } else {
+                    Text("Episódios", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White.copy(alpha = 0.8f))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    for (episode in episodes) {
+                        EpisodeItem(
+                            episode = episode,
+                            onPlay = { onPlayEpisode(selectedSeason, episode.episode_number) },
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
         }
     }
 }

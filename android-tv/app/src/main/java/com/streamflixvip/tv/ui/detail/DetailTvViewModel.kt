@@ -19,6 +19,7 @@ data class DetailTvUiState(
     val details: TmdbResponse? = null,
     val seasonEpisodes: Map<Int, List<TmdbEpisode>> = emptyMap(),
     val selectedSeason: Int = 1,
+    val loadingSeasons: Set<Int> = emptySet(),
     val similar: List<TmdbItem> = emptyList(),
     val trailerKey: String? = null,
     val sources: List<VipSource> = emptyList(),
@@ -57,9 +58,16 @@ class DetailTvViewModel(
                         )
                     }
 
-                    // Carrega temporadas se for série
+                    // Busca episódios SÓ da temporada 1 de cara (mesmo padrão
+                    // do app de celular, ver CatalogRepository.getSeasonEpisodes
+                    // — busca sob demanda, uma temporada por vez, em vez de
+                    // disparar N chamadas simultâneas pra todas as temporadas
+                    // ao abrir a tela). Isso evita o bug em que temporadas
+                    // além da 3ª pareciam "sumir": eram chamadas que falhavam
+                    // silenciosamente numa rajada de requisições paralelas,
+                    // sem nenhum aviso de erro na tela.
                     if (mediaType == "tv" && response.number_of_seasons != null) {
-                        loadSeasons(response)
+                        loadSeasonIfNeeded(1)
                     }
                 },
                 onFailure = { e ->
@@ -74,28 +82,52 @@ class DetailTvViewModel(
         }
     }
 
-    private fun loadSeasons(details: TmdbResponse) {
-        viewModelScope.launch {
-            val totalSeasons = details.number_of_seasons ?: 1
-            val episodesMap = mutableMapOf<Int, List<TmdbEpisode>>()
+    /**
+     * Busca episódios de UMA temporada por vez, só quando ainda não foram
+     * carregados — chamada tanto ao abrir a tela (temporada 1) quanto ao
+     * trocar de temporada (ver selectSeason). Erro de rede agora aparece
+     * de verdade em showError, em vez de ser engolido e deixar a seção
+     * simplesmente vazia sem explicação.
+     */
+    private fun loadSeasonIfNeeded(season: Int) {
+        if (_uiState.value.seasonEpisodes.containsKey(season)) return
+        if (_uiState.value.loadingSeasons.contains(season)) return
 
-            val seasonNumbers = (1..totalSeasons.coerceAtMost(8))
-            for (seasonNum in seasonNumbers) {
-                val seasonPath = "/tv/$tmdbId/season/$seasonNum"
-                runCatching {
-                    NetworkModule.tmdbApi.requestSeasonDetail(path = seasonPath)
-                }.onSuccess { seasonDetail ->
-                    episodesMap[seasonNum] = seasonDetail.episodes.orEmpty()
+        viewModelScope.launch {
+            _uiState.update { it.copy(loadingSeasons = it.loadingSeasons + season) }
+
+            val seasonPath = "/tv/$tmdbId/season/$season"
+            runCatching {
+                NetworkModule.tmdbApi.requestSeasonDetail(path = seasonPath)
+            }.fold(
+                onSuccess = { seasonDetail ->
                     _uiState.update {
-                        it.copy(seasonEpisodes = episodesMap.toMap())
+                        it.copy(
+                            seasonEpisodes = it.seasonEpisodes + (season to seasonDetail.episodes.orEmpty()),
+                            loadingSeasons = it.loadingSeasons - season,
+                        )
                     }
-                }
-            }
+                },
+                onFailure = {
+                    _uiState.update {
+                        it.copy(
+                            loadingSeasons = it.loadingSeasons - season,
+                            showError = "Não foi possível carregar a Temporada $season. Toque para tentar de novo.",
+                        )
+                    }
+                },
+            )
         }
     }
 
     fun selectSeason(season: Int) {
-        _uiState.update { it.copy(selectedSeason = season) }
+        _uiState.update { it.copy(selectedSeason = season, showError = null) }
+        loadSeasonIfNeeded(season)
+    }
+
+    /** Permite tentar de novo a temporada atual após uma falha, sem sair da tela. */
+    fun retryCurrentSeason() {
+        loadSeasonIfNeeded(_uiState.value.selectedSeason)
     }
 
     fun loadEpisodeSources(season: Int, episode: Int, onSuccess: (VipSource) -> Unit) {

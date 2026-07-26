@@ -37,7 +37,14 @@ class HomeTvViewModel : ViewModel() {
     private val cache = mutableMapOf<String, List<TmdbItem>>()
 
     fun loadAll() {
-        if (cache.isNotEmpty()) {
+        // Antes: bastava UMA chamada ter sucesso pro cache "existir" e
+        // loadAll() pular tudo nas próximas vezes (ex: voltar pra Home
+        // depois de sair do app) — mesmo que outras categorias tivessem
+        // vindo vazias por falha de rede temporária, elas ficavam vazias
+        // pra sempre até reiniciar o app. Agora só considera "já
+        // carregado" se pelo menos uma categoria central (trending) tem
+        // itens de verdade.
+        if (cache["/trending/all/week|null|null"]?.isNotEmpty() == true) {
             _uiState.update { it.copy(isLoading = false) }
             return
         }
