@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo
 import android.content.Intent
 import android.net.Uri
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.Toast
@@ -180,6 +181,16 @@ fun PlayerScreen(
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         onDispose {
             activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // Mantém a tela ligada enquanto o player está aberto — sem essa flag
+    // o timeout normal de brilho/bloqueio do celular escurece a tela no
+    // meio do filme, mesmo com o vídeo tocando.
+    DisposableEffect(Unit) {
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 
