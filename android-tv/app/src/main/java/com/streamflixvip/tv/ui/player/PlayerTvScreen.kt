@@ -149,6 +149,14 @@ fun PlayerTvScreen(
         }
     }
 
+    // Atualizar Aspect Ratio quando mudar
+    LaunchedEffect(currentAspectRatio) {
+        player?.let { exoPlayer ->
+            // Força atualização do resizeMode no PlayerView via AndroidView
+            // (o update lambda será chamado automaticamente)
+        }
+    }
+
     // Carregamento do Stream
     LaunchedEffect(currentSource) {
         val exoPlayer = player ?: return@LaunchedEffect
