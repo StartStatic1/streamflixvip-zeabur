@@ -24,6 +24,18 @@ interface VipApi {
     suspend fun createPix(
         @Body body: PixRequest,
     ): PixResponse
+
+    @Headers("Content-Type: application/json")
+    @POST("api/activate-tv")
+    suspend fun activateTv(
+        @Body body: ActivateTvRequest,
+    ): ActivateTvResponse
+
+    @Headers("Content-Type: application/json")
+    @POST("api/tv-status")
+    suspend fun getTvStatus(
+        @Body body: TvStatusRequest,
+    ): TvStatusResponse
 }
 
 @JsonClass(generateAdapter = true)
@@ -46,3 +58,24 @@ data class PixRequest(val userId: String, val value: Double)
 
 @JsonClass(generateAdapter = true)
 data class PixResponse(val success: Boolean = false, val qrCode: String? = null, val pixCode: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class ActivateTvRequest(val code: String, val deviceId: String, val deviceLabel: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class ActivateTvResponse(
+    val success: Boolean = false,
+    val expiresAt: String? = null,
+    val planLabel: String? = null,
+    val error: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class TvStatusRequest(val deviceId: String)
+
+@JsonClass(generateAdapter = true)
+data class TvStatusResponse(
+    val active: Boolean = false,
+    val expiresAt: String? = null,
+    val planLabel: String? = null,
+)

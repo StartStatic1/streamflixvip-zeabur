@@ -15,16 +15,21 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.streamflixvip.tv.data.TvActivationManager
 import com.streamflixvip.tv.network.VipSource
+import com.streamflixvip.tv.ui.activation.ActivationTvScreen
 import com.streamflixvip.tv.ui.detail.DetailTvScreen
 import com.streamflixvip.tv.ui.home.HomeTvScreen
 import com.streamflixvip.tv.ui.player.PlayerTvScreen
 import com.streamflixvip.tv.ui.search.SearchTvScreen
+import com.streamflixvip.tv.ui.splash.SplashTvScreen
 import com.streamflixvip.tv.ui.theme.StreamFlixTvTheme
 
 /**
  * Activity única do app de TV — Navigation Compose com rotas:
  *
+ *   "splash" → SplashTvScreen (nova!)
+ *   "activation" → ActivationTvScreen (nova! — gate obrigatório de VIP)
  *   "home" → HomeTvScreen
  *   "search" → SearchTvScreen (nova!)
  *   "profile" → tela placeholder
@@ -33,6 +38,8 @@ import com.streamflixvip.tv.ui.theme.StreamFlixTvTheme
  *   "player" → PlayerTvScreen
  *
  * Fluxo:
+ *   Splash (carrossel + som) → já ativado? Home : Ativação (código VIP)
+ *   Ativação → código validado → Home
  *   Home/Search → click → Detail → Assistir → resolve fontes → Player
  *   Player → volta → Detail → volta → Home
  */
@@ -44,6 +51,14 @@ class MainTvActivity : ComponentActivity() {
         setContent {
             StreamFlixTvTheme {
                 val navController = rememberNavController()
+                val activationManager = remember { TvActivationManager(applicationContext) }
+
+                // Revalida contra o servidor em paralelo com a splash — pega
+                // revogação feita manualmente no painel/Supabase sem atrasar
+                // a abertura do app (splash já segura ~2.2s por conta própria).
+                LaunchedEffect(Unit) {
+                    activationManager.revalidate()
+                }
 
                 // State compartilhado para passar source do Detail pro Player
                 var pendingSource by remember { mutableStateOf<VipSource?>(null) }
@@ -52,7 +67,31 @@ class MainTvActivity : ComponentActivity() {
                 var pendingEpisode by remember { mutableStateOf(0) }
                 var pendingTitle by remember { mutableStateOf("Sem título") }
 
-                NavHost(navController = navController, startDestination = "home") {
+                NavHost(navController = navController, startDestination = "splash") {
+
+                    // ── SPLASH ──
+                    composable("splash") {
+                        SplashTvScreen(
+                            onFinished = {
+                                val next = if (activationManager.isActivatedLocally) "home" else "activation"
+                                navController.navigate(next) {
+                                    popUpTo("splash") { inclusive = true }
+                                }
+                            },
+                        )
+                    }
+
+                    // ── ATIVAÇÃO (trava tudo até validar um código) ──
+                    composable("activation") {
+                        ActivationTvScreen(
+                            activationManager = activationManager,
+                            onActivated = {
+                                navController.navigate("home") {
+                                    popUpTo("activation") { inclusive = true }
+                                }
+                            },
+                        )
+                    }
 
                     // ── HOME ──
                     composable("home") {

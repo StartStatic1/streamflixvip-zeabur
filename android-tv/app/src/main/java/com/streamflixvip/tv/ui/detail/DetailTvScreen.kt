@@ -9,8 +9,13 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -87,8 +92,18 @@ fun DetailTvScreen(
         // Layout full-screen: backdrop de fundo, conteúdo por cima. Filme cabe
         // 100% sem rolar (Row ocupa a tela toda); série ganha uma faixa rolável
         // de episódios abaixo, sem afetar o layout do filme.
-        Column(modifier = Modifier.fillMaxSize()) {
-        Row(modifier = Modifier.fillMaxWidth().let { if (isSeries) it.weight(1f) else it.fillMaxHeight() }) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+                .let { if (isSeries) it.verticalScroll(rememberScrollState()) else it },
+        ) {
+        // Antes: weight(1f) aqui, dentro de uma Column sem scroll. Isso
+        // fazia a faixa de episódios (sem altura própria) brigar por
+        // espaço com o herói e sobrar só ~3 linhas visíveis, sem como
+        // rolar pra ver o resto — não importava quantos episódios a
+        // temporada tivesse. Agora a página inteira rola quando é série,
+        // e o herói tem altura fixa (não mais weight) pra caber numa
+        // Column rolável.
+        Row(modifier = Modifier.fillMaxWidth().let { if (isSeries) it.height(520.dp) else it.fillMaxHeight() }) {
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -265,6 +280,17 @@ private fun ServerSidePanel(
     onClose: () -> Unit,
     onSelect: (VipSource) -> Unit,
 ) {
+    // Sem isso, quando o painel aparece (ao clicar num episódio/filme com
+    // mais de uma fonte), o foco do D-pad continua onde estava antes (no
+    // card do episódio, por exemplo). O painel abre, mas fica "surdo" pro
+    // controle remoto — o usuário aperta OK e nada acontece, porque nada
+    // dentro do painel está focado. Foca o primeiro servidor assim que o
+    // painel entra em composição.
+    val firstServerFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        runCatching { firstServerFocusRequester.requestFocus() }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxHeight()
@@ -297,15 +323,19 @@ private fun ServerSidePanel(
         Spacer(modifier = Modifier.height(24.dp))
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            items(sources) { src ->
-                ServerSourceCard(source = src, onClick = { onSelect(src) })
+            itemsIndexed(sources) { index, src ->
+                ServerSourceCard(
+                    source = src,
+                    onClick = { onSelect(src) },
+                    focusRequester = if (index == 0) firstServerFocusRequester else null,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ServerSourceCard(source: VipSource, onClick: () -> Unit) {
+private fun ServerSourceCard(source: VipSource, onClick: () -> Unit, focusRequester: FocusRequester? = null) {
     var isFocused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(if (isFocused) 1.03f else 1f, label = "server_card_scale")
 
@@ -314,6 +344,7 @@ private fun ServerSourceCard(source: VipSource, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onFocusChanged { isFocused = it.isFocused },
         colors = CardDefaults.colors(
             containerColor = Color(0xFF1E1E2E),
