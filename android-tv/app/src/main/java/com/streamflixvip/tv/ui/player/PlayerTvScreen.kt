@@ -1,7 +1,9 @@
 package com.streamflixvip.tv.ui.player
 
+import android.app.Activity
 import android.view.KeyEvent
 import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
@@ -121,6 +123,19 @@ fun PlayerTvScreen(
         }
     }
 
+    // Mantém a tela ligada e sinaliza pro Android/Fire TV que há mídia
+    // ativa, enquanto essa tela do player estiver montada. Sem isso, o
+    // screensaver do sistema sobe durante a reprodução — daí o app perde
+    // ON_PAUSE, o vídeo pausa, o sistema "confirma" que não há mídia
+    // tocando e o screensaver continua até fechar o app.
+    DisposableEffect(context) {
+        val activity = context as? Activity
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     // Ciclo de vida do ExoPlayer
     DisposableEffect(context) {
         val exoPlayer = ExoPlayer.Builder(context).build().apply {
@@ -131,7 +146,13 @@ fun PlayerTvScreen(
 
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> exoPlayer.pause()
+                // ON_PAUSE também dispara quando o screensaver do sistema
+                // sobe (a Activity perde foco, mas continua visível) — não
+                // é o usuário saindo da tela. Pausar aqui era o que
+                // realimentava o loop do screensaver. Só pausamos de fato
+                // em ON_STOP, quando a Activity realmente some da tela
+                // (usuário saiu, apertou HOME, trocou de app etc).
+                Lifecycle.Event.ON_STOP -> exoPlayer.pause()
                 Lifecycle.Event.ON_RESUME -> {}
                 Lifecycle.Event.ON_DESTROY -> {
                     exoPlayer.release()
