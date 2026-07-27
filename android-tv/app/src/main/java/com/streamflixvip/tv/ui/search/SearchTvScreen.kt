@@ -82,10 +82,19 @@ fun SearchTvScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A10))) {
         Column(modifier = Modifier.fillMaxSize()) {
+            fun triggerSearch() {
+                coroutineScope.launch {
+                    isLoading = true
+                    results = performSearch(query, selectedType, selectedGenre, selectedYear)
+                    isLoading = false
+                }
+            }
+
             SearchTopBar(
                 query = query,
                 onQueryChange = { query = it },
                 onBack = onBack,
+                onSearch = { triggerSearch() },
                 focusRequester = searchBarFocus,
             )
 
@@ -100,15 +109,7 @@ fun SearchTvScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            SearchButton(
-                onClick = {
-                    coroutineScope.launch {
-                        isLoading = true
-                        results = performSearch(query, selectedType, selectedGenre, selectedYear)
-                        isLoading = false
-                    }
-                }
-            )
+            SearchButton(onClick = { triggerSearch() })
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -205,6 +206,7 @@ private fun SearchTopBar(
     query: String,
     onQueryChange: (String) -> Unit,
     onBack: () -> Unit,
+    onSearch: () -> Unit,
     focusRequester: FocusRequester,
 ) {
     Box(
@@ -253,6 +255,12 @@ private fun SearchTopBar(
                 ),
                 shape = RoundedCornerShape(24.dp),
                 textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search,
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onSearch = { onSearch() },
+                ),
             )
         }
     }
