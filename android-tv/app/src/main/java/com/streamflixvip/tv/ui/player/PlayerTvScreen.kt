@@ -41,10 +41,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.*
@@ -65,6 +69,10 @@ enum class AspectRatioMode(val mode: Int, val label: String) {
 
 enum class BottomPanelType { ASPECT, SUBTITLES, SERVERS }
 
+// Uma faixa de legenda detectada no vídeo — group/trackIndex identificam
+// exatamente qual faixa dentro do ExoPlayer, pra poder ligar/trocar depois.
+data class SubtitleOption(val label: String, val group: androidx.media3.common.TrackGroup, val trackIndex: Int)
+
 @Composable
 fun PlayerTvScreen(
     source: VipSource,
@@ -77,6 +85,15 @@ fun PlayerTvScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    // Precisa existir ANTES do ExoPlayer.Builder pra poder ser injetado nele
+    // — é o que expõe quais faixas de legenda/áudio o arquivo tem e permite
+    // ligar/trocar uma. Sem isso (como estava antes), o ExoPlayer decodifica
+    // a legenda só se ele MESMO decidir auto-selecionar uma faixa "forçada"
+    // do arquivo — na prática, quase nunca escolhe sozinha, então a legenda
+    // embutida simplesmente nunca aparecia.
+    val trackSelector = remember { DefaultTrackSelector(context) }
+    var subtitleOptions by remember { mutableStateOf(listOf<SubtitleOption>()) }
+    var selectedSubtitleLabel by remember { mutableStateOf("Desligada") }
 
     // --- Estados do Player ---
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
@@ -138,7 +155,7 @@ fun PlayerTvScreen(
 
     // Ciclo de vida do ExoPlayer
     DisposableEffect(context) {
-        val exoPlayer = ExoPlayer.Builder(context).build().apply {
+        val exoPlayer = ExoPlayer.Builder(context).setTrackSelector(trackSelector).build().apply {
             repeatMode = Player.REPEAT_MODE_OFF
             playWhenReady = true
         }
@@ -171,13 +188,6 @@ fun PlayerTvScreen(
     }
 
     // Atualizar Aspect Ratio quando mudar
-    LaunchedEffect(currentAspectRatio) {
-        player?.let { exoPlayer ->
-            // Força atualização do resizeMode no PlayerView via AndroidView
-            // (o update lambda será chamado automaticamente)
-        }
-    }
-
     // Carregamento do Stream
     LaunchedEffect(currentSource) {
         val exoPlayer = player ?: return@LaunchedEffect
@@ -185,6 +195,8 @@ fun PlayerTvScreen(
         playbackError = null
         showControls()
         activeBottomPanel = null
+        subtitleOptions = emptyList()
+        selectedSubtitleLabel = "Desligada"
 
         try {
             val resolvedUrl = withContext(Dispatchers.IO) {
@@ -211,7 +223,35 @@ fun PlayerTvScreen(
                 isLoading = false
                 showControls()
             }
+            override fun onTracksChanged(tracks: Tracks) {
+                val subtitles = mutableListOf<SubtitleOption>()
+                for (group in tracks.groups) {
+                    if (group.type != C.TRACK_TYPE_TEXT) continue
+                    for (i in 0 until group.length) {
+                        val format = group.getTrackFormat(i)
+                        val label = format.label ?: format.language ?: "Faixa ${i + 1}"
+                        subtitles += SubtitleOption(label, group.mediaTrackGroup, i)
+                    }
+                }
+                subtitleOptions = subtitles
+            }
         })
+    }
+
+    fun selectSubtitle(option: SubtitleOption?) {
+        trackSelector.parameters = if (option == null) {
+            selectedSubtitleLabel = "Desligada"
+            trackSelector.parameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .build()
+        } else {
+            selectedSubtitleLabel = option.label
+            trackSelector.parameters.buildUpon()
+                .setOverrideForType(TrackSelectionOverride(option.group, option.trackIndex))
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .build()
+        }
     }
 
     LaunchedEffect(Unit) { rootFocusRequester.requestFocus() }
@@ -353,7 +393,7 @@ fun PlayerTvScreen(
                             onClick = { activeBottomPanel = if (activeBottomPanel == BottomPanelType.ASPECT) null else BottomPanelType.ASPECT; showControls() }
                         )
                         MenuActionBtn(
-                            label = "Legendas",
+                            label = selectedSubtitleLabel,
                             icon = Icons.Filled.ClosedCaption,
                             isSelected = activeBottomPanel == BottomPanelType.SUBTITLES,
                             onClick = { activeBottomPanel = if (activeBottomPanel == BottomPanelType.SUBTITLES) null else BottomPanelType.SUBTITLES; showControls() }
@@ -385,7 +425,26 @@ fun PlayerTvScreen(
                                     }
                                 }
                                 BottomPanelType.SUBTITLES -> {
-                                    Text("Legendas Internas: Padrão", color = Color.White, fontSize = 14.sp)
+                                    if (subtitleOptions.isEmpty()) {
+                                        Text("Este vídeo não tem legendas embutidas", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+                                    } else {
+                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            item {
+                                                MenuOptionChip(
+                                                    label = "Desligada",
+                                                    isSelected = selectedSubtitleLabel == "Desligada",
+                                                    onClick = { selectSubtitle(null); activeBottomPanel = null },
+                                                )
+                                            }
+                                            items(subtitleOptions) { opt ->
+                                                MenuOptionChip(
+                                                    label = opt.label,
+                                                    isSelected = selectedSubtitleLabel == opt.label,
+                                                    onClick = { selectSubtitle(opt); activeBottomPanel = null },
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                                 BottomPanelType.SERVERS -> {
                                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
