@@ -116,7 +116,7 @@ module.exports = async function handler(req, res) {
 
     // 4) Upsert por device_id (uma linha por aparelho — reativar/renovar
     //    com um código novo simplesmente atualiza a mesma linha).
-    const upsertRes = await fetch(`${SUPABASE_URL}/rest/v1/tv_activations`, {
+    const upsertRes = await fetch(`${SUPABASE_URL}/rest/v1/tv_activations?on_conflict=device_id`, {
       method: 'POST',
       headers: { ...headers, 'Prefer': 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify({
@@ -133,7 +133,7 @@ module.exports = async function handler(req, res) {
     if (!upsertRes.ok) {
       const errText = await upsertRes.text();
       console.error('tv_activations upsert error:', errText);
-      res.status(502).json({ error: 'Código validado, mas falhou ao ativar a TV. Tente novamente.' });
+      res.status(502).json({ error: `Falha ao ativar (detalhe técnico): ${errText.slice(0, 200)}` });
       return;
     }
 
