@@ -116,6 +116,74 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  // ── CENTRAL DE ATIVAÇÕES ──────────────────────────────────────────
+  // Junta as 3 formas de alguém ficar VIP (código resgatado no mobile,
+  // PIX automático via Mercado Pago, código ativado numa TV) numa visão
+  // só por conta — resolve o problema de "paguei/ativei e o painel não
+  // mostra nada disso junto".
+  if (action === 'activations') {
+    const [statusRes, codesRes, tvRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/vip_status?select=user_id,email,expires_at,plan_label,last_code_used&order=expires_at.desc&limit=500`, { headers: svcHeaders }),
+      fetch(`${SUPABASE_URL}/rest/v1/vip_codes?select=code,used_by,plan_label,is_active`, { headers: svcHeaders }),
+      fetch(`${SUPABASE_URL}/rest/v1/tv_activations?select=code,device_id,device_label,expires_at,is_active`, { headers: svcHeaders }),
+    ]);
+    const statusRows = await statusRes.json();
+    const codesRows = await codesRes.json();
+    const tvRows = await tvRes.json();
+
+    if (!statusRes.ok) { res.status(502).json({ error: 'Erro ao buscar vip_status', detail: statusRows }); return; }
+
+    const codesByUser = new Map(); // used_by -> code
+    if (Array.isArray(codesRows)) {
+      for (const c of codesRows) {
+        if (c.used_by) codesByUser.set(c.used_by, c.code);
+      }
+    }
+    const tvByCode = new Map(); // code -> [tv rows]
+    if (Array.isArray(tvRows)) {
+      for (const t of tvRows) {
+        if (!t.is_active) continue;
+        if (!tvByCode.has(t.code)) tvByCode.set(t.code, []);
+        tvByCode.get(t.code).push({ deviceId: t.device_id, deviceLabel: t.device_label, expiresAt: t.expires_at });
+      }
+    }
+
+    const now = new Date();
+    const activations = (Array.isArray(statusRows) ? statusRows : []).map((u) => {
+      const lastCode = u.last_code_used;
+      let origem = 'Desconhecida';
+      let codigoRelacionado = null;
+
+      if (lastCode && lastCode.startsWith('PIX-MP-')) {
+        origem = 'Pagamento PIX automático';
+      } else if (lastCode) {
+        origem = `Código: ${lastCode}`;
+        codigoRelacionado = lastCode;
+      } else if (codesByUser.has(u.user_id)) {
+        codigoRelacionado = codesByUser.get(u.user_id);
+        origem = `Código: ${codigoRelacionado}`;
+      }
+
+      const tvs = codigoRelacionado ? (tvByCode.get(codigoRelacionado) || []) : [];
+      const isActive = u.expires_at ? new Date(u.expires_at) > now : false;
+
+      return {
+        email: u.email || '(sem e-mail)',
+        userId: u.user_id,
+        vipAtivo: isActive,
+        expiresAt: u.expires_at,
+        planLabel: u.plan_label,
+        origem,
+        codigoRelacionado,
+        tvsAtivas: tvs.length,
+        tvs,
+      };
+    });
+
+    res.status(200).json({ activations });
+    return;
+  }
+
   // ── LIST REDEMPTIONS (histórico de códigos usados por um usuário) ──
   if (action === 'list-redemptions') {
     const { userId } = body;

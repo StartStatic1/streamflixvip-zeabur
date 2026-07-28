@@ -720,6 +720,7 @@
     <button class="panel-tab" data-tab="users" onclick="switchTab('users')">👥 Usuários</button>
     <button class="panel-tab" data-tab="movies" onclick="switchTab('movies')">🎬 Filmes &amp; Séries</button>
     <button class="panel-tab" data-tab="upload" onclick="switchTab('upload')">📤 Upload</button>
+    <button class="panel-tab" data-tab="activations" onclick="switchTab('activations')">🎯 Ativações</button>
     <button class="panel-tab" data-tab="ads" onclick="switchTab('ads')">📢 Anúncios</button>
     <button class="panel-tab" data-tab="iptv" onclick="switchTab('iptv')">📡 IPTV</button>
     <button class="panel-tab" data-tab="embeds" onclick="switchTab('embeds')">🔗 Embeds</button>
@@ -995,6 +996,33 @@
         </div>
 
         <div id="uploadErrorWrap" style="display:none;margin-top:16px;color:#e05252;font-size:0.85rem"></div>
+      </div>
+    </section>
+
+    <!-- ════════════ ABA: ATIVAÇÕES (visão unificada mobile+TV+PIX) ════════════ -->
+    <section id="tab-activations" class="tab-panel" style="display:none">
+      <div class="card">
+        <div class="card-title">🎯 Central de Ativações</div>
+        <p style="color:var(--muted);font-size:0.85rem;margin-bottom:16px">
+          Toda forma de alguém ficar VIP, junta numa visão só: código resgatado no mobile,
+          PIX automático, e quantas TVs cada conta ativou.
+        </p>
+        <input type="text" id="activationsSearch" placeholder="Buscar por e-mail ou código..." style="width:100%;margin-bottom:16px" oninput="renderActivationsTable()" />
+        <div id="activationsLoading" style="color:var(--muted);font-size:0.85rem">Carregando...</div>
+        <div style="overflow-x:auto">
+          <table id="activationsTable" style="display:none;width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="text-align:left;border-bottom:1px solid var(--surface2)">
+                <th style="padding:8px 6px">E-mail</th>
+                <th style="padding:8px 6px">Status</th>
+                <th style="padding:8px 6px">Expira em</th>
+                <th style="padding:8px 6px">Origem</th>
+                <th style="padding:8px 6px">📺 TVs</th>
+              </tr>
+            </thead>
+            <tbody id="activationsTableBody"></tbody>
+          </table>
+        </div>
       </div>
     </section>
     <section id="tab-ads" class="tab-panel" style="display:none">
@@ -1821,6 +1849,7 @@
     if (tab === 'iptv') loadIptvSources();
     if (tab === 'embeds') loadEmbedPartners();
     if (tab === 'dashboard') loadDashboard();
+    if (tab === 'activations') loadActivations();
 
     // Registra a aba atual na URL, pra "voltar" do navegador funcionar de
     // verdade dentro do admin, em vez de sair do site direto. opts.skipPush
@@ -1920,6 +1949,48 @@
     const input = document.getElementById('uploadResultUrl');
     input.select();
     navigator.clipboard?.writeText(input.value);
+  }
+
+  // ════════════════════════════════════════════════════════════
+  // ABA: ATIVAÇÕES
+  // ════════════════════════════════════════════════════════════
+  let _activationsData = [];
+
+  async function loadActivations() {
+    document.getElementById('activationsLoading').style.display = 'block';
+    document.getElementById('activationsTable').style.display = 'none';
+    const data = await api('activations');
+    _activationsData = data.activations || [];
+    document.getElementById('activationsLoading').style.display = 'none';
+    document.getElementById('activationsTable').style.display = 'table';
+    renderActivationsTable();
+  }
+
+  function renderActivationsTable() {
+    const query = (document.getElementById('activationsSearch').value || '').toLowerCase();
+    const filtered = _activationsData.filter((a) =>
+      a.email.toLowerCase().includes(query) || (a.codigoRelacionado || '').toLowerCase().includes(query)
+    );
+    const tbody = document.getElementById('activationsTableBody');
+    tbody.innerHTML = filtered.map((a) => {
+      const statusBadge = a.vipAtivo
+        ? '<span style="color:#2ecc71">✅ VIP ativo</span>'
+        : '<span style="color:#e05252">Expirado</span>';
+      const expira = a.expiresAt ? new Date(a.expiresAt).toLocaleDateString('pt-BR') : '—';
+      const tvInfo = a.tvsAtivas > 0
+        ? `${a.tvsAtivas} TV${a.tvsAtivas > 1 ? 's' : ''}`
+        : '—';
+      return `<tr style="border-bottom:1px solid var(--surface2)">
+        <td style="padding:8px 6px">${a.email}</td>
+        <td style="padding:8px 6px">${statusBadge}</td>
+        <td style="padding:8px 6px">${expira}</td>
+        <td style="padding:8px 6px;font-size:0.85rem;color:var(--muted)">${a.origem}</td>
+        <td style="padding:8px 6px">${tvInfo}</td>
+      </tr>`;
+    }).join('');
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--muted)">Nada encontrado</td></tr>';
+    }
   }
 
   // ════════════════════════════════════════════════════════════
