@@ -176,6 +176,23 @@
       grid-template-columns: repeat(3, 1fr);
       gap: 12px;
     }
+    /* Em telas estreitas (celular), vira uma fileira que rola de lado —
+       3 colunas fixas nesse espaço ficavam apertadas e empilhavam feio. */
+    @media (max-width: 720px) {
+      .stats-row {
+        display: flex;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        gap: 10px;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+      }
+      .stat-card {
+        flex: 0 0 auto;
+        width: 150px;
+        scroll-snap-align: start;
+      }
+    }
     .stat-card {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -702,6 +719,7 @@
     <button class="panel-tab" data-tab="codes" onclick="switchTab('codes')">🎟️ Códigos VIP</button>
     <button class="panel-tab" data-tab="users" onclick="switchTab('users')">👥 Usuários</button>
     <button class="panel-tab" data-tab="movies" onclick="switchTab('movies')">🎬 Filmes &amp; Séries</button>
+    <button class="panel-tab" data-tab="upload" onclick="switchTab('upload')">📤 Upload</button>
     <button class="panel-tab" data-tab="ads" onclick="switchTab('ads')">📢 Anúncios</button>
     <button class="panel-tab" data-tab="iptv" onclick="switchTab('iptv')">📡 IPTV</button>
     <button class="panel-tab" data-tab="embeds" onclick="switchTab('embeds')">🔗 Embeds</button>
@@ -734,6 +752,10 @@
         <div class="stat-card">
           <div class="stat-value" id="dashActiveAds">—</div>
           <div class="stat-label">Anúncios ativos</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="dashActiveTvs">—</div>
+          <div class="stat-label">📺 TVs ativadas</div>
         </div>
         <div class="stat-card" id="dashUnmatchedCard">
           <div class="stat-value" id="dashUnmatched">—</div>
@@ -946,7 +968,35 @@
       </div>
     </section>
 
-    <!-- ════════════ ABA: ANÚNCIOS ════════════ -->
+    <!-- ════════════ ABA: UPLOAD (R2) ════════════ -->
+    <section id="tab-upload" class="tab-panel" style="display:none">
+      <div class="card">
+        <div class="card-title">📤 Upload de vídeo pro R2</div>
+        <p style="color:var(--muted);font-size:0.85rem;margin-bottom:16px">
+          O arquivo vai direto pro Cloudflare R2 — a chave de acesso nunca passa pelo navegador.
+          Ao terminar, a URL pública já vem pronta pra colar no cadastro do filme/série.
+        </p>
+        <input type="file" id="uploadFileInput" accept="video/*" style="margin-bottom:12px;width:100%" />
+        <button onclick="startR2Upload()" id="btnStartUpload">⬆️ Enviar</button>
+
+        <div id="uploadProgressWrap" style="display:none;margin-top:16px">
+          <div style="background:var(--surface2);border-radius:100px;height:10px;overflow:hidden">
+            <div id="uploadProgressBar" style="background:var(--accent, #f39c12);height:100%;width:0%;transition:width .2s"></div>
+          </div>
+          <div id="uploadProgressText" style="font-size:0.8rem;color:var(--muted);margin-top:6px">0%</div>
+        </div>
+
+        <div id="uploadResultWrap" style="display:none;margin-top:20px">
+          <div style="font-size:0.85rem;color:var(--muted);margin-bottom:6px">✅ Enviado! URL pública:</div>
+          <div style="display:flex;gap:8px">
+            <input type="text" id="uploadResultUrl" readonly style="flex:1" />
+            <button onclick="copyUploadResultUrl()">📋 Copiar</button>
+          </div>
+        </div>
+
+        <div id="uploadErrorWrap" style="display:none;margin-top:16px;color:#e05252;font-size:0.85rem"></div>
+      </div>
+    </section>
     <section id="tab-ads" class="tab-panel" style="display:none">
       <div class="card">
         <div class="card-title">📢 Novo anúncio</div>
@@ -1799,6 +1849,78 @@
       loadDashboard(); // primeira visita, sem hash na URL: carrega os dados da aba padrão (dashboard)
     }
   })();
+
+  // ════════════════════════════════════════════════════════════
+  // ABA: UPLOAD (R2)
+  // ════════════════════════════════════════════════════════════
+  async function startR2Upload() {
+    const input = document.getElementById('uploadFileInput');
+    const file = input.files?.[0];
+    const errorWrap = document.getElementById('uploadErrorWrap');
+    const resultWrap = document.getElementById('uploadResultWrap');
+    errorWrap.style.display = 'none';
+    resultWrap.style.display = 'none';
+
+    if (!file) {
+      errorWrap.textContent = 'Escolhe um arquivo primeiro.';
+      errorWrap.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('btnStartUpload');
+    btn.disabled = true;
+    btn.textContent = 'Preparando...';
+
+    try {
+      // 1) Pede pro servidor uma URL assinada — ele quem tem a chave do R2.
+      const presignRes = await fetch('/api/r2-presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, contentType: file.type || 'application/octet-stream' }),
+      });
+      const presignData = await presignRes.json();
+      if (!presignRes.ok || !presignData.uploadUrl) {
+        throw new Error(presignData.error || 'Falha ao preparar upload.');
+      }
+
+      // 2) Manda o arquivo DIRETO pro R2 com essa URL (não passa pelo
+      // nosso servidor — evita duplicar o tráfego do vídeo inteiro).
+      // Usa XMLHttpRequest (não fetch) porque só ele expõe progresso real
+      // de upload, útil pra vídeo grande.
+      document.getElementById('uploadProgressWrap').style.display = 'block';
+      btn.textContent = 'Enviando...';
+
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', presignData.uploadUrl);
+        xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+        xhr.upload.onprogress = (e) => {
+          if (!e.lengthComputable) return;
+          const pct = Math.round((e.loaded / e.total) * 100);
+          document.getElementById('uploadProgressBar').style.width = pct + '%';
+          document.getElementById('uploadProgressText').textContent = pct + '%';
+        };
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error('Upload falhou (HTTP ' + xhr.status + ')'));
+        xhr.onerror = () => reject(new Error('Erro de rede durante o upload.'));
+        xhr.send(file);
+      });
+
+      document.getElementById('uploadResultUrl').value = presignData.publicUrl;
+      resultWrap.style.display = 'block';
+    } catch (err) {
+      errorWrap.textContent = err.message || 'Erro ao enviar.';
+      errorWrap.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '⬆️ Enviar';
+    }
+  }
+
+  function copyUploadResultUrl() {
+    const input = document.getElementById('uploadResultUrl');
+    input.select();
+    navigator.clipboard?.writeText(input.value);
+  }
 
   // ════════════════════════════════════════════════════════════
   // ABA: USUÁRIOS
@@ -3380,6 +3502,7 @@
     document.getElementById('dashActiveCodes').textContent = (data.activeVipCodes ?? 0).toLocaleString('pt-BR');
     document.getElementById('dashTotalUsers').textContent = (data.totalUsers ?? 0).toLocaleString('pt-BR');
     document.getElementById('dashActiveAds').textContent = (data.activeAds ?? 0).toLocaleString('pt-BR');
+    document.getElementById('dashActiveTvs').textContent = (data.activeTvActivations ?? 0).toLocaleString('pt-BR');
     document.getElementById('dashUnmatched').textContent = (data.totalUnmatched ?? 0).toLocaleString('pt-BR');
 
     const topWrap = document.getElementById('dashTopSourcesWrap');

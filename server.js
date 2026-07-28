@@ -64,6 +64,9 @@ const tmdb           = require('./api/tmdb.js');
 const trackLogin     = require('./api/track-login.js');
 const vipStatus      = require('./api/vip-status.js');
 const mercadopago    = require('./api/mercadopago.js');
+const activateTv     = require('./api/activate-tv.js');
+const tvStatus       = require('./api/tv-status.js');
+const r2Presign      = require('./api/r2-presign.js');
 
 // ── Rotas de API ──
 // Cada rota aceita todos os métodos (o próprio handler já checa
@@ -91,6 +94,9 @@ app.all('/api/tmdb',          wrap(tmdb));
 app.all('/api/track-login',   wrap(trackLogin));
 app.all('/api/vip-status',    wrap(vipStatus));
 app.all('/api/mercadopago/*', wrap(mercadopago));
+app.all('/api/activate-tv',   wrap(activateTv));
+app.all('/api/tv-status',     wrap(tvStatus));
+app.all('/api/r2-presign',    wrap(r2Presign));
 
 // ── Arquivos estáticos (site, admin, embed) ──
 // STATIC_DIR já resolve automaticamente entre 'public'/'Public' (ver acima).
