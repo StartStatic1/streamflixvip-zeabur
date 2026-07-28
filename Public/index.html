@@ -5110,12 +5110,7 @@ document.addEventListener('click', (e) => {
           {name:'Vidstack',  tag:'DUB · HD',  url:`${MGEB_BASE}/embed/${tmdbId}/1/1?player=vidstack`},
         ];
 
-    // Prioriza fontes que venham da nova API MegaEmbed VIP (Sincronizadas via Xtream)
-    const megaVipSources = customServers.filter(s => s.name === 'MegaEmbed VIP');
-    const otherCustomSources = customServers.filter(s => s.name !== 'MegaEmbed VIP');
-    
-    // A ordem final será: MegaEmbed VIP (se existir) -> Fallbacks -> Outros servidores customizados
-    const servers = [...megaVipSources, ...fallbackServers, ...otherCustomSources];
+    const servers = [...fallbackServers, ...customServers];
     grid._servers = servers;
     // Novo filme/episódio carregado: reseta o controle de fallback, senão
     // o sistema "lembraria" servidores como ruins de um título anterior.
