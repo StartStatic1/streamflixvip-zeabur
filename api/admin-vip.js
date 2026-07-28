@@ -453,6 +453,7 @@ module.exports = async function handler(req, res) {
         totalUsers,
         totalUnmatched,
         activeAds,
+        activeTvActivations,
       ] = await Promise.all([
         countRows('vip_sources'),
         countRows('iptv_sources', '&is_active=eq.true'),
@@ -460,55 +461,41 @@ module.exports = async function handler(req, res) {
         countRows('vip_status'), // usuários VIP registrados
         countRows('iptv_unmatched_items'),
         countRows('vip_ads', '&is_active=eq.true'),
+        countRows('tv_activations', '&is_active=eq.true'),
       ]);
 
-      // Breakdown de filmes/séries por servidor/fonte — dá visão rápida
-      // de quais fontes têm mais conteúdo, já separando filme de série,
-      // já que o auto-sync (iptv-sync) só traz filmes por enquanto e as
-      // séries entram majoritariamente por cadastro manual.
-      //
-      // IMPORTANTE: séries têm uma linha por EPISÓDIO em vip_sources
-      // (colunas season/episode), diferente de filme que é 1 linha = 1
-      // filme. Por isso "séries com fonte" não pode ser contagem de
-      // linhas — precisa contar tmdb_id únicos entre as linhas de série,
-      // senão 1 série com 5 episódios cadastrados aparece como "5 séries".
-      // A tabela por servidor mostra contagem de episódios mesmo (útil
-      // pra ver volume de conteúdo por fonte); só o card do topo usa a
-      // contagem de séries distintas.
-      //
-      // O PostgREST limita respostas a 1000 linhas por padrão. Com ~27 mil
-      // registros em vip_sources, uma busca sem paginação trunca
-      // silenciosamente nas primeiras ~1000 — por isso paginamos
-      // explicitamente até esgotar as linhas (Range em blocos de 1000).
-      const bySourceCounts = {}; // label -> { movie, tv } (tv = episódios)
-      const seriesIds = new Set(); // tmdb_id únicos de série, pra contagem distinta
-      let totalMovies = 0;
-      const PAGE_SIZE = 1000;
-      let from = 0;
-      while (true) {
-        const pageRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/vip_sources?select=source_label,media_type,tmdb_id`,
-          { headers: { ...svcHeaders, Range: `${from}-${from + PAGE_SIZE - 1}` } }
-        );
-        const pageRows = await pageRes.json();
-        if (!Array.isArray(pageRows) || pageRows.length === 0) break;
-
-        for (const row of pageRows) {
-          const label = row.source_label || '(sem nome)';
-          const isTv = row.media_type === 'tv';
-          if (!bySourceCounts[label]) bySourceCounts[label] = { movie: 0, tv: 0 };
-          if (isTv) { bySourceCounts[label].tv++; seriesIds.add(row.tmdb_id); }
-          else { bySourceCounts[label].movie++; totalMovies++; }
-        }
-
-        if (pageRows.length < PAGE_SIZE) break; // última página
-        from += PAGE_SIZE;
+      // Breakdown de filmes/séries por servidor/fonte, e contagem de
+      // séries distintas — feito via função no Postgres (admin_dashboard_rpc.sql),
+      // não buscando a vip_sources inteira pro código. Antes isso paginava
+      // a tabela inteira em blocos de 1000 linhas, esperando cada busca
+      // terminar pra pedir a próxima — com a base crescendo (hoje ~250 mil
+      // linhas), viravam 250+ requisições sequenciais e a função da Vercel
+      // estourava o tempo limite antes de terminar (por isso o dashboard
+      // ficava travado em "Carregando..." pra sempre). Uma função no banco
+      // resolve isso numa consulta só, em milissegundos.
+      async function rpc(fnName) {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fnName}`, {
+          method: 'POST',
+          headers: { ...svcHeaders, 'Content-Type': 'application/json' },
+          body: '{}',
+        });
+        return r.json();
       }
-      const totalSeries = seriesIds.size;
-      const topSources = Object.entries(bySourceCounts)
-        .map(([label, c]) => ({ label, movie: c.movie, tv: c.tv, count: c.movie + c.tv }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 8);
+
+      const [totalMovies, totalSeriesRaw, breakdownRaw] = await Promise.all([
+        countRows('vip_sources', '&media_type=eq.movie'),
+        rpc('admin_series_distinct_count'),
+        rpc('admin_sources_breakdown'),
+      ]);
+      const totalSeries = Number(totalSeriesRaw) || 0;
+      const topSources = Array.isArray(breakdownRaw)
+        ? breakdownRaw.map((row) => ({
+            label: row.source_label || '(sem nome)',
+            movie: Number(row.movie_count) || 0,
+            tv: Number(row.tv_episode_count) || 0,
+            count: (Number(row.movie_count) || 0) + (Number(row.tv_episode_count) || 0),
+          }))
+        : [];
 
       res.status(200).json({
         totalVipSources,
@@ -517,6 +504,7 @@ module.exports = async function handler(req, res) {
         totalUsers,
         totalUnmatched,
         activeAds,
+        activeTvActivations,
         totalMovies,
         totalSeries,
         topSources,
