@@ -34,6 +34,10 @@ CHECK_INTERVAL = int(os.environ.get("DOWNLOADER_CHECK_INTERVAL", "60"))
 MIN_FREE_GB = float(os.environ.get("MIN_FREE_DISK_GB", "5"))
 TMP_DIR = os.environ.get("DOWNLOADER_TMP_DIR", "/root/streamflix/movie-fetcher/tmp_downloads")
 
+# Arquivo baixado menor que isso e tratado como erro (provavelmente
+# pagina de erro do servidor de origem, nao o video real).
+MIN_VALID_FILE_MB = float(os.environ.get("MIN_VALID_FILE_MB", "10"))
+
 os.makedirs(TMP_DIR, exist_ok=True)
 
 s3 = boto3.client(
@@ -80,9 +84,42 @@ def update_candidate_status(candidates, movie_id, **fields):
 
 
 def download_file(url, dest_path):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=120) as resp, open(dest_path, "wb") as out:
-        shutil.copyfileobj(resp, out)
+    """
+    Baixa o arquivo de video da fonte IPTV.
+
+    O painel de origem so entrega o link real (302 -> servidor de
+    entrega com token assinado) quando reconhece o User-Agent como
+    um player de video legitimo. Com um UA generico (ex: Mozilla/5.0)
+    ele responde 200 OK com uma pagina HTML de erro disfarcada de
+    video/mp4 (Content-Length pequeno), sem nunca lancar excecao.
+
+    Por isso: usamos User-Agent de VLC, mandamos Range como um player
+    real manda, e validamos o tamanho final do arquivo antes de dar
+    como sucesso.
+    """
+    headers = {
+        "User-Agent": "VLC/3.0.4 LibVLC/3.0.4",
+        "Accept": "*/*",
+        "Range": "bytes=0-",
+        "Icy-MetaData": "1",
+    }
+    req = urllib.request.Request(url, headers=headers)
+
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        content_type = resp.getheader("Content-Type", "")
+        if content_type and "video" not in content_type.lower() and "octet-stream" not in content_type.lower():
+            raise ValueError(f"resposta nao parece ser video (Content-Type: {content_type})")
+
+        with open(dest_path, "wb") as out:
+            shutil.copyfileobj(resp, out)
+
+    size_mb = os.path.getsize(dest_path) / (1024 * 1024)
+    if size_mb < MIN_VALID_FILE_MB:
+        os.remove(dest_path)
+        raise ValueError(
+            f"arquivo baixado muito pequeno ({size_mb:.2f}MB, minimo {MIN_VALID_FILE_MB}MB) "
+            f"- provavelmente pagina de erro do servidor de origem, nao o video real"
+        )
 
 
 def process_one(movie_id):
