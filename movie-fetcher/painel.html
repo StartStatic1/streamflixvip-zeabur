@@ -63,6 +63,8 @@
   .badge.pending { background: #3a3220; color: #e0c05c; }
   .badge.done { background: #1f3a24; color: #6fd97f; }
   .badge.downloading { background: #1f2f3a; color: #6fb8d9; }
+  .badge.queued { background: #2a2540; color: #b39ddb; }
+  .badge.error { background: #3a1f24; color: #ff8080; }
   .card .link-box { padding: 0 8px 8px; }
   .card .link-box input {
     width: 100%;
@@ -74,6 +76,18 @@
     border-radius: 4px;
   }
   #empty { text-align: center; padding: 40px; color: #8b93a7; }
+  .dl-btn {
+    width: 100%;
+    padding: 6px;
+    border-radius: 6px;
+    border: none;
+    background: #2d5cf2;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .dl-btn:disabled { background: #3a3f4d; cursor: default; }
 </style>
 </head>
 <body>
@@ -90,8 +104,32 @@
 <script>
 const R2_PUBLIC_BASE_URL = "https://pub-90cce3ad488f4a52ac089b9496083787.r2.dev";
 const CANDIDATES_URL = R2_PUBLIC_BASE_URL + "/movie-fetcher/candidates.json";
+const REQUEST_API_URL = "http://65.21.48.50:8091/api/request-download";
 
 let allMovies = [];
+
+async function requestDownload(id, btn) {
+  btn.disabled = true;
+  btn.textContent = "Enviando...";
+  try {
+    const res = await fetch(REQUEST_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: id })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      btn.textContent = "Na fila!";
+      setTimeout(loadCandidates, 1500);
+    } else {
+      btn.textContent = "Erro: " + (data.error || "falhou");
+      btn.disabled = false;
+    }
+  } catch (err) {
+    btn.textContent = "Erro de conexao";
+    btn.disabled = false;
+  }
+}
 
 async function loadCandidates() {
   try {
@@ -121,11 +159,24 @@ function render(movies) {
 
   grid.innerHTML = movies.map(function(m) {
     const poster = m.poster_url || "";
-    const statusClass = m.status === "done" ? "done" : (m.status === "downloading" ? "downloading" : "pending");
-    const statusLabel = m.status === "done" ? "Pronto" : (m.status === "downloading" ? "Baixando" : "Pendente");
+    const statusMap = {
+      done: ["done", "Pronto"],
+      downloading: ["downloading", "Baixando"],
+      queued: ["queued", "Na fila"],
+      error: ["error", "Erro"],
+      pending: ["pending", "Pendente"]
+    };
+    const pair = statusMap[m.status] || statusMap.pending;
+    const statusClass = pair[0];
+    const statusLabel = pair[1];
 
     const linkBox = (m.status === "done" && m.r2_url)
       ? '<div class="link-box"><input readonly value="' + m.r2_url + '" onclick="this.select()"></div>'
+      : "";
+
+    const showButton = m.status === "pending";
+    const downloadBtn = showButton
+      ? '<button class="dl-btn" onclick="requestDownload(\'' + m.id + '\', this)">Baixar este filme</button>'
       : "";
 
     return (
@@ -137,6 +188,7 @@ function render(movies) {
           '<span class="badge ' + statusClass + '">' + statusLabel + '</span>' +
         '</div>' +
         linkBox +
+        (downloadBtn ? '<div style="padding:0 8px 8px">' + downloadBtn + '</div>' : '') +
       '</div>'
     );
   }).join("");
