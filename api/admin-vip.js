@@ -55,9 +55,24 @@ module.exports = async function handler(req, res) {
 
   // ── LIST ──
   if (action === 'list') {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_codes?select=*&order=created_at.desc&limit=200`, { headers: svcHeaders });
-    const rows = await r.json();
-    res.status(200).json({ codes: rows });
+    const [codesRes, tvRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/vip_codes?select=*&order=created_at.desc&limit=200`, { headers: svcHeaders }),
+      fetch(`${SUPABASE_URL}/rest/v1/tv_activations?select=code,device_label&is_active=eq.true`, { headers: svcHeaders }),
+    ]);
+    const rows = await codesRes.json();
+    const tvRows = await tvRes.json();
+
+    const tvCountByCode = new Map();
+    if (Array.isArray(tvRows)) {
+      for (const t of tvRows) {
+        tvCountByCode.set(t.code, (tvCountByCode.get(t.code) || 0) + 1);
+      }
+    }
+    const rowsWithTv = Array.isArray(rows)
+      ? rows.map((c) => ({ ...c, tv_activations_count: tvCountByCode.get(c.code) || 0 }))
+      : rows;
+
+    res.status(200).json({ codes: rowsWithTv });
     return;
   }
 

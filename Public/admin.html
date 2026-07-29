@@ -1703,6 +1703,14 @@
       else if (isUsed) badge = '<span class="badge badge-red">Usado</span>';
       else             badge = '<span class="badge badge-green">Disponível</span>';
 
+      // Selo de TV: aparece independente do badge acima, porque um código
+      // pode nunca ter sido resgatado no mobile (fica "Disponível") e
+      // ainda assim já ter ativado uma TV — os dois são controles
+      // separados no banco.
+      if (c.tv_activations_count > 0) {
+        badge += ` <span class="badge" style="background:#2a2a3a;color:#8ab4f8">📺 ${c.tv_activations_count}</span>`;
+      }
+
       const plan = c.plan_label || hoursToLabel(c.duration_hours);
       const date = c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '—';
 
