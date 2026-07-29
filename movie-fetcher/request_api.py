@@ -1,22 +1,16 @@
 #!/usr/bin/env python3
 """
-Movie Fetcher - Downloader
-Roda em loop lento (verifica a fila a cada CHECK_INTERVAL segundos).
-Para cada pedido na fila (download_queue.json): baixa o video da URL
-de origem (IPTV), sobe pro R2 em movies/<id>.mp4, atualiza o status
-no candidates.json para "done" com o link publico, remove da fila.
-
-Processa 1 filme por vez (sequencial), com checagem de espaco em
-disco antes de cada download, para nunca comprometer o VPS que
-tambem hospeda o site principal StreamFlixVIP.
+Movie Fetcher - Request API
+API minima e isolada, rodando numa porta propria (5060), que recebe
+pedidos de download vindos do painel HTML e os grava numa fila no R2.
+Nao interfere com streamflix-api (5000) nem com o site principal (8000).
 """
 
 import os
 import json
-import time
-import shutil
-import urllib.request
 from datetime import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import boto3
 from botocore.client import Config
 
@@ -24,17 +18,13 @@ R2_ACCESS_KEY_ID = os.environ["R2_ACCESS_KEY_ID"]
 R2_SECRET_ACCESS_KEY = os.environ["R2_SECRET_ACCESS_KEY"]
 R2_ACCOUNT_ID = os.environ["R2_ACCOUNT_ID"]
 R2_BUCKET_NAME = os.environ["R2_BUCKET_NAME"]
-R2_PUBLIC_BASE_URL = os.environ["R2_PUBLIC_BASE_URL"]
 
 CANDIDATES_KEY = "movie-fetcher/candidates.json"
 QUEUE_KEY = "movie-fetcher/download_queue.json"
-LOG_PREFIX = "[downloader]"
+PORT = int(os.environ.get("REQUEST_API_PORT", "5060"))
 
-CHECK_INTERVAL = int(os.environ.get("DOWNLOADER_CHECK_INTERVAL", "60"))
-MIN_FREE_GB = float(os.environ.get("MIN_FREE_DISK_GB", "5"))
-TMP_DIR = os.environ.get("DOWNLOADER_TMP_DIR", "/root/streamflix/movie-fetcher/tmp_downloads")
-
-os.makedirs(TMP_DIR, exist_ok=True)
+app = Flask(__name__)
+CORS(app)
 
 s3 = boto3.client(
     "s3",
@@ -46,18 +36,13 @@ s3 = boto3.client(
 )
 
 
-def log(msg):
-    print(f"{LOG_PREFIX} {datetime.now().isoformat()} {msg}", flush=True)
-
-
 def load_json(key, default):
     try:
         obj = s3.get_object(Bucket=R2_BUCKET_NAME, Key=key)
         return json.loads(obj["Body"].read().decode("utf-8"))
     except s3.exceptions.NoSuchKey:
         return default
-    except Exception as e:
-        log(f"aviso: falha ao ler {key} ({e})")
+    except Exception:
         return default
 
 
@@ -66,103 +51,47 @@ def save_json(key, data):
     s3.put_object(Bucket=R2_BUCKET_NAME, Key=key, Body=body, ContentType="application/json")
 
 
-def free_disk_gb():
-    total, used, free = shutil.disk_usage("/")
-    return free / (1024 ** 3)
+@app.route("/api/request-download", methods=["POST"])
+def request_download():
+    data = request.get_json(force=True, silent=True) or {}
+    movie_id = data.get("id")
+    if not movie_id:
+        return jsonify({"error": "campo 'id' obrigatorio"}), 400
 
-
-def update_candidate_status(candidates, movie_id, **fields):
-    for c in candidates:
-        if c["id"] == movie_id:
-            c.update(fields)
-            return True
-    return False
-
-
-def download_file(url, dest_path):
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=120) as resp, open(dest_path, "wb") as out:
-        shutil.copyfileobj(resp, out)
-
-
-def process_one(movie_id):
     candidates = load_json(CANDIDATES_KEY, [])
     movie = next((c for c in candidates if c["id"] == movie_id), None)
     if not movie:
-        log(f"ERRO: filme {movie_id} nao encontrado nos candidatos, pulando")
-        return False
+        return jsonify({"error": "filme nao encontrado nos candidatos"}), 404
 
-    title_safe = "".join(ch if ch.isalnum() or ch in " -_" else "" for ch in movie["title"]).strip()
-    filename = f"{title_safe} ({movie['year']}).mp4".replace(" ", "_")
-    tmp_path = os.path.join(TMP_DIR, filename)
-    r2_key = f"movies/{filename}"
+    queue = load_json(QUEUE_KEY, [])
+    if any(q["id"] == movie_id for q in queue):
+        return jsonify({"status": "ja_estava_na_fila"}), 200
 
-    log(f"iniciando: {movie['title']} ({movie['year']})")
-    update_candidate_status(candidates, movie_id, status="downloading")
+    queue.append({
+        "id": movie_id,
+        "requested_at": datetime.now().isoformat(),
+    })
+    save_json(QUEUE_KEY, queue)
+
+    for c in candidates:
+        if c["id"] == movie_id and c["status"] == "pending":
+            c["status"] = "queued"
     save_json(CANDIDATES_KEY, candidates)
 
-    free_gb = free_disk_gb()
-    if free_gb < MIN_FREE_GB:
-        log(f"ABORTADO: espaco em disco insuficiente ({free_gb:.1f}GB livres, minimo {MIN_FREE_GB}GB)")
-        update_candidate_status(candidates, movie_id, status="error", error="disco cheio")
-        save_json(CANDIDATES_KEY, candidates)
-        return False
-
-    try:
-        download_file(movie["source_url"], tmp_path)
-    except Exception as e:
-        log(f"ERRO ao baixar {movie['title']}: {e}")
-        update_candidate_status(candidates, movie_id, status="error", error=str(e))
-        save_json(CANDIDATES_KEY, candidates)
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        return False
-
-    size_mb = os.path.getsize(tmp_path) / (1024 * 1024)
-    log(f"download concluido ({size_mb:.1f}MB), enviando para R2...")
-
-    try:
-        s3.upload_file(tmp_path, R2_BUCKET_NAME, r2_key, ExtraArgs={"ContentType": "video/mp4"})
-    except Exception as e:
-        log(f"ERRO ao subir para R2: {e}")
-        update_candidate_status(candidates, movie_id, status="error", error=str(e))
-        save_json(CANDIDATES_KEY, candidates)
-        os.remove(tmp_path)
-        return False
-
-    os.remove(tmp_path)
-    r2_url = f"{R2_PUBLIC_BASE_URL}/{r2_key}"
-
-    candidates = load_json(CANDIDATES_KEY, [])
-    update_candidate_status(candidates, movie_id, status="done", r2_url=r2_url, downloaded_at=datetime.now().isoformat())
-    save_json(CANDIDATES_KEY, candidates)
-
-    log(f"CONCLUIDO: {movie['title']} -> {r2_url}")
-    return True
+    return jsonify({"status": "adicionado_a_fila", "queue_size": len(queue)}), 200
 
 
-def main():
-    log(f"downloader iniciado (verifica fila a cada {CHECK_INTERVAL}s, minimo {MIN_FREE_GB}GB livres)")
-    while True:
-        queue = load_json(QUEUE_KEY, [])
-        if not queue:
-            time.sleep(CHECK_INTERVAL)
-            continue
+@app.route("/api/queue-status", methods=["GET"])
+def queue_status():
+    queue = load_json(QUEUE_KEY, [])
+    return jsonify({"queue_size": len(queue), "queue": queue})
 
-        next_item = queue[0]
-        movie_id = next_item["id"]
 
-        success = process_one(movie_id)
-
-        queue = load_json(QUEUE_KEY, [])
-        queue = [q for q in queue if q["id"] != movie_id]
-        save_json(QUEUE_KEY, queue)
-
-        if not success:
-            log(f"item {movie_id} removido da fila apos falha (verifique status 'error' no candidates.json)")
-
-        time.sleep(5)
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "service": "movie-fetcher-request-api"})
 
 
 if __name__ == "__main__":
-    main()
+    print(f"Movie Fetcher Request API rodando na porta {PORT}")
+    app.run(host="0.0.0.0", port=PORT)
