@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Movie Fetcher - Candidatos</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #0b0e14;
+    color: #e6e6e6;
+  }
+  header {
+    padding: 20px;
+    background: #12161f;
+    border-bottom: 1px solid #232838;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header h1 { margin: 0 0 12px 0; font-size: 1.3rem; }
+  #search {
+    width: 100%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #2a3040;
+    background: #1a1f2b;
+    color: #fff;
+    font-size: 1rem;
+  }
+  #stats { color: #8b93a7; font-size: 0.85rem; margin-top: 8px; }
+  #grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 14px;
+    padding: 16px;
+  }
+  .card {
+    background: #151a24;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #232838;
+  }
+  .card img {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+    background: #1a1f2b;
+    display: block;
+  }
+  .card .info { padding: 8px; }
+  .card .title { font-size: 0.85rem; font-weight: 600; line-height: 1.2; margin-bottom: 4px; }
+  .card .year { font-size: 0.75rem; color: #8b93a7; }
+  .card .badge {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 0.7rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .badge.pending { background: #3a3220; color: #e0c05c; }
+  .badge.done { background: #1f3a24; color: #6fd97f; }
+  .badge.downloading { background: #1f2f3a; color: #6fb8d9; }
+  .card .link-box { padding: 0 8px 8px; }
+  .card .link-box input {
+    width: 100%;
+    font-size: 0.7rem;
+    padding: 4px;
+    background: #0b0e14;
+    border: 1px solid #232838;
+    color: #8b93a7;
+    border-radius: 4px;
+  }
+  #empty { text-align: center; padding: 40px; color: #8b93a7; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Movie Fetcher - Candidatos (1975-1995)</h1>
+  <input id="search" type="text" placeholder="Buscar por titulo...">
+  <div id="stats">Carregando...</div>
+</header>
+
+<div id="grid"></div>
+<div id="empty" style="display:none">Nenhum filme encontrado.</div>
+
+<script>
+// AJUSTE AQUI: coloque a URL publica do seu bucket R2
+const R2_PUBLIC_BASE_URL = "https://pub-90cce3ad488f4a52ac089b9496083787.r2.dev";
+const CANDIDATES_URL = R2_PUBLIC_BASE_URL + "/movie-fetcher/candidates.json";
+
+let allMovies = [];
+
+async function loadCandidates() {
+  try {
+    const res = await fetch(CANDIDATES_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    allMovies = await res.json();
+    allMovies.sort(function(a, b) { return b.year.localeCompare(a.year); });
+    render(allMovies);
+  } catch (err) {
+    document.getElementById("stats").textContent = "Erro ao carregar: " + err.message;
+  }
+}
+
+function render(movies) {
+  const grid = document.getElementById("grid");
+  const empty = document.getElementById("empty");
+  const stats = document.getElementById("stats");
+
+  stats.textContent = movies.length + " filme(s) encontrado(s)";
+
+  if (movies.length === 0) {
+    grid.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
+  empty.style.display = "none";
+
+  grid.innerHTML = movies.map(function(m) {
+    const poster = m.poster_url || "";
+    const statusClass = m.status === "done" ? "done" : (m.status === "downloading" ? "downloading" : "pending");
+    const statusLabel = m.status === "done" ? "Pronto" : (m.status === "downloading" ? "Baixando" : "Pendente");
+
+    const linkBox = (m.status === "done" && m.r2_url)
+      ? '<div class="link-box"><input readonly value="' + m.r2_url + '" onclick="this.select()"></div>'
+      : "";
+
+    return (
+      '<div class="card">' +
+        '<img src="' + poster + '" loading="lazy" alt="' + m.title + '" onerror="this.style.opacity=0.2">' +
+        '<div class="info">' +
+          '<div class="title">' + m.title + '</div>' +
+          '<div class="year">' + m.year + ' - ' + (m.source_group || "") + '</div>' +
+          '<span class="badge ' + statusClass + '">' + statusLabel + '</span>' +
+        '</div>' +
+        linkBox +
+      '</div>'
+    );
+  }).join("");
+}
+
+document.getElementById("search").addEventListener("input", function(e) {
+  const q = e.target.value.toLowerCase().trim();
+  if (!q) { render(allMovies); return; }
+  render(allMovies.filter(function(m) { return m.title.toLowerCase().includes(q); }));
+});
+
+loadCandidates();
+setInterval(loadCandidates, 30000);
+</script>
+
+</body>
+</html>
