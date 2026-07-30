@@ -139,6 +139,18 @@ def update_candidate_status(candidates, movie_id, **fields):
 # ---------------------------------------------------------------
 # Download (com retry para lidar com rede movel instavel)
 # ---------------------------------------------------------------
+PROGRESS_LOG_INTERVAL = float(os.environ.get("DOWNLOADER_PROGRESS_INTERVAL", "5"))  # segundos entre linhas de progresso
+PROGRESS_CHUNK_SIZE = 1024 * 256  # 256KB por leitura
+
+
+def _format_size(num_bytes):
+    for unit in ("B", "KB", "MB", "GB"):
+        if num_bytes < 1024:
+            return f"{num_bytes:.1f}{unit}"
+        num_bytes /= 1024
+    return f"{num_bytes:.1f}TB"
+
+
 def download_file_once(url, dest_path):
     headers = {
         "User-Agent": "VLC/3.0.4 LibVLC/3.0.4",
@@ -153,8 +165,37 @@ def download_file_once(url, dest_path):
         if content_type and "video" not in content_type.lower() and "octet-stream" not in content_type.lower():
             raise ValueError(f"resposta nao parece ser video (Content-Type: {content_type})")
 
+        total_size = resp.getheader("Content-Length")
+        total_size = int(total_size) if total_size else None
+
+        downloaded = 0
+        start_time = time.time()
+        last_log_time = start_time
+
         with open(dest_path, "wb") as out:
-            shutil.copyfileobj(resp, out)
+            while True:
+                chunk = resp.read(PROGRESS_CHUNK_SIZE)
+                if not chunk:
+                    break
+                out.write(chunk)
+                downloaded += len(chunk)
+
+                now = time.time()
+                if now - last_log_time >= PROGRESS_LOG_INTERVAL:
+                    elapsed = now - start_time
+                    speed = downloaded / elapsed if elapsed > 0 else 0
+                    if total_size:
+                        pct = downloaded / total_size * 100
+                        eta_sec = (total_size - downloaded) / speed if speed > 0 else 0
+                        eta_min = int(eta_sec // 60)
+                        eta_s = int(eta_sec % 60)
+                        log(
+                            f"progresso: {pct:.1f}% ({_format_size(downloaded)}/{_format_size(total_size)}) "
+                            f"- {_format_size(speed)}/s - ETA {eta_min}m{eta_s:02d}s"
+                        )
+                    else:
+                        log(f"progresso: {_format_size(downloaded)} baixados - {_format_size(speed)}/s")
+                    last_log_time = now
 
     size_mb = os.path.getsize(dest_path) / (1024 * 1024)
     if size_mb < MIN_VALID_FILE_MB:
