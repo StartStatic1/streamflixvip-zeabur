@@ -436,13 +436,16 @@ async function runOnce({ serviceKey, tmdbApiKey, startTime, seriesCache }) {
     return { done: true };
   }
 
+  let allDone = true;
   for (const source of sources) {
-    if (timeLeft() <= 5000) return { done: false };
+    if (timeLeft() <= 5000) {
+      allDone = false;
+      break;
+    }
     try {
       const movieResult = await processMovies({ source, serviceKey, tmdbApiKey, timeLeft });
-      if (timeLeft() <= 5000) return { done: false };
       const seriesResult = await processSeries({ source, serviceKey, tmdbApiKey, timeLeft, seriesCache });
-      return { done: movieResult.done && seriesResult.done };
+      if (!movieResult.done || !seriesResult.done) allDone = false;
     } catch (err) {
       console.error(`[xtream-sync-standalone] Fonte "${source.name || source.id}" falhou (${err.message}), pulando para a próxima fonte.`);
       try {
@@ -457,8 +460,7 @@ async function runOnce({ serviceKey, tmdbApiKey, startTime, seriesCache }) {
     }
   }
 
-  console.log('[xtream-sync-standalone] Todas as fontes Xtream ativas falharam ou o tempo acabou neste ciclo.');
-  return { done: false };
+  return { done: allDone };
 }
 
 async function main() {

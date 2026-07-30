@@ -303,12 +303,15 @@ async function runOnce({ serviceKey, tmdbApiKey, startTime }) {
   // travar o ciclo inteiro. Antes, um erro numa única fonte matava o
   // processo com process.exit(1) e as fontes saudáveis nunca chegavam
   // a ser tentadas nessa execução.
+  let allDone = true;
   for (const source of sources) {
     if (timeLeft() <= 5000) {
-      return { done: false };
+      allDone = false;
+      break;
     }
     try {
-      return await processSource({ source, serviceKey, tmdbApiKey, timeLeft });
+      const result = await processSource({ source, serviceKey, tmdbApiKey, timeLeft });
+      if (!result.done) allDone = false;
     } catch (err) {
       console.error(`[sync-standalone] Fonte "${source.name || source.id}" falhou (${err.message}), pulando para a próxima fonte.`);
       try {
@@ -325,8 +328,7 @@ async function runOnce({ serviceKey, tmdbApiKey, startTime }) {
     }
   }
 
-  console.log('[sync-standalone] Todas as fontes ativas falharam ou o tempo acabou neste ciclo.');
-  return { done: false };
+  return { done: allDone };
 }
 
 async function main() {
