@@ -21,6 +21,39 @@
     z-index: 10;
   }
   header h1 { margin: 0 0 12px 0; font-size: 1.3rem; }
+  #status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+  }
+  #status-bar.online { background: #1f3a24; color: #6fd97f; }
+  #status-bar.offline { background: #3a1f24; color: #ff8080; }
+  #status-bar.idle { background: #1a2438; color: #7fb0e0; }
+  #status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+  #status-dot.pulse { animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  #status-progress-bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 999px;
+    overflow: hidden;
+    min-width: 60px;
+  }
+  #status-progress-fill {
+    height: 100%;
+    background: currentColor;
+    border-radius: 999px;
+    transition: width 0.5s ease;
+  }
   #search {
     width: 100%;
     padding: 10px 14px;
@@ -145,6 +178,10 @@
 
 <header>
   <h1>Movie Fetcher - Candidatos (1975-1995)</h1>
+  <div id="status-bar" class="idle">
+    <span id="status-dot"></span>
+    <span id="status-text">Verificando status...</span>
+  </div>
   <input id="search" type="text" placeholder="Buscar por titulo...">
   <div id="stats">Carregando...</div>
   <div id="filters">
@@ -164,12 +201,76 @@
 <script>
 const R2_PUBLIC_BASE_URL = "https://pub-90cce3ad488f4a52ac089b9496083787.r2.dev";
 const CANDIDATES_URL = R2_PUBLIC_BASE_URL + "/movie-fetcher/candidates.json";
+const STATUS_URL = R2_PUBLIC_BASE_URL + "/movie-fetcher/downloader_status.json";
 const REQUEST_API_URL = "http://65.21.48.50:8091/api/request-download";
 const PAGE_SIZE = 60;
+const STALE_SECONDS = 180; // se o status nao atualizar em 3min, considera offline
 
 let allMovies = [];
 let currentFilter = "all";
 let currentPage = 1;
+
+function formatBytes(bytes) {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let n = bytes;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+  return n.toFixed(1) + " " + units[i];
+}
+
+async function loadStatus() {
+  const bar = document.getElementById("status-bar");
+  const dot = document.getElementById("status-dot");
+  const text = document.getElementById("status-text");
+  try {
+    const res = await fetch(STATUS_URL, { cache: "no-store" });
+    if (!res.ok) throw new Error("sem status ainda");
+    const s = await res.json();
+
+    const updatedAt = new Date(s.updated_at);
+    const ageSec = (Date.now() - updatedAt.getTime()) / 1000;
+
+    if (ageSec > STALE_SECONDS) {
+      bar.className = "offline";
+      dot.className = "";
+      text.textContent = "Downloader parado (sem atividade ha " + Math.round(ageSec / 60) + " min) - abra o Termux no celular";
+      return;
+    }
+
+    if (s.state === "downloading") {
+      bar.className = "online";
+      dot.className = "pulse";
+      const movie = allMovies.find(function(m) { return m.id === s.current_movie; });
+      const title = movie ? movie.title : s.current_movie;
+      let progressHtml = "";
+      if (s.progress_pct !== undefined) {
+        progressHtml =
+          '<div id="status-progress-bar"><div id="status-progress-fill" style="width:' + s.progress_pct + '%"></div></div>' +
+          '<span>' + s.progress_pct + '%</span>';
+      }
+      text.innerHTML = 'Baixando: ' + escapeHtml(title || "...") +
+        (s.speed_bytes_s ? ' - ' + formatBytes(s.speed_bytes_s) + '/s' : '');
+      if (progressHtml) {
+        bar.innerHTML = '<span id="status-dot" class="pulse"></span><span style="white-space:nowrap">Baixando: ' +
+          escapeHtml(title || "...") + '</span>' + progressHtml;
+      }
+    } else if (s.state === "running_idle") {
+      bar.className = "online";
+      dot.className = "";
+      text.textContent = "Downloader ativo, aguardando fila" +
+        (s.session_processed ? " (" + s.session_processed + " processados nesta sessao)" : "");
+    } else {
+      bar.className = "offline";
+      dot.className = "";
+      text.textContent = "Downloader parado";
+    }
+  } catch (err) {
+    bar.className = "offline";
+    dot.className = "";
+    text.textContent = "Downloader offline ou nunca iniciado";
+  }
+}
 
 async function requestDownload(id, btn) {
   btn.disabled = true;
@@ -339,7 +440,9 @@ document.querySelectorAll(".filter-btn").forEach(function(btn) {
 });
 
 loadCandidates();
+loadStatus();
 setInterval(loadCandidates, 30000);
+setInterval(loadStatus, 8000);
 </script>
 
 </body>

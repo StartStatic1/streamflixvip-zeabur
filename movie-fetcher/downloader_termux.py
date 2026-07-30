@@ -151,7 +151,7 @@ def _format_size(num_bytes):
     return f"{num_bytes:.1f}TB"
 
 
-def download_file_once(url, dest_path):
+def download_file_once(url, dest_path, movie_id=None):
     headers = {
         "User-Agent": "VLC/3.0.4 LibVLC/3.0.4",
         "Accept": "*/*",
@@ -193,6 +193,12 @@ def download_file_once(url, dest_path):
                             f"progresso: {pct:.1f}% ({_format_size(downloaded)}/{_format_size(total_size)}) "
                             f"- {_format_size(speed)}/s - ETA {eta_min}m{eta_s:02d}s"
                         )
+                        write_status(s3, "downloading", current_movie=movie_id, extra={
+                            "progress_pct": round(pct, 1),
+                            "speed_bytes_s": round(speed),
+                            "downloaded_bytes": downloaded,
+                            "total_bytes": total_size,
+                        })
                     else:
                         log(f"progresso: {_format_size(downloaded)} baixados - {_format_size(speed)}/s")
                     last_log_time = now
@@ -206,7 +212,7 @@ def download_file_once(url, dest_path):
         )
 
 
-def download_file(url, dest_path):
+def download_file(url, dest_path, movie_id=None):
     """Tenta baixar com retry progressivo (util em rede movel instavel)."""
     last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
@@ -215,7 +221,7 @@ def download_file(url, dest_path):
                 wait = RETRY_BASE_WAIT * (2 ** (attempt - 2))
                 log(f"tentativa {attempt}/{MAX_RETRIES} apos espera de {wait}s...")
                 time.sleep(wait)
-            download_file_once(url, dest_path)
+            download_file_once(url, dest_path, movie_id=movie_id)
             return  # sucesso
         except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
             last_error = e
@@ -255,7 +261,7 @@ def process_one(movie_id):
         return False
 
     try:
-        download_file(movie["source_url"], tmp_path)
+        download_file(movie["source_url"], tmp_path, movie_id=movie_id)
     except Exception as e:
         log(f"ERRO ao baixar {movie['title']}: {e}")
         update_candidate_status(candidates, movie_id, status="error", error=str(e))
@@ -290,10 +296,31 @@ def process_one(movie_id):
     return True
 
 
+STATUS_KEY = "movie-fetcher/downloader_status.json"
+
+
+def write_status(s3_client, state, current_movie=None, extra=None):
+    """Escreve o status atual do downloader no R2, para o painel web
+    poder mostrar se esta rodando, parado, ou baixando algo agora."""
+    try:
+        payload = {
+            "state": state,  # "running_idle", "downloading", "stopped"
+            "current_movie": current_movie,
+            "updated_at": datetime.now().isoformat(),
+        }
+        if extra:
+            payload.update(extra)
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        s3_client.put_object(Bucket=R2_BUCKET_NAME, Key=STATUS_KEY, Body=body, ContentType="application/json")
+    except Exception:
+        pass  # status e best-effort, nunca deve derrubar o processo principal
+
+
 def main():
     log(f"downloader (Termux) iniciado (verifica fila a cada {CHECK_INTERVAL}s, minimo {MIN_FREE_GB}GB livres)")
     log(f"pasta temporaria: {TMP_DIR}")
     notify("Movie Fetcher", "Downloader iniciado no celular")
+    write_status(s3, "running_idle")
 
     processed = 0
     errors = 0
@@ -302,12 +329,14 @@ def main():
         while True:
             queue = load_json(QUEUE_KEY, [])
             if not queue:
+                write_status(s3, "running_idle", extra={"session_processed": processed, "session_errors": errors})
                 time.sleep(CHECK_INTERVAL)
                 continue
 
             next_item = queue[0]
             movie_id = next_item["id"]
 
+            write_status(s3, "downloading", current_movie=movie_id)
             success = process_one(movie_id)
             processed += 1
             if not success:
@@ -325,6 +354,7 @@ def main():
     except KeyboardInterrupt:
         log(f"interrompido pelo usuario. Total da sessao: {processed} processados, {errors} com erro")
         notify("Movie Fetcher - Parado", f"{processed} processados, {errors} com erro")
+        write_status(s3, "stopped", extra={"session_processed": processed, "session_errors": errors})
         sys.exit(0)
 
 
