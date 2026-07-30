@@ -77,7 +77,6 @@ import com.streamflixvip.app.data.ProgressRepository
 import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.StreamUrlResolver
 import com.streamflixvip.app.network.VipSource
-import com.startapp.sdk.adsbase.StartAppAd
 import com.streamflixvip.app.data.VipStatusHolder
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
@@ -229,17 +228,9 @@ fun PlayerScreen(
         return
     }
 
-    // Lógica de Anúncios Start.io:
-    // Só carrega e mostra se o usuário NÃO for VIP.
-    val isVip by VipStatusHolder.isVip.collectAsState()
-    val context = LocalContext.current
-    
-    LaunchedEffect(isVip) {
-        if (!isVip) {
-            // Carrega e mostra um anúncio intersticial (tela cheia) antes do filme começar
-            StartAppAd.showAd(context)
-        }
-    }
+    // Anúncio de play fica no VipWaitScreen (Rewarded Video).
+    // Não mostrar interstitial aqui de novo — empilhava 2 ads + espera
+    // vazia e matava a experiência / eCPM.
 
     if (isDirectPlayable) {
         NativePlayer(
