@@ -31,6 +31,17 @@
     font-size: 1rem;
   }
   #stats { color: #8b93a7; font-size: 0.85rem; margin-top: 8px; }
+  #filters { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid #2a3040;
+    background: #1a1f2b;
+    color: #8b93a7;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+  .filter-btn.active { background: #2d5cf2; color: #fff; border-color: #2d5cf2; }
   #grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -65,16 +76,37 @@
   .badge.downloading { background: #1f2f3a; color: #6fb8d9; }
   .badge.queued { background: #2a2540; color: #b39ddb; }
   .badge.error { background: #3a1f24; color: #ff8080; }
-  .card .link-box { padding: 0 8px 8px; }
+  .card .error-msg {
+    font-size: 0.65rem;
+    color: #ff8080;
+    padding: 0 8px;
+    margin-top: 4px;
+    line-height: 1.3;
+    max-height: 2.6em;
+    overflow: hidden;
+  }
+  .card .link-box { padding: 8px; display: flex; gap: 6px; }
   .card .link-box input {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     font-size: 0.7rem;
-    padding: 4px;
+    padding: 6px;
     background: #0b0e14;
     border: 1px solid #232838;
     color: #8b93a7;
     border-radius: 4px;
   }
+  .copy-btn {
+    padding: 6px 10px;
+    border-radius: 4px;
+    border: 1px solid #2a3040;
+    background: #1a1f2b;
+    color: #6fd97f;
+    font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .copy-btn.copied { background: #1f3a24; color: #6fd97f; border-color: #2d5cf2; }
   #empty { text-align: center; padding: 40px; color: #8b93a7; }
   .dl-btn {
     width: 100%;
@@ -87,7 +119,26 @@
     font-weight: 600;
     cursor: pointer;
   }
+  .dl-btn.retry { background: #a33; }
   .dl-btn:disabled { background: #3a3f4d; cursor: default; }
+  #pager {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    color: #8b93a7;
+    font-size: 0.85rem;
+  }
+  #pager button {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid #2a3040;
+    background: #1a1f2b;
+    color: #fff;
+    cursor: pointer;
+  }
+  #pager button:disabled { opacity: 0.4; cursor: default; }
 </style>
 </head>
 <body>
@@ -96,17 +147,29 @@
   <h1>Movie Fetcher - Candidatos (1975-1995)</h1>
   <input id="search" type="text" placeholder="Buscar por titulo...">
   <div id="stats">Carregando...</div>
+  <div id="filters">
+    <button class="filter-btn active" data-status="all">Todos</button>
+    <button class="filter-btn" data-status="pending">Pendentes</button>
+    <button class="filter-btn" data-status="queued">Na fila</button>
+    <button class="filter-btn" data-status="downloading">Baixando</button>
+    <button class="filter-btn" data-status="done">Prontos</button>
+    <button class="filter-btn" data-status="error">Com erro</button>
+  </div>
 </header>
 
 <div id="grid"></div>
 <div id="empty" style="display:none">Nenhum filme encontrado.</div>
+<div id="pager"></div>
 
 <script>
 const R2_PUBLIC_BASE_URL = "https://pub-90cce3ad488f4a52ac089b9496083787.r2.dev";
 const CANDIDATES_URL = R2_PUBLIC_BASE_URL + "/movie-fetcher/candidates.json";
 const REQUEST_API_URL = "http://65.21.48.50:8091/api/request-download";
+const PAGE_SIZE = 60;
 
 let allMovies = [];
+let currentFilter = "all";
+let currentPage = 1;
 
 async function requestDownload(id, btn) {
   btn.disabled = true;
@@ -131,34 +194,70 @@ async function requestDownload(id, btn) {
   }
 }
 
+function copyLink(url, btn) {
+  navigator.clipboard.writeText(url).then(function() {
+    const original = btn.textContent;
+    btn.textContent = "Copiado!";
+    btn.classList.add("copied");
+    setTimeout(function() {
+      btn.textContent = original;
+      btn.classList.remove("copied");
+    }, 1500);
+  }).catch(function() {
+    btn.textContent = "Falhou";
+  });
+}
+
 async function loadCandidates() {
   try {
     const res = await fetch(CANDIDATES_URL, { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     allMovies = await res.json();
     allMovies.sort(function(a, b) { return b.year.localeCompare(a.year); });
-    render(allMovies);
+    applyFilters();
   } catch (err) {
     document.getElementById("stats").textContent = "Erro ao carregar: " + err.message;
   }
+}
+
+function applyFilters() {
+  const q = document.getElementById("search").value.toLowerCase().trim();
+  let filtered = allMovies;
+
+  if (currentFilter !== "all") {
+    filtered = filtered.filter(function(m) { return (m.status || "pending") === currentFilter; });
+  }
+  if (q) {
+    filtered = filtered.filter(function(m) { return m.title.toLowerCase().includes(q); });
+  }
+
+  currentPage = Math.min(currentPage, Math.max(1, Math.ceil(filtered.length / PAGE_SIZE)));
+  render(filtered);
 }
 
 function render(movies) {
   const grid = document.getElementById("grid");
   const empty = document.getElementById("empty");
   const stats = document.getElementById("stats");
+  const pager = document.getElementById("pager");
 
   stats.textContent = movies.length + " filme(s) encontrado(s)";
 
   if (movies.length === 0) {
     grid.innerHTML = "";
     empty.style.display = "block";
+    pager.innerHTML = "";
     return;
   }
   empty.style.display = "none";
 
-  grid.innerHTML = movies.map(function(m) {
+  const totalPages = Math.max(1, Math.ceil(movies.length / PAGE_SIZE));
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = movies.slice(start, start + PAGE_SIZE);
+
+  grid.innerHTML = pageItems.map(function(m) {
     const poster = m.poster_url || "";
+    const status = m.status || "pending";
     const statusMap = {
       done: ["done", "Pronto"],
       downloading: ["downloading", "Baixando"],
@@ -166,38 +265,77 @@ function render(movies) {
       error: ["error", "Erro"],
       pending: ["pending", "Pendente"]
     };
-    const pair = statusMap[m.status] || statusMap.pending;
+    const pair = statusMap[status] || statusMap.pending;
     const statusClass = pair[0];
     const statusLabel = pair[1];
 
-    const linkBox = (m.status === "done" && m.r2_url)
-      ? '<div class="link-box"><input readonly value="' + m.r2_url + '" onclick="this.select()"></div>'
+    const errorMsg = (status === "error" && m.error)
+      ? '<div class="error-msg" title="' + escapeAttr(m.error) + '">' + escapeHtml(m.error) + '</div>'
       : "";
 
-    const showButton = m.status === "pending";
-    const downloadBtn = showButton
-      ? '<button class="dl-btn" onclick="requestDownload(\'' + m.id + '\', this)">Baixar este filme</button>'
+    const linkBox = (status === "done" && m.r2_url)
+      ? '<div class="link-box">' +
+          '<input readonly value="' + m.r2_url + '" onclick="this.select()">' +
+          '<button class="copy-btn" onclick="copyLink(\'' + m.r2_url + '\', this)">Copiar</button>' +
+        '</div>'
       : "";
+
+    // Botao aparece tanto para pendentes (baixar) quanto para erro (tentar de novo)
+    let downloadBtn = "";
+    if (status === "pending") {
+      downloadBtn = '<button class="dl-btn" onclick="requestDownload(\'' + m.id + '\', this)">Baixar este filme</button>';
+    } else if (status === "error") {
+      downloadBtn = '<button class="dl-btn retry" onclick="requestDownload(\'' + m.id + '\', this)">Tentar novamente</button>';
+    }
 
     return (
       '<div class="card">' +
-        '<img src="' + poster + '" loading="lazy" alt="' + m.title + '" onerror="this.style.opacity=0.2">' +
+        '<img src="' + poster + '" loading="lazy" alt="' + escapeAttr(m.title) + '" onerror="this.style.opacity=0.2">' +
         '<div class="info">' +
-          '<div class="title">' + m.title + '</div>' +
+          '<div class="title">' + escapeHtml(m.title) + '</div>' +
           '<div class="year">' + m.year + ' - ' + (m.source_group || "") + '</div>' +
           '<span class="badge ' + statusClass + '">' + statusLabel + '</span>' +
         '</div>' +
+        errorMsg +
         linkBox +
         (downloadBtn ? '<div style="padding:0 8px 8px">' + downloadBtn + '</div>' : '') +
       '</div>'
     );
   }).join("");
+
+  pager.innerHTML =
+    '<button id="prevPage" ' + (currentPage <= 1 ? 'disabled' : '') + '>&larr; Anterior</button>' +
+    '<span>Pagina ' + currentPage + ' de ' + totalPages + '</span>' +
+    '<button id="nextPage" ' + (currentPage >= totalPages ? 'disabled' : '') + '>Proxima &rarr;</button>';
+
+  const prevBtn = document.getElementById("prevPage");
+  const nextBtn = document.getElementById("nextPage");
+  if (prevBtn) prevBtn.onclick = function() { currentPage--; applyFilters(); window.scrollTo(0, 0); };
+  if (nextBtn) nextBtn.onclick = function() { currentPage++; applyFilters(); window.scrollTo(0, 0); };
 }
 
-document.getElementById("search").addEventListener("input", function(e) {
-  const q = e.target.value.toLowerCase().trim();
-  if (!q) { render(allMovies); return; }
-  render(allMovies.filter(function(m) { return m.title.toLowerCase().includes(q); }));
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
+function escapeAttr(str) {
+  return (str || "").replace(/"/g, "&quot;");
+}
+
+document.getElementById("search").addEventListener("input", function() {
+  currentPage = 1;
+  applyFilters();
+});
+
+document.querySelectorAll(".filter-btn").forEach(function(btn) {
+  btn.addEventListener("click", function() {
+    document.querySelectorAll(".filter-btn").forEach(function(b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    currentFilter = btn.dataset.status;
+    currentPage = 1;
+    applyFilters();
+  });
 });
 
 loadCandidates();
