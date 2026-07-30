@@ -5,15 +5,12 @@ Roda em loop lento (verifica a fila a cada CHECK_INTERVAL segundos).
 Para cada pedido na fila (download_queue.json): baixa o video da URL
 de origem (IPTV), sobe pro R2 em movies/<id>.mp4, atualiza o status
 no candidates.json para "done" com o link publico, remove da fila.
-
-Processa 1 filme por vez (sequencial), com checagem de espaco em
-disco antes de cada download, para nunca comprometer o VPS que
-tambem hospeda o site principal StreamFlixVIP.
 """
 
 import os
 import json
 import time
+import random
 import shutil
 import urllib.request
 from datetime import datetime
@@ -32,11 +29,8 @@ LOG_PREFIX = "[downloader]"
 
 CHECK_INTERVAL = int(os.environ.get("DOWNLOADER_CHECK_INTERVAL", "60"))
 MIN_FREE_GB = float(os.environ.get("MIN_FREE_DISK_GB", "5"))
-TMP_DIR = os.environ.get("DOWNLOADER_TMP_DIR", "/root/streamflix/movie-fetcher/tmp_downloads")
-
-# Arquivo baixado menor que isso e tratado como erro (provavelmente
-# pagina de erro do servidor de origem, nao o video real).
 MIN_VALID_FILE_MB = float(os.environ.get("MIN_VALID_FILE_MB", "10"))
+TMP_DIR = os.environ.get("DOWNLOADER_TMP_DIR", "/root/streamflix/movie-fetcher/tmp_downloads")
 
 os.makedirs(TMP_DIR, exist_ok=True)
 
@@ -87,23 +81,30 @@ def download_file(url, dest_path):
     """
     Baixa o arquivo de video da fonte IPTV.
 
-    O painel de origem so entrega o link real (302 -> servidor de
-    entrega com token assinado) quando reconhece o User-Agent como
-    um player de video legitimo. Com um UA generico (ex: Mozilla/5.0)
-    ele responde 200 OK com uma pagina HTML de erro disfarcada de
-    video/mp4 (Content-Length pequeno), sem nunca lancar excecao.
+    Usamos User-Agent de VLC e headers de player real porque o
+    servidor de origem so libera o video de verdade quando reconhece
+    um player legitimo.
 
-    Por isso: usamos User-Agent de VLC, mandamos Range como um player
-    real manda, e validamos o tamanho final do arquivo antes de dar
-    como sucesso.
+    Adicionamos um parametro aleatorio na URL (cache-buster) e
+    headers no-cache porque o CDN do provedor pode cachear por horas
+    uma resposta de erro apos uma falha da origem, servindo esse erro
+    em cache para tentativas seguintes mesmo que o video exista.
+
+    Valida o tamanho final do arquivo antes de dar como sucesso.
     """
+    cache_buster = random.randint(1000000, 9999999)
+    separator = "&" if "?" in url else "?"
+    url_no_cache = f"{url}{separator}_cb={cache_buster}"
+
     headers = {
         "User-Agent": "VLC/3.0.4 LibVLC/3.0.4",
         "Accept": "*/*",
         "Range": "bytes=0-",
         "Icy-MetaData": "1",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
     }
-    req = urllib.request.Request(url, headers=headers)
+    req = urllib.request.Request(url_no_cache, headers=headers)
 
     with urllib.request.urlopen(req, timeout=120) as resp:
         content_type = resp.getheader("Content-Type", "")
@@ -118,7 +119,7 @@ def download_file(url, dest_path):
         os.remove(dest_path)
         raise ValueError(
             f"arquivo baixado muito pequeno ({size_mb:.2f}MB, minimo {MIN_VALID_FILE_MB}MB) "
-            f"- provavelmente pagina de erro do servidor de origem, nao o video real"
+            f"- provavelmente pagina de erro do servidor de origem ou cache do CDN, nao o video real"
         )
 
 
