@@ -24,6 +24,8 @@
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
+const { shouldKeepMovieTitle } = require('./lib/iptv-parser');
+
 const DEFAULT_SOURCE_LABEL_PREFIX = 'Xtream VIP';
 
 // Mesmo orçamento generoso dos outros standalones (55 min de 60 disponíveis
@@ -212,16 +214,25 @@ async function processMovies({ source, serviceKey, tmdbApiKey, timeLeft }) {
     const chunk = vods.slice(cursor, cursor + CONCURRENCY);
     const results = await Promise.all(chunk.map(async (vod) => {
       const title = vod.name || 'Sem título';
+      // Descarta 4K/UHD/8K antes de gastar chamada TMDB — mesmo critério do M3U.
+      if (!shouldKeepMovieTitle(title)) {
+        return { vod, found: null, error: null, skippedQuality: true };
+      }
       try {
         const found = await searchTmdbMovie(title, null, tmdbApiKey);
-        return { vod, found, error: null };
+        return { vod, found, error: null, skippedQuality: false };
       } catch (err) {
-        return { vod, found: null, error: err };
+        return { vod, found: null, error: err, skippedQuality: false };
       }
     }));
 
-    for (const { vod, found, error } of results) {
+    for (const { vod, found, error, skippedQuality } of results) {
       const title = vod.name || 'Sem título';
+      if (skippedQuality) {
+        // Conta como unmatched de qualidade só pra log; não grava no banco.
+        unmatchedCount++;
+        continue;
+      }
       if (error) {
         errors++;
         console.error('[xtream-sync-standalone] erro casando', title, error.message);
@@ -436,16 +447,13 @@ async function runOnce({ serviceKey, tmdbApiKey, startTime, seriesCache }) {
     return { done: true };
   }
 
-  let allDone = true;
   for (const source of sources) {
-    if (timeLeft() <= 5000) {
-      allDone = false;
-      break;
-    }
+    if (timeLeft() <= 5000) return { done: false };
     try {
       const movieResult = await processMovies({ source, serviceKey, tmdbApiKey, timeLeft });
+      if (timeLeft() <= 5000) return { done: false };
       const seriesResult = await processSeries({ source, serviceKey, tmdbApiKey, timeLeft, seriesCache });
-      if (!movieResult.done || !seriesResult.done) allDone = false;
+      return { done: movieResult.done && seriesResult.done };
     } catch (err) {
       console.error(`[xtream-sync-standalone] Fonte "${source.name || source.id}" falhou (${err.message}), pulando para a próxima fonte.`);
       try {
@@ -460,7 +468,8 @@ async function runOnce({ serviceKey, tmdbApiKey, startTime, seriesCache }) {
     }
   }
 
-  return { done: allDone };
+  console.log('[xtream-sync-standalone] Todas as fontes Xtream ativas falharam ou o tempo acabou neste ciclo.');
+  return { done: false };
 }
 
 async function main() {
