@@ -46,7 +46,7 @@ import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.TmdbSeason
 import com.streamflixvip.app.network.VipSource
-import com.startapp.sdk.adsbase.StartAppAd
+import com.streamflixvip.app.ads.AdsHelper
 
 private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 private const val TMDB_STILL_BASE = "https://image.tmdb.org/t/p/w300"
@@ -268,7 +268,7 @@ private fun DetailContent(
                     if (state.trailerKey != null) {
                         // Se não for VIP, mostra um anúncio antes do trailer
                         if (!isVip) {
-                            StartAppAd.showAd(context)
+                            AdsHelper.showInterstitial(context)
                         }
                         showTrailerModal = true
                     }
