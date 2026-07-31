@@ -45,12 +45,14 @@ import com.streamflixvip.tv.data.LocalWatchProgress
 import com.streamflixvip.tv.network.TmdbItem
 
 private const val TMDB_POSTER = "https://image.tmdb.org/t/p/w342"
-private const val TMDB_BACKDROP = "https://image.tmdb.org/t/p/w1280"
+private const val TMDB_BACKDROP = "https://image.tmdb.org/t/p/w780"
 
-private val Bg = Color(0xFF0B0B12)
+private val Bg = Color(0xFF0E0E16)
 private val RailBg = Color(0xFF12121C)
 private val Gold = Color(0xFFD4AF37)
-private val TextMuted = Color(0xFFB0B0C0)
+private val TextMuted = Color(0xFFA8A8B8)
+private val PlayBlue = Color(0xFF3B82F6)
+private val PlayPurple = Color(0xFF7C3AED)
 
 @Composable
 fun HomeTvScreen(
@@ -77,26 +79,26 @@ fun HomeTvScreen(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(88.dp)
+                    .width(80.dp)
                     .background(RailBg)
-                    .padding(vertical = 20.dp),
+                    .padding(vertical = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(
-                    Modifier.size(42.dp).clip(CircleShape).background(Gold),
+                    Modifier.size(40.dp).clip(CircleShape).background(Gold),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("S", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text("S", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 }
-                Spacer(Modifier.height(40.dp))
+                Spacer(Modifier.height(36.dp))
                 NavRailItem(Icons.Filled.Home, "Início", selected = true, onClick = {})
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(18.dp))
                 NavRailItem(Icons.Filled.Search, "Buscar", selected = false, onClick = onNavigateToSearch)
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(18.dp))
                 NavRailItem(Icons.Filled.Favorite, "Minha lista", selected = false, onClick = onNavigateToMyList)
                 Spacer(Modifier.weight(1f))
                 NavRailItem(Icons.Filled.Settings, "Conta", selected = false, onClick = onNavigateToAccount)
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
             }
 
             when {
@@ -109,11 +111,12 @@ fun HomeTvScreen(
                 else -> LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 72.dp),
+                    contentPadding = PaddingValues(top = 20.dp, bottom = 64.dp),
                 ) {
+                    // Hero estilo streamly: texto | card imagem (não full-bleed)
                     item(key = "hero") {
                         if (hero != null) {
-                            HeroBanner(
+                            StreamlyHero(
                                 item = hero,
                                 playFocus = playFocus,
                                 onPlay = { onItemClick(hero.id, hero.resolvedMediaType) },
@@ -124,10 +127,10 @@ fun HomeTvScreen(
 
                     if (state.continueWatching.isNotEmpty()) {
                         item(key = "continue") {
-                            SectionTitle("Continuar assistindo")
+                            SectionHeader("Continuar assistindo")
                             LazyRow(
-                                contentPadding = PaddingValues(horizontal = 36.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                contentPadding = PaddingValues(horizontal = 28.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 items(state.continueWatching, key = { "cw_${it.tmdbId}_${it.mediaType}" }) { entry ->
                                     ContinueWatchingCard(entry) {
@@ -149,122 +152,128 @@ fun HomeTvScreen(
     }
 }
 
+/**
+ * Layout streamly: coluna de texto à esquerda + imagem arredondada à direita.
+ * Não ocupa a tela inteira como backdrop.
+ */
 @Composable
-private fun HeroBanner(
+private fun StreamlyHero(
     item: TmdbItem,
     playFocus: FocusRequester,
     onPlay: () -> Unit,
     onDetails: () -> Unit,
 ) {
-    Box(
-        Modifier
+    Row(
+        modifier = Modifier
             .fillMaxWidth()
-            .height(320.dp),
+            .padding(start = 28.dp, end = 28.dp, top = 8.dp, bottom = 8.dp)
+            .height(230.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        AsyncImage(
-            model = (item.backdrop_path ?: item.poster_path)?.let { path ->
-                if (item.backdrop_path != null) "$TMDB_BACKDROP$path" else "$TMDB_POSTER$path"
-            },
-            contentDescription = item.displayTitle,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        0f to Color.Black.copy(alpha = 0.92f),
-                        0.45f to Color.Black.copy(alpha = 0.55f),
-                        0.75f to Color.Black.copy(alpha = 0.25f),
-                        1f to Color.Transparent,
-                    ),
-                ),
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        0.55f to Color.Transparent,
-                        1f to Bg,
-                    ),
-                ),
-        )
-
+        // ── Texto (esquerda) ──
         Column(
-            Modifier
-                .align(Alignment.CenterStart)
-                .fillMaxWidth(0.48f)
-                .padding(start = 36.dp, end = 16.dp, top = 28.dp, bottom = 24.dp),
+            modifier = Modifier
+                .weight(0.42f)
+                .fillMaxHeight(),
+            verticalArrangement = Arrangement.Center,
         ) {
             Text(
                 item.displayMediaLabel,
                 color = Gold,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(6.dp))
             Text(
                 item.displayTitle,
                 color = Color.White,
-                fontSize = 32.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                lineHeight = 36.sp,
+                lineHeight = 30.sp,
             )
             Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 item.displayRating?.let {
-                    Text("★ $it", color = Gold, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("IMDb $it", color = Color(0xFFF5C518), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
                 item.displayYear?.let {
-                    Text(it, color = TextMuted, fontSize = 14.sp)
+                    Text(it, color = TextMuted, fontSize = 13.sp)
                 }
             }
             item.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     overview,
                     color = TextMuted,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
-                    lineHeight = 18.sp,
+                    lineHeight = 16.sp,
                 )
             }
-            Spacer(Modifier.height(18.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = onPlay,
                     modifier = Modifier.focusRequester(playFocus),
                     colors = ButtonDefaults.colors(
-                        containerColor = Gold,
-                        focusedContainerColor = Color.White,
-                        contentColor = Color.Black,
-                        focusedContentColor = Color.Black,
-                    ),
-                ) {
-                    Icon(Icons.Filled.PlayArrow, null, Modifier.size(20.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Assistir", fontWeight = FontWeight.Bold)
-                }
-                Button(
-                    onClick = onDetails,
-                    colors = ButtonDefaults.colors(
-                        containerColor = Color.White.copy(alpha = 0.15f),
-                        focusedContainerColor = Color.White.copy(alpha = 0.35f),
+                        containerColor = PlayBlue,
+                        focusedContainerColor = PlayPurple,
                         contentColor = Color.White,
                         focusedContentColor = Color.White,
                     ),
                 ) {
-                    Icon(Icons.Filled.Info, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Detalhes")
+                    Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Assistir", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+                Button(
+                    onClick = onDetails,
+                    colors = ButtonDefaults.colors(
+                        containerColor = Color.White.copy(alpha = 0.12f),
+                        focusedContainerColor = Color.White.copy(alpha = 0.28f),
+                        contentColor = Color.White,
+                        focusedContentColor = Color.White,
+                    ),
+                ) {
+                    Icon(Icons.Filled.Info, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Detalhes", fontSize = 14.sp)
                 }
             }
+        }
+
+        // ── Imagem em card arredondado (direita) — como streamly ──
+        Box(
+            modifier = Modifier
+                .weight(0.58f)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF1A1A28)),
+        ) {
+            AsyncImage(
+                model = (item.backdrop_path ?: item.poster_path)?.let { path ->
+                    if (item.backdrop_path != null) "$TMDB_BACKDROP$path" else "$TMDB_POSTER$path"
+                },
+                contentDescription = item.displayTitle,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            // sombra suave na borda esquerda do card
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .width(40.dp)
+                    .align(Alignment.CenterStart)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Bg.copy(alpha = 0.35f), Color.Transparent),
+                        ),
+                    ),
+            )
         }
     }
 }
@@ -288,7 +297,7 @@ private fun NavRailItem(
     }
     Box(
         modifier = Modifier
-            .size(48.dp)
+            .size(46.dp)
             .clip(RoundedCornerShape(12.dp))
             .border(2.dp, borderColor, RoundedCornerShape(12.dp))
             .background(
@@ -305,30 +314,23 @@ private fun NavRailItem(
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Row(
-        Modifier.padding(start = 36.dp, end = 36.dp, top = 8.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .width(3.dp)
-                .height(16.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Gold),
-        )
-        Spacer(Modifier.width(10.dp))
-        Text(text, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-    }
+private fun SectionHeader(text: String) {
+    Text(
+        text,
+        color = Color.White,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 16.sp,
+        modifier = Modifier.padding(start = 28.dp, end = 28.dp, top = 14.dp, bottom = 2.dp),
+    )
 }
 
 @Composable
 private fun ContinueWatchingCard(entry: LocalWatchProgress, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = Modifier.width(220.dp).height(124.dp),
+        modifier = Modifier.width(168.dp).height(96.dp),
         shape = CardDefaults.shape(shape = RoundedCornerShape(10.dp)),
-        scale = CardDefaults.scale(focusedScale = 1.05f),
+        scale = CardDefaults.scale(focusedScale = 1.06f),
         colors = CardDefaults.colors(
             containerColor = Color(0xFF1A1A24),
             focusedContainerColor = Color(0xFF1A1A24),
@@ -353,44 +355,44 @@ private fun ContinueWatchingCard(entry: LocalWatchProgress, onClick: () -> Unit)
                     .background(
                         Brush.verticalGradient(
                             0f to Color.Transparent,
-                            0.45f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.9f),
+                            0.4f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.88f),
                         ),
                     ),
             )
             Box(
                 Modifier
                     .align(Alignment.Center)
-                    .size(36.dp)
+                    .size(28.dp)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
+                    .background(Color.Black.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(16.dp))
             }
             Column(
                 Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
             ) {
                 Text(
                     entry.title,
                     color = Color.White,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 entry.displaySubtitle?.let { sub ->
-                    Text(sub, color = TextMuted, fontSize = 11.sp, maxLines = 1)
+                    Text(sub, color = TextMuted, fontSize = 10.sp, maxLines = 1)
                 }
-                Spacer(Modifier.height(5.dp))
+                Spacer(Modifier.height(3.dp))
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(2.dp))
+                        .height(2.dp)
+                        .clip(RoundedCornerShape(1.dp))
                         .background(Color.White.copy(alpha = 0.2f)),
                 ) {
                     Box(
@@ -413,8 +415,8 @@ private fun PosterCard(
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier.width(120.dp).aspectRatio(2f / 3f),
-        shape = CardDefaults.shape(shape = RoundedCornerShape(10.dp)),
+        modifier = Modifier.width(112.dp).aspectRatio(2f / 3f),
+        shape = CardDefaults.shape(shape = RoundedCornerShape(8.dp)),
         scale = CardDefaults.scale(focusedScale = 1.06f),
         colors = CardDefaults.colors(
             containerColor = Color(0xFF1A1A24),
@@ -423,7 +425,7 @@ private fun PosterCard(
         border = CardDefaults.border(
             focusedBorder = Border(
                 border = androidx.compose.foundation.BorderStroke(2.dp, Gold),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(8.dp),
             ),
         ),
     ) {
@@ -443,11 +445,11 @@ private fun CatalogRow(
     onItemClick: (Int, String) -> Unit,
 ) {
     if (items.isEmpty()) return
-    Column(Modifier.padding(bottom = 4.dp)) {
-        SectionTitle(title)
+    Column(Modifier.padding(bottom = 2.dp)) {
+        SectionHeader(title)
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 36.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(items, key = { it.id }) { item ->
                 PosterCard(
