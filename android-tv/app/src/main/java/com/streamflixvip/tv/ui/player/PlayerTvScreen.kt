@@ -5,34 +5,23 @@ import android.view.KeyEvent
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,33 +34,25 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.*
+import com.streamflixvip.tv.data.LocalLibraryStore
+import com.streamflixvip.tv.data.LocalWatchProgress
 import com.streamflixvip.tv.network.NetworkModule
 import com.streamflixvip.tv.network.VipSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
-// Enum para os modos de Aspect Ratio
 enum class AspectRatioMode(val mode: Int, val label: String) {
     FIT(AspectRatioFrameLayout.RESIZE_MODE_FIT, "Original"),
     FILL(AspectRatioFrameLayout.RESIZE_MODE_FILL, "Esticar"),
     ZOOM(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, "Zoom"),
-    FIXED_HEIGHT(AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT, "Alt. Fixa"),
-    FIXED_WIDTH(AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH, "Larg. Fixa")
 }
-
-enum class BottomPanelType { ASPECT, SUBTITLES, SERVERS }
-
-// Uma faixa de legenda detectada no vídeo — group/trackIndex identificam
-// exatamente qual faixa dentro do ExoPlayer, pra poder ligar/trocar depois.
-data class SubtitleOption(val label: String, val group: androidx.media3.common.TrackGroup, val trackIndex: Int)
 
 @Composable
 fun PlayerTvScreen(
@@ -80,476 +61,182 @@ fun PlayerTvScreen(
     season: Int,
     episode: Int,
     title: String,
+    tmdbId: Int = 0,
+    mediaType: String = "movie",
+    posterPath: String? = null,
     onBack: () -> Unit = {},
     onServerFailed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    // Precisa existir ANTES do ExoPlayer.Builder pra poder ser injetado nele
-    // — é o que expõe quais faixas de legenda/áudio o arquivo tem e permite
-    // ligar/trocar uma. Sem isso (como estava antes), o ExoPlayer decodifica
-    // a legenda só se ele MESMO decidir auto-selecionar uma faixa "forçada"
-    // do arquivo — na prática, quase nunca escolhe sozinha, então a legenda
-    // embutida simplesmente nunca aparecia.
+    val libraryStore = remember { LocalLibraryStore(context) }
     val trackSelector = remember { DefaultTrackSelector(context) }
-    var subtitleOptions by remember { mutableStateOf(listOf<SubtitleOption>()) }
-    var selectedSubtitleLabel by remember { mutableStateOf("Desligada") }
-
-    // --- Estados do Player ---
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var currentSource by remember { mutableStateOf(source) }
-    val sourcesList by remember { mutableStateOf(sources.ifEmpty { listOf(source) }) }
-    // Guarda a posição antes de trocar de servidor (ver troca em
-    // BottomPanelType.SERVERS), pra retomar de onde parou em vez de
-    // reiniciar do zero — sem isso, trocar de servidor no meio do filme
-    // te jogava de volta pro início.
-    var resumePositionMs by remember { mutableStateOf(0L) }
-    
-    // --- Estado do Aspect Ratio ---
+    val sourcesList = remember { sources.ifEmpty { listOf(source) } }
+    var resumePositionMs by remember {
+        val saved = if (tmdbId > 0) {
+            libraryStore.getProgressFor(tmdbId, mediaType, season, episode)?.positionSeconds?.times(1000L) ?: 0L
+        } else 0L
+        mutableStateOf(saved)
+    }
     var currentAspectRatio by remember { mutableStateOf(AspectRatioMode.FIT) }
-
-    // --- Estado dos painéis minimalistas ---
-    var activeBottomPanel by remember { mutableStateOf<BottomPanelType?>(null) }
-
-    // --- Visibilidade e Foco ---
     var controlsVisible by remember { mutableStateOf(true) }
     var interactionTick by remember { mutableIntStateOf(0) }
-    val rootFocusRequester = remember { FocusRequester() }
-    val pauseBtnFocus = remember { FocusRequester() }
+    val rootFocus = remember { FocusRequester() }
+    val pauseFocus = remember { FocusRequester() }
 
-    fun showControls() {
-        controlsVisible = true
-        interactionTick++
+    fun persistProgress(exo: ExoPlayer?) {
+        if (tmdbId <= 0 || exo == null) return
+        val posMs = exo.currentPosition.coerceAtLeast(0L)
+        val durMs = exo.duration
+        if (durMs <= 0L || durMs == C.TIME_UNSET) return
+        libraryStore.saveProgress(
+            LocalWatchProgress(
+                tmdbId = tmdbId, mediaType = mediaType, season = season, episode = episode,
+                title = title, posterPath = posterPath,
+                positionSeconds = (posMs / 1000L).toInt(),
+                durationSeconds = (durMs / 1000L).toInt(),
+            ),
+        )
     }
 
-    // Auto-hide: esconde se não houver interação por 5s e nenhum painel estiver aberto
-    LaunchedEffect(controlsVisible, interactionTick, activeBottomPanel) {
-        if (controlsVisible && activeBottomPanel == null) {
-            delay(5000)
-            controlsVisible = false
-        }
-    }
+    fun showControls() { controlsVisible = true; interactionTick++ }
 
-    // Gerenciamento de Foco ao mostrar controles
+    LaunchedEffect(player, tmdbId) {
+        if (tmdbId <= 0) return@LaunchedEffect
+        while (isActive) { delay(15_000); persistProgress(player) }
+    }
+    LaunchedEffect(controlsVisible, interactionTick) {
+        if (controlsVisible) { delay(5000); controlsVisible = false }
+    }
     LaunchedEffect(controlsVisible) {
-        if (controlsVisible && activeBottomPanel == null) {
-            runCatching { pauseBtnFocus.requestFocus() }
-        }
+        if (controlsVisible) runCatching { pauseFocus.requestFocus() }
     }
 
-    // Mantém a tela ligada e sinaliza pro Android/Fire TV que há mídia
-    // ativa, enquanto essa tela do player estiver montada. Sem isso, o
-    // screensaver do sistema sobe durante a reprodução — daí o app perde
-    // ON_PAUSE, o vídeo pausa, o sistema "confirma" que não há mídia
-    // tocando e o screensaver continua até fechar o app.
     DisposableEffect(context) {
-        val activity = context as? Activity
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose {
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
+        (context as? Activity)?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { (context as? Activity)?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
-    // Ciclo de vida do ExoPlayer
     DisposableEffect(context) {
-        val exoPlayer = ExoPlayer.Builder(context).setTrackSelector(trackSelector).build().apply {
+        val exo = ExoPlayer.Builder(context).setTrackSelector(trackSelector).build().apply {
             repeatMode = Player.REPEAT_MODE_OFF
             playWhenReady = true
         }
-        player = exoPlayer
-
+        player = exo
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                // ON_PAUSE também dispara quando o screensaver do sistema
-                // sobe (a Activity perde foco, mas continua visível) — não
-                // é o usuário saindo da tela. Pausar aqui era o que
-                // realimentava o loop do screensaver. Só pausamos de fato
-                // em ON_STOP, quando a Activity realmente some da tela
-                // (usuário saiu, apertou HOME, trocou de app etc).
-                Lifecycle.Event.ON_STOP -> exoPlayer.pause()
-                Lifecycle.Event.ON_RESUME -> {}
-                Lifecycle.Event.ON_DESTROY -> {
-                    exoPlayer.release()
-                    player = null
-                }
+                Lifecycle.Event.ON_STOP -> exo.pause()
+                Lifecycle.Event.ON_DESTROY -> { exo.release(); player = null }
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-
         onDispose {
+            runCatching { persistProgress(exo) }
             lifecycleOwner.lifecycle.removeObserver(observer)
-            exoPlayer.release()
-            player = null
+            exo.release(); player = null
         }
     }
 
-    // Atualizar Aspect Ratio quando mudar
-    // Carregamento do Stream
     LaunchedEffect(currentSource) {
-        val exoPlayer = player ?: return@LaunchedEffect
-        isLoading = true
-        playbackError = null
-        showControls()
-        activeBottomPanel = null
-        subtitleOptions = emptyList()
-        selectedSubtitleLabel = "Desligada"
-
+        val exo = player ?: return@LaunchedEffect
+        isLoading = true; playbackError = null; showControls()
         try {
-            val resolvedUrl = withContext(Dispatchers.IO) {
+            val url = withContext(Dispatchers.IO) {
                 currentSource.resolvedPlaybackUrl(NetworkModule.ZEABUR_BASE_URL)
             }
-            val mediaItem = MediaItem.fromUri(resolvedUrl)
-            exoPlayer.setMediaItem(mediaItem)
-            exoPlayer.prepare()
-            if (resumePositionMs > 0) {
-                exoPlayer.seekTo(resumePositionMs)
-            }
-            exoPlayer.playWhenReady = true
+            exo.setMediaItem(MediaItem.fromUri(url))
+            exo.prepare()
+            if (resumePositionMs > 0) exo.seekTo(resumePositionMs)
+            exo.playWhenReady = true
             isLoading = false
         } catch (e: Exception) {
-            playbackError = "Erro ao carregar: ${e.message}"
-            isLoading = false
+            playbackError = "Erro: ${e.message}"; isLoading = false
         }
-
-        exoPlayer.addListener(object : Player.Listener {
-            override fun onIsLoadingChanged(isLoadingNow: Boolean) { isLoading = isLoadingNow }
-            override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+        exo.addListener(object : Player.Listener {
+            override fun onIsLoadingChanged(v: Boolean) { isLoading = v }
+            override fun onIsPlayingChanged(v: Boolean) { isPlaying = v }
             override fun onPlayerError(error: PlaybackException) {
-                playbackError = "Erro de reprodução: ${error.message}"
-                isLoading = false
-                showControls()
-            }
-            override fun onTracksChanged(tracks: Tracks) {
-                val subtitles = mutableListOf<SubtitleOption>()
-                for (group in tracks.groups) {
-                    if (group.type != C.TRACK_TYPE_TEXT) continue
-                    for (i in 0 until group.length) {
-                        val format = group.getTrackFormat(i)
-                        val label = format.label ?: format.language ?: "Faixa ${i + 1}"
-                        subtitles += SubtitleOption(label, group.mediaTrackGroup, i)
-                    }
-                }
-                subtitleOptions = subtitles
+                playbackError = "Erro: ${error.message}"; isLoading = false; showControls()
             }
         })
     }
 
-    fun selectSubtitle(option: SubtitleOption?) {
-        trackSelector.parameters = if (option == null) {
-            selectedSubtitleLabel = "Desligada"
-            trackSelector.parameters.buildUpon()
-                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                .build()
-        } else {
-            selectedSubtitleLabel = option.label
-            trackSelector.parameters.buildUpon()
-                .setOverrideForType(TrackSelectionOverride(option.group, option.trackIndex))
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                .build()
-        }
-    }
-
-    LaunchedEffect(Unit) { rootFocusRequester.requestFocus() }
+    LaunchedEffect(Unit) { rootFocus.requestFocus() }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .focusable()
-            .focusRequester(rootFocusRequester)
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.type != KeyEventType.KeyUp) return@onKeyEvent false
-
-                val isBack = keyEvent.key == Key.Back || keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ESCAPE
-                val isDpadOrCenter = when (keyEvent.key) {
-                    Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight,
-                    Key.DirectionCenter, Key.Enter, Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> true
-                    else -> keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_CENTER
-                }
-
-                when {
-                    isBack -> {
-                        when {
-                            activeBottomPanel != null -> {
-                                activeBottomPanel = null
-                                showControls()
-                                true
-                            }
-                            !controlsVisible -> {
-                                showControls()
-                                true
-                            }
-                            else -> false // Propaga para sair da tela
-                        }
-                    }
-                    !controlsVisible && isDpadOrCenter -> {
-                        showControls()
-                        true
-                    }
-                    else -> false
-                }
-            },
+        Modifier.fillMaxSize().background(Color.Black).focusable().focusRequester(rootFocus).onKeyEvent { ev ->
+            if (ev.type != KeyEventType.KeyUp) return@onKeyEvent false
+            val isBack = ev.key == Key.Back || ev.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ESCAPE
+            if (isBack) {
+                if (!controlsVisible) { showControls(); true } else false
+            } else if (!controlsVisible) { showControls(); true } else false
+        },
     ) {
-        // Camada do Vídeo
-        player?.let { exoPlayer ->
+        player?.let { exo ->
             AndroidView(
                 factory = { ctx ->
                     PlayerView(ctx).apply {
-                        this.player = exoPlayer
+                        this.player = exo
                         useController = false
                         resizeMode = currentAspectRatio.mode
-                        // Configurações de legenda removendo chamadas problemáticas
-                        subtitleView?.setApplyEmbeddedFontSizes(false)
-                        subtitleView?.setApplyEmbeddedStyles(false)
-                        // Removido: subtitleView?.setFixedTextSize(subtitleView.getTextSize() * 1.2f) para evitar erro de compilação
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                        )
+                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
-                update = { view -> view.resizeMode = currentAspectRatio.mode },
+                update = { it.resizeMode = currentAspectRatio.mode },
             )
         }
-
-        // Overlay de Controles (Barra Inferior)
-        AnimatedVisibility(
-            visible = controlsVisible && playbackError == null,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { it / 2 }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { it / 2 }),
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.8f))
-                    .padding(vertical = 16.dp)
-            ) {
-                // Título
-                Text(
-                    text = title,
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Barra de Tempo
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    var currentPosMs by remember { mutableStateOf(0L) }
-                    var durationMs by remember { mutableStateOf(0L) }
-                    LaunchedEffect(player, controlsVisible) {
-                        while (controlsVisible) {
-                            player?.let {
-                                currentPosMs = it.currentPosition.coerceAtLeast(0)
-                                durationMs = it.duration.coerceAtLeast(0)
-                            }
-                            delay(500)
+        AnimatedVisibility(visible = controlsVisible && playbackError == null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter)) {
+            Column(Modifier.fillMaxWidth().background(Color.Black.copy(0.8f)).padding(16.dp)) {
+                Text(title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(onClick = { if (isPlaying) player?.pause() else player?.play(); showControls() }, modifier = Modifier.focusRequester(pauseFocus)) {
+                            Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White)
+                        }
+                        IconButton(onClick = { player?.seekTo((player?.currentPosition ?: 0) - 10000); showControls() }) {
+                            Icon(Icons.Filled.Replay10, null, tint = Color.White)
+                        }
+                        IconButton(onClick = { player?.seekTo((player?.currentPosition ?: 0) + 10000); showControls() }) {
+                            Icon(Icons.Filled.Forward10, null, tint = Color.White)
                         }
                     }
-                    Text(
-                        "${formatTime(currentPosMs)} / ${formatTime(durationMs)}",
-                        fontSize = 13.sp,
-                        color = Color.White.copy(alpha = 0.7f)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Botões
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PlayerControlBtn(
-                            icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            onClick = { if (isPlaying) player?.pause() else player?.play(); showControls() },
-                            focusRequester = pauseBtnFocus
-                        )
-                        PlayerControlBtn(icon = Icons.Filled.Replay10, onClick = { player?.seekTo((player?.currentPosition ?: 0) - 10000); showControls() })
-                        PlayerControlBtn(icon = Icons.Filled.Forward10, onClick = { player?.seekTo((player?.currentPosition ?: 0) + 10000); showControls() })
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        MenuActionBtn(
-                            label = currentAspectRatio.label,
-                            icon = Icons.Filled.AspectRatio,
-                            isSelected = activeBottomPanel == BottomPanelType.ASPECT,
-                            onClick = { activeBottomPanel = if (activeBottomPanel == BottomPanelType.ASPECT) null else BottomPanelType.ASPECT; showControls() }
-                        )
-                        MenuActionBtn(
-                            label = selectedSubtitleLabel,
-                            icon = Icons.Filled.ClosedCaption,
-                            isSelected = activeBottomPanel == BottomPanelType.SUBTITLES,
-                            onClick = { activeBottomPanel = if (activeBottomPanel == BottomPanelType.SUBTITLES) null else BottomPanelType.SUBTITLES; showControls() }
-                        )
-                        MenuActionBtn(
-                            label = "Servidores",
-                            icon = Icons.Filled.Dns,
-                            isSelected = activeBottomPanel == BottomPanelType.SERVERS,
-                            onClick = { activeBottomPanel = if (activeBottomPanel == BottomPanelType.SERVERS) null else BottomPanelType.SERVERS; showControls() }
-                        )
-                    }
-                }
-
-                // Abas
-                AnimatedVisibility(visible = activeBottomPanel != null) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                        Spacer(modifier = Modifier.height(1.dp).fillMaxWidth().background(Color.White.copy(alpha = 0.15f)))
-                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                            when (activeBottomPanel) {
-                                BottomPanelType.ASPECT -> {
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        items(AspectRatioMode.values()) { mode ->
-                                            MenuOptionChip(
-                                                label = mode.label,
-                                                isSelected = currentAspectRatio == mode,
-                                                onClick = { currentAspectRatio = mode; activeBottomPanel = null }
-                                            )
-                                        }
-                                    }
-                                }
-                                BottomPanelType.SUBTITLES -> {
-                                    if (subtitleOptions.isEmpty()) {
-                                        Text("Este vídeo não tem legendas embutidas", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
-                                    } else {
-                                        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                            item {
-                                                MenuOptionChip(
-                                                    label = "Desligada",
-                                                    isSelected = selectedSubtitleLabel == "Desligada",
-                                                    onClick = { selectSubtitle(null); activeBottomPanel = null },
-                                                )
-                                            }
-                                            items(subtitleOptions) { opt ->
-                                                MenuOptionChip(
-                                                    label = opt.label,
-                                                    isSelected = selectedSubtitleLabel == opt.label,
-                                                    onClick = { selectSubtitle(opt); activeBottomPanel = null },
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                                BottomPanelType.SERVERS -> {
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        items(sourcesList) { srv ->
-                                            MenuOptionChip(
-                                                label = srv.displayName,
-                                                isSelected = srv.source_url == currentSource.source_url,
-                                                onClick = {
-                                                    resumePositionMs = player?.currentPosition ?: 0L
-                                                    currentSource = srv
-                                                    activeBottomPanel = null
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                                null -> {}
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = {
+                            val modes = AspectRatioMode.values()
+                            val i = modes.indexOf(currentAspectRatio)
+                            currentAspectRatio = modes[(i + 1) % modes.size]
+                            showControls()
+                        }) { Text(currentAspectRatio.label) }
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(sourcesList) { srv ->
+                                Button(onClick = {
+                                    resumePositionMs = player?.currentPosition ?: 0L
+                                    currentSource = srv
+                                    showControls()
+                                }) { Text(srv.displayName) }
                             }
                         }
                     }
                 }
             }
         }
-
-        // Loading/Erro
         if (isLoading && playbackError == null) {
             CircularProgressIndicator(color = Color(0xFFD4AF37), modifier = Modifier.align(Alignment.Center))
         }
-        
         if (playbackError != null) {
-            Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(playbackError!!, color = Color.White, fontSize = 16.sp)
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(onClick = onServerFailed) { Text("Voltar", color = Color.Black) }
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(playbackError!!, color = Color.White)
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = onServerFailed) { Text("Voltar") }
             }
         }
     }
-}
-
-@Composable
-fun MenuActionBtn(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, isSelected: Boolean, onClick: () -> Unit) {
-    var isFocused by remember { mutableStateOf(false) }
-    Surface(
-        onClick = onClick,
-        modifier = Modifier
-            .onFocusChanged { isFocused = it.isFocused }
-            .clip(RoundedCornerShape(8.dp)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (isSelected) Color(0xFFD4AF37).copy(alpha = 0.2f) else Color.Transparent,
-            focusedContainerColor = Color.White.copy(alpha = 0.15f)
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(icon, contentDescription = null, tint = if (isFocused || isSelected) Color(0xFFD4AF37) else Color.White, modifier = Modifier.size(20.dp))
-            Text(label, color = if (isFocused || isSelected) Color(0xFFD4AF37) else Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-fun MenuOptionChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
-    var isFocused by remember { mutableStateOf(false) }
-    Surface(
-        onClick = onClick,
-        modifier = Modifier
-            .onFocusChanged { isFocused = it.isFocused }
-            .clip(RoundedCornerShape(12.dp)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (isSelected) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.08f),
-            focusedContainerColor = if (isSelected) Color(0xFFD4AF37).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.25f)
-        )
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
-            color = if (isSelected) Color.Black else Color.White,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-@Composable
-private fun PlayerControlBtn(icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit, focusRequester: FocusRequester? = null) {
-    var isFocused by remember { mutableStateOf(false) }
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .onFocusChanged { isFocused = it.isFocused }
-            .scale(if (isFocused) 1.15f else 1f),
-        colors = IconButtonDefaults.colors(focusedContainerColor = Color.White.copy(alpha = 0.15f))
-    ) {
-        Icon(icon, contentDescription = null, tint = if (isFocused) Color(0xFFD4AF37) else Color.White, modifier = Modifier.size(32.dp))
-    }
-}
-
-private fun formatTime(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val h = totalSeconds / 3600
-    val m = (totalSeconds % 3600) / 60
-    val s = totalSeconds % 60
-    return if (h > 0) String.format("%d:%02d:%02d", h, m, s) else String.format("%d:%02d", m, s)
 }
