@@ -1,7 +1,11 @@
 package com.streamflixvip.tv.ui.home
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.streamflixvip.tv.data.LocalFavorite
+import com.streamflixvip.tv.data.LocalLibraryStore
+import com.streamflixvip.tv.data.LocalWatchProgress
 import com.streamflixvip.tv.network.NetworkModule
 import com.streamflixvip.tv.network.TmdbItem
 import kotlinx.coroutines.async
@@ -16,6 +20,8 @@ import kotlinx.coroutines.launch
 data class HomeTvUiState(
     val isLoading: Boolean = true,
     val heroItems: List<TmdbItem> = emptyList(),
+    val continueWatching: List<LocalWatchProgress> = emptyList(),
+    val favorites: List<LocalFavorite> = emptyList(),
     val trendingItems: List<TmdbItem> = emptyList(),
     val popularMovies: List<TmdbItem> = emptyList(),
     val popularSeries: List<TmdbItem> = emptyList(),
@@ -29,22 +35,19 @@ data class HomeTvUiState(
     val error: String? = null,
 )
 
-class HomeTvViewModel : ViewModel() {
+class HomeTvViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(HomeTvUiState())
     val uiState: StateFlow<HomeTvUiState> = _uiState.asStateFlow()
 
+    private val libraryStore = LocalLibraryStore(application)
     private val cache = mutableMapOf<String, List<TmdbItem>>()
+    private var catalogLoaded = false
 
     fun loadAll() {
-        // Antes: bastava UMA chamada ter sucesso pro cache "existir" e
-        // loadAll() pular tudo nas próximas vezes (ex: voltar pra Home
-        // depois de sair do app) — mesmo que outras categorias tivessem
-        // vindo vazias por falha de rede temporária, elas ficavam vazias
-        // pra sempre até reiniciar o app. Agora só considera "já
-        // carregado" se pelo menos uma categoria central (trending) tem
-        // itens de verdade.
-        if (cache["/trending/all/week|null|null"]?.isNotEmpty() == true) {
+        refreshLibrary()
+
+        if (catalogLoaded && cache["/trending/all/week|null|null"]?.isNotEmpty() == true) {
             _uiState.update { it.copy(isLoading = false) }
             return
         }
@@ -53,7 +56,6 @@ class HomeTvViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
             try {
-                // CORREÇÃO BUG #10: Carregamento PARALELO com awaitAll
                 val results = coroutineScope {
                     val hero = async { safeFetch("/trending/all/day") }
                     val trending = async { safeFetch("/trending/all/week") }
@@ -69,6 +71,7 @@ class HomeTvViewModel : ViewModel() {
                     awaitAll(hero, trending, movies, series, action, comedy, drama, horror, scifi, anime, family)
                 }
 
+                catalogLoaded = true
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -83,6 +86,8 @@ class HomeTvViewModel : ViewModel() {
                         scifiItems = results[8],
                         animeItems = results[9],
                         familyItems = results[10],
+                        continueWatching = libraryStore.getContinueWatching(),
+                        favorites = libraryStore.getFavorites(),
                     )
                 }
             } catch (e: Exception) {
@@ -90,6 +95,15 @@ class HomeTvViewModel : ViewModel() {
                     it.copy(isLoading = false, error = "Erro ao carregar conteúdo")
                 }
             }
+        }
+    }
+
+    fun refreshLibrary() {
+        _uiState.update {
+            it.copy(
+                continueWatching = libraryStore.getContinueWatching(),
+                favorites = libraryStore.getFavorites(),
+            )
         }
     }
 
