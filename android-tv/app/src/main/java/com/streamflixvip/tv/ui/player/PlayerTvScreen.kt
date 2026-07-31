@@ -23,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -138,7 +139,6 @@ fun PlayerTvScreen(
         if (tmdbId <= 0) return@LaunchedEffect
         while (isActive) { delay(15_000); persistProgress(player) }
     }
-    // Atualiza posição a cada 500ms para a barra de tempo
     LaunchedEffect(player) {
         while (isActive) {
             val exo = player
@@ -251,7 +251,6 @@ fun PlayerTvScreen(
                 Text(title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 16.sp)
                 Spacer(Modifier.height(10.dp))
 
-                // ── Barra de tempo / progresso ──
                 val fraction = if (durationMs > 0) {
                     (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
                 } else 0f
@@ -372,6 +371,3 @@ fun PlayerTvScreen(
         }
     }
 }
-
-private fun Modifier.clip(shape: RoundedCornerShape): Modifier =
-    androidx.compose.ui.draw.clip(shape)
