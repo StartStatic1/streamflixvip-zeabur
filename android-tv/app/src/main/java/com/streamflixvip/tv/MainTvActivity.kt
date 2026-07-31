@@ -35,13 +35,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * Activity única do app de TV — Navigation Compose com rotas:
- *
- *   splash → activation | home
- *   home → search | mylist | account | detail | category | player
- *   detail → player
- */
 class MainTvActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,10 +77,32 @@ class MainTvActivity : ComponentActivity() {
                     pendingTmdbId = tmdbId
                     pendingMediaType = mediaType
                     pendingPosterPath = posterPath
-                    navController.navigate("player")
+                    navController.navigate("player") {
+                        launchSingleTop = true
+                    }
                 }
 
-                /** Continuar assistindo → busca fontes e abre o player direto (resume no PlayerTvScreen). */
+                fun goBackFromPlayer() {
+                    val tmdbId = pendingTmdbId
+                    val mediaType = pendingMediaType
+                    pendingSource = null
+                    pendingSources = emptyList()
+                    val detailRoute = "detail/$mediaType/$tmdbId"
+                    // Se veio da tela de detalhes, só remove o player.
+                    // Se veio do Continuar assistindo (home → player), abre detalhes.
+                    if (tmdbId > 0) {
+                        val landed = navController.popBackStack(detailRoute, inclusive = false)
+                        if (!landed) {
+                            navController.navigate(detailRoute) {
+                                popUpTo("player") { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    } else {
+                        navController.popBackStack()
+                    }
+                }
+
                 fun resumeContinueWatching(entry: LocalWatchProgress) {
                     scope.launch {
                         val sources = withContext(Dispatchers.IO) {
@@ -130,6 +145,44 @@ class MainTvActivity : ComponentActivity() {
                     }
                 }
 
+                fun playNextEpisode() {
+                    if (pendingMediaType != "tv" || pendingTmdbId <= 0) return
+                    val nextEp = pendingEpisode + 1
+                    val season = pendingSeason
+                    val tmdbId = pendingTmdbId
+                    val titleBase = pendingTitle.substringBefore(" · ").ifBlank { pendingTitle }
+                    scope.launch {
+                        val sources = withContext(Dispatchers.IO) {
+                            runCatching {
+                                NetworkModule.supabaseApi.getSourcesForEpisode(
+                                    apiKey = NetworkModule.supabaseAnonKey,
+                                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
+                                    seasonFilter = PostgrestFilter.eq(season),
+                                    episodeFilter = PostgrestFilter.eq(nextEp),
+                                )
+                            }.getOrDefault(emptyList())
+                        }
+                        if (sources.isEmpty()) {
+                            Toast.makeText(
+                                this@MainTvActivity,
+                                "Não há próximo episódio nesta temporada",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                            return@launch
+                        }
+                        openPlayer(
+                            source = sources.first(),
+                            sources = sources,
+                            season = season,
+                            episode = nextEp,
+                            title = "$titleBase · T${season}E$nextEp",
+                            tmdbId = tmdbId,
+                            mediaType = "tv",
+                            posterPath = pendingPosterPath,
+                        )
+                    }
+                }
+
                 NavHost(navController = navController, startDestination = "splash") {
 
                     composable("splash") {
@@ -160,15 +213,9 @@ class MainTvActivity : ComponentActivity() {
                                 navController.navigate("detail/$mediaType/$tmdbId")
                             },
                             onContinueClick = { entry -> resumeContinueWatching(entry) },
-                            onNavigateToSearch = {
-                                navController.navigate("search")
-                            },
-                            onNavigateToMyList = {
-                                navController.navigate("mylist")
-                            },
-                            onNavigateToAccount = {
-                                navController.navigate("account")
-                            },
+                            onNavigateToSearch = { navController.navigate("search") },
+                            onNavigateToMyList = { navController.navigate("mylist") },
+                            onNavigateToAccount = { navController.navigate("account") },
                             onExploreCategory = { category ->
                                 navController.navigate("category/$category")
                             },
@@ -256,16 +303,11 @@ class MainTvActivity : ComponentActivity() {
                                 tmdbId = pendingTmdbId,
                                 mediaType = pendingMediaType,
                                 posterPath = pendingPosterPath,
-                                onBack = {
-                                    pendingSource = null
-                                    pendingSources = emptyList()
-                                    navController.popBackStack()
-                                },
-                                onServerFailed = {
-                                    pendingSource = null
-                                    pendingSources = emptyList()
-                                    navController.popBackStack()
-                                },
+                                onBack = { goBackFromPlayer() },
+                                onServerFailed = { goBackFromPlayer() },
+                                onNextEpisode = if (pendingMediaType == "tv") ({
+                                    playNextEpisode()
+                                }) else null,
                             )
                         } else {
                             LaunchedEffect(Unit) {
