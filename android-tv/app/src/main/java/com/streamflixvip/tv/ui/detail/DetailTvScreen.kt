@@ -46,6 +46,9 @@ fun DetailTvScreen(
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(tmdbId) { viewModel.loadDetails() }
 
+    val context = LocalContext.current
+    val libraryStore = remember(context) { LocalLibraryStore(context) }
+
     Box(Modifier.fillMaxSize().background(Color(0xFF0A0A10))) {
         if (state.isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -68,7 +71,6 @@ fun DetailTvScreen(
         val displayTitle = details.title ?: details.name ?: "Sem titulo"
         val isSeries = mediaType == "tv"
         val showPanel = state.showServerPicker && state.sources.size > 1
-        val libraryStore = remember { LocalLibraryStore(LocalContext.current) }
         var isFavorite by remember(tmdbId, mediaType) {
             mutableStateOf(libraryStore.isFavorite(tmdbId, mediaType))
         }
@@ -79,7 +81,14 @@ fun DetailTvScreen(
                     if (backdropUrl != null) {
                         AsyncImage(backdropUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     }
-                    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xFF0A0A10), Color(0xFF0A0A10).copy(0.75f), Color.Transparent), endX = 900f)))
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.horizontalGradient(
+                                listOf(Color(0xFF0A0A10), Color(0xFF0A0A10).copy(alpha = 0.75f), Color.Transparent),
+                                endX = 900f,
+                            ),
+                        ),
+                    )
                     IconButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(20.dp)) {
                         Icon(Icons.Filled.ArrowBack, "Voltar", tint = Color.White)
                     }
@@ -87,7 +96,7 @@ fun DetailTvScreen(
                         Text(displayTitle, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 2)
                         Spacer(Modifier.height(12.dp))
                         details.overview?.let {
-                            Text(it, fontSize = 14.sp, color = Color.White.copy(0.8f), maxLines = 3)
+                            Text(it, fontSize = 14.sp, color = Color.White.copy(alpha = 0.8f), maxLines = 3)
                         }
                         Spacer(Modifier.height(18.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -105,24 +114,34 @@ fun DetailTvScreen(
                             }) { Text("Assistir Agora") }
                             Button(onClick = {
                                 isFavorite = libraryStore.toggleFavorite(
-                                    LocalFavorite(tmdbId, mediaType, displayTitle, details.poster_path)
+                                    LocalFavorite(tmdbId, mediaType, displayTitle, details.poster_path),
                                 )
                             }) { Text(if (isFavorite) "Na Minha Lista" else "Minha Lista") }
                         }
                     }
                 }
-                AnimatedVisibility(visible = showPanel, enter = fadeIn() + slideInHorizontally { it }, exit = fadeOut() + slideOutHorizontally { it }) {
+                AnimatedVisibility(
+                    visible = showPanel,
+                    enter = fadeIn() + slideInHorizontally { it },
+                    exit = fadeOut() + slideOutHorizontally { it },
+                ) {
                     Column(Modifier.fillMaxHeight().width(420.dp).background(Color(0xFF12121A)).padding(28.dp)) {
                         Text("Escolha o Servidor", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         Spacer(Modifier.height(16.dp))
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             items(state.sources) { src ->
-                                Button(onClick = {
-                                    viewModel.pickServer(src) {
-                                        if (isSeries) onPlayClick(src, state.sources, state.selectedSeason, 1, displayTitle, details.poster_path)
-                                        else onPlayClick(src, state.sources, 0, 0, displayTitle, details.poster_path)
-                                    }
-                                }, modifier = Modifier.fillMaxWidth()) { Text(src.displayName) }
+                                Button(
+                                    onClick = {
+                                        viewModel.pickServer(src) {
+                                            if (isSeries) {
+                                                onPlayClick(src, state.sources, state.selectedSeason, 1, displayTitle, details.poster_path)
+                                            } else {
+                                                onPlayClick(src, state.sources, 0, 0, displayTitle, details.poster_path)
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) { Text(src.displayName) }
                             }
                         }
                     }
@@ -143,7 +162,14 @@ fun DetailTvScreen(
                         Card(
                             onClick = {
                                 viewModel.loadEpisodeSources(state.selectedSeason, ep.episode_number) { source ->
-                                    onPlayClick(source, state.sources, state.selectedSeason, ep.episode_number, "$displayTitle - S${state.selectedSeason}E${ep.episode_number}", details.poster_path)
+                                    onPlayClick(
+                                        source,
+                                        state.sources,
+                                        state.selectedSeason,
+                                        ep.episode_number,
+                                        "$displayTitle - S${state.selectedSeason}E${ep.episode_number}",
+                                        details.poster_path,
+                                    )
                                 }
                             },
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
