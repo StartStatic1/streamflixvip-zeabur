@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,6 +17,7 @@ import androidx.navigation.navArgument
 import com.streamflixvip.tv.data.TvActivationManager
 import com.streamflixvip.tv.network.VipSource
 import com.streamflixvip.tv.ui.account.AccountTvScreen
+import com.streamflixvip.tv.ui.account.MyListTvScreen
 import com.streamflixvip.tv.ui.activation.ActivationTvScreen
 import com.streamflixvip.tv.ui.detail.DetailTvScreen
 import com.streamflixvip.tv.ui.home.HomeTvScreen
@@ -29,13 +29,9 @@ import com.streamflixvip.tv.ui.theme.StreamFlixTvTheme
 /**
  * Activity única do app de TV — Navigation Compose com rotas:
  *
- *   "splash" → SplashTvScreen
- *   "activation" → ActivationTvScreen (gate VIP)
- *   "home" → HomeTvScreen
- *   "search" → SearchTvScreen
- *   "account" → AccountTvScreen (perfil + engrenagem)
- *   "detail/{mediaType}/{tmdbId}" → DetailTvScreen
- *   "player" → PlayerTvScreen
+ *   splash → activation | home
+ *   home → search | mylist | account | detail
+ *   detail → player
  */
 class MainTvActivity : ComponentActivity() {
 
@@ -92,6 +88,9 @@ class MainTvActivity : ComponentActivity() {
                             onNavigateToSearch = {
                                 navController.navigate("search")
                             },
+                            onNavigateToMyList = {
+                                navController.navigate("mylist")
+                            },
                             onNavigateToAccount = {
                                 navController.navigate("account")
                             },
@@ -100,6 +99,15 @@ class MainTvActivity : ComponentActivity() {
 
                     composable("search") {
                         SearchTvScreen(
+                            onItemClick = { tmdbId, mediaType ->
+                                navController.navigate("detail/$mediaType/$tmdbId")
+                            },
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+
+                    composable("mylist") {
+                        MyListTvScreen(
                             onItemClick = { tmdbId, mediaType ->
                                 navController.navigate("detail/$mediaType/$tmdbId")
                             },

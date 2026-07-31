@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,17 +30,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
-import com.streamflixvip.tv.data.LocalFavorite
 import com.streamflixvip.tv.data.LocalWatchProgress
 import com.streamflixvip.tv.network.TmdbItem
 
 private const val TMDB_POSTER = "https://image.tmdb.org/t/p/w342"
-private const val TMDB_BACKDROP = "https://image.tmdb.org/t/p/w780"
 
 private val Bg = Color(0xFF0B0B12)
 private val RailBg = Color(0xFF12121C)
@@ -51,14 +51,16 @@ fun HomeTvScreen(
     viewModel: HomeTvViewModel = viewModel(),
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToMyList: () -> Unit = {},
     onNavigateToAccount: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
     LaunchedEffect(Unit) { viewModel.loadAll() }
 
     Box(Modifier.fillMaxSize().background(Bg)) {
         Row(Modifier.fillMaxSize()) {
-            // ── Rail de navegação ──
+            // Rail — coração = Minha lista | engrenagem = Conta (rotas diferentes)
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -68,23 +70,20 @@ fun HomeTvScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Box(
-                    Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(Gold),
+                    Modifier.size(42.dp).clip(CircleShape).background(Gold),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text("S", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                 }
                 Spacer(Modifier.height(40.dp))
                 NavRailItem(Icons.Filled.Home, "Início", selected = true, onClick = {})
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(20.dp))
                 NavRailItem(Icons.Filled.Search, "Buscar", selected = false, onClick = onNavigateToSearch)
-                Spacer(Modifier.height(18.dp))
-                NavRailItem(Icons.Filled.Favorite, "Lista", selected = false, onClick = onNavigateToAccount)
+                Spacer(Modifier.height(20.dp))
+                NavRailItem(Icons.Filled.Favorite, "Minha lista", selected = false, onClick = onNavigateToMyList)
                 Spacer(Modifier.weight(1f))
                 NavRailItem(Icons.Filled.Settings, "Conta", selected = false, onClick = onNavigateToAccount)
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
             }
 
             when {
@@ -95,33 +94,35 @@ fun HomeTvScreen(
                     Text(state.error!!, color = Color.White)
                 }
                 else -> LazyColumn(
-                    Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 20.dp, bottom = 56.dp),
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    // top generoso: ao voltar o scroll, título "Em Alta" não cola na borda
+                    contentPadding = PaddingValues(top = 36.dp, bottom = 80.dp),
                 ) {
                     if (state.continueWatching.isNotEmpty()) {
-                        item {
+                        item(key = "continue") {
                             SectionTitle("Continuar assistindo")
+                            // padding vertical evita card "comido" pelo scale do foco
                             LazyRow(
-                                contentPadding = PaddingValues(horizontal = 40.dp),
+                                contentPadding = PaddingValues(horizontal = 40.dp, vertical = 14.dp),
                                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                             ) {
-                                items(state.continueWatching, key = { "${it.tmdbId}_${it.mediaType}" }) { entry ->
+                                items(state.continueWatching, key = { "cw_${it.tmdbId}_${it.mediaType}" }) { entry ->
                                     ContinueWatchingCard(entry) {
                                         onItemClick(entry.tmdbId, entry.mediaType)
                                     }
                                 }
                             }
-                            Spacer(Modifier.height(12.dp))
                         }
                     }
                     if (state.favorites.isNotEmpty()) {
-                        item {
+                        item(key = "fav_preview") {
                             SectionTitle("Minha lista")
                             LazyRow(
-                                contentPadding = PaddingValues(horizontal = 40.dp),
+                                contentPadding = PaddingValues(horizontal = 40.dp, vertical = 14.dp),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                items(state.favorites, key = { "fav_${it.tmdbId}_${it.mediaType}" }) { fav ->
+                                items(state.favorites.take(12), key = { "fav_${it.tmdbId}_${it.mediaType}" }) { fav ->
                                     PosterCard(
                                         title = fav.title,
                                         posterPath = fav.posterPath,
@@ -129,10 +130,9 @@ fun HomeTvScreen(
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(8.dp))
                         }
                     }
-                    item {
+                    item(key = "catalog") {
                         CatalogRow("Em Alta", state.trendingItems, onItemClick)
                         CatalogRow("Filmes Populares", state.popularMovies, onItemClick)
                         CatalogRow("Séries Populares", state.popularSeries, onItemClick)
@@ -176,11 +176,7 @@ private fun NavRailItem(
                 if (focused) Gold.copy(alpha = 0.12f) else Color.Transparent,
                 RoundedCornerShape(12.dp),
             )
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            .then(
-                Modifier // clique via Card/IconButton-like
-            ),
+            .onFocusChanged { focused = it.isFocused },
         contentAlignment = Alignment.Center,
     ) {
         androidx.compose.material3.IconButton(onClick = onClick) {
@@ -192,7 +188,7 @@ private fun NavRailItem(
 @Composable
 private fun SectionTitle(text: String) {
     Row(
-        Modifier.padding(start = 40.dp, end = 40.dp, top = 18.dp, bottom = 10.dp),
+        Modifier.padding(start = 40.dp, end = 40.dp, top = 10.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -211,15 +207,15 @@ private fun SectionTitle(text: String) {
 private fun ContinueWatchingCard(entry: LocalWatchProgress, onClick: () -> Unit) {
     Card(
         onClick = onClick,
-        modifier = Modifier.width(268.dp).height(152.dp),
+        modifier = Modifier.width(280.dp).height(158.dp),
         shape = CardDefaults.shape(shape = RoundedCornerShape(12.dp)),
-        scale = CardDefaults.scale(focusedScale = 1.05f),
+        scale = CardDefaults.scale(focusedScale = 1.04f),
         colors = CardDefaults.colors(
             containerColor = Color(0xFF1A1A24),
             focusedContainerColor = Color(0xFF1A1A24),
         ),
         border = CardDefaults.border(
-            focusedBorder = androidx.tv.material3.Border(
+            focusedBorder = Border(
                 border = androidx.compose.foundation.BorderStroke(2.dp, Gold),
                 shape = RoundedCornerShape(12.dp),
             ),
@@ -232,15 +228,14 @@ private fun ContinueWatchingCard(entry: LocalWatchProgress, onClick: () -> Unit)
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-            // gradiente inferior para legibilidade
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(72.dp)
+                    .height(78.dp)
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f)),
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.94f)),
                         ),
                     ),
             )
@@ -262,7 +257,6 @@ private fun ContinueWatchingCard(entry: LocalWatchProgress, onClick: () -> Unit)
                     Text(sub, color = TextMuted, fontSize = 12.sp, maxLines = 1)
                 }
                 Spacer(Modifier.height(6.dp))
-                // barra de progresso
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -292,13 +286,13 @@ private fun PosterCard(
         onClick = onClick,
         modifier = Modifier.width(124.dp).aspectRatio(2f / 3f),
         shape = CardDefaults.shape(shape = RoundedCornerShape(10.dp)),
-        scale = CardDefaults.scale(focusedScale = 1.08f),
+        scale = CardDefaults.scale(focusedScale = 1.06f),
         colors = CardDefaults.colors(
             containerColor = Color(0xFF1A1A24),
             focusedContainerColor = Color(0xFF1A1A24),
         ),
         border = CardDefaults.border(
-            focusedBorder = androidx.tv.material3.Border(
+            focusedBorder = Border(
                 border = androidx.compose.foundation.BorderStroke(2.dp, Gold),
                 shape = RoundedCornerShape(10.dp),
             ),
@@ -320,10 +314,10 @@ private fun CatalogRow(
     onItemClick: (Int, String) -> Unit,
 ) {
     if (items.isEmpty()) return
-    Column(Modifier.padding(top = 8.dp, bottom = 4.dp)) {
+    Column(Modifier.padding(bottom = 6.dp)) {
         SectionTitle(title)
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 40.dp),
+            contentPadding = PaddingValues(horizontal = 40.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             items(items, key = { it.id }) { item ->

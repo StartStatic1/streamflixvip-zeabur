@@ -3,7 +3,9 @@ package com.streamflixvip.tv.ui.account
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
@@ -27,8 +29,8 @@ import com.streamflixvip.tv.data.LocalLibraryStore
 import com.streamflixvip.tv.data.TvActivationManager
 
 /**
- * Tela única de Conta: status VIP, limpar histórico local e desativar o aparelho.
- * Substitui os ícones mortos de Perfil e Engrenagem na sidebar.
+ * Conta / configurações do aparelho (VIP, limpar dados locais, desativar).
+ * Minha lista tem tela própria (MyListTvScreen).
  */
 @Composable
 fun AccountTvScreen(
@@ -42,6 +44,7 @@ fun AccountTvScreen(
     var favoritesCount by remember { mutableIntStateOf(libraryStore.getFavorites().size) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     val firstFocus = remember { FocusRequester() }
+    val scroll = rememberScrollState()
 
     LaunchedEffect(Unit) {
         runCatching { firstFocus.requestFocus() }
@@ -50,111 +53,118 @@ fun AccountTvScreen(
     val plan = activationManager.planLabel ?: "VIP"
     val active = activationManager.isActivatedLocally
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0A0A10))
-            .padding(48.dp),
+            .verticalScroll(scroll)
+            .padding(horizontal = 48.dp, vertical = 36.dp),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AccountActionChip(
-                    label = "Voltar",
-                    icon = Icons.Filled.ArrowBack,
-                    focusRequester = firstFocus,
-                    onClick = onBack,
-                )
-                Spacer(modifier = Modifier.width(24.dp))
-                Text("Conta", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF16161F), RoundedCornerShape(16.dp))
-                    .padding(28.dp),
-            ) {
-                Column {
-                    Text(
-                        if (active) "Aparelho ativado" else "Aparelho não ativado",
-                        color = if (active) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.6f),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Plano: $plan", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        "ID do aparelho: ${activationManager.deviceId.take(12)}…",
-                        color = Color.White.copy(alpha = 0.45f),
-                        fontSize = 13.sp,
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Continuar assistindo: $continueCount  ·  Minha lista: $favoritesCount",
-                        color = Color.White.copy(alpha = 0.55f),
-                        fontSize = 14.sp,
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Text("Biblioteca neste aparelho", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-
+        Row(verticalAlignment = Alignment.CenterVertically) {
             AccountActionChip(
-                label = "Limpar Continuar assistindo",
-                icon = Icons.Filled.Delete,
-                onClick = {
-                    libraryStore.clearAllProgress()
-                    continueCount = 0
-                    statusMessage = "Histórico de progresso limpo neste aparelho."
-                },
+                label = "Voltar",
+                icon = Icons.Filled.ArrowBack,
+                focusRequester = firstFocus,
+                onClick = onBack,
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            AccountActionChip(
-                label = "Limpar Minha lista",
-                icon = Icons.Filled.Delete,
-                onClick = {
-                    libraryStore.clearAllFavorites()
-                    favoritesCount = 0
-                    statusMessage = "Minha lista limpa neste aparelho."
-                },
-            )
+            Spacer(modifier = Modifier.width(24.dp))
+            Text("Conta", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        }
 
-            Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
-            Text("Sessão", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-            AccountActionChip(
-                label = "Desativar este aparelho",
-                icon = Icons.Filled.ExitToApp,
-                destructive = true,
-                onClick = {
-                    activationManager.clearLocalActivation()
-                    onDeactivated()
-                },
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Info, contentDescription = null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF16161F), RoundedCornerShape(16.dp))
+                .padding(28.dp),
+        ) {
+            Column {
                 Text(
-                    "StreamFlixVIP TV  v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                    color = Color.White.copy(alpha = 0.4f),
+                    if (active) "Aparelho ativado" else "Aparelho não ativado",
+                    color = if (active) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.6f),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Plano: $plan", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    "ID do aparelho: ${activationManager.deviceId.take(12)}…",
+                    color = Color.White.copy(alpha = 0.45f),
                     fontSize = 13.sp,
                 )
-            }
-
-            statusMessage?.let {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(it, color = Color(0xFFD4AF37), fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Continuar assistindo: $continueCount  ·  Minha lista: $favoritesCount",
+                    color = Color.White.copy(alpha = 0.55f),
+                    fontSize = 14.sp,
+                )
             }
         }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text("Biblioteca neste aparelho", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        AccountActionChip(
+            label = "Limpar Continuar assistindo",
+            icon = Icons.Filled.Delete,
+            onClick = {
+                libraryStore.clearAllProgress()
+                continueCount = 0
+                statusMessage = "Histórico de progresso limpo neste aparelho."
+            },
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        AccountActionChip(
+            label = "Limpar Minha lista",
+            icon = Icons.Filled.Delete,
+            onClick = {
+                libraryStore.clearAllFavorites()
+                favoritesCount = 0
+                statusMessage = "Minha lista limpa neste aparelho."
+            },
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text("Sessão", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(12.dp))
+        AccountActionChip(
+            label = "Desativar este aparelho",
+            icon = Icons.Filled.ExitToApp,
+            destructive = true,
+            onClick = {
+                activationManager.clearLocalActivation()
+                onDeactivated()
+            },
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.Info,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.4f),
+                modifier = Modifier.size(16.dp),
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "StreamFlixVIP TV  v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                color = Color.White.copy(alpha = 0.4f),
+                fontSize = 13.sp,
+            )
+        }
+
+        statusMessage?.let {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(it, color = Color(0xFFD4AF37), fontSize = 14.sp)
+        }
+
+        // espaço extra no fim para o último botão não ficar colado na borda da TV
+        Spacer(modifier = Modifier.height(48.dp))
     }
 }
 
