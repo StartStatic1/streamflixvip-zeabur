@@ -73,7 +73,6 @@ fun DetailTvScreen(
     val playFocus = remember { FocusRequester() }
     val serverFocus = remember { FocusRequester() }
 
-    // Servidores inline (não modal) — aparecem sob os botões quando há >1 fonte
     var serverChoices by remember { mutableStateOf<List<VipSource>>(emptyList()) }
     var pendingSeason by remember { mutableIntStateOf(0) }
     var pendingEpisode by remember { mutableIntStateOf(0) }
@@ -108,7 +107,6 @@ fun DetailTvScreen(
                         serverChoices = emptyList()
                         onPlayClick(sources.first(), sources, season, episode, title, details.poster_path)
                     } else {
-                        // Inline: chips de servidor focáveis com o controle
                         pendingSeason = season
                         pendingEpisode = episode
                         pendingTitle = title
@@ -155,7 +153,6 @@ fun DetailTvScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
 
-                        // Meta: ano · nota · duração · gêneros
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             val year = (details.release_date ?: details.first_air_date)?.take(4)
@@ -221,12 +218,14 @@ fun DetailTvScreen(
                             }
                         }
 
-                        // Servidores inline — linha horizontal focável (fácil com D-pad)
                         if (serverChoices.isNotEmpty()) {
                             Spacer(Modifier.height(12.dp))
                             Text("Escolha o servidor", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             Spacer(Modifier.height(8.dp))
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(end = 8.dp),
+                            ) {
                                 items(serverChoices.size) { index ->
                                     val src = serverChoices[index]
                                     ServerChip(
@@ -258,12 +257,21 @@ fun DetailTvScreen(
                         Column(
                             Modifier
                                 .fillMaxWidth()
-                                .weight(1f)
-                                .padding(horizontal = 48.dp),
+                                .weight(1f),
                         ) {
-                            Text("Temporadas", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                            Text(
+                                "Temporadas",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 48.dp),
+                            )
                             Spacer(Modifier.height(10.dp))
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Padding no conteúdo da lista: primeiro e último chip cabem inteiros
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                contentPadding = PaddingValues(horizontal = 48.dp),
+                            ) {
                                 items((1..(state.details?.number_of_seasons ?: 1)).toList()) { season ->
                                     SeasonChip(
                                         label = "T$season",
@@ -285,7 +293,7 @@ fun DetailTvScreen(
                                 val episodes = state.seasonEpisodes[state.selectedSeason].orEmpty()
                                 LazyColumn(
                                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    contentPadding = PaddingValues(bottom = 24.dp),
+                                    contentPadding = PaddingValues(start = 48.dp, end = 48.dp, bottom = 28.dp),
                                 ) {
                                     items(episodes, key = { it.episode_number }) { ep ->
                                         EpisodeRow(
@@ -304,20 +312,25 @@ fun DetailTvScreen(
                             }
                         }
                     } else {
-                        // Filme: preenche o vão com elenco
-                        val cast = details.credits?.cast.orEmpty().take(12)
+                        val cast = details.credits?.cast.orEmpty().take(14)
                         if (cast.isNotEmpty()) {
                             Column(
                                 Modifier
                                     .fillMaxWidth()
-                                    .weight(1f)
-                                    .padding(horizontal = 48.dp),
+                                    .weight(1f),
                             ) {
-                                Text("Elenco", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                Text(
+                                    "Elenco",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 48.dp),
+                                )
                                 Spacer(Modifier.height(12.dp))
+                                // start/end no contentPadding: o último ator entra inteiro na tela ao focar/rolar
                                 LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                                    contentPadding = PaddingValues(bottom = 24.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    contentPadding = PaddingValues(start = 48.dp, end = 48.dp, bottom = 28.dp),
                                 ) {
                                     items(cast) { member ->
                                         CastCard(member)
@@ -351,11 +364,11 @@ private fun MetaPill(text: String) {
 private fun CastCard(member: TmdbCastMember) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(100.dp),
+        modifier = Modifier.width(104.dp),
     ) {
         Box(
             Modifier
-                .size(88.dp)
+                .size(90.dp)
                 .clip(CircleShape)
                 .background(Color(0xFF1A1A28))
                 .border(1.dp, GlassBorder, CircleShape),
