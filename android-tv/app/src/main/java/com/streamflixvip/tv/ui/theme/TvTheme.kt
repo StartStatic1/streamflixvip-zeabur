@@ -5,16 +5,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
 
-// Paleta StreamFlixVIP — fundo escuro + dourado premium
-private val Gold = Color(0xFFD4AF37)
-private val DarkBackground = Color(0xFF0A0A10)
-private val DarkSurface = Color(0xFF15151C)
+// Paleta StreamFlixVIP — glass + indigo (sem amarelo)
+private val Accent = Color(0xFF6366F1)
+private val DarkBackground = Color(0xFF0B0B14)
+private val DarkSurface = Color(0xFF10101A)
 
 private val TvDarkColors = darkColorScheme(
-    primary = Gold,
+    primary = Accent,
     background = DarkBackground,
     surface = DarkSurface,
-    surfaceVariant = Color(0xFF232330),
+    surfaceVariant = Color(0xFF1A1A28),
 )
 
 @Composable
