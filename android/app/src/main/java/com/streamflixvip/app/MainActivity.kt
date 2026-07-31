@@ -237,13 +237,25 @@ private fun MainAppScaffold(
             composable("livetv") {
                 LiveTvScreen(
                     onChannelClick = { channel ->
+                        if (!VipStatusHolder.isVip.value) {
+                            navController.navigate("profile") { launchSingleTop = true }
+                            return@LiveTvScreen
+                        }
                         PendingLiveChannel.set(channel)
                         navController.navigate("liveplayer")
+                    },
+                    onUpgradeClick = {
+                        navController.navigate("profile") { launchSingleTop = true }
                     },
                 )
             }
 
             composable("liveplayer") {
+                val isVip by VipStatusHolder.isVip.collectAsState()
+                if (!isVip) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                    return@composable
+                }
                 val channel = remember { PendingLiveChannel.consume() }
                 if (channel == null || channel.streams.isEmpty()) {
                     LaunchedEffect(Unit) { navController.popBackStack() }
