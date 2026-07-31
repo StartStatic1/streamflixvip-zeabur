@@ -52,7 +52,6 @@ private const val TMDB_POSTER = "https://image.tmdb.org/t/p/w342"
 private const val TMDB_BACKDROP = "https://image.tmdb.org/t/p/w780"
 private const val TMDB_BACKDROP_LG = "https://image.tmdb.org/t/p/w1280"
 
-// Paleta glass / streamly — sem amarelo
 private val Bg = Color(0xFF0B0B14)
 private val RailBg = Color(0xFF10101A)
 private val Accent = Color(0xFF6366F1)
@@ -70,6 +69,7 @@ private const val CONTINUE_VISIBLE = 6
 fun HomeTvScreen(
     viewModel: HomeTvViewModel = viewModel(),
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
+    onContinueClick: (LocalWatchProgress) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
     onNavigateToMyList: () -> Unit = {},
     onNavigateToAccount: () -> Unit = {},
@@ -151,7 +151,6 @@ fun HomeTvScreen(
                     Text(state.error!!, color = Color.White)
                 }
                 else -> {
-                    // Layout fixo — zero scroll vertical (sem carrosséis de catálogo)
                     Column(
                         modifier = Modifier.fillMaxSize().padding(top = 20.dp, bottom = 20.dp),
                     ) {
@@ -182,7 +181,8 @@ fun HomeTvScreen(
                         ContinueSection(
                             entries = state.continueWatching,
                             featuredFallback = state.trendingItems.take(CONTINUE_VISIBLE),
-                            onItemClick = onItemClick,
+                            onContinueClick = onContinueClick,
+                            onFeaturedClick = onItemClick,
                             onSeeAll = { onExploreCategory("continue") },
                         )
                     }
@@ -357,7 +357,8 @@ private fun ExploreChips(
 private fun ContinueSection(
     entries: List<LocalWatchProgress>,
     featuredFallback: List<TmdbItem>,
-    onItemClick: (Int, String) -> Unit,
+    onContinueClick: (LocalWatchProgress) -> Unit,
+    onFeaturedClick: (Int, String) -> Unit,
     onSeeAll: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth()) {
@@ -407,9 +408,7 @@ private fun ContinueSection(
                         entries.take(CONTINUE_VISIBLE),
                         key = { "cw_${it.tmdbId}_${it.mediaType}" },
                     ) { entry ->
-                        ContinueWatchingCard(entry) {
-                            onItemClick(entry.tmdbId, entry.mediaType)
-                        }
+                        ContinueWatchingCard(entry) { onContinueClick(entry) }
                     }
                 }
             }
@@ -422,7 +421,7 @@ private fun ContinueSection(
                         FeaturedMiniCard(
                             title = item.displayTitle,
                             posterPath = item.poster_path,
-                            onClick = { onItemClick(item.id, item.resolvedMediaType) },
+                            onClick = { onFeaturedClick(item.id, item.resolvedMediaType) },
                         )
                     }
                 }
