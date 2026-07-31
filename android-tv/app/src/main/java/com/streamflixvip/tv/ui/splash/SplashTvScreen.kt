@@ -8,8 +8,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -34,33 +33,36 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.streamflixvip.tv.data.TvActivationManager
 import com.streamflixvip.tv.network.NetworkModule
-import com.streamflixvip.tv.network.TmdbItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 private const val TMDB_POSTER_W342 = "https://image.tmdb.org/t/p/w342"
-private const val GOLD = 0xFFD4AF37
+
+private val Bg = Color(0xFF0B0B14)
+private val Accent = Color(0xFF6366F1)
+private val AccentSoft = Color(0xFF818CF8)
+private val Cyan = Color(0xFF22D3EE)
 
 /**
- * Splash da TV: fundo com fileiras de pôsteres (filmes/séries em alta,
- * puxados do TMDB) rolando devagar em direções alternadas, logo
- * StreamFlixVIP surgindo no centro por cima, e um efeito sonoro curto se
- * `res/raw/splash_whoosh` existir no projeto (opcional — se não existir,
- * a splash funciona normal e silenciosa, sem quebrar o build).
+ * Splash cinema: fileiras de pôsteres + logo glass indigo.
+ * Antes de sair, revalida a ativação no servidor — assim, após reinstalar,
+ * se o device_id ainda estiver ativo, vai direto pra home.
  *
- * Duração mínima de 2.2s mesmo que os pôsteres carreguem rápido, pra não
- * ficar um "pisca" incômodo; se demorar mais que isso pra buscar os
- * pôsteres, mostra a splash só com o logo até finalizar.
+ * Som opcional: coloque `res/raw/splash_whoosh.mp3` (ou .ogg) para intro.
  */
 @Composable
-fun SplashTvScreen(onFinished: () -> Unit) {
+fun SplashTvScreen(
+    activationManager: TvActivationManager,
+    onFinished: (isActivated: Boolean) -> Unit,
+) {
     val context = LocalContext.current
     var posterRows by remember { mutableStateOf<List<List<String>>>(emptyList()) }
+    var statusText by remember { mutableStateOf("Carregando catálogo…") }
 
-    // Toca o som da splash uma única vez, se o arquivo existir em res/raw.
     DisposableEffect(Unit) {
         var player: MediaPlayer? = null
         val soundId = context.resources.getIdentifier("splash_whoosh", "raw", context.packageName)
@@ -69,57 +71,97 @@ fun SplashTvScreen(onFinished: () -> Unit) {
             player?.setOnCompletionListener { it.release() }
             player?.start()
         }
-        onDispose {
-            player?.release()
-        }
+        onDispose { player?.release() }
     }
 
     LaunchedEffect(Unit) {
-        val minDuration = async { delay(2200) }
-        val posters = withContext(Dispatchers.IO) {
+        val minDuration = async { delay(2400) }
+
+        val postersJob = async(Dispatchers.IO) {
             runCatching {
                 val trending = NetworkModule.tmdbApi.request(path = "/trending/all/week").results.orEmpty()
                 val paths = trending.mapNotNull { it.poster_path }.filter { it.isNotBlank() }
-                if (paths.isEmpty()) emptyList() else paths.chunked((paths.size / 3).coerceAtLeast(1)).take(3)
+                if (paths.isEmpty()) emptyList()
+                else paths.chunked((paths.size / 3).coerceAtLeast(1)).take(3)
             }.getOrDefault(emptyList())
         }
-        posterRows = posters
+
+        statusText = "Verificando ativação…"
+        val revalidateJob = async { activationManager.revalidate() }
+
+        posterRows = postersJob.await()
+        statusText = if (posterRows.isNotEmpty()) "Bem-vindo" else "Preparando…"
+
         minDuration.await()
-        onFinished()
+        val active = revalidateJob.await()
+        onFinished(active)
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A10))) {
+    Box(modifier = Modifier.fillMaxSize().background(Bg)) {
         if (posterRows.isNotEmpty()) {
-            Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
                 posterRows.forEachIndexed { index, row ->
                     PosterMarqueeRow(
                         posterPaths = row,
                         reverse = index % 2 == 1,
-                        durationMs = 26000 + index * 4000,
+                        durationMs = 28000 + index * 3500,
                     )
                 }
             }
-            // Escurece por cima dos pôsteres pra o logo ficar legível
             Box(
-                modifier = Modifier.fillMaxSize().background(
+                Modifier.fillMaxSize().background(
                     Brush.radialGradient(
-                        colors = listOf(Color(0xFF0A0A10).copy(alpha = 0.55f), Color(0xFF0A0A10).copy(alpha = 0.92f)),
+                        colors = listOf(
+                            Color(0x660B0B14),
+                            Color(0xCC0B0B14),
+                            Bg,
+                        ),
                     ),
                 ),
             )
-        } else {
-            CircularProgressIndicator(color = Color(GOLD), modifier = Modifier.align(Alignment.Center))
+            // vinheta lateral cinema
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.horizontalGradient(
+                        0f to Bg.copy(alpha = 0.85f),
+                        0.2f to Color.Transparent,
+                        0.8f to Color.Transparent,
+                        1f to Bg.copy(alpha = 0.85f),
+                    ),
+                ),
+            )
         }
 
-        SplashLogo(modifier = Modifier.align(Alignment.Center))
+        Column(
+            Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            SplashLogo()
+            Spacer(Modifier.height(28.dp))
+            if (posterRows.isEmpty()) {
+                CircularProgressIndicator(
+                    color = AccentSoft,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(28.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+            Text(
+                statusText,
+                color = Color.White.copy(alpha = 0.55f),
+                fontSize = 13.sp,
+            )
+        }
     }
 }
 
 @Composable
 private fun PosterMarqueeRow(posterPaths: List<String>, reverse: Boolean, durationMs: Int) {
     if (posterPaths.isEmpty()) return
-    // Duplica a lista pra criar loop contínuo sem "costura" visível.
-    val looped = posterPaths + posterPaths
+    val looped = posterPaths + posterPaths + posterPaths
     val transition = rememberInfiniteTransition(label = "marquee")
     val offset by transition.animateFloat(
         initialValue = 0f,
@@ -129,15 +171,15 @@ private fun PosterMarqueeRow(posterPaths: List<String>, reverse: Boolean, durati
             repeatMode = RepeatMode.Restart,
         ),
         label = "marquee_x",
-        )
+    )
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(160.dp)
+            .height(150.dp)
             .graphicsLayer {
                 val widthPx = size.width.takeIf { it > 0f } ?: 1f
-                translationX = offset * widthPx * 0.5f
+                translationX = offset * widthPx * 0.45f
             },
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -146,44 +188,68 @@ private fun PosterMarqueeRow(posterPaths: List<String>, reverse: Boolean, durati
                 model = "$TMDB_POSTER_W342$path",
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.width(110.dp).height(160.dp).clip(RoundedCornerShape(10.dp)),
+                modifier = Modifier
+                    .width(104.dp)
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(10.dp)),
             )
         }
     }
 }
 
 @Composable
-private fun SplashLogo(modifier: Modifier = Modifier) {
-    val scaleAnim by animateFloatAsState(targetValue = 1f, animationSpec = tween(700), label = "logo_scale")
-    val alphaAnim by animateFloatAsState(targetValue = 1f, animationSpec = tween(900), label = "logo_alpha")
+private fun SplashLogo() {
+    val scaleAnim by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(900),
+        label = "logo_scale",
+    )
+    val alphaAnim by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = tween(1100),
+        label = "logo_alpha",
+    )
 
     Column(
-        modifier = modifier.scale(0.85f + 0.15f * scaleAnim).alpha(alphaAnim),
+        modifier = Modifier
+            .scale(0.88f + 0.12f * scaleAnim)
+            .alpha(alphaAnim),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(
             modifier = Modifier
-                .size(84.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(GOLD)),
+                .size(88.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(
+                    Brush.linearGradient(listOf(Accent, Cyan.copy(alpha = 0.85f))),
+                )
+                .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(22.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color(0xFF0A0A10), modifier = Modifier.size(44.dp))
+            Icon(
+                Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(46.dp),
+            )
         }
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(Modifier.height(18.dp))
         Text(
             "StreamFlix",
-            fontSize = 40.sp,
+            fontSize = 42.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
             textAlign = TextAlign.Center,
+            letterSpacing = 1.sp,
         )
         Text(
             "VIP",
-            fontSize = 40.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(GOLD),
+            fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = AccentSoft,
             textAlign = TextAlign.Center,
+            letterSpacing = 6.sp,
         )
     }
 }

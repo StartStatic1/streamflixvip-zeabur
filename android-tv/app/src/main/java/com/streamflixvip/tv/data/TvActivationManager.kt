@@ -2,29 +2,29 @@ package com.streamflixvip.tv.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.media.MediaDrm
 import android.provider.Settings
+import android.util.Base64
 import com.streamflixvip.tv.network.NetworkModule
 import com.streamflixvip.tv.network.TvStatusRequest
+import java.util.UUID
 
 /**
- * Ativação da TV por código VIP — sem login de e-mail/senha, diferente do
- * mobile. Guarda localmente a expiração já validada pelo servidor
- * (`/api/activate-tv`), e revalida de vez em quando contra `/api/tv-status`
- * pra pegar revogação manual feita direto no Supabase (ver ADMIN.md /
- * migrations/tv_activations.sql).
+ * Ativação da TV por código VIP — sem login de e-mail/senha.
  *
- * device_id = Settings.Secure.ANDROID_ID: estável mesmo reinstalando o
- * app (só muda com reset de fábrica do aparelho), então dá pra identificar
- * "essa TV" sem precisar gerar e persistir um UUID próprio.
+ * device_id prioritário = Widevine MediaDrm (costuma sobreviver a reinstalação
+ * e troca de assinatura do APK). Fallback = ANDROID_ID.
+ *
+ * O cache local (SharedPreferences) some ao desinstalar; por isso o splash
+ * SEMPRE chama [revalidate] antes de decidir home vs ativação. Se o servidor
+ * ainda tem esse device_id ativo, a TV entra direto sem digitar o código de novo.
  */
 class TvActivationManager(context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("sfv_tv_activation", Context.MODE_PRIVATE)
 
-    val deviceId: String =
-        Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-            ?: "unknown-device"
+    val deviceId: String = resolveStableDeviceId(context)
 
     private var expiresAtMs: Long
         get() = prefs.getLong(KEY_EXPIRES_AT, 0L)
@@ -37,7 +37,6 @@ class TvActivationManager(context: Context) {
     /** true se o cache local diz que essa TV está ativada e dentro da validade. */
     val isActivatedLocally: Boolean get() = expiresAtMs > System.currentTimeMillis()
 
-    /** Envia o código digitado pro servidor. Em caso de sucesso, já salva o cache local. */
     suspend fun activate(code: String): Result<Unit> {
         return try {
             val response = NetworkModule.vipApi.activateTv(
@@ -62,11 +61,11 @@ class TvActivationManager(context: Context) {
     }
 
     /**
-     * Revalida contra o servidor (chamar no início do app, sem bloquear —
-     * se falhar por rede, mantém o que já está em cache, pra não deslogar
-     * alguém ativo só porque a TV caiu de internet por um instante).
+     * Revalida contra o servidor. Se a rede falhar, mantém o cache local
+     * (não desloga só porque a TV perdeu internet um instante).
+     * @return true se o servidor (ou cache) confirma ativação válida.
      */
-    suspend fun revalidate() {
+    suspend fun revalidate(): Boolean {
         try {
             val response = NetworkModule.vipApi.getTvStatus(TvStatusRequest(deviceId = deviceId))
             if (response.active && response.expiresAt != null) {
@@ -76,10 +75,11 @@ class TvActivationManager(context: Context) {
                 expiresAtMs = 0L
             }
         } catch (_: Exception) {
+            // mantém cache
         }
+        return isActivatedLocally
     }
 
-    /** Limpa o cache local de ativação (usado na tela Conta / "Desativar este aparelho"). */
     fun clearLocalActivation() {
         expiresAtMs = 0L
         planLabel = null
@@ -93,5 +93,37 @@ class TvActivationManager(context: Context) {
     companion object {
         private const val KEY_EXPIRES_AT = "expires_at_ms"
         private const val KEY_PLAN_LABEL = "plan_label"
+
+        private val WIDEVINE_UUID: UUID =
+            UUID.fromString("edef8ba9-79d6-4ace-a3c8-27dcd51d21ed")
+
+        /**
+         * ID estável do aparelho. MediaDrm Widevine costuma permanecer igual
+         * após desinstalar/reinstalar e até com outra assinatura de APK.
+         * ANDROID_ID muda quando a signing key muda — por isso não é primário.
+         */
+        fun resolveStableDeviceId(context: Context): String {
+            val drmId = runCatching {
+                val drm = MediaDrm(WIDEVINE_UUID)
+                try {
+                    val bytes = drm.getPropertyByteArray(MediaDrm.PROPERTY_DEVICE_UNIQUE_ID)
+                    if (bytes != null && bytes.isNotEmpty()) {
+                        Base64.encodeToString(bytes, Base64.NO_WRAP or Base64.URL_SAFE)
+                            .trimEnd('=')
+                            .take(32)
+                    } else null
+                } finally {
+                    runCatching { drm.release() }
+                }
+            }.getOrNull()
+
+            if (!drmId.isNullOrBlank()) return "wv_$drmId"
+
+            val androidId = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ANDROID_ID,
+            )
+            return androidId?.takeIf { it.isNotBlank() } ?: "unknown-device"
+        }
     }
 }

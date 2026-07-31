@@ -46,10 +46,6 @@ class MainTvActivity : ComponentActivity() {
                 val activationManager = remember { TvActivationManager(applicationContext) }
                 val scope = rememberCoroutineScope()
 
-                LaunchedEffect(Unit) {
-                    activationManager.revalidate()
-                }
-
                 var pendingSource by remember { mutableStateOf<VipSource?>(null) }
                 var pendingSources by remember { mutableStateOf<List<VipSource>>(emptyList()) }
                 var pendingSeason by remember { mutableStateOf(0) }
@@ -88,8 +84,6 @@ class MainTvActivity : ComponentActivity() {
                     pendingSource = null
                     pendingSources = emptyList()
                     val detailRoute = "detail/$mediaType/$tmdbId"
-                    // Se veio da tela de detalhes, só remove o player.
-                    // Se veio do Continuar assistindo (home → player), abre detalhes.
                     if (tmdbId > 0) {
                         val landed = navController.popBackStack(detailRoute, inclusive = false)
                         if (!landed) {
@@ -187,8 +181,9 @@ class MainTvActivity : ComponentActivity() {
 
                     composable("splash") {
                         SplashTvScreen(
-                            onFinished = {
-                                val next = if (activationManager.isActivatedLocally) "home" else "activation"
+                            activationManager = activationManager,
+                            onFinished = { isActivated ->
+                                val next = if (isActivated) "home" else "activation"
                                 navController.navigate(next) {
                                     popUpTo("splash") { inclusive = true }
                                 }
