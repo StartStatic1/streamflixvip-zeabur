@@ -1,7 +1,7 @@
 {
-  "versionCode": 24,
-  "versionName": "7.0.0",
+  "versionCode": 25,
+  "versionName": "7.1.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Novas funções vip, tv online, melhorias"
+  "releaseNotes": "Tv online VIP, melhoria no player tv, adicionado canais +18"
 }
