@@ -51,9 +51,6 @@ class TvActivationManager(context: Context) {
                 Result.failure(Exception(response.error ?: "Código inválido."))
             }
         } catch (e: retrofit2.HttpException) {
-            // O backend manda a mensagem de erro no corpo mesmo em 4xx/5xx —
-            // Retrofit trata isso como exceção, então extrai a mensagem de lá
-            // em vez de mostrar "HTTP 409" cru pra quem está digitando o código.
             val message = runCatching {
                 e.response()?.errorBody()?.string()
                     ?.let { org.json.JSONObject(it).optString("error") }
@@ -76,13 +73,17 @@ class TvActivationManager(context: Context) {
                 expiresAtMs = parseIso(response.expiresAt) ?: expiresAtMs
                 planLabel = response.planLabel
             } else if (!response.active) {
-                // Servidor confirmou que não está mais ativo (revogado ou
-                // expirado) — limpa o cache local pra travar a tela de novo.
                 expiresAtMs = 0L
             }
         } catch (_: Exception) {
-            // Sem internet ou servidor fora: não mexe no cache local.
         }
+    }
+
+    /** Limpa o cache local de ativação (usado na tela Conta / "Desativar este aparelho"). */
+    fun clearLocalActivation() {
+        expiresAtMs = 0L
+        planLabel = null
+        prefs.edit().remove(KEY_EXPIRES_AT).remove(KEY_PLAN_LABEL).apply()
     }
 
     private fun parseIso(iso: String): Long? = runCatching {
