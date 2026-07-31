@@ -6,12 +6,15 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Sell
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -25,14 +28,17 @@ sealed class BottomNavItem(
     data object Home : BottomNavItem("home", "Início", Icons.Filled.Home)
     data object Explore : BottomNavItem("explore", "Explorar", Icons.Filled.Explore)
     data object LiveTv : BottomNavItem("livetv", "TV", Icons.Filled.LiveTv)
+    data object Genres : BottomNavItem("genres", "Gêneros", Icons.Filled.Sell)
     data object MyList : BottomNavItem("mylist", "Favoritos", Icons.Filled.Favorite)
     data object Profile : BottomNavItem("profile", "Perfil", Icons.Filled.Person)
 }
 
+/** Início · Explorar · TV · Gêneros · Favoritos · Perfil */
 val bottomNavItems = listOf(
     BottomNavItem.Home,
     BottomNavItem.Explore,
     BottomNavItem.LiveTv,
+    BottomNavItem.Genres,
     BottomNavItem.MyList,
     BottomNavItem.Profile,
 )
@@ -66,7 +72,14 @@ fun StreamFlixBottomBar(navController: NavController) {
                     }
                 },
                 icon = { Icon(item.icon, contentDescription = item.label) },
-                label = { Text(item.label) },
+                label = {
+                    Text(
+                        item.label,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
             )
         }
     }
