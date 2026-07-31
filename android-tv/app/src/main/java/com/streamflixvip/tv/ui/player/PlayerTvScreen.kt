@@ -8,20 +8,30 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,7 +48,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import androidx.tv.material3.*
+import androidx.tv.material3.Button
+import androidx.tv.material3.Icon
+import androidx.tv.material3.IconButton
+import androidx.tv.material3.Text
 import com.streamflixvip.tv.data.LocalLibraryStore
 import com.streamflixvip.tv.data.LocalWatchProgress
 import com.streamflixvip.tv.network.NetworkModule
@@ -52,6 +65,17 @@ enum class AspectRatioMode(val mode: Int, val label: String) {
     FIT(AspectRatioFrameLayout.RESIZE_MODE_FIT, "Original"),
     FILL(AspectRatioFrameLayout.RESIZE_MODE_FILL, "Esticar"),
     ZOOM(AspectRatioFrameLayout.RESIZE_MODE_ZOOM, "Zoom"),
+}
+
+private val Gold = Color(0xFFD4AF37)
+
+private fun formatTime(ms: Long): String {
+    if (ms <= 0L || ms == C.TIME_UNSET) return "0:00"
+    val totalSec = (ms / 1000L).toInt()
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
 @Composable
@@ -86,8 +110,12 @@ fun PlayerTvScreen(
     var currentAspectRatio by remember { mutableStateOf(AspectRatioMode.FIT) }
     var controlsVisible by remember { mutableStateOf(true) }
     var interactionTick by remember { mutableIntStateOf(0) }
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(0L) }
+    var progressFocused by remember { mutableStateOf(false) }
     val rootFocus = remember { FocusRequester() }
     val pauseFocus = remember { FocusRequester() }
+    val progressFocus = remember { FocusRequester() }
 
     fun persistProgress(exo: ExoPlayer?) {
         if (tmdbId <= 0 || exo == null) return
@@ -109,6 +137,18 @@ fun PlayerTvScreen(
     LaunchedEffect(player, tmdbId) {
         if (tmdbId <= 0) return@LaunchedEffect
         while (isActive) { delay(15_000); persistProgress(player) }
+    }
+    // Atualiza posição a cada 500ms para a barra de tempo
+    LaunchedEffect(player) {
+        while (isActive) {
+            val exo = player
+            if (exo != null) {
+                positionMs = exo.currentPosition.coerceAtLeast(0L)
+                val d = exo.duration
+                if (d > 0 && d != C.TIME_UNSET) durationMs = d
+            }
+            delay(500)
+        }
     }
     LaunchedEffect(controlsVisible, interactionTick) {
         if (controlsVisible) { delay(5000); controlsVisible = false }
@@ -185,26 +225,117 @@ fun PlayerTvScreen(
                         this.player = exo
                         useController = false
                         resizeMode = currentAspectRatio.mode
-                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        layoutParams = ViewGroup.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
                 update = { it.resizeMode = currentAspectRatio.mode },
             )
         }
-        AnimatedVisibility(visible = controlsVisible && playbackError == null, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.BottomCenter)) {
-            Column(Modifier.fillMaxWidth().background(Color.Black.copy(0.8f)).padding(16.dp)) {
-                Text(title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1)
+
+        AnimatedVisibility(
+            visible = controlsVisible && playbackError == null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.82f))
+                    .padding(horizontal = 28.dp, vertical = 16.dp),
+            ) {
+                Text(title, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, fontSize = 16.sp)
+                Spacer(Modifier.height(10.dp))
+
+                // ── Barra de tempo / progresso ──
+                val fraction = if (durationMs > 0) {
+                    (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                } else 0f
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(formatTime(positionMs), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+                    Spacer(Modifier.width(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(if (progressFocused) 10.dp else 6.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.22f))
+                            .then(
+                                if (progressFocused) Modifier.border(1.dp, Gold, RoundedCornerShape(4.dp))
+                                else Modifier
+                            )
+                            .focusRequester(progressFocus)
+                            .onFocusChanged { progressFocused = it.isFocused }
+                            .focusable()
+                            .onKeyEvent { ev ->
+                                if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
+                                val exo = player ?: return@onKeyEvent false
+                                val step = 10_000L
+                                when (ev.key) {
+                                    Key.DirectionLeft -> {
+                                        exo.seekTo((exo.currentPosition - step).coerceAtLeast(0L))
+                                        showControls()
+                                        true
+                                    }
+                                    Key.DirectionRight -> {
+                                        val max = if (exo.duration > 0 && exo.duration != C.TIME_UNSET) exo.duration else Long.MAX_VALUE
+                                        exo.seekTo((exo.currentPosition + step).coerceAtMost(max))
+                                        showControls()
+                                        true
+                                    }
+                                    else -> false
+                                }
+                            },
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(fraction)
+                                .background(Gold),
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text(formatTime(durationMs), color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+                }
+
                 Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        IconButton(onClick = { if (isPlaying) player?.pause() else player?.play(); showControls() }, modifier = Modifier.focusRequester(pauseFocus)) {
-                            Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, null, tint = Color.White)
+                        IconButton(
+                            onClick = {
+                                if (isPlaying) player?.pause() else player?.play()
+                                showControls()
+                            },
+                            modifier = Modifier.focusRequester(pauseFocus),
+                        ) {
+                            Icon(
+                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                null,
+                                tint = Color.White,
+                            )
                         }
-                        IconButton(onClick = { player?.seekTo((player?.currentPosition ?: 0) - 10000); showControls() }) {
+                        IconButton(onClick = {
+                            player?.seekTo((player?.currentPosition ?: 0) - 10_000)
+                            showControls()
+                        }) {
                             Icon(Icons.Filled.Replay10, null, tint = Color.White)
                         }
-                        IconButton(onClick = { player?.seekTo((player?.currentPosition ?: 0) + 10000); showControls() }) {
+                        IconButton(onClick = {
+                            player?.seekTo((player?.currentPosition ?: 0) + 10_000)
+                            showControls()
+                        }) {
                             Icon(Icons.Filled.Forward10, null, tint = Color.White)
                         }
                     }
@@ -228,8 +359,9 @@ fun PlayerTvScreen(
                 }
             }
         }
+
         if (isLoading && playbackError == null) {
-            CircularProgressIndicator(color = Color(0xFFD4AF37), modifier = Modifier.align(Alignment.Center))
+            CircularProgressIndicator(color = Gold, modifier = Modifier.align(Alignment.Center))
         }
         if (playbackError != null) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -240,3 +372,6 @@ fun PlayerTvScreen(
         }
     }
 }
+
+private fun Modifier.clip(shape: RoundedCornerShape): Modifier =
+    androidx.compose.ui.draw.clip(shape)
