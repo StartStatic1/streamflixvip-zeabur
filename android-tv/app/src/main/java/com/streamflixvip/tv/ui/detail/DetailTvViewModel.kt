@@ -24,7 +24,6 @@ data class DetailTvUiState(
     val trailerKey: String? = null,
     val sources: List<VipSource> = emptyList(),
     val showError: String? = null,
-    val showServerPicker: Boolean = false,
     val retryCount: Int = 0,
 )
 
@@ -40,7 +39,7 @@ class DetailTvViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, showError = null) }
 
-            val appendToResponse = "videos,similar"
+            val appendToResponse = "videos,credits"
             val path = if (mediaType == "movie") "/movie/$tmdbId" else "/tv/$tmdbId"
 
             val result = runCatching {
@@ -54,23 +53,13 @@ class DetailTvViewModel(
                             isLoading = false,
                             details = response,
                             trailerKey = response.trailerKey,
-                            similar = response.results?.take(20) ?: response.results.orEmpty(),
                         )
                     }
-
-                    // Busca episódios SÓ da temporada 1 de cara (mesmo padrão
-                    // do app de celular, ver CatalogRepository.getSeasonEpisodes
-                    // — busca sob demanda, uma temporada por vez, em vez de
-                    // disparar N chamadas simultâneas pra todas as temporadas
-                    // ao abrir a tela). Isso evita o bug em que temporadas
-                    // além da 3ª pareciam "sumir": eram chamadas que falhavam
-                    // silenciosamente numa rajada de requisições paralelas,
-                    // sem nenhum aviso de erro na tela.
                     if (mediaType == "tv" && response.number_of_seasons != null) {
                         loadSeasonIfNeeded(1)
                     }
                 },
-                onFailure = { e ->
+                onFailure = {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
@@ -82,13 +71,6 @@ class DetailTvViewModel(
         }
     }
 
-    /**
-     * Busca episódios de UMA temporada por vez, só quando ainda não foram
-     * carregados — chamada tanto ao abrir a tela (temporada 1) quanto ao
-     * trocar de temporada (ver selectSeason). Erro de rede agora aparece
-     * de verdade em showError, em vez de ser engolido e deixar a seção
-     * simplesmente vazia sem explicação.
-     */
     private fun loadSeasonIfNeeded(season: Int) {
         if (_uiState.value.seasonEpisodes.containsKey(season)) return
         if (_uiState.value.loadingSeasons.contains(season)) return
@@ -112,7 +94,7 @@ class DetailTvViewModel(
                     _uiState.update {
                         it.copy(
                             loadingSeasons = it.loadingSeasons - season,
-                            showError = "Não foi possível carregar a Temporada $season. Toque para tentar de novo.",
+                            showError = "Não foi possível carregar a Temporada $season.",
                         )
                     }
                 },
@@ -125,12 +107,12 @@ class DetailTvViewModel(
         loadSeasonIfNeeded(season)
     }
 
-    /** Permite tentar de novo a temporada atual após uma falha, sem sair da tela. */
     fun retryCurrentSeason() {
         loadSeasonIfNeeded(_uiState.value.selectedSeason)
     }
 
-    fun loadEpisodeSources(season: Int, episode: Int, onSuccess: (VipSource) -> Unit) {
+    /** Sempre devolve a lista completa de fontes (0, 1 ou N). */
+    fun loadEpisodeSources(season: Int, episode: Int, onResult: (List<VipSource>) -> Unit) {
         viewModelScope.launch {
             runCatching {
                 NetworkModule.supabaseApi.getSourcesForEpisode(
@@ -140,20 +122,16 @@ class DetailTvViewModel(
                     episodeFilter = PostgrestFilter.eq(episode),
                 )
             }.onSuccess { sources ->
-                if (sources.isEmpty()) {
-                    _uiState.update { it.copy(showError = "Nenhuma fonte disponível para este episódio") }
-                } else if (sources.size == 1) {
-                    onSuccess(sources.first())
-                } else {
-                    _uiState.update { it.copy(sources = sources, showServerPicker = true, showError = null) }
-                }
+                _uiState.update { it.copy(sources = sources, showError = if (sources.isEmpty()) "Nenhuma fonte disponível" else null) }
+                onResult(sources)
             }.onFailure {
                 _uiState.update { it.copy(showError = "Erro ao carregar fontes") }
+                onResult(emptyList())
             }
         }
     }
 
-    fun loadMovieSources(onSuccess: (VipSource) -> Unit) {
+    fun loadMovieSources(onResult: (List<VipSource>) -> Unit) {
         viewModelScope.launch {
             runCatching {
                 NetworkModule.supabaseApi.getSourcesForMovie(
@@ -162,26 +140,13 @@ class DetailTvViewModel(
                     mediaTypeFilter = PostgrestFilter.eq(mediaType),
                 )
             }.onSuccess { sources ->
-                if (sources.isEmpty()) {
-                    _uiState.update { it.copy(showError = "Nenhuma fonte disponível para este filme") }
-                } else if (sources.size == 1) {
-                    onSuccess(sources.first())
-                } else {
-                    _uiState.update { it.copy(sources = sources, showServerPicker = true, showError = null) }
-                }
+                _uiState.update { it.copy(sources = sources, showError = if (sources.isEmpty()) "Nenhuma fonte disponível" else null) }
+                onResult(sources)
             }.onFailure {
                 _uiState.update { it.copy(showError = "Erro ao carregar fontes") }
+                onResult(emptyList())
             }
         }
-    }
-
-    fun dismissServerPicker() {
-        _uiState.update { it.copy(showServerPicker = false) }
-    }
-
-    fun pickServer(source: VipSource, onSuccess: () -> Unit) {
-        dismissServerPicker()
-        onSuccess()
     }
 
     fun retryLoad() {

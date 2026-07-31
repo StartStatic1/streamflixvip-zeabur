@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.Subtitles
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -104,6 +103,40 @@ fun PlayerTvScreen(
     onServerFailed: () -> Unit = {},
     onNextEpisode: (() -> Unit)? = null,
 ) {
+    // Chave de sessão: troca de EP/servidor reinicia estado do player
+    val sessionKey = "$tmdbId|$mediaType|$season|$episode|${source.source_url}"
+
+    key(sessionKey) {
+        PlayerSession(
+            source = source,
+            sources = sources,
+            season = season,
+            episode = episode,
+            title = title,
+            tmdbId = tmdbId,
+            mediaType = mediaType,
+            posterPath = posterPath,
+            onBack = onBack,
+            onServerFailed = onServerFailed,
+            onNextEpisode = onNextEpisode,
+        )
+    }
+}
+
+@Composable
+private fun PlayerSession(
+    source: VipSource,
+    sources: List<VipSource>,
+    season: Int,
+    episode: Int,
+    title: String,
+    tmdbId: Int,
+    mediaType: String,
+    posterPath: String?,
+    onBack: () -> Unit,
+    onServerFailed: () -> Unit,
+    onNextEpisode: (() -> Unit)?,
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val libraryStore = remember { LocalLibraryStore(context) }
@@ -156,10 +189,9 @@ fun PlayerTvScreen(
         val quals = mutableListOf<TrackOption>()
         for (gi in 0 until tracks.groups.size) {
             val group = tracks.groups[gi]
-            val type = group.type
             for (ti in 0 until group.length) {
                 val format = group.getTrackFormat(ti)
-                when (type) {
+                when (group.type) {
                     C.TRACK_TYPE_TEXT -> {
                         val lang = format.language ?: format.label ?: "Legenda ${subs.size + 1}"
                         subs.add(TrackOption(lang, gi, ti))
@@ -193,14 +225,11 @@ fun PlayerTvScreen(
         val group = tracks.groups[option.groupIndex].mediaTrackGroup
         val override = TrackSelectionOverride(group, listOf(option.trackIndex))
         trackSelector.setParameters(
-            params
-                .setTrackTypeDisabled(type, false)
-                .clearOverridesOfType(type)
-                .addOverride(override),
+            params.setTrackTypeDisabled(type, false).clearOverridesOfType(type).addOverride(override),
         )
     }
 
-    LaunchedEffect(player, tmdbId) {
+    LaunchedEffect(player, tmdbId, season, episode) {
         if (tmdbId <= 0) return@LaunchedEffect
         while (isActive) { delay(15_000); persistProgress(player) }
     }
@@ -215,7 +244,7 @@ fun PlayerTvScreen(
             delay(500)
         }
     }
-    LaunchedEffect(controlsVisible, interactionTick) {
+    LaunchedEffect(controlsVisible, interactionTick, showSubtitleMenu, showQualityMenu) {
         if (controlsVisible && !showSubtitleMenu && !showQualityMenu) {
             delay(5000); controlsVisible = false
         }
@@ -361,9 +390,7 @@ fun PlayerTvScreen(
                                 }
                             },
                     ) {
-                        Box(
-                            Modifier.fillMaxHeight().fillMaxWidth(fraction).background(AccentSoft),
-                        )
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(AccentSoft))
                     }
                     Spacer(Modifier.width(8.dp))
                     Text(formatTime(durationMs), color = TextMuted, fontSize = 11.sp)
@@ -376,7 +403,6 @@ fun PlayerTvScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Controles principais
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
                             onClick = {
@@ -404,8 +430,13 @@ fun PlayerTvScreen(
                             Icon(Icons.Filled.Forward10, null, tint = Color.White)
                         }
 
-                        CompactChip("Pular intro") {
-                            player?.seekTo((player?.currentPosition ?: 0) + 85_000)
+                        // Avanço fixo (intros variam — Rick & Morty tem cold open)
+                        CompactChip("+30s") {
+                            player?.seekTo((player?.currentPosition ?: 0) + 30_000)
+                            showControls()
+                        }
+                        CompactChip("+90s") {
+                            player?.seekTo((player?.currentPosition ?: 0) + 90_000)
                             showControls()
                         }
 
@@ -417,7 +448,6 @@ fun PlayerTvScreen(
                         }
                     }
 
-                    // Opções à direita — compactas
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (subtitleOptions.size > 1) {
                             CompactChip("Legenda") {
@@ -439,15 +469,10 @@ fun PlayerTvScreen(
                             currentAspectRatio = modes[(i + 1) % modes.size]
                             showControls()
                         }
-
-                        // Servidores compactos
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             items(sourcesList) { srv ->
                                 val selected = srv.source_url == currentSource.source_url
-                                CompactChip(
-                                    text = srv.displayName.take(18),
-                                    selected = selected,
-                                ) {
+                                CompactChip(text = srv.displayName.take(18), selected = selected) {
                                     resumePositionMs = player?.currentPosition ?: 0L
                                     currentSource = srv
                                     showControls()
@@ -457,7 +482,6 @@ fun PlayerTvScreen(
                     }
                 }
 
-                // Menus de legenda / qualidade
                 if (showSubtitleMenu) {
                     Spacer(Modifier.height(8.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

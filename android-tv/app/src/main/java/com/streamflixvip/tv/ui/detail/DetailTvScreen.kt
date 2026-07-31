@@ -6,10 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
@@ -39,10 +39,12 @@ import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.streamflixvip.tv.data.LocalFavorite
 import com.streamflixvip.tv.data.LocalLibraryStore
+import com.streamflixvip.tv.network.TmdbCastMember
 import com.streamflixvip.tv.network.TmdbEpisode
 import com.streamflixvip.tv.network.VipSource
 
 private const val TMDB_BACKDROP = "https://image.tmdb.org/t/p/w1280"
+private const val TMDB_PROFILE = "https://image.tmdb.org/t/p/w185"
 
 private val Bg = Color(0xFF0B0B14)
 private val Accent = Color(0xFF6366F1)
@@ -69,13 +71,14 @@ fun DetailTvScreen(
     val context = LocalContext.current
     val libraryStore = remember(context) { LocalLibraryStore(context) }
     val playFocus = remember { FocusRequester() }
+    val serverFocus = remember { FocusRequester() }
 
-    // Episódio pendente quando o seletor de servidor abre (série)
-    var pendingSeason by remember { mutableIntStateOf(1) }
-    var pendingEpisode by remember { mutableIntStateOf(1) }
-    var pendingEpisodeTitle by remember { mutableStateOf("") }
-    var localSources by remember { mutableStateOf<List<VipSource>>(emptyList()) }
-    var showServerPicker by remember { mutableStateOf(false) }
+    // Servidores inline (não modal) — aparecem sob os botões quando há >1 fonte
+    var serverChoices by remember { mutableStateOf<List<VipSource>>(emptyList()) }
+    var pendingSeason by remember { mutableIntStateOf(0) }
+    var pendingEpisode by remember { mutableIntStateOf(0) }
+    var pendingTitle by remember { mutableStateOf("") }
+    var loadingSources by remember { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().background(Bg)) {
         when {
@@ -98,28 +101,29 @@ fun DetailTvScreen(
                     mutableStateOf(libraryStore.isFavorite(tmdbId, mediaType))
                 }
 
-                fun startWithSources(sources: List<VipSource>, season: Int, episode: Int, title: String) {
+                fun handleSources(sources: List<VipSource>, season: Int, episode: Int, title: String) {
+                    loadingSources = false
                     if (sources.isEmpty()) return
                     if (sources.size == 1) {
+                        serverChoices = emptyList()
                         onPlayClick(sources.first(), sources, season, episode, title, details.poster_path)
                     } else {
-                        localSources = sources
+                        // Inline: chips de servidor focáveis com o controle
                         pendingSeason = season
                         pendingEpisode = episode
-                        pendingEpisodeTitle = title
-                        showServerPicker = true
+                        pendingTitle = title
+                        serverChoices = sources
                     }
                 }
 
-                // Backdrop full
                 if (backdropUrl != null) {
                     AsyncImage(backdropUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                     Box(
                         Modifier.fillMaxSize().background(
                             Brush.verticalGradient(
-                                0f to Color(0x990B0B14),
-                                0.35f to Color(0xCC0B0B14),
-                                0.7f to Bg,
+                                0f to Color(0x880B0B14),
+                                0.4f to Color(0xCC0B0B14),
+                                0.75f to Bg,
                                 1f to Bg,
                             ),
                         ),
@@ -127,9 +131,8 @@ fun DetailTvScreen(
                 }
 
                 Column(Modifier.fillMaxSize()) {
-                    // Top bar
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         IconButton(onClick = onBack) {
@@ -137,12 +140,11 @@ fun DetailTvScreen(
                         }
                     }
 
-                    // Hero info
                     Column(
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 48.dp)
-                            .padding(bottom = 12.dp),
+                            .padding(bottom = 8.dp),
                     ) {
                         Text(
                             displayTitle,
@@ -152,34 +154,46 @@ fun DetailTvScreen(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
+
+                        // Meta: ano · nota · duração · gêneros
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            val year = (details.release_date ?: details.first_air_date)?.take(4)
+                            year?.let { MetaPill(it) }
+                            details.vote_average?.takeIf { it > 0 }?.let {
+                                MetaPill("★ ${"%.1f".format(it)}")
+                            }
+                            details.displayRuntime?.let { MetaPill(it) }
+                            details.genres.orEmpty().take(3).forEach { MetaPill(it.name) }
+                        }
+
                         Spacer(Modifier.height(10.dp))
                         details.overview?.let {
                             Text(
                                 it,
                                 fontSize = 14.sp,
                                 color = Color.White.copy(alpha = 0.78f),
-                                maxLines = if (isSeries) 2 else 4,
+                                maxLines = if (isSeries) 2 else 3,
                                 overflow = TextOverflow.Ellipsis,
                                 lineHeight = 20.sp,
                             )
                         }
-                        Spacer(Modifier.height(16.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Spacer(Modifier.height(14.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Button(
                                 onClick = {
+                                    loadingSources = true
+                                    serverChoices = emptyList()
                                     if (isSeries) {
                                         val season = state.selectedSeason
-                                        viewModel.loadEpisodeSources(season, 1) { source ->
-                                            // loadEpisodeSources chama onSuccess só com 1 fonte;
-                                            // com várias, o estado sources é atualizado — tratamos abaixo
-                                            val sources = state.sources.ifEmpty { listOf(source) }
-                                            startWithSources(sources, season, 1, "$displayTitle · T${season}E1")
+                                        val title = "$displayTitle · T${season}E1"
+                                        viewModel.loadEpisodeSources(season, 1) { sources ->
+                                            handleSources(sources, season, 1, title)
                                         }
-                                        // Fallback: se múltiplas, o ViewModel seta sources + showServerPicker
                                     } else {
-                                        viewModel.loadMovieSources { source ->
-                                            val sources = state.sources.ifEmpty { listOf(source) }
-                                            startWithSources(sources, 0, 0, displayTitle)
+                                        viewModel.loadMovieSources { sources ->
+                                            handleSources(sources, 0, 0, displayTitle)
                                         }
                                     }
                                 },
@@ -191,8 +205,13 @@ fun DetailTvScreen(
                                     focusedContentColor = Color.White,
                                 ),
                             ) {
-                                Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(4.dp))
+                                if (loadingSources) {
+                                    CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(6.dp))
+                                } else {
+                                    Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                }
                                 Text("Assistir Agora", fontWeight = FontWeight.Bold)
                             }
                             GlassButton(if (isFavorite) "Na Minha Lista" else "Minha Lista") {
@@ -201,26 +220,41 @@ fun DetailTvScreen(
                                 )
                             }
                         }
+
+                        // Servidores inline — linha horizontal focável (fácil com D-pad)
+                        if (serverChoices.isNotEmpty()) {
+                            Spacer(Modifier.height(12.dp))
+                            Text("Escolha o servidor", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Spacer(Modifier.height(8.dp))
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(serverChoices.size) { index ->
+                                    val src = serverChoices[index]
+                                    ServerChip(
+                                        label = src.displayName,
+                                        modifier = if (index == 0) Modifier.focusRequester(serverFocus) else Modifier,
+                                        onClick = {
+                                            onPlayClick(
+                                                src,
+                                                serverChoices,
+                                                pendingSeason,
+                                                pendingEpisode,
+                                                pendingTitle.ifBlank { displayTitle },
+                                                details.poster_path,
+                                            )
+                                            serverChoices = emptyList()
+                                        },
+                                    )
+                                }
+                            }
+                            LaunchedEffect(serverChoices) {
+                                runCatching { serverFocus.requestFocus() }
+                            }
+                        }
                     }
 
                     LaunchedEffect(Unit) { runCatching { playFocus.requestFocus() } }
 
-                    // Sincroniza picker do ViewModel (quando load*Sources acha >1 fonte)
-                    LaunchedEffect(state.showServerPicker, state.sources) {
-                        if (state.showServerPicker && state.sources.size > 1) {
-                            localSources = state.sources
-                            if (!isSeries) {
-                                pendingSeason = 0
-                                pendingEpisode = 0
-                                pendingEpisodeTitle = displayTitle
-                            }
-                            showServerPicker = true
-                            viewModel.dismissServerPicker()
-                        }
-                    }
-
                     if (isSeries) {
-                        // Temporadas + episódios
                         Column(
                             Modifier
                                 .fillMaxWidth()
@@ -234,11 +268,14 @@ fun DetailTvScreen(
                                     SeasonChip(
                                         label = "T$season",
                                         selected = season == state.selectedSeason,
-                                        onClick = { viewModel.selectSeason(season) },
+                                        onClick = {
+                                            serverChoices = emptyList()
+                                            viewModel.selectSeason(season)
+                                        },
                                     )
                                 }
                             }
-                            Spacer(Modifier.height(14.dp))
+                            Spacer(Modifier.height(12.dp))
 
                             if (state.loadingSeasons.contains(state.selectedSeason)) {
                                 Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -254,18 +291,11 @@ fun DetailTvScreen(
                                         EpisodeRow(
                                             episode = ep,
                                             onClick = {
+                                                loadingSources = true
+                                                serverChoices = emptyList()
                                                 val title = "$displayTitle · T${state.selectedSeason}E${ep.episode_number}"
-                                                pendingSeason = state.selectedSeason
-                                                pendingEpisode = ep.episode_number
-                                                pendingEpisodeTitle = title
-                                                viewModel.loadEpisodeSources(state.selectedSeason, ep.episode_number) { source ->
-                                                    val sources = state.sources.ifEmpty { listOf(source) }
-                                                    startWithSources(
-                                                        sources,
-                                                        state.selectedSeason,
-                                                        ep.episode_number,
-                                                        title,
-                                                    )
+                                                viewModel.loadEpisodeSources(state.selectedSeason, ep.episode_number) { sources ->
+                                                    handleSources(sources, state.selectedSeason, ep.episode_number, title)
                                                 }
                                             },
                                         )
@@ -273,26 +303,31 @@ fun DetailTvScreen(
                                 }
                             }
                         }
+                    } else {
+                        // Filme: preenche o vão com elenco
+                        val cast = details.credits?.cast.orEmpty().take(12)
+                        if (cast.isNotEmpty()) {
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .padding(horizontal = 48.dp),
+                            ) {
+                                Text("Elenco", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                Spacer(Modifier.height(12.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    contentPadding = PaddingValues(bottom = 24.dp),
+                                ) {
+                                    items(cast) { member ->
+                                        CastCard(member)
+                                    }
+                                }
+                            }
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
                     }
-                }
-
-                // Overlay de servidores (não empurra o layout)
-                if (showServerPicker && localSources.isNotEmpty()) {
-                    ServerPickerOverlay(
-                        sources = localSources,
-                        onPick = { src ->
-                            showServerPicker = false
-                            onPlayClick(
-                                src,
-                                localSources,
-                                pendingSeason,
-                                pendingEpisode,
-                                pendingEpisodeTitle.ifBlank { displayTitle },
-                                details.poster_path,
-                            )
-                        },
-                        onDismiss = { showServerPicker = false },
-                    )
                 }
             }
         }
@@ -300,54 +335,92 @@ fun DetailTvScreen(
 }
 
 @Composable
-private fun ServerPickerOverlay(
-    sources: List<VipSource>,
-    onPick: (VipSource) -> Unit,
-    onDismiss: () -> Unit,
-) {
+private fun MetaPill(text: String) {
     Box(
         Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.72f)),
-        contentAlignment = Alignment.Center,
+            .clip(RoundedCornerShape(6.dp))
+            .background(Glass)
+            .border(1.dp, GlassBorder, RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
     ) {
-        Column(
+        Text(text, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
+    }
+}
+
+@Composable
+private fun CastCard(member: TmdbCastMember) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(100.dp),
+    ) {
+        Box(
             Modifier
-                .widthIn(max = 420.dp)
-                .fillMaxWidth(0.4f)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color(0xF0121220))
-                .border(1.dp, GlassBorder, RoundedCornerShape(18.dp))
-                .padding(22.dp),
+                .size(88.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF1A1A28))
+                .border(1.dp, GlassBorder, CircleShape),
+            contentAlignment = Alignment.Center,
         ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Escolha o servidor", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Filled.Close, "Fechar", tint = TextMuted)
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(sources) { src ->
-                    Button(
-                        onClick = { onPick(src) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.colors(
-                            containerColor = Glass,
-                            focusedContainerColor = Accent.copy(alpha = 0.4f),
-                            contentColor = Color.White,
-                            focusedContentColor = Color.White,
-                        ),
-                    ) {
-                        Text(src.displayName, fontSize = 14.sp)
-                    }
-                }
+            if (member.profile_path != null) {
+                AsyncImage(
+                    model = "$TMDB_PROFILE${member.profile_path}",
+                    contentDescription = member.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            } else {
+                Text(
+                    member.name.take(1),
+                    color = TextMuted,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                )
             }
         }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            member.name,
+            color = Color.White,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        member.character?.let {
+            Text(
+                it,
+                color = TextMuted,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServerChip(
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Button(
+        onClick = onClick,
+        modifier = modifier
+            .onFocusChanged { focused = it.isFocused }
+            .border(
+                1.5.dp,
+                if (focused) AccentSoft else GlassBorder,
+                RoundedCornerShape(999.dp),
+            ),
+        colors = ButtonDefaults.colors(
+            containerColor = if (focused) Accent.copy(alpha = 0.4f) else Glass,
+            focusedContainerColor = Accent.copy(alpha = 0.5f),
+            contentColor = Color.White,
+            focusedContentColor = Color.White,
+        ),
+    ) {
+        Text(label, fontSize = 13.sp, maxLines = 1)
     }
 }
 
