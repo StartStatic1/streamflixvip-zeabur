@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.Normalizer
 
 data class LiveTvUiState(
     val isLoading: Boolean = true,
@@ -22,16 +23,23 @@ data class LiveTvUiState(
 ) {
     val filteredChannels: List<LiveChannel>
         get() {
+            val q = normalize(searchQuery)
             var list = channels
-            if (selectedCategoryId != "all") {
+            // Com busca ativa: procura em TODAS as categorias (senão parece "quebrado")
+            if (q.isEmpty() && selectedCategoryId != "all") {
                 list = list.filter { it.categoryId == selectedCategoryId }
             }
-            val q = searchQuery.trim()
             if (q.isNotEmpty()) {
-                list = list.filter { it.name.contains(q, ignoreCase = true) }
+                list = list.filter { normalize(it.name).contains(q) }
             }
             return list
         }
+
+    companion object {
+        fun normalize(s: String): String =
+            Normalizer.normalize(s.trim().lowercase(), Normalizer.Form.NFD)
+                .replace("\\p{M}+".toRegex(), "")
+    }
 }
 
 class LiveTvViewModel : ViewModel() {
@@ -74,7 +82,7 @@ class LiveTvViewModel : ViewModel() {
     }
 
     fun selectCategory(id: String) {
-        _uiState.update { it.copy(selectedCategoryId = id) }
+        _uiState.update { it.copy(selectedCategoryId = id, searchQuery = "") }
     }
 
     fun setSearch(query: String) {
