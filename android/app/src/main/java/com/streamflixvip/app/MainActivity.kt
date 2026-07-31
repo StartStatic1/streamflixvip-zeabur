@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 
@@ -20,7 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -42,6 +40,9 @@ import com.streamflixvip.app.ui.explore.ExploreViewModel
 import com.streamflixvip.app.ui.explore.PendingExploreFilter
 import com.streamflixvip.app.ui.home.HomeScreen
 import com.streamflixvip.app.ui.home.HomeViewModel
+import com.streamflixvip.app.ui.livetv.LivePlayerScreen
+import com.streamflixvip.app.ui.livetv.LiveTvScreen
+import com.streamflixvip.app.ui.livetv.PendingLiveChannel
 import com.streamflixvip.app.ui.mylist.MyListScreen
 import com.streamflixvip.app.ui.mylist.MyListViewModel
 import com.streamflixvip.app.ui.nav.StreamFlixBottomBar
@@ -59,31 +60,14 @@ import java.net.URLEncoder
 import com.startapp.sdk.adsbase.StartAppAd
 import com.startapp.sdk.adsbase.StartAppSDK
 
-/**
- * Activity única hospedando toda a navegação via Compose Navigation.
- *
- * Estrutura em duas camadas:
- * 1. Gate de autenticação — se não estiver logado, mostra AuthScreen até
- *    o login completar. Sessão persiste via SessionStore (SharedPreferences),
- *    então isso só aparece na primeira vez ou após logout.
- * 2. Depois de logado: Scaffold com bottom bar fixa (Início/Buscar/Minha
- *    Lista/Perfil) + NavHost cobrindo essas 4 abas MAIS as rotas de
- *    Detail/Player (que abrem por cima, sem bottom bar — faz sentido
- *    principalmente pro Player, que quer maximizar área de vídeo).
- */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Precisa vir ANTES de super.onCreate() — a API do
-        // core-splashscreen intercepta a criação da Activity nesse ponto
-        // pra decidir quando a splash sai da tela.
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        
-        // Inicializar Start.io SDK
+
         StartAppSDK.init(this, "206908168", true)
-        // Desativar splash screen automática da Start.io (já temos a nossa)
         StartAppAd.disableSplash()
-        
+
         enableEdgeToEdge()
         setContent {
             StreamFlixTheme {
@@ -100,10 +84,6 @@ private fun AppRoot() {
     val context = LocalContext.current
     val sessionStore = remember {
         SessionStore(context).also {
-            // Atribuição síncrona, não em LaunchedEffect — precisa estar
-            // pronto ANTES da primeira composição de qualquer tela poder
-            // disparar uma chamada de rede autenticada (ex: HomeScreen
-            // carregando "continuar assistindo" já no primeiro frame).
             com.streamflixvip.app.network.NetworkModule.sessionStore = it
         }
     }
@@ -112,12 +92,6 @@ private fun AppRoot() {
 
     var isLoggedIn by remember { mutableStateOf(sessionStore.isLoggedIn) }
 
-    // ── Checagem de atualização obrigatória ──
-    // Roda uma vez, assim que o app abre, ANTES de splash/login — se
-    // existir uma versão mais nova publicada (ver api/app-version.js),
-    // a pessoa é bloqueada aqui até atualizar. Falha de rede/servidor não
-    // trava o app (updateInfo continua null e o fluxo normal segue) —
-    // só bloqueia quando a checagem teve SUCESSO e confirmou desatualização.
     var updateInfo by remember { mutableStateOf<com.streamflixvip.app.network.AppVersionResponse?>(null) }
     var isDownloadingUpdate by remember { mutableStateOf(false) }
 
@@ -128,9 +102,6 @@ private fun AppRoot() {
                 updateInfo = response
             }
         } catch (_: Exception) {
-            // Sem internet, servidor fora do ar, etc. — não bloqueia o
-            // app por causa disso; a pessoa só não vai saber que existe
-            // update até a próxima abertura com rede disponível.
         }
     }
 
@@ -156,12 +127,6 @@ private fun AppRoot() {
         return
     }
 
-    // Splash Compose animada — roda logo depois da splash nativa do
-    // sistema (instalada em onCreate). A nativa cobre só o instante de
-    // "app abrindo" antes do Compose montar; esta aqui é a experiência
-    // de marca de verdade (logo, frase de efeito, partículas), rodando
-    // já dentro do próprio Compose. Sem nenhuma ligação com login/sessão
-    // — sempre aparece por alguns segundos, então segue pro fluxo normal.
     var showSplash by remember { mutableStateOf(true) }
 
     if (showSplash) {
@@ -190,17 +155,9 @@ private fun MainAppScaffold(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute in listOf("home", "search", "explore", "genres", "mylist", "profile")
-    // A lupa aparece nas abas principais. Pesquisa Geral e Explorar têm
-    // cabeçalhos próprios porque são fluxos diferentes: uma localiza títulos
-    // por texto; a outra descobre conteúdo por filtros e categorias.
+    val showBottomBar = currentRoute in listOf("home", "search", "explore", "livetv", "genres", "mylist", "profile")
     val showTopBar = currentRoute in listOf("home", "genres", "mylist", "profile")
 
-    // Popula o status VIP em memória assim que o app abre logado — assim,
-    // MESMO que o usuário nunca visite a aba Perfil, a tela de Detalhes já
-    // sabe se ele é VIP a tempo de decidir mostrar cadeado ou não. Sem
-    // isso, requiresVip() ficaria preso em "não-VIP" até a primeira visita
-    // ao Perfil (comportamento seguro, mas indesejado pra quem já pagou).
     LaunchedEffect(userId) {
         if (userId != null) {
             val status = VipRepository().getStatus(userId)
@@ -212,7 +169,6 @@ private fun MainAppScaffold(
         topBar = {
             if (showTopBar) {
                 com.streamflixvip.app.ui.nav.AppTopBar(
-                    // userDisplayName = userEmail?.substringBefore("@"), // Removido a pedido do usuário
                     onSearchClick = {
                         navController.navigate("search") { launchSingleTop = true }
                     },
@@ -226,11 +182,6 @@ private fun MainAppScaffold(
         NavHost(
             navController = navController,
             startDestination = "home",
-            // innerPadding já reflete corretamente topBar e bottomBar
-            // juntos (o Scaffold calcula isso sozinho a partir do que
-            // topBar/bottomBar acima realmente desenharam) — não precisa
-            // de lógica condicional aqui, só zerar padding nas telas que
-            // não têm NENHUMA das duas (Detail/Player, tela cheia).
             modifier = Modifier.padding(innerPadding),
         ) {
             composable("home") {
@@ -273,10 +224,6 @@ private fun MainAppScaffold(
             composable("explore") {
                 val viewModel: ExploreViewModel = viewModel(
                     factory = viewModelFactory {
-                        // Lê e imediatamente limpa o filtro pendente (se
-                        // veio do "Ver mais" da Home) — assim, reabrir a
-                        // aba Explorar pela bottom bar depois não fica
-                        // "grudada" no último filtro usado.
                         val pending = PendingExploreFilter.consume()
                         ExploreViewModel(initialFilters = pending ?: com.streamflixvip.app.ui.explore.ExploreFilters())
                     },
@@ -285,6 +232,28 @@ private fun MainAppScaffold(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
                 )
+            }
+
+            composable("livetv") {
+                LiveTvScreen(
+                    onChannelClick = { channel ->
+                        PendingLiveChannel.set(channel)
+                        navController.navigate("liveplayer")
+                    },
+                )
+            }
+
+            composable("liveplayer") {
+                val channel = remember { PendingLiveChannel.consume() }
+                if (channel == null || channel.streams.isEmpty()) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    LivePlayerScreen(
+                        channelName = channel.name,
+                        streams = channel.streams,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
 
             composable("genres") {
@@ -378,19 +347,9 @@ private fun MainAppScaffold(
                     },
                     onBack = { navController.popBackStack() },
                     onUpgradeClick = {
-                        // Leva pra aba Perfil, onde a seção VIP (resgate de
-                        // código + benefícios) já está — evita duplicar essa
-                        // tela em dois lugares diferentes do app.
-                        navController.navigate("profile") {
-                            launchSingleTop = true
-                        }
+                        navController.navigate("profile") { launchSingleTop = true }
                     },
                     onOpenTitle = { openTmdbId, openMediaType ->
-                        // Empilha uma nova tela de Detail por cima da atual —
-                        // ao tocar em "Voltar" no título similar, volta pro
-                        // título original, comportamento padrão de navegação
-                        // encadeada (mesmo que abrir de qualquer outro lugar
-                        // do app, tipo Home ou Buscar).
                         navController.navigate("detail/$openTmdbId/$openMediaType")
                     },
                 )
@@ -424,13 +383,6 @@ private fun MainAppScaffold(
                 }
                 val url = URLDecoder.decode(encodedUrl, "UTF-8")
 
-                // Fricção pra não-VIP: espera alguns segundos antes do player
-                // abrir de verdade, com CTA pra pular virando VIP — mesma
-                // ideia do Rewarded Interstitial que o site já usa no
-                // primeiro play. VIP nunca vê essa tela (waitDone já nasce
-                // true). Estado local (não navegação) porque é só uma
-                // barreira temporal antes do MESMO destino, não uma tela
-                // que a pessoa navega "de volta" pra ela.
                 val isVip by VipStatusHolder.isVip.collectAsState()
                 var waitDone by remember(entry.id) { mutableStateOf(isVip) }
 
@@ -463,11 +415,6 @@ private fun MainAppScaffold(
     }
 }
 
-/**
- * Helper genérico pra criar ViewModelProvider.Factory a partir de uma
- * lambda — evita repetir o boilerplate de `object : Factory { ... }`
- * pra cada ViewModel que recebe argumentos de construtor.
- */
 private fun <T : androidx.lifecycle.ViewModel> viewModelFactory(create: () -> T) =
     object : androidx.lifecycle.ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
