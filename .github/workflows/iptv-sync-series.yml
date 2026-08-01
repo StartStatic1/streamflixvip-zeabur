@@ -1,24 +1,10 @@
 name: Sincronização IPTV — Séries (standalone)
 
-# Irmão separado de iptv-sync.yml (que cuida só de filmes). Roda de forma
-# totalmente independente: horário próprio, cursor de progresso próprio
-# (series_sync_cursor, diferente do sync_cursor usado pelo sync de filmes),
-# então um nunca atrasa nem disputa tempo com o outro.
-#
-# IMPORTANTE — antes de usar:
-# 1. Configure os mesmos Secrets já usados pelo iptv-sync.yml em:
-#    Settings > Secrets and variables > Actions
-#      SUPABASE_SERVICE_ROLE_KEY
-#      TMDB_API_KEY
-# 2. Adicione as colunas novas na tabela iptv_sources do Supabase
-#    (series_sync_cursor, series_last_batch_at, series_last_synced_at,
-#    series_last_sync_stats) — ver SQL fornecido junto com este arquivo.
 on:
   schedule:
-    - cron: '15 */1 * * *'   # roda 1x por hora, no minuto 15 (deslocado do sync de filmes pra não competir por rede/CPU no mesmo instante)
+    - cron: '15 */1 * * *'
   workflow_dispatch: {}
 
-# Mesma proteção contra empilhamento dos outros dois workflows de sync.
 concurrency:
   group: iptv-sync-series
   cancel-in-progress: false
@@ -43,10 +29,11 @@ jobs:
         run: node sync-series-standalone.js
 
       - name: Manter só as 2 melhores fontes por episódio
+        continue-on-error: true
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl -sf -X POST "https://gkujbjpvphuvrejpvvtz.supabase.co/rest/v1/rpc/enforce_max_sources_per_episode" \
+          curl -sS -X POST "https://gkujbjpvphuvrejpvvtz.supabase.co/rest/v1/rpc/enforce_max_sources_per_episode" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Content-Type: application/json" \

@@ -12,11 +12,6 @@ on:
     - cron: '*/30 * * * *'
   workflow_dispatch: {}
 
-# Impede que uma nova execução comece em cima de uma anterior que ainda
-# está rodando (ex: se uma rodada travar/demorar mais que os 30 min do
-# cron, isso empilharia execuções concorrentes disputando as mesmas
-# linhas no Supabase). cancel-in-progress:false = a nova espera a
-# anterior terminar em vez de cancelá-la no meio.
 concurrency:
   group: iptv-sync
   cancel-in-progress: false
@@ -41,14 +36,11 @@ jobs:
         run: node sync-standalone.js
 
       - name: Manter só as 2 melhores fontes por episódio
-        # Os 3 painéis IPTV sincronizam o catálogo completo deles sem
-        # restrição — esse passo é quem decide quantas fontes disso tudo
-        # o app realmente guarda por filme/episódio (ver
-        # migrations/enforce_max_sources.sql).
+        continue-on-error: true
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          curl -sf -X POST "https://gkujbjpvphuvrejpvvtz.supabase.co/rest/v1/rpc/enforce_max_sources_per_episode" \
+          curl -sS -X POST "https://gkujbjpvphuvrejpvvtz.supabase.co/rest/v1/rpc/enforce_max_sources_per_episode" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "Content-Type: application/json" \
