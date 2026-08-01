@@ -1,6 +1,6 @@
 // api/live-tv.js
 //
-// Lista canais ao vivo das fontes IPTV ativas (até 3), agrupando por nome
+// Lista canais ao vivo das fontes IPTV (até 3), agrupando por nome
 // com múltiplas URLs de stream para fallback no player do app.
 // Credenciais Xtream NUNCA saem daqui — o app só recebe nome, logo, categoria e URLs.
 
@@ -19,7 +19,10 @@ async function sbSelect(serviceKey, table, query) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
     headers: supabaseHeaders(serviceKey),
   });
-  if (!r.ok) throw new Error(`Supabase ${table}: ${r.status}`);
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    throw new Error(`Supabase ${table}: ${r.status} ${body.slice(0, 200)}`);
+  }
   return r.json();
 }
 
@@ -33,7 +36,7 @@ async function xtreamFetch(baseUrl, username, password, action, params = {}) {
   });
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 18000);
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
   try {
     const res = await fetch(url.toString(), {
       signal: controller.signal,
@@ -61,24 +64,37 @@ function normalizeName(name) {
 function buildLiveUrl(host, user, pass, streamId, extension) {
   const base = String(host).replace(/\/+$/, '');
   const ext = (extension || 'm3u8').toLowerCase().replace(/^\./, '');
-  // Prefer m3u8 for ExoPlayer; .ts also works as progressive/HLS in many panels
   const useExt = ext === 'ts' ? 'm3u8' : (ext || 'm3u8');
   return `${base}/live/${user}/${pass}/${streamId}.${useExt}`;
+}
+
+function hasXtreamCreds(source) {
+  return !!(source.xtream_host && source.xtream_user && source.xtream_pass);
 }
 
 async function loadFromSource(source) {
   const host = source.xtream_host;
   const user = source.xtream_user;
   const pass = source.xtream_pass;
-  if (!host || !user || !pass) return { categories: [], streams: [] };
+  if (!host || !user || !pass) {
+    return { sourceName: source.name || 'Fonte', priority: source.priority ?? 100, categories: [], streams: [], skipReason: 'sem credenciais xtream' };
+  }
 
   const [categories, streams] = await Promise.all([
-    xtreamFetch(host, user, pass, 'get_live_categories').catch(() => []),
-    xtreamFetch(host, user, pass, 'get_live_streams').catch(() => []),
+    xtreamFetch(host, user, pass, 'get_live_categories').catch((e) => {
+      console.error('[live-tv] categorias', source.name, e.message);
+      return [];
+    }),
+    xtreamFetch(host, user, pass, 'get_live_streams').catch((e) => {
+      console.error('[live-tv] streams', source.name, e.message);
+      return [];
+    }),
   ]);
 
   const catList = Array.isArray(categories) ? categories : [];
   const streamList = Array.isArray(streams) ? streams : [];
+
+  console.log(`[live-tv] ${source.name}: ${catList.length} cats, ${streamList.length} streams`);
 
   return {
     sourceName: source.name || 'Fonte',
@@ -106,34 +122,66 @@ async function handler(req, res) {
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
-    res.status(500).json({ error: 'Servidor sem SUPABASE_SERVICE_ROLE_KEY' });
+    res.status(500).json({ error: 'Servidor sem SUPABASE_SERVICE_ROLE_KEY', categories: [], channels: [], sourcesUsed: 0 });
     return;
   }
 
   try {
-    // Até 3 fontes ativas, prioridade crescente (menor número = primeiro)
-    const sources = await sbSelect(
+    // 1) Fontes ativas com credenciais
+    let sources = await sbSelect(
       serviceKey,
       'iptv_sources',
-      'is_active=eq.true&select=id,name,priority,xtream_host,xtream_user,xtream_pass,source_type&order=priority.asc.nullslast&limit=' + MAX_SOURCES,
+      'is_active=eq.true&select=id,name,priority,xtream_host,xtream_user,xtream_pass,source_type,is_active&order=priority.asc.nullslast&limit=20',
     );
 
-    if (!sources.length) {
-      res.status(200).json({ categories: [], channels: [], sourcesUsed: 0 });
+    // 2) Fallback: se nenhuma ativa, tenta qualquer uma com host/user/pass
+    //    (evita TV “morta” quando alguém desmarcou is_active por engano)
+    if (!Array.isArray(sources) || sources.length === 0) {
+      console.warn('[live-tv] nenhuma is_active=true — tentando todas as fontes');
+      sources = await sbSelect(
+        serviceKey,
+        'iptv_sources',
+        'select=id,name,priority,xtream_host,xtream_user,xtream_pass,source_type,is_active&order=priority.asc.nullslast&limit=20',
+      );
+    }
+
+    if (!Array.isArray(sources)) sources = [];
+
+    const withCreds = sources.filter(hasXtreamCreds).slice(0, MAX_SOURCES);
+
+    if (!withCreds.length) {
+      res.status(200).json({
+        categories: [],
+        channels: [],
+        sourcesUsed: 0,
+        diagnostic: {
+          sourcesInDb: sources.length,
+          withCredentials: 0,
+          activeTrue: sources.filter((s) => s.is_active === true).length,
+          hint: sources.length === 0
+            ? 'Tabela iptv_sources vazia ou inacessível'
+            : 'Fontes existem mas sem xtream_host/user/pass preenchidos',
+        },
+      });
       return;
     }
 
     const results = await Promise.all(
-      sources.map((s) =>
+      withCreds.map((s) =>
         loadFromSource(s).catch((err) => {
           console.error('[live-tv] fonte falhou', s.name, err.message);
-          return { sourceName: s.name, priority: s.priority, categories: [], streams: [] };
+          return {
+            sourceName: s.name,
+            priority: s.priority,
+            categories: [],
+            streams: [],
+            skipReason: err.message,
+          };
         }),
       ),
     );
 
-    // Merge categorias por nome normalizado
-    const categoryMap = new Map(); // key -> { id, name }
+    const categoryMap = new Map();
     for (const r of results) {
       for (const c of r.categories) {
         const key = normalizeName(c.name);
@@ -144,15 +192,15 @@ async function handler(req, res) {
       }
     }
 
-    // Merge canais por nome: acumula streams de até 3 fontes
-    const channelMap = new Map(); // normName -> channel
+    const channelMap = new Map();
     for (const r of results) {
       for (const s of r.streams) {
         const key = normalizeName(s.name);
         if (!key) continue;
-        const catKey = normalizeName(
-          r.categories.find((c) => c.id === s.categoryId)?.name || 'Outros',
-        ) || 'outros';
+        const catKey =
+          normalizeName(
+            r.categories.find((c) => c.id === s.categoryId)?.name || 'Outros',
+          ) || 'outros';
 
         let ch = channelMap.get(key);
         if (!ch) {
@@ -166,7 +214,6 @@ async function handler(req, res) {
           channelMap.set(key, ch);
         }
         if (!ch.logo && s.logo) ch.logo = s.logo;
-        // Evita URL duplicada
         if (!ch.streams.some((x) => x.url === s.url)) {
           ch.streams.push({
             url: s.url,
@@ -177,7 +224,6 @@ async function handler(req, res) {
       }
     }
 
-    // Ordena streams de cada canal por priority
     const channels = Array.from(channelMap.values()).map((ch) => ({
       ...ch,
       streams: ch.streams.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)),
@@ -189,18 +235,41 @@ async function handler(req, res) {
       a.name.localeCompare(b.name, 'pt-BR'),
     );
 
-    // Só categorias que têm pelo menos 1 canal
     const usedCats = new Set(channels.map((c) => c.categoryId));
     const filteredCategories = categories.filter((c) => usedCats.has(c.id));
 
-    res.status(200).json({
-      categories: [{ id: 'all', name: 'Todos' }, ...filteredCategories],
+    const sourcesUsed = results.filter((r) => r.streams.length > 0).length;
+
+    const payload = {
+      categories: channels.length
+        ? [{ id: 'all', name: 'Todos' }, ...filteredCategories]
+        : [],
       channels,
-      sourcesUsed: results.filter((r) => r.streams.length > 0).length,
-    });
+      sourcesUsed,
+    };
+
+    if (!channels.length) {
+      payload.diagnostic = {
+        triedSources: withCreds.map((s) => s.name),
+        perSource: results.map((r) => ({
+          name: r.sourceName,
+          streams: r.streams.length,
+          categories: r.categories.length,
+          skipReason: r.skipReason || null,
+        })),
+        hint: 'Fontes contatadas mas painel Xtream não devolveu canais live (offline, user expirado ou bloqueio)',
+      };
+    }
+
+    res.status(200).json(payload);
   } catch (err) {
     console.error('[live-tv]', err);
-    res.status(500).json({ error: err.message || 'Erro ao carregar canais' });
+    res.status(500).json({
+      error: err.message || 'Erro ao carregar canais',
+      categories: [],
+      channels: [],
+      sourcesUsed: 0,
+    });
   }
 }
 
