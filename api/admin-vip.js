@@ -225,6 +225,38 @@ module.exports = async function handler(req, res) {
     else groupList.sort((a, b) => b.latest - a.latest);
     const start = (Math.max(1, page) - 1) * pageSize;
     const pageItems = groupList.slice(start, start + pageSize);
+
+    // Contagem precisa: o limit 4000 pode trazer so 1 linha de um titulo
+    // que tem 3 fontes. Ao expandir o painel busca tudo; o cabecalho
+    // precisa bater. Reconsulta so os titulos da pagina atual.
+    if (pageItems.length > 0) {
+      const ids = [...new Set(pageItems.map((g) => g.tmdb_id))];
+      const countRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/vip_sources?tmdb_id=in.(${ids.join(',')})&select=tmdb_id,media_type,is_active,title,poster_path`,
+        { headers: svcHeaders },
+      );
+      if (countRes.ok) {
+        const allForPage = await countRes.json();
+        const byKey = new Map();
+        (allForPage || []).forEach((s) => {
+          const key = s.media_type + ':' + s.tmdb_id;
+          if (!byKey.has(key)) byKey.set(key, []);
+          byKey.get(key).push(s);
+        });
+        pageItems.forEach((g) => {
+          const items = byKey.get(g.media_type + ':' + g.tmdb_id) || [];
+          if (items.length === 0) return;
+          g.sourceCount = items.length;
+          g.activeCount = items.filter((s) => s.is_active).length;
+          g.inactiveCount = items.length - g.activeCount;
+          const withTitle = items.find((s) => s.title && String(s.title).trim());
+          if (withTitle) g.title = withTitle.title;
+          const withPoster = items.find((s) => s.poster_path);
+          if (withPoster) g.poster_path = withPoster.poster_path;
+        });
+      }
+    }
+
     res.status(200).json({
       groups: pageItems.map((g) => ({
         tmdb_id: g.tmdb_id, media_type: g.media_type, title: g.title,
