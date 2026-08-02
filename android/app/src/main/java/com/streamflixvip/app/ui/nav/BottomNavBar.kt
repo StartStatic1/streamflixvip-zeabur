@@ -31,7 +31,6 @@ sealed class BottomNavItem(
     data object Profile : BottomNavItem("profile", "Perfil", Icons.Filled.Person)
 }
 
-/** Cinema Flutuante — 4 itens limpos. Gêneros e Favoritos ficam dentro de Explorar / Perfil. */
 val bottomNavItems = listOf(
     BottomNavItem.Home,
     BottomNavItem.Explore,
@@ -39,7 +38,7 @@ val bottomNavItems = listOf(
     BottomNavItem.Profile,
 )
 
-private val Gold = Color(0xFFD4AF37)
+private val OceanCyan = Color(0xFF00E5FF)
 
 @Composable
 fun StreamFlixBottomBar(navController: NavController) {
@@ -82,11 +81,11 @@ fun StreamFlixBottomBar(navController: NavController) {
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Gold,
-                    selectedTextColor = Gold,
+                    selectedIconColor = OceanCyan,
+                    selectedTextColor = OceanCyan,
                     unselectedIconColor = Color.White.copy(alpha = 0.55f),
                     unselectedTextColor = Color.White.copy(alpha = 0.55f),
-                    indicatorColor = Gold.copy(alpha = 0.14f),
+                    indicatorColor = OceanCyan.copy(alpha = 0.14f),
                 ),
             )
         }

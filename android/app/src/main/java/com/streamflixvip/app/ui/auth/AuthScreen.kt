@@ -32,13 +32,10 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.streamflixvip.app.data.CatalogRepository
 
-private val Gold = Color(0xFFD4AF37)
+private val OceanCyan = Color(0xFF00E5FF)
 private val DarkBg = Color(0xFF05050A)
 private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 
-/**
- * Login por e-mail + código — formulário em card flutuante sobre o rolo de posters.
- */
 @Composable
 fun AuthScreen(
     viewModel: AuthViewModel,
@@ -54,7 +51,6 @@ fun AuthScreen(
     Box(Modifier.fillMaxSize().background(DarkBg)) {
         MovingPosterBackground()
 
-        // Overlay mais suave — posters ficam mais visíveis (efeito "no ar")
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -78,7 +74,6 @@ fun AuthScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Card flutuante do formulário
             Surface(
                 shape = RoundedCornerShape(24.dp),
                 color = Color(0xFF0F0F16).copy(alpha = 0.92f),
@@ -93,7 +88,7 @@ fun AuthScreen(
                         "StreamFlixVIP",
                         fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Gold,
+                        color = OceanCyan,
                     )
                     Spacer(Modifier.height(6.dp))
 
@@ -105,7 +100,7 @@ fun AuthScreen(
 
                     state.infoMessage?.let {
                         Spacer(Modifier.height(12.dp))
-                        Text(it, color = Gold, fontSize = 13.sp)
+                        Text(it, color = OceanCyan, fontSize = 13.sp)
                     }
                     state.errorMessage?.let {
                         Spacer(Modifier.height(12.dp))
@@ -131,10 +126,10 @@ private fun EmailStep(state: AuthUiState, viewModel: AuthViewModel) {
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email),
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Gold,
+            focusedBorderColor = OceanCyan,
             unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
-            focusedLabelColor = Gold,
-            cursorColor = Gold,
+            focusedLabelColor = OceanCyan,
+            cursorColor = OceanCyan,
         ),
         shape = RoundedCornerShape(14.dp),
     )
@@ -145,12 +140,12 @@ private fun EmailStep(state: AuthUiState, viewModel: AuthViewModel) {
         modifier = Modifier.fillMaxWidth().height(50.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Gold,
-            contentColor = Color.Black,
+            containerColor = OceanCyan,
+            contentColor = Color(0xFF001820),
         ),
     ) {
         if (state.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Color.Black)
+            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Color(0xFF001820))
         } else {
             Text("Continuar", fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
@@ -173,10 +168,10 @@ private fun CodeStep(state: AuthUiState, viewModel: AuthViewModel) {
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = Gold,
+            focusedBorderColor = OceanCyan,
             unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
-            focusedLabelColor = Gold,
-            cursorColor = Gold,
+            focusedLabelColor = OceanCyan,
+            cursorColor = OceanCyan,
         ),
         shape = RoundedCornerShape(14.dp),
     )
@@ -187,12 +182,12 @@ private fun CodeStep(state: AuthUiState, viewModel: AuthViewModel) {
         modifier = Modifier.fillMaxWidth().height(50.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Gold,
-            contentColor = Color.Black,
+            containerColor = OceanCyan,
+            contentColor = Color(0xFF001820),
         ),
     ) {
         if (state.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Color.Black)
+            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Color(0xFF001820))
         } else {
             Text("Entrar", fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }

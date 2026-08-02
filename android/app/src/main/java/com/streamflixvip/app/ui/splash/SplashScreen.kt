@@ -22,12 +22,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
-/**
- * Splash Cinema Flutuante — preto profundo, play dourado, partículas lentas.
- */
 @Composable
 fun SplashScreen(onSplashFinished: () -> Unit) {
-    val Gold = Color(0xFFD4AF37)
+    val Accent = Color(0xFF00E5FF)
     val DarkBg = Color(0xFF05050A)
 
     val scaleAnim by animateFloatAsState(
@@ -117,7 +114,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF0C0C14),
+                            Color(0xFF061018),
                             DarkBg
                         ),
                         center = Offset(0.5f, 0.42f),
@@ -129,6 +126,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
         particles.forEach { particle ->
             FloatingParticle(
                 particle = particle,
+                accent = Accent,
                 modifier = Modifier.alpha(exitAlpha)
             )
         }
@@ -144,7 +142,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 modifier = Modifier
                     .size(108.dp)
                     .background(
-                        color = Gold.copy(alpha = glowAlpha * 0.18f),
+                        color = Accent.copy(alpha = glowAlpha * 0.18f),
                         shape = CircleShape
                     )
                     .scale(pulseScale)
@@ -152,7 +150,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "StreamFlixVIP",
-                    tint = Gold,
+                    tint = Accent,
                     modifier = Modifier.size(52.dp)
                 )
             }
@@ -170,7 +168,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 text = "VIP",
                 fontSize = 34.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Gold,
+                color = Accent,
                 textAlign = TextAlign.Center
             )
 
@@ -196,8 +194,11 @@ data class Particle(
 )
 
 @Composable
-private fun FloatingParticle(particle: Particle, modifier: Modifier = Modifier) {
-    val Gold = Color(0xFFD4AF37)
+private fun FloatingParticle(
+    particle: Particle,
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
     val transition = rememberInfiniteTransition(label = "particle_${particle.startX}")
     val offsetY by transition.animateFloat(
         initialValue = particle.startY,
@@ -222,7 +223,7 @@ private fun FloatingParticle(particle: Particle, modifier: Modifier = Modifier) 
             modifier = Modifier
                 .size(particle.sizeDp.dp)
                 .background(
-                    color = Gold.copy(alpha = particle.maxOpacity),
+                    color = accent.copy(alpha = particle.maxOpacity),
                     shape = CircleShape
                 )
         )
