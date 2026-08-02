@@ -5,27 +5,23 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// Paleta espelhando o dark theme que o site já usa (fundo escuro, dourado
-// como cor de destaque) — mantém identidade visual consistente entre
-// site e app.
+// Cinema Flutuante — preto mais profundo + dourado VIP
 private val Gold = Color(0xFFD4AF37)
-private val DarkBackground = Color(0xFF0A0A10)
-private val DarkSurface = Color(0xFF15151C)
+private val DarkBackground = Color(0xFF05050A)
+private val DarkSurface = Color(0xFF0F0F16)
 
 private val DarkColors = darkColorScheme(
     primary = Gold,
+    onPrimary = Color.Black,
     background = DarkBackground,
     surface = DarkSurface,
-    surfaceVariant = Color(0xFF232330),
+    surfaceVariant = Color(0xFF1A1A24),
+    onSurface = Color.White,
+    onSurfaceVariant = Color.White.copy(alpha = 0.58f),
+    outline = Gold.copy(alpha = 0.18f),
 )
 
-// ── Tema sempre escuro ──
-// O app StreamFlixVIP usa exclusivamente o esquema escuro, independente
-// do modo do sistema operacional. Isso evita telas brancas/em branco
-// quando o usuário tem o modo claro ativado no celular, e garante
-// identidade visual consistente em qualquer dispositivo.
-// Não há seletor de tema nem perfil de usuário para isso — é uma decisão
-// de produto: o app é dark-only, igual ao site.
+// Tema sempre escuro — identidade visual do StreamFlixVIP
 @Composable
 fun StreamFlixTheme(
     content: @Composable () -> Unit,

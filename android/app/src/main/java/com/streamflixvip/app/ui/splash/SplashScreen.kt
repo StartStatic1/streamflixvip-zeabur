@@ -23,101 +23,84 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 /**
- * Splash Screen animada do StreamFlixVIP.
- *
- * Sequência de animações:
- * 1. Ícone de play + logo "StreamFlixVIP" fazem fade-in com scale
- * 2. Frase de efeito aparece com delay
- * 3. Partículas brilhantes flutuam ao fundo
- * 4. Fade-out antes de liberar navegação
- *
- * NOTA: Não usa MaterialTheme porque roda antes do tema ser carregado.
+ * Splash Cinema Flutuante — preto profundo, play dourado, partículas lentas.
  */
 @Composable
 fun SplashScreen(onSplashFinished: () -> Unit) {
-    // Cores
     val Gold = Color(0xFFD4AF37)
-    val DarkBg = Color(0xFF0A0A10)
+    val DarkBg = Color(0xFF05050A)
 
-    // Animação 1: escala do logo (0.5 -> 1.0)
     val scaleAnim by animateFloatAsState(
         targetValue = 1f,
         animationSpec = tween(durationMillis = 800, easing = EaseOutBack),
         label = "logo_scale"
     )
 
-    // Animação 2: alpha do logo (0 -> 1)
     val alphaAnim by animateFloatAsState(
         targetValue = 1f,
         animationSpec = tween(durationMillis = 1000),
         label = "logo_alpha"
     )
 
-    // Animação 3: pulse contínuo no ícone
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseScale by pulseAnim.animateFloat(
-        initialValue = 0.9f,
-        targetValue = 1.1f,
+        initialValue = 0.92f,
+        targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = EaseInOut),
+            animation = tween(1400, easing = EaseInOut),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse_scale"
     )
 
-    // Animação 4: glow do ícone
     val glowAlpha by pulseAnim.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
+        initialValue = 0.25f,
+        targetValue = 0.7f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = EaseInOut),
+            animation = tween(1400, easing = EaseInOut),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glow_alpha"
     )
 
-    // Animação 5: frase de efeito aparece com delay
     var showTagline by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(1200)
+        delay(1100)
         showTagline = true
     }
     val taglineAlpha by animateFloatAsState(
         targetValue = if (showTagline) 1f else 0f,
-        animationSpec = tween(durationMillis = 800),
+        animationSpec = tween(durationMillis = 900),
         label = "tagline_alpha"
     )
 
-    // Animação 6: fade-out final
     var startExit by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(3500)
+        delay(3400)
         startExit = true
     }
     val exitAlpha by animateFloatAsState(
         targetValue = if (startExit) 0f else 1f,
-        animationSpec = tween(durationMillis = 600),
+        animationSpec = tween(durationMillis = 550),
         label = "exit_alpha"
     )
 
-    // Dispara callback quando animação de saída termina
     LaunchedEffect(exitAlpha) {
         if (exitAlpha == 0f) {
-            delay(100)
+            delay(80)
             onSplashFinished()
         }
     }
 
-    // Partículas flutuantes
     val particles = remember {
-        (0 until 12).map { _ ->
+        (0 until 14).map { _ ->
             Particle(
-                startX = (10..90).random().toFloat(),
-                startY = (10..90).random().toFloat(),
-                sizeDp = (2..5).random(),
-                duration = (3000..6000).random(),
-                delayMs = (0..2000).random(),
-                maxOpacity = 0.2f + (Math.random() * 0.4).toFloat()
+                startX = (8..92).random().toFloat(),
+                startY = (8..92).random().toFloat(),
+                sizeDp = (2..4).random(),
+                duration = (3500..7000).random(),
+                delayMs = (0..2500).random(),
+                maxOpacity = 0.15f + (Math.random() * 0.35).toFloat()
             )
         }
     }
@@ -128,23 +111,21 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
             .alpha(exitAlpha),
         contentAlignment = Alignment.Center
     ) {
-        // Fundo com gradiente sutil
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF12121A),
+                            Color(0xFF0C0C14),
                             DarkBg
                         ),
-                        center = Offset(0.5f, 0.4f),
-                        radius = 0.8f
+                        center = Offset(0.5f, 0.42f),
+                        radius = 0.85f
                     )
                 )
         )
 
-        // Partículas brilhantes
         particles.forEach { particle ->
             FloatingParticle(
                 particle = particle,
@@ -152,20 +133,18 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
             )
         }
 
-        // Conteúdo central
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .scale(scaleAnim)
                 .alpha(alphaAnim)
         ) {
-            // Ícone de play com glow
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(108.dp)
                     .background(
-                        color = Gold.copy(alpha = glowAlpha * 0.15f),
+                        color = Gold.copy(alpha = glowAlpha * 0.18f),
                         shape = CircleShape
                     )
                     .scale(pulseScale)
@@ -174,55 +153,39 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "StreamFlixVIP",
                     tint = Gold,
-                    modifier = Modifier.size(50.dp)
+                    modifier = Modifier.size(52.dp)
                 )
             }
 
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(30.dp))
 
-            // Logo "StreamFlix" em branco
             Text(
                 text = "StreamFlix",
-                fontSize = 32.sp,
+                fontSize = 34.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
                 textAlign = TextAlign.Center
             )
-            // Logo "VIP" em dourado
             Text(
                 text = "VIP",
-                fontSize = 32.sp,
+                fontSize = 34.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Gold,
                 textAlign = TextAlign.Center
             )
 
-            // Frase de efeito
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(22.dp))
             Text(
                 text = "Seu cinema. Seu ritmo.",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.7f * taglineAlpha),
+                color = Color.White.copy(alpha = 0.65f * taglineAlpha),
                 textAlign = TextAlign.Center
-            )
-        }
-
-        // Linha decorativa inferior animada
-        if (showTagline) {
-            AnimatedDecorativeLine(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 60.dp)
-                    .alpha(exitAlpha)
             )
         }
     }
 }
 
-/**
- * Partícula flutuante individual.
- */
 data class Particle(
     val startX: Float,
     val startY: Float,
@@ -234,10 +197,11 @@ data class Particle(
 
 @Composable
 private fun FloatingParticle(particle: Particle, modifier: Modifier = Modifier) {
+    val Gold = Color(0xFFD4AF37)
     val transition = rememberInfiniteTransition(label = "particle_${particle.startX}")
     val offsetY by transition.animateFloat(
         initialValue = particle.startY,
-        targetValue = particle.startY - 30f,
+        targetValue = particle.startY - 28f,
         animationSpec = infiniteRepeatable(
             animation = tween(particle.duration, delayMillis = particle.delayMs),
             repeatMode = RepeatMode.Reverse
@@ -264,29 +228,3 @@ private fun FloatingParticle(particle: Particle, modifier: Modifier = Modifier) 
         )
     }
 }
-
-@Composable
-private fun AnimatedDecorativeLine(modifier: Modifier = Modifier) {
-    val Gold = Color(0xFFD4AF37)
-    val anim by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(durationMillis = 1500),
-        label = "line_anim"
-    )
-    Box(
-        modifier = modifier
-            .fillMaxWidth(anim * 0.3f)
-            .height(1.dp)
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        Gold,
-                        Color.Transparent
-                    )
-                )
-            )
-    )
-}
-
-private val Gold = Color(0xFFD4AF37)
