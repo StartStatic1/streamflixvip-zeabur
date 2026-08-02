@@ -40,18 +40,8 @@ import com.streamflixvip.app.ui.vip.VipViewModel
 
 private const val TELEGRAM_URL = "https://t.me/streamflixofc"
 private const val SUPPORT_EMAIL = "streamflixvip@outlook.com"
-private val Gold = Color(0xFFD4AF37)
+private val Accent = Color(0xFF00E5FF)
 
-/**
- * Aba Perfil — estrutura em seções:
- * 1. Header: avatar circular, nome derivado do e-mail, badge "Membro StreamFlixVIP"
- * 2. Assinatura VIP (resgate de código + status + aviso de expiração)
- * 3. Contato Oficial: e-mail de suporte e Telegram, ambos abrindo de verdade
- * 4. Preferências: notificações, persistido em disco (não só em memória)
- * 5. Sobre: versão, Termos de Uso e Política de Privacidade — com conteúdo
- *    real num modal, em vez de item de menu sem nenhuma ação por trás
- * 6. Sair da conta
- */
 @Composable
 fun ProfileScreen(
     authViewModel: AuthViewModel,
@@ -78,7 +68,6 @@ fun ProfileScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp),
     ) {
-        // === HEADER ===
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -94,7 +83,7 @@ fun ProfileScreen(
                     Icon(
                         Icons.Filled.Person,
                         contentDescription = null,
-                        tint = Gold,
+                        tint = Accent,
                         modifier = Modifier.size(48.dp),
                     )
                 }
@@ -102,10 +91,10 @@ fun ProfileScreen(
                     modifier = Modifier
                         .size(28.dp)
                         .clip(CircleShape)
-                        .background(Gold),
+                        .background(Accent),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Star, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFF001820), modifier = Modifier.size(16.dp))
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -116,16 +105,15 @@ fun ProfileScreen(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(Gold.copy(alpha = 0.12f))
+                    .background(Accent.copy(alpha = 0.12f))
                     .padding(horizontal = 14.dp, vertical = 6.dp),
             ) {
-                Text("Membro StreamFlixVIP", fontSize = 12.sp, color = Gold, fontWeight = FontWeight.Bold)
+                Text("Membro StreamFlixVIP", fontSize = 12.sp, color = Accent, fontWeight = FontWeight.Bold)
             }
         }
 
         Spacer(Modifier.height(28.dp))
 
-        // === ASSINATURA VIP ===
         if (userId != null) {
             SectionTitle("Assinatura VIP")
             val vipViewModel: VipViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
@@ -140,7 +128,6 @@ fun ProfileScreen(
             Spacer(Modifier.height(28.dp))
         }
 
-        // === CONTATO OFICIAL ===
         SectionTitle("Contato Oficial")
         ProfileInfoCard(
             icon = Icons.Filled.Email,
@@ -160,23 +147,18 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(28.dp))
 
-        // === PREFERÊNCIAS ===
         SectionTitle("Preferências")
-        
+
         ProfileInfoCard(
             icon = Icons.Filled.SettingsInputComponent,
             title = "Leitor IPTV Nativo",
             subtitle = if (isIptvActive) "Ativado (${iptvStore.xtreamUser})" else "Configurar Host, Login e Senha",
-            iconTint = if (isIptvActive) Gold else Color(0xFF4CAF50),
+            iconTint = if (isIptvActive) Accent else Color(0xFF4CAF50),
             onClick = { showIptvDialog = true },
         )
-        
+
         Spacer(Modifier.height(8.dp))
 
-        // Notificações — persiste de verdade: ao tocar, salva no
-        // PreferencesStore na hora, então sobrevive a fechar e reabrir o
-        // app (diferente de um estado só em memória, que resetaria pra
-        // "ligado" toda vez).
         ProfileToggleCard(
             icon = Icons.Filled.Notifications,
             title = "Notificações",
@@ -191,7 +173,6 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(28.dp))
 
-        // === SOBRE ===
         SectionTitle("Sobre")
         ProfileInfoCard(
             icon = Icons.Filled.Info,
@@ -202,8 +183,6 @@ fun ProfileScreen(
             showChevron = false,
         )
         Spacer(Modifier.height(8.dp))
-        // Abre um modal com o texto real dos Termos, em vez de um
-        // onClick vazio que pareceria um item quebrado.
         ProfileInfoCard(
             icon = Icons.Filled.Description,
             title = "Termos de Uso",
@@ -222,7 +201,6 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(28.dp))
 
-        // === SAIR ===
         Surface(
             shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
@@ -255,9 +233,6 @@ fun ProfileScreen(
         Spacer(Modifier.height(16.dp))
     }
 
-    // Conteúdo simples e real — mesmo não sendo um documento jurídico
-    // extenso, dizer algo verdadeiro é sempre melhor que um item de menu
-    // sem nenhuma ação por trás.
     if (showTermsDialog) {
         InfoDialog(
             title = "Termos de Uso",
@@ -375,7 +350,7 @@ private fun ProfileToggleCard(
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(checkedTrackColor = Gold, checkedThumbColor = Color.Black),
+                colors = SwitchDefaults.colors(checkedTrackColor = Accent, checkedThumbColor = Color(0xFF001820)),
             )
         }
     }
@@ -389,7 +364,7 @@ private fun InfoDialog(title: String, body: String, onDismiss: () -> Unit) {
         text = { Text(body, fontSize = 14.sp) },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Entendi", color = Gold)
+                Text("Entendi", color = Accent)
             }
         },
     )

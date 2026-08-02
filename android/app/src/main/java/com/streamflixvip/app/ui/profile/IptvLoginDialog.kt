@@ -14,12 +14,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.streamflixvip.app.data.IptvStore
 
-private val Gold = Color(0xFFD4AF37)
+private val Accent = Color(0xFF00E5FF)
 
-/**
- * Modal de Login IPTV (Xtream Codes).
- * O Host pode ser fixo (vindo do painel) ou editável.
- */
 @Composable
 fun IptvLoginDialog(
     iptvStore: IptvStore,
@@ -28,9 +24,6 @@ fun IptvLoginDialog(
 ) {
     var user by remember { mutableStateOf(iptvStore.xtreamUser ?: "") }
     var pass by remember { mutableStateOf(iptvStore.xtreamPass ?: "") }
-    
-    // O Host idealmente viria de uma config do painel, mas deixamos salvo
-    // pra facilitar o teste inicial.
     var host by remember { mutableStateOf(iptvStore.xtreamHost ?: "http://tvclubmais.com:80") }
 
     AlertDialog(
@@ -44,7 +37,7 @@ fun IptvLoginDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(Modifier.height(16.dp))
-                
+
                 OutlinedTextField(
                     value = host,
                     onValueChange = { host = it },
@@ -52,9 +45,9 @@ fun IptvLoginDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
-                
+
                 Spacer(Modifier.height(8.dp))
-                
+
                 OutlinedTextField(
                     value = user,
                     onValueChange = { user = it },
@@ -63,9 +56,9 @@ fun IptvLoginDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
-                
+
                 Spacer(Modifier.height(8.dp))
-                
+
                 OutlinedTextField(
                     value = pass,
                     onValueChange = { pass = it },
@@ -86,7 +79,7 @@ fun IptvLoginDialog(
                     onSuccess()
                     onDismiss()
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.Black)
+                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Color(0xFF001820))
             ) {
                 Text("Salvar e Ativar")
             }

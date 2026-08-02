@@ -17,11 +17,6 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 
-/**
- * Seção VIP embutida na tela de Perfil — mostra status atual e, se não
- * for VIP, um formulário pra resgatar código. Mesma lógica de negócio do
- * modal VIP do site, só que como seção nativa em vez de modal HTML.
- */
 @Composable
 fun VipSection(viewModel: VipViewModel) {
     val state by viewModel.uiState.collectAsState()
@@ -32,9 +27,9 @@ fun VipSection(viewModel: VipViewModel) {
             amount = state.paymentAmount,
             planLabel = state.paymentLabel,
             durationHours = state.paymentDuration,
-            onDismiss = { 
+            onDismiss = {
                 viewModel.dismissPayment()
-                viewModel.refreshStatus() // Atualiza o status ao fechar
+                viewModel.refreshStatus()
             }
         )
     }
@@ -61,9 +56,6 @@ fun VipSection(viewModel: VipViewModel) {
                     Spacer(Modifier.height(4.dp))
                     Text("Válido até ${formatVipExpiry(expiresAt)}", fontSize = 13.sp)
 
-                    // Aviso de renovação — só aparece nos últimos dias
-                    // antes de expirar, pra pessoa não ser pega de
-                    // surpresa perdendo o acesso sem aviso nenhum.
                     val daysLeft = daysUntilExpiry(expiresAt)
                     if (daysLeft != null && daysLeft in 0..5) {
                         Spacer(Modifier.height(8.dp))
@@ -99,7 +91,6 @@ fun VipSection(viewModel: VipViewModel) {
                 )
                 Spacer(Modifier.height(20.dp))
 
-                // Plano 1 Mês — entrada, sem destaque especial.
                 VipPlanCard(
                     title = "1 Mês",
                     price = "R$ 19,90",
@@ -110,9 +101,6 @@ fun VipSection(viewModel: VipViewModel) {
                 )
                 Spacer(Modifier.height(10.dp))
 
-                // Plano 3 Meses — o "meio-termo": mostra o preço por mês
-                // pra deixar claro que sai mais barato que renovar 3x no
-                // plano mensal (19,90 × 3 = 59,70 vs 49,90 aqui).
                 VipPlanCard(
                     title = "3 Meses",
                     price = "R$ 49,90",
@@ -123,14 +111,13 @@ fun VipSection(viewModel: VipViewModel) {
                 )
                 Spacer(Modifier.height(10.dp))
 
-                // Plano Vitalício — topo de linha, pagamento único.
                 VipPlanCard(
                     title = "Vitalício",
                     price = "R$ 99,90",
                     priceSuffix = "pagamento único",
                     badge = "Melhor valor",
                     highlighted = false,
-                    goldOutline = true,
+                    accentOutline = true,
                     onClick = { viewModel.startPayment(99.90, "VIP Vitalício", 876000) },
                 )
 
@@ -173,13 +160,6 @@ fun VipSection(viewModel: VipViewModel) {
     }
 }
 
-/**
- * Card de plano VIP — usado pelos 3 planos (1 mês / 3 meses / vitalício).
- * Em vez de três botões idênticos (difícil de comparar rapidamente),
- * cada card tem: nome do plano, preço em destaque, um selo opcional
- * ("Economize R$X" / "Melhor valor") e um contorno diferenciado pro
- * plano mais vantajoso — o olho vai direto pro que compensa mais.
- */
 @Composable
 private fun VipPlanCard(
     title: String,
@@ -188,16 +168,16 @@ private fun VipPlanCard(
     badge: String?,
     highlighted: Boolean,
     onClick: () -> Unit,
-    goldOutline: Boolean = false,
+    accentOutline: Boolean = false,
 ) {
-    val gold = Color(0xFFD4AF37)
+    val accent = Color(0xFF00E5FF)
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
-        color = if (highlighted) gold.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+        color = if (highlighted) accent.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
         border = when {
-            highlighted -> BorderStroke(1.5.dp, gold)
-            goldOutline -> BorderStroke(1.dp, gold.copy(alpha = 0.5f))
+            highlighted -> BorderStroke(1.5.dp, accent)
+            accentOutline -> BorderStroke(1.dp, accent.copy(alpha = 0.5f))
             else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         },
         modifier = Modifier.fillMaxWidth(),
@@ -221,13 +201,13 @@ private fun VipPlanCard(
                         Spacer(Modifier.width(8.dp))
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = gold.copy(alpha = 0.18f),
+                            color = accent.copy(alpha = 0.18f),
                         ) {
                             Text(
                                 it,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = gold,
+                                color = accent,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                             )
                         }
@@ -244,13 +224,12 @@ private fun VipPlanCard(
                 price,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = if (highlighted || goldOutline) gold else MaterialTheme.colorScheme.onSurface,
+                color = if (highlighted || accentOutline) accent else MaterialTheme.colorScheme.onSurface,
             )
         }
     }
 }
 
-/** Formata a data de expiração no padrão dd/MM/yyyy, igual formatVipExpiry() do site. */
 private fun formatVipExpiry(isoDate: String): String {
     return try {
         val date = OffsetDateTime.parse(isoDate)
@@ -260,7 +239,6 @@ private fun formatVipExpiry(isoDate: String): String {
     }
 }
 
-/** Dias restantes até a expiração (arredondado pra baixo) — null se a data vier num formato inesperado. */
 private fun daysUntilExpiry(isoDate: String): Long? {
     return try {
         val expiry = OffsetDateTime.parse(isoDate)
