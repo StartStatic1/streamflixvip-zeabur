@@ -1,12 +1,10 @@
-// api/admin-vip.js — loader (parts p0..p2)
-const fs = require('fs');
-const path = require('path');
-const Module = require('module');
-const code = [0, 1, 2]
-  .map((i) => fs.readFileSync(path.join(__dirname, `admin-vip.p${i}.js`), 'utf8'))
-  .join('');
-const m = new Module(module.id, module);
-m.filename = path.join(__dirname, 'admin-vip.js');
-m.paths = Module._nodeModulePaths(__dirname);
-m._compile(code, m.filename);
-module.exports = m.exports;
+// api/admin-vip.js — temporary safe stub while full file is restored
+module.exports = async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+  res.status(503).json({
+    error: 'admin-vip em restauracao. Abra o arquivo admin-vip-COMPLETE.js dos artifacts e faca push para api/admin-vip.js',
+  });
+};
