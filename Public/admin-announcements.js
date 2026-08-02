@@ -2,10 +2,10 @@
 (function () {
   function escapeHtml(str) {
     return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+      .replace(/&/g, '&')
+      .replace(/</g, '<')
+      .replace(/>/g, '>')
+      .replace(/"/g, '"');
   }
 
   async function loadAnnouncements() {
@@ -14,6 +14,10 @@
     wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem">Carregando…</p>';
     try {
       const data = await api('list-announcements');
+      if (data && data.error) {
+        wrap.innerHTML = '<p style="color:#f87171">Erro: ' + escapeHtml(data.error) + '</p>';
+        return;
+      }
       const list = data.announcements || [];
       if (!list.length) {
         wrap.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;padding:16px 0;text-align:center">Nenhum aviso ainda. Publique o primeiro acima.</p>';
@@ -26,26 +30,33 @@
           ? '<span class="pill active">Ativo</span>'
           : '<span class="pill inactive">Inativo</span>';
         const link = a.link_tmdb_id
-          ? `<div style="font-size:0.75rem;color:var(--muted);margin-top:4px">Link: ${a.link_media_type || '?'} #${a.link_tmdb_id}</div>`
+          ? '<div style="font-size:0.75rem;color:var(--muted);margin-top:4px">Link: ' +
+            (a.link_media_type || '?') + ' #' + a.link_tmdb_id + '</div>'
           : '';
-        return `<div class="source-row" style="flex-direction:column;align-items:stretch;gap:8px;margin-bottom:10px">
-          <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
-            <div>
-              <div style="font-weight:600">${escapeHtml(a.title || '')} <span style="font-size:0.75rem;color:var(--muted);font-weight:400">${typeLabel[a.type] || a.type || ''}</span></div>
-              <div style="font-size:0.85rem;color:var(--muted);margin-top:4px;white-space:pre-wrap">${escapeHtml(a.body || '')}</div>
-              ${link}
-              <div style="font-size:0.72rem;color:var(--muted);margin-top:6px">${when}</div>
-            </div>
-            ${badge}
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn-secondary" style="width:auto;padding:6px 12px;font-size:0.8rem" onclick="toggleAnnouncement('${a.id}', ${!a.active})">${a.active ? 'Desativar' : 'Ativar'}</button>
-            <button class="btn-secondary" style="width:auto;padding:6px 12px;font-size:0.8rem;color:#f87171" onclick="deleteAnnouncement('${a.id}')">Excluir</button>
-          </div>
-        </div>`;
+        return (
+          '<div class="source-row" style="flex-direction:column;align-items:stretch;gap:8px;margin-bottom:10px">' +
+          '<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">' +
+          '<div>' +
+          '<div style="font-weight:600">' + escapeHtml(a.title || '') +
+          ' <span style="font-size:0.75rem;color:var(--muted);font-weight:400">' +
+          (typeLabel[a.type] || a.type || '') + '</span></div>' +
+          '<div style="font-size:0.85rem;color:var(--muted);margin-top:4px;white-space:pre-wrap">' +
+          escapeHtml(a.body || '') + '</div>' +
+          link +
+          '<div style="font-size:0.72rem;color:var(--muted);margin-top:6px">' + when + '</div>' +
+          '</div>' + badge +
+          '</div>' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn-secondary" style="width:auto;padding:6px 12px;font-size:0.8rem" onclick="toggleAnnouncement(\'' +
+          a.id + '\', ' + (!a.active) + ')">' +
+          (a.active ? 'Desativar' : 'Ativar') + '</button>' +
+          '<button class="btn-secondary" style="width:auto;padding:6px 12px;font-size:0.8rem;color:#f87171" onclick="deleteAnnouncement(\'' +
+          a.id + '\')">Excluir</button>' +
+          '</div></div>'
+        );
       }).join('');
     } catch (e) {
-      wrap.innerHTML = `<p style="color:#f87171">Erro: ${escapeHtml(e.message || String(e))}</p>`;
+      wrap.innerHTML = '<p style="color:#f87171">Erro: ' + escapeHtml(e.message || String(e)) + '</p>';
     }
   }
 
@@ -55,14 +66,23 @@
     const type = document.getElementById('annType').value || 'info';
     const tmdb = document.getElementById('annTmdb').value;
     const media = document.getElementById('annMedia').value || '';
-    if (!title || !body) { showToast('Preencha título e texto'); return; }
+    if (!title || !body) {
+      showToast('Preencha título e texto');
+      return;
+    }
     try {
-      await api('create-announcement', {
-        title, body, type,
+      const data = await api('create-announcement', {
+        title,
+        body,
+        type,
         link_tmdb_id: tmdb ? Number(tmdb) : null,
         link_media_type: media || null,
         active: true,
       });
+      if (data && data.error) {
+        showToast('Erro: ' + (data.error.message || data.error));
+        return;
+      }
       document.getElementById('annTitle').value = '';
       document.getElementById('annBody').value = '';
       document.getElementById('annTmdb').value = '';
@@ -76,7 +96,11 @@
 
   async function toggleAnnouncement(id, active) {
     try {
-      await api('toggle-announcement', { id, active: !!active });
+      const data = await api('toggle-announcement', { id: id, active: !!active });
+      if (data && data.error) {
+        showToast('Erro: ' + data.error);
+        return;
+      }
       showToast(active ? 'Aviso ativado' : 'Aviso desativado');
       loadAnnouncements();
     } catch (e) {
@@ -87,7 +111,11 @@
   async function deleteAnnouncement(id) {
     if (!confirm('Excluir este aviso permanentemente?')) return;
     try {
-      await api('delete-announcement', { id });
+      const data = await api('delete-announcement', { id: id });
+      if (data && data.error) {
+        showToast('Erro: ' + data.error);
+        return;
+      }
       showToast('Aviso excluído');
       loadAnnouncements();
     } catch (e) {
@@ -100,8 +128,7 @@
   window.toggleAnnouncement = toggleAnnouncement;
   window.deleteAnnouncement = deleteAnnouncement;
 
-  // Integra com switchTab se existir
-  const _origSwitch = window.switchTab;
+  var _origSwitch = window.switchTab;
   if (typeof _origSwitch === 'function') {
     window.switchTab = function (tab) {
       _origSwitch(tab);
