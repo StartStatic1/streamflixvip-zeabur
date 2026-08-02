@@ -1,5 +1,5 @@
 // api/admin-vip.js
-// API admin VIP — restaurada (nucleo + IPTV + live TV + fontes + ads basico)
+// API admin VIP — restaurada (nucleo + IPTV + live TV + fontes + ads basico + avisos)
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
 module.exports = async function handler(req, res) {
@@ -445,7 +445,6 @@ module.exports = async function handler(req, res) {
     const { sourceId, cascade } = body;
     if (!sourceId) { res.status(400).json({ error: 'Informe sourceId' }); return; }
 
-    // Busca o nome da fonte ANTES de apagar, para limpar vip_sources com o mesmo source_label
     let sourceName = null;
     try {
       const getRes = await fetch(
@@ -464,7 +463,6 @@ module.exports = async function handler(req, res) {
     });
     if (!r.ok) { res.status(502).json({ error: 'Erro excluir IPTV', detail: await r.text() }); return; }
 
-    // cascade !== false: remove tambem todas as vip_sources com source_label = nome da fonte
     let vipSourcesDeleted = 0;
     if (cascade !== false && sourceName) {
       try {
@@ -649,6 +647,72 @@ module.exports = async function handler(req, res) {
       enforceOk = en.ok;
     } catch (_) {}
     res.status(200).json({ success: true, unmatchedDeleted, enforceOk });
+    return;
+  }
+
+  // ── Avisos do app (app_announcements) ──
+  if (action === 'list-announcements') {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/app_announcements?select=id,type,title,body,active,link_tmdb_id,link_media_type,created_at&order=created_at.desc&limit=100`,
+      { headers: svcHeaders },
+    );
+    const rows = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao listar avisos', detail: rows }); return; }
+    res.status(200).json({ announcements: rows || [] });
+    return;
+  }
+
+  if (action === 'create-announcement') {
+    const title = (body.title || '').trim();
+    const bodyText = (body.body || '').trim();
+    const type = (body.type || 'info').trim() || 'info';
+    if (!title || !bodyText) {
+      res.status(400).json({ error: 'Informe titulo e texto do aviso' });
+      return;
+    }
+    const payload = {
+      title,
+      body: bodyText,
+      type,
+      active: body.active !== false,
+    };
+    if (body.link_tmdb_id != null && body.link_tmdb_id !== '') {
+      payload.link_tmdb_id = Number(body.link_tmdb_id);
+    }
+    if (body.link_media_type) payload.link_media_type = body.link_media_type;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_announcements`, {
+      method: 'POST',
+      headers: { ...svcHeaders, Prefer: 'return=representation' },
+      body: JSON.stringify(payload),
+    });
+    const result = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao criar aviso', detail: result }); return; }
+    res.status(200).json({ created: result });
+    return;
+  }
+
+  if (action === 'toggle-announcement') {
+    const { id, active } = body;
+    if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_announcements?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: svcHeaders,
+      body: JSON.stringify({ active: !!active }),
+    });
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao alternar aviso', detail: await r.text() }); return; }
+    res.status(200).json({ success: true });
+    return;
+  }
+
+  if (action === 'delete-announcement') {
+    const { id } = body;
+    if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_announcements?id=eq.${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: svcHeaders,
+    });
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao excluir aviso', detail: await r.text() }); return; }
+    res.status(200).json({ success: true });
     return;
   }
 
