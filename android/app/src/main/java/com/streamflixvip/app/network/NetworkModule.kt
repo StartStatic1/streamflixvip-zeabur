@@ -55,7 +55,6 @@ object NetworkModule {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    /** Timeout maior para /api/live-tv (consulta até 3 painéis Xtream). */
     private val liveTvOkHttp = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -130,6 +129,15 @@ object NetworkModule {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(AppVersionApi::class.java)
+    }
+
+    val announcementsApi: AnnouncementsApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(AnnouncementsApi::class.java)
     }
 
     val favoritesApi: FavoritesApi by lazy {
