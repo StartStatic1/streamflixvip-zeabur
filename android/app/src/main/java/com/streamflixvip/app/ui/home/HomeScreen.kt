@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -40,11 +41,7 @@ private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 
 /**
- * Tela inicial: banner rotativo em destaque + fileiras horizontais por
- * categoria. Tudo aqui é Compose nativo — sem WebView, sem HTML
- * renderizado. O scroll, os gestos de arrastar, tudo roda no motor de
- * renderização nativo do Android (Skia via Compose), não no motor de um
- * navegador embutido.
+ * Home Cinema Flutuante — cards com elevação, ar generoso e hero suspenso.
  */
 @Composable
 fun HomeScreen(
@@ -58,7 +55,7 @@ fun HomeScreen(
     when (val s = state) {
         is HomeUiState.Loading -> {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         }
         is HomeUiState.Error -> {
@@ -75,12 +72,11 @@ fun HomeScreen(
 
             LazyColumn(
                 state = scrollState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 16.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+                contentPadding = PaddingValues(bottom = 28.dp),
             ) {
-                // Banner como item de verdade da lista — sobe e some com o
-                // scroll naturalmente, sem precisar simular posição manual
-                // nem deixar espaço vazio reservado quando ele desaparece.
                 if (s.heroItems.isNotEmpty()) {
                     item {
                         HeroBanner(
@@ -92,20 +88,19 @@ fun HomeScreen(
 
                 if (s.continueWatching.isNotEmpty()) {
                     item {
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(28.dp))
                         ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick)
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(12.dp))
                     }
                 }
                 itemsIndexed(s.rows) { index, row ->
+                    Spacer(Modifier.height(20.dp))
                     ContentRow(row = row, onItemClick = onItemClick, onSeeAllClick = onSeeAllClick)
-                    Spacer(Modifier.height(24.dp))
-                    
-                    // Inserir banner de anúncio a cada 3 fileiras para usuários NÃO VIP
+
                     val isVip by VipStatusHolder.isVip.collectAsState()
                     if (!isVip && (index + 1) % 3 == 0) {
+                        Spacer(Modifier.height(20.dp))
                         StartIoBanner()
-                        Spacer(Modifier.height(24.dp))
                     }
                 }
             }
@@ -113,13 +108,6 @@ fun HomeScreen(
     }
 }
 
-/**
- * Banner rotativo em destaque, no topo da Home — o mesmo padrão visual
- * dos apps de referência (Netflix, Cinevia, Peacock): imagem grande,
- * gradiente escuro embaixo pra legibilidade, título + botão de assistir
- * por cima. Troca de slide sozinho a cada 6s, mas responde a swipe
- * manual do usuário a qualquer momento (HorizontalPager nativo).
- */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun HeroBanner(
@@ -128,9 +116,6 @@ private fun HeroBanner(
 ) {
     val pagerState = rememberPagerState(pageCount = { items.size })
 
-    // Autoavança apenas quando há mais de um destaque e nunca interrompe o
-    // arraste manual. O pager ocupa a largura inteira; não há cartas laterais
-    // recortadas nem sobrepostas ao conteúdo principal.
     LaunchedEffect(pagerState, items) {
         if (items.size <= 1) return@LaunchedEffect
         while (true) {
@@ -144,13 +129,19 @@ private fun HeroBanner(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(380.dp) // Imersivo mas sem dominar a tela inteira no celular
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .height(400.dp)
+            .shadow(
+                elevation = 18.dp,
+                shape = RoundedCornerShape(22.dp),
+                ambientColor = Color.Black.copy(alpha = 0.55f),
+                spotColor = Color.Black.copy(alpha = 0.7f),
+            )
+            .clip(RoundedCornerShape(22.dp))
     ) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier
-                .fillMaxSize(), // Ocupa todo o Box pai
-
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(0.dp),
             pageSpacing = 0.dp,
         ) { page ->
@@ -160,105 +151,102 @@ private fun HeroBanner(
             val overview = item.overview?.takeIf { it.isNotBlank() }
                 ?: "Confira detalhes, nota e opções para assistir."
 
-            Card(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clickable { onClick(item) },
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
             ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    AsyncImage(
-                        model = heroImage,
-                        contentDescription = item.displayTitle,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.08f),
-                                        Color.Black.copy(alpha = 0.34f),
-                                        Color.Black.copy(alpha = 0.94f),
-                                    ),
-                                    startY = 80f,
+                AsyncImage(
+                    model = heroImage,
+                    contentDescription = item.displayTitle,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.05f),
+                                    Color.Black.copy(alpha = 0.35f),
+                                    Color.Black.copy(alpha = 0.92f),
                                 ),
+                                startY = 60f,
                             ),
-                    )
-                    Column(
+                        ),
+                )
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp, vertical = 22.dp),
+                    horizontalAlignment = Alignment.Start,
+                ) {
+                    Text(
+                        text = item.displayMediaLabel,
                         modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 24.dp), // Aumenta o padding interno
-                        horizontalAlignment = Alignment.Start,
-                    ) {
-                        Text(
-                            text = item.displayMediaLabel,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.White.copy(alpha = 0.16f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = item.displayTitle,
-                            color = Color.White,
-                            fontSize = 27.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            item.displayYear?.let { year ->
-                                Text(year, color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
-                            }
-                            if (item.displayYear != null && item.displayRating != null) {
-                                Text(" • ", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
-                            }
-                            item.displayRating?.let { rating ->
-                                Icon(
-                                    imageVector = Icons.Filled.Star,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(15.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                                Spacer(Modifier.width(3.dp))
-                                Text(rating, color = Color.White.copy(alpha = 0.9f), fontSize = 13.sp)
-                            }
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White.copy(alpha = 0.14f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = item.displayTitle,
+                        color = Color.White,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        item.displayYear?.let { year ->
+                            Text(year, color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp)
                         }
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            text = overview,
-                            color = Color.White.copy(alpha = 0.88f),
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Button(
-                            onClick = { onClick(item) },
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = Color.Black,
-                            ),
-                        ) {
+                        if (item.displayYear != null && item.displayRating != null) {
+                            Text(" • ", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                        }
+                        item.displayRating?.let { rating ->
                             Icon(
-                                imageVector = Icons.Filled.PlayArrow,
+                                imageVector = Icons.Filled.Star,
                                 contentDescription = null,
-                                modifier = Modifier.size(19.dp),
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.primary,
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text("Assistir", fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(3.dp))
+                            Text(rating, color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp)
                         }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = overview,
+                        color = Color.White.copy(alpha = 0.82f),
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(Modifier.height(14.dp))
+                    Button(
+                        onClick = { onClick(item) },
+                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = Color.Black,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("Assistir", fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -268,25 +256,25 @@ private fun HeroBanner(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp) // Ajusta o padding para os indicadores
-                    .align(Alignment.BottomCenter), // Alinha os indicadores na parte inferior do Box
+                    .padding(bottom = 14.dp)
+                    .align(Alignment.BottomCenter),
                 horizontalArrangement = Arrangement.Center,
             ) {
                 items.indices.forEach { index ->
                     val isActive = pagerState.currentPage == index
                     val width by animateFloatAsState(
-                        targetValue = if (isActive) 22f else 7f,
+                        targetValue = if (isActive) 20f else 6f,
                         label = "heroIndicatorWidth",
                     )
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 3.dp)
-                            .height(6.dp)
+                            .height(5.dp)
                             .width(width.dp)
                             .clip(RoundedCornerShape(3.dp))
                             .background(
                                 if (isActive) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                                else Color.White.copy(alpha = 0.35f),
                             ),
                     )
                 }
@@ -306,15 +294,13 @@ private fun StartIoBanner() {
         Text(
             text = "Patrocinado",
             fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
             modifier = Modifier.padding(bottom = 4.dp)
         )
         AndroidView(
             modifier = Modifier.fillMaxWidth(),
             factory = { context ->
-                Banner(context).apply {
-                    // O Banner da Start.io se auto-ajusta ao tamanho do container
-                }
+                Banner(context).apply { }
             }
         )
     }
@@ -330,11 +316,11 @@ private fun ContinueWatchingRow(
             text = "Continuar assistindo",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
         )
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             items(entries) { entry ->
                 ContinueWatchingCard(
@@ -355,33 +341,36 @@ private fun ContinueWatchingCard(
 
     Column(
         modifier = Modifier
-            .width(120.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .width(124.dp)
+            .shadow(
+                elevation = 10.dp,
+                shape = RoundedCornerShape(14.dp),
+                ambientColor = Color.Black.copy(alpha = 0.4f),
+                spotColor = Color.Black.copy(alpha = 0.55f),
+            )
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
             .clickable(onClick = onClick),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(175.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .height(180.dp)
+                .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
             AsyncImage(
                 model = posterUrl,
                 contentDescription = entry.displayTitle,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(10.dp)),
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-            // Barra de progresso colada na base do poster — mesmo padrão
-            // visual que Netflix/Prime/Disney+ usam pra "continuar assistindo".
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
                     .height(4.dp)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
+                    .background(Color.Black.copy(alpha = 0.45f)),
             ) {
                 Box(
                     modifier = Modifier
@@ -391,23 +380,21 @@ private fun ContinueWatchingCard(
                 )
             }
         }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = entry.displayTitle,
-            fontSize = 12.sp,
-            maxLines = 1,
-            modifier = Modifier.width(120.dp),
-        )
-        // Só faz sentido pra série (filme não tem season/episode reais —
-        // chegam como 0 vindos do fluxo de filme). Ajuda a pessoa a saber
-        // exatamente onde vai continuar, sem precisar abrir os detalhes.
-        if (entry.media_type == "tv" && entry.season > 0) {
+        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
             Text(
-                text = "T${entry.season}:E${entry.episode}",
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = entry.displayTitle,
+                fontSize = 12.sp,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
+            if (entry.media_type == "tv" && entry.season > 0) {
+                Text(
+                    text = "T${entry.season}:E${entry.episode}",
+                    fontSize = 10.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -422,7 +409,7 @@ private fun ContentRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -431,10 +418,6 @@ private fun ContentRow(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
-            // "Ver mais" só aparece quando a fileira tem um filtro
-            // equivalente na aba Explorar (gênero+ano) — fileiras como
-            // Trending/Populares usam endpoints próprios da TMDB sem
-            // correspondência direta em discover, então não expõem isso.
             row.exploreLink?.let { link ->
                 Text(
                     text = "Ver mais",
@@ -447,7 +430,7 @@ private fun ContentRow(
         }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             itemsIndexed(row.items) { index, item ->
                 PosterCard(
@@ -468,72 +451,73 @@ private fun PosterCard(
 ) {
     val posterUrl = item.poster_path?.let { TMDB_POSTER_BASE + it }
 
-    // Cards ranqueados (Top 10) ganham um espaço extra à esquerda pro
-    // número gigante — sem isso, o número ficaria cortado ou sobreposto
-    // de um jeito ruim em cima do próprio pôster.
     Row(verticalAlignment = Alignment.Bottom) {
         if (rank != null) {
             Text(
                 text = "$rank",
-                fontSize = 64.sp,
+                fontSize = 58.sp,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.offset(x = 12.dp),
+                modifier = Modifier.offset(x = 10.dp),
             )
         }
         Column(
             modifier = Modifier
-                .width(120.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .width(124.dp)
+                .shadow(
+                    elevation = 10.dp,
+                    shape = RoundedCornerShape(14.dp),
+                    ambientColor = Color.Black.copy(alpha = 0.4f),
+                    spotColor = Color.Black.copy(alpha = 0.55f),
+                )
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surface)
                 .clickable(onClick = onClick),
         ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(175.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            AsyncImage(
-                model = posterUrl,
-                contentDescription = item.displayTitle,
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(10.dp)),
-                contentScale = ContentScale.Crop,
-            )
-            // Badge de nota no canto — mesmo padrão dos apps de referência
-            // (estrela + número), só aparece se o TMDB já tem votos suficientes.
-            item.displayRating?.let { rating ->
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.65f))
-                        .padding(horizontal = 6.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(11.dp))
-                    Spacer(Modifier.width(2.dp))
-                    Text(rating, fontSize = 10.sp, color = Color.White)
+                    .fillMaxWidth()
+                    .height(180.dp)
+                    .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                AsyncImage(
+                    model = posterUrl,
+                    contentDescription = item.displayTitle,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                item.displayRating?.let { rating ->
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.68f))
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFFFFC107), modifier = Modifier.size(11.dp))
+                        Spacer(Modifier.width(2.dp))
+                        Text(rating, fontSize = 10.sp, color = Color.White)
+                    }
                 }
             }
-        }
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = item.displayTitle,
-            fontSize = 12.sp,
-            maxLines = 1,
-            modifier = Modifier.width(120.dp),
-        )
-        item.displayYear?.let { year ->
-            Text(
-                text = year,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                Text(
+                    text = item.displayTitle,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                item.displayYear?.let { year ->
+                    Text(
+                        text = year,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
     }
 }
