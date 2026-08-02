@@ -722,6 +722,7 @@
     <button class="panel-tab" data-tab="upload" onclick="switchTab('upload')">📤 Upload</button>
     <button class="panel-tab" data-tab="activations" onclick="switchTab('activations')">🎯 Ativações</button>
     <button class="panel-tab" data-tab="ads" onclick="switchTab('ads')">📢 Anúncios</button>
+    <button class="panel-tab" data-tab="announcements" onclick="switchTab('announcements')">🔔 Avisos App</button>
     <button class="panel-tab" data-tab="iptv" onclick="switchTab('iptv')">📡 IPTV</button>
     <button class="panel-tab" data-tab="embeds" onclick="switchTab('embeds')">🔗 Embeds</button>
   </nav>
@@ -1076,6 +1077,52 @@
       <div class="card" style="margin-top:24px">
         <div class="card-title">📋 Anúncios cadastrados</div>
         <div class="table-wrap" id="adsListWrap"></div>
+      </div>
+    </section>
+
+
+    <section id="tab-announcements" class="tab-panel" style="display:none">
+      <div class="card">
+        <div class="card-title">🔔 Novo aviso para o app</div>
+        <p style="color:var(--muted);font-size:0.85rem;margin:0 0 14px">Aparece no <strong>Perfil</strong> do app mobile (Notificações/Avisos ligados).</p>
+        <div class="form-row">
+          <div class="form-group" style="flex:1">
+            <label>Título</label>
+            <input id="annTitle" type="text" placeholder="Ex: Novo filme disponível" maxlength="120">
+          </div>
+          <div class="form-group" style="width:160px">
+            <label>Tipo</label>
+            <select id="annType">
+              <option value="info">Aviso</option>
+              <option value="movie">Filme novo</option>
+              <option value="maintenance">Manutenção</option>
+              <option value="promo">Promoção</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Texto</label>
+          <textarea id="annBody" rows="3" placeholder="Mensagem..." maxlength="500"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="width:140px">
+            <label>TMDB ID (opc.)</label>
+            <input id="annTmdb" type="number" placeholder="ex: 550">
+          </div>
+          <div class="form-group" style="width:140px">
+            <label>Tipo mídia</label>
+            <select id="annMedia">
+              <option value="">—</option>
+              <option value="movie">Filme</option>
+              <option value="tv">Série</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn-primary" onclick="createAnnouncement()">Publicar aviso</button>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-title">📋 Avisos publicados</div>
+        <div id="announcementsListWrap"><p style="color:var(--muted)">Carregando…</p></div>
       </div>
     </section>
 
@@ -1854,6 +1901,7 @@
       }
     }
     if (tab === 'ads') loadAds();
+    if (tab === 'announcements' && typeof loadAnnouncements === 'function') loadAnnouncements();
     if (tab === 'iptv') loadIptvSources();
     if (tab === 'embeds') loadEmbedPartners();
     if (tab === 'dashboard') loadDashboard();
@@ -3624,5 +3672,6 @@
     _toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
   }
 </script>
+  <script src="/admin-announcements.js"></script>
 </body>
 </html>
