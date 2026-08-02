@@ -91,9 +91,7 @@ fun LivePlayerScreen(
     var sourceLabel by remember { mutableStateOf("") }
     var controlsVisible by remember { mutableStateOf(true) }
     var aspect by remember { mutableStateOf(LiveAspect.FIT) }
-    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
-    // Auto-esconde overlay depois de 4s
     LaunchedEffect(controlsVisible) {
         if (controlsVisible) {
             delay(4000)
@@ -180,20 +178,13 @@ fun LivePlayerScreen(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = exoPlayer
-                    useController = true
-                    controllerShowTimeoutMs = 3500
-                    controllerHideOnTouch = true
+                    // Live: sem controller nativo (sem seek bar / tempo 00:00)
+                    useController = false
                     resizeMode = aspect.mode
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT,
                     )
-                    setControllerVisibilityListener(
-                        PlayerView.ControllerVisibilityListener { visibility ->
-                            controlsVisible = visibility == android.view.View.VISIBLE
-                        },
-                    )
-                    playerViewRef = this
                 }
             },
             update = { pv ->
@@ -202,27 +193,61 @@ fun LivePlayerScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
-        // Botão voltar (sempre discreto no canto)
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(8.dp),
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .statusBarsPadding(),
         ) {
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.45f)),
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent),
+                        ),
+                    )
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Filled.ArrowBack, "Voltar", tint = Color.White)
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                ) {
+                    Icon(Icons.Filled.ArrowBack, "Voltar", tint = Color.White)
+                }
+                Spacer(Modifier.weight(1f))
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color(0xE0EF4444))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(Color.White),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "AO VIVO",
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                    )
+                }
             }
         }
 
-        // Info discreta EMBAIXO da barra de progresso do player
         AnimatedVisibility(
             visible = controlsVisible,
             enter = fadeIn(),
@@ -237,73 +262,81 @@ fun LivePlayerScreen(
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)),
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)),
                         ),
                     )
-                    .padding(start = 16.dp, end = 16.dp, top = 28.dp, bottom = 8.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 36.dp, bottom = 14.dp),
             ) {
-                // Espaço para não colidir com a seek bar nativa do Exo (~48dp)
-                Spacer(Modifier.height(40.dp))
-
-                Text(
-                    channelName,
-                    color = Color.White,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    sourceLabel + if (streams.size > 1) "  ·  ${streamIndex + 1}/${streams.size}" else "",
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                )
-
-                Spacer(Modifier.height(10.dp))
-
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // Proporção
-                    LiveChip(
-                        icon = Icons.Filled.AspectRatio,
-                        label = aspect.label,
-                        onClick = {
-                            aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
-                            controlsVisible = true
-                        },
-                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            channelName,
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            buildString {
+                                append(sourceLabel)
+                                if (streams.size > 1) {
+                                    append("  ·  ")
+                                    append(streamIndex + 1)
+                                    append('/')
+                                    append(streams.size)
+                                }
+                            },
+                            color = Color.White.copy(alpha = 0.55f),
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
 
-                    // Trocar fonte
-                    if (streams.size > 1) {
+                    Spacer(Modifier.width(12.dp))
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         LiveChip(
-                            icon = Icons.Filled.SwapHoriz,
-                            label = "Fonte",
+                            icon = Icons.Filled.AspectRatio,
+                            label = aspect.label,
                             onClick = {
-                                streamIndex = (streamIndex + 1) % streams.size
+                                aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
+                                controlsVisible = true
+                            },
+                        )
+                        if (streams.size > 1) {
+                            LiveChip(
+                                icon = Icons.Filled.SwapHoriz,
+                                label = "Fonte",
+                                onClick = {
+                                    streamIndex = (streamIndex + 1) % streams.size
+                                    isLoading = true
+                                    errorMessage = null
+                                    controlsVisible = true
+                                },
+                            )
+                        }
+                        LiveChip(
+                            icon = Icons.Filled.Refresh,
+                            label = "Reload",
+                            onClick = {
+                                val current = streamIndex
+                                streamIndex = -1
+                                streamIndex = current.coerceAtLeast(0)
                                 isLoading = true
                                 errorMessage = null
                                 controlsVisible = true
                             },
                         )
                     }
-
-                    // Recarregar
-                    LiveChip(
-                        icon = Icons.Filled.Refresh,
-                        label = "Reload",
-                        onClick = {
-                            val current = streamIndex
-                            streamIndex = -1
-                            streamIndex = current.coerceAtLeast(0)
-                            isLoading = true
-                            errorMessage = null
-                            controlsVisible = true
-                        },
-                    )
                 }
             }
         }
@@ -352,7 +385,7 @@ private fun LiveChip(
             .background(Color.White.copy(alpha = 0.12f))
             .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(16.dp))
