@@ -34,10 +34,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.streamflixvip.app.data.IptvStore
 import com.streamflixvip.app.data.PreferencesStore
+import com.streamflixvip.app.network.AnnouncementItem
+import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.ui.auth.AuthViewModel
 import androidx.compose.material.icons.filled.SettingsInputComponent
 import com.streamflixvip.app.ui.vip.VipSection
 import com.streamflixvip.app.ui.vip.VipViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val TELEGRAM_URL = "https://t.me/streamflixofc"
 private const val SUPPORT_EMAIL = "streamflixvip@outlook.com"
@@ -61,6 +65,20 @@ fun ProfileScreen(
     var showPrivacyDialog by remember { mutableStateOf(false) }
     var showIptvDialog by remember { mutableStateOf(false) }
     var isIptvActive by remember { mutableStateOf(iptvStore.hasCredentials) }
+    var announcements by remember { mutableStateOf<List<AnnouncementItem>>(emptyList()) }
+
+    // Carrega avisos só se o usuário quer notificações
+    LaunchedEffect(notificationsEnabled) {
+        if (!notificationsEnabled) {
+            announcements = emptyList()
+            return@LaunchedEffect
+        }
+        announcements = withContext(Dispatchers.IO) {
+            runCatching {
+                NetworkModule.announcementsApi.getAnnouncements().announcements
+            }.getOrElse { emptyList() }
+        }
+    }
 
     val displayName = userEmail?.substringBefore("@") ?: "—"
 
@@ -116,7 +134,6 @@ fun ProfileScreen(
 
         Spacer(Modifier.height(24.dp))
 
-        // Minha Lista / Favoritos
         if (onMyListClick != null) {
             ProfileInfoCard(
                 icon = Icons.Filled.Favorite,
@@ -126,6 +143,16 @@ fun ProfileScreen(
                 onClick = onMyListClick,
             )
             Spacer(Modifier.height(24.dp))
+        }
+
+        // Avisos (só com notificações ligadas)
+        if (notificationsEnabled && announcements.isNotEmpty()) {
+            SectionTitle("Avisos")
+            announcements.forEach { item ->
+                AnnouncementCard(item)
+                Spacer(Modifier.height(8.dp))
+            }
+            Spacer(Modifier.height(16.dp))
         }
 
         if (userId != null) {
@@ -175,8 +202,8 @@ fun ProfileScreen(
 
         ProfileToggleCard(
             icon = Icons.Filled.Notifications,
-            title = "Notificações",
-            subtitle = "Receba novidades e atualizações",
+            title = "Notificações / Avisos",
+            subtitle = if (notificationsEnabled) "Avisos ativos no Perfil" else "Desativado — avisos ocultos",
             iconTint = Color(0xFFFF7043),
             checked = notificationsEnabled,
             onCheckedChange = {
@@ -273,6 +300,39 @@ fun ProfileScreen(
             onDismiss = { showIptvDialog = false },
             onSuccess = { isIptvActive = iptvStore.hasCredentials }
         )
+    }
+}
+
+@Composable
+private fun AnnouncementCard(item: AnnouncementItem) {
+    val typeColor = when (item.type.lowercase()) {
+        "movie", "filme" -> Accent
+        "maintenance", "manutencao", "manutenção" -> Color(0xFFFFB74D)
+        "promo", "promoção", "promocao" -> Color(0xFF81C784)
+        else -> Color(0xFF90CAF9)
+    }
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Text(
+                item.typeLabel.uppercase(),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = typeColor,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(item.title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                item.body,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp,
+            )
+        }
     }
 }
 
