@@ -1,7 +1,7 @@
 {
-  "versionCode": 26,
-  "versionName": "7.2.0",
+  "versionCode": 27,
+  "versionName": "7.4.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Correções Bugs, melhorias na aba tv, suporte a canais "
+  "releaseNotes": "Mudanças no layout, Otimizações para melhor navegação"
 }
