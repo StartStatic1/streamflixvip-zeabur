@@ -226,9 +226,6 @@ module.exports = async function handler(req, res) {
     const start = (Math.max(1, page) - 1) * pageSize;
     const pageItems = groupList.slice(start, start + pageSize);
 
-    // Contagem precisa: o limit 4000 pode trazer so 1 linha de um titulo
-    // que tem 3 fontes. Ao expandir o painel busca tudo; o cabecalho
-    // precisa bater. Reconsulta so os titulos da pagina atual.
     if (pageItems.length > 0) {
       const ids = [...new Set(pageItems.map((g) => g.tmdb_id))];
       const countRes = await fetch(
@@ -417,7 +414,16 @@ module.exports = async function handler(req, res) {
       }),
     });
     const result = await r.json();
-    if (!r.ok) { res.status(502).json({ error: 'Erro ao criar fonte IPTV', detail: result }); return; }
+    if (!r.ok) {
+      const detail = typeof result === 'string' ? result : (result && (result.message || result.error_description || result.hint || JSON.stringify(result)));
+      const msg = String(detail || '');
+      if (msg.includes('duplicate') || msg.includes('unique')) {
+        res.status(409).json({ error: 'Ja existe uma fonte IPTV com esse nome. Use outro nome ou edite a existente.' });
+        return;
+      }
+      res.status(502).json({ error: 'Erro ao criar fonte IPTV: ' + msg.slice(0, 180) });
+      return;
+    }
     res.status(200).json({ success: true, source: Array.isArray(result) ? result[0] : result });
     return;
   }
@@ -495,8 +501,19 @@ module.exports = async function handler(req, res) {
         is_active: true,
       }),
     });
-    if (!r.ok) { res.status(502).json({ error: 'Erro criar live TV', detail: await r.text() }); return; }
-    res.status(200).json({ success: true, source: (await r.json())[0] });
+    const liveBody = await r.text();
+    if (!r.ok) {
+      const msg = liveBody || '';
+      if (msg.includes('duplicate') || msg.includes('unique')) {
+        res.status(409).json({ error: 'Ja existe fonte de TV com esse nome.' });
+        return;
+      }
+      res.status(502).json({ error: 'Erro criar live TV: ' + msg.slice(0, 180) });
+      return;
+    }
+    let liveJson;
+    try { liveJson = JSON.parse(liveBody); } catch (_) { liveJson = []; }
+    res.status(200).json({ success: true, source: Array.isArray(liveJson) ? liveJson[0] : liveJson });
     return;
   }
 
