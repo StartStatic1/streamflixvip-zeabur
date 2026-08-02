@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Notifications
@@ -48,6 +49,7 @@ fun ProfileScreen(
     userId: String?,
     userEmail: String?,
     onSignedOut: () -> Unit,
+    onMyListClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -112,7 +114,19 @@ fun ProfileScreen(
             }
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(24.dp))
+
+        // Minha Lista / Favoritos
+        if (onMyListClick != null) {
+            ProfileInfoCard(
+                icon = Icons.Filled.Favorite,
+                title = "Minha Lista",
+                subtitle = "Filmes e séries que você salvou",
+                iconTint = Accent,
+                onClick = onMyListClick,
+            )
+            Spacer(Modifier.height(24.dp))
+        }
 
         if (userId != null) {
             SectionTitle("Assinatura VIP")
@@ -177,7 +191,7 @@ fun ProfileScreen(
         ProfileInfoCard(
             icon = Icons.Filled.Info,
             title = "Versão",
-            subtitle = "1.0.0",
+            subtitle = "7.4.0",
             iconTint = Color(0xFF78909C),
             onClick = {},
             showChevron = false,
