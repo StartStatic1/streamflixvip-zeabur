@@ -1,19 +1,3 @@
-<<<<<<< HEAD
-// api/admin-vip.js — carrega 9 chunks
-const fs = require('fs');
-const path = require('path');
-const Module = require('module');
-const n = 9;
-const code = [];
-for (let i = 0; i < n; i++) {
-  code.push(fs.readFileSync(path.join(__dirname, 'admin-vip.c' + i + '.js'), 'utf8'));
-}
-const m = new Module(module.id, module);
-m.filename = path.join(__dirname, 'admin-vip.js');
-m.paths = Module._nodeModulePaths(__dirname);
-m._compile(code.join(''), m.filename);
-module.exports = m.exports;
-=======
 // api/admin-vip.js
 // API admin VIP — restaurada (nucleo + IPTV + live TV + fontes + ads basico)
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
@@ -58,17 +42,6 @@ module.exports = async function handler(req, res) {
     Authorization: `Bearer ${serviceKey}`,
     'Content-Type': 'application/json',
   };
-
-  // Painel manda sourceId / isActive; backend antigo lia id / is_active.
-  // Aceita os dois nomes pra exclusão/toggle/update nunca falharem em silêncio.
-  function sourceRowId(b) {
-    return b.sourceId != null ? b.sourceId : b.id;
-  }
-  function sourceActiveFlag(b) {
-    if (b.isActive !== undefined) return !!b.isActive;
-    if (b.is_active !== undefined) return !!b.is_active;
-    return undefined;
-  }
 
   if (action === 'list') {
     const [codesRes, tvRes] = await Promise.all([
@@ -332,15 +305,15 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'update-source') {
-    const id = sourceRowId(body);
+    const { id, source_url, source_label, priority, season, episode, title } = body;
     if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
     const patch = {};
-    if (body.source_url !== undefined) patch.source_url = body.source_url;
-    if (body.source_label !== undefined) patch.source_label = body.source_label;
-    if (body.priority !== undefined) patch.priority = body.priority;
-    if (body.season !== undefined) patch.season = body.season;
-    if (body.episode !== undefined) patch.episode = body.episode;
-    if (body.title !== undefined) patch.title = body.title;
+    if (source_url !== undefined) patch.source_url = source_url;
+    if (source_label !== undefined) patch.source_label = source_label;
+    if (priority !== undefined) patch.priority = priority;
+    if (season !== undefined) patch.season = season;
+    if (episode !== undefined) patch.episode = episode;
+    if (title !== undefined) patch.title = title;
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { ...svcHeaders, Prefer: 'return=representation' },
@@ -353,14 +326,12 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'toggle-source') {
-    const id = sourceRowId(body);
-    const isActive = sourceActiveFlag(body);
+    const { id, is_active } = body;
     if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
-    if (isActive === undefined) { res.status(400).json({ error: 'Informe isActive' }); return; }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
       headers: { ...svcHeaders, Prefer: 'return=representation' },
-      body: JSON.stringify({ is_active: isActive }),
+      body: JSON.stringify({ is_active: !!is_active }),
     });
     if (!r.ok) { res.status(502).json({ error: 'Erro ao alternar fonte', detail: await r.text() }); return; }
     res.status(200).json({ success: true });
@@ -368,7 +339,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'delete-source') {
-    const id = sourceRowId(body);
+    const { id } = body;
     if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(id)}`, {
       method: 'DELETE',
@@ -470,79 +441,47 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  // Excluir fonte IPTV de verdade: remove a linha em iptv_sources E todas as
-  // entradas em vip_sources cujo source_label = nome da fonte (é assim que o
-  // sync grava: source_label = source.name). Sem isso o host some da aba IPTV
-  // mas continua no app e na aba Filmes (bug do mnba.shop).
   if (action === 'delete-iptv-source') {
-    const { sourceId } = body;
+    const { sourceId, cascade } = body;
     if (!sourceId) { res.status(400).json({ error: 'Informe sourceId' }); return; }
 
-    const getRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/iptv_sources?id=eq.${encodeURIComponent(sourceId)}&select=id,name`,
-      { headers: svcHeaders },
-    );
-    const getRows = await getRes.json();
-    if (!getRes.ok || !Array.isArray(getRows) || getRows.length === 0) {
-      res.status(404).json({ error: 'Fonte IPTV nao encontrada (ja foi excluida?)' });
-      return;
-    }
-    const sourceName = getRows[0].name;
-
-    // 1) Remove todos os servidores/filmes que o sync criou com esse nome
-    let vipDeleted = 0;
-    if (sourceName) {
-      const delVip = await fetch(
-        `${SUPABASE_URL}/rest/v1/vip_sources?source_label=eq.${encodeURIComponent(sourceName)}`,
-        { method: 'DELETE', headers: { ...svcHeaders, Prefer: 'return=representation' } },
+    // Busca o nome da fonte ANTES de apagar, para limpar vip_sources com o mesmo source_label
+    let sourceName = null;
+    try {
+      const getRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/iptv_sources?id=eq.${encodeURIComponent(sourceId)}&select=name`,
+        { headers: svcHeaders },
       );
-      if (delVip.ok) {
-        try {
-          const deletedRows = await delVip.json();
-          vipDeleted = Array.isArray(deletedRows) ? deletedRows.length : 0;
-        } catch (_) {}
-      } else {
-        res.status(502).json({ error: 'Erro ao apagar fontes dos filmes (vip_sources)', detail: await delVip.text() });
-        return;
+      if (getRes.ok) {
+        const rows = await getRes.json();
+        if (Array.isArray(rows) && rows[0] && rows[0].name) sourceName = String(rows[0].name).trim();
       }
-    }
+    } catch (_) {}
 
-    // 2) Remove itens nao-match ligados a essa fonte
-    await fetch(
-      `${SUPABASE_URL}/rest/v1/iptv_unmatched_items?source_id=eq.${encodeURIComponent(sourceId)}`,
-      { method: 'DELETE', headers: svcHeaders },
-    ).catch(() => {});
-
-    // 3) Remove a propria fonte IPTV
     const r = await fetch(`${SUPABASE_URL}/rest/v1/iptv_sources?id=eq.${encodeURIComponent(sourceId)}`, {
       method: 'DELETE',
       headers: svcHeaders,
     });
     if (!r.ok) { res.status(502).json({ error: 'Erro excluir IPTV', detail: await r.text() }); return; }
 
-    res.status(200).json({ success: true, vipSourcesDeleted: vipDeleted, sourceName });
-    return;
-  }
-
-  // Limpa restos orfaos: vip_sources de um host ja morto (ex: excluiu IPTV
-  // antes deste fix). Uso: action purge-source-label + sourceLabel.
-  if (action === 'purge-source-label') {
-    const label = (body.sourceLabel || body.source_label || '').trim();
-    if (!label) { res.status(400).json({ error: 'Informe sourceLabel' }); return; }
-    const delVip = await fetch(
-      `${SUPABASE_URL}/rest/v1/vip_sources?source_label=eq.${encodeURIComponent(label)}`,
-      { method: 'DELETE', headers: { ...svcHeaders, Prefer: 'return=representation' } },
-    );
-    if (!delVip.ok) {
-      res.status(502).json({ error: 'Erro ao limpar vip_sources', detail: await delVip.text() });
-      return;
+    // cascade !== false: remove tambem todas as vip_sources com source_label = nome da fonte
+    let vipSourcesDeleted = 0;
+    if (cascade !== false && sourceName) {
+      try {
+        const del = await fetch(
+          `${SUPABASE_URL}/rest/v1/vip_sources?source_label=eq.${encodeURIComponent(sourceName)}`,
+          { method: 'DELETE', headers: { ...svcHeaders, Prefer: 'return=representation' } },
+        );
+        if (del.ok) {
+          try {
+            const deleted = await del.json();
+            vipSourcesDeleted = Array.isArray(deleted) ? deleted.length : 0;
+          } catch (_) {}
+        }
+      } catch (_) {}
     }
-    let deleted = 0;
-    try {
-      const rows = await delVip.json();
-      deleted = Array.isArray(rows) ? rows.length : 0;
-    } catch (_) {}
-    res.status(200).json({ success: true, deleted, sourceLabel: label });
+
+    res.status(200).json({ success: true, sourceName, vipSourcesDeleted });
     return;
   }
 
@@ -717,4 +656,3 @@ module.exports = async function handler(req, res) {
     error: 'Acao ainda nao restaurada: ' + (action || '(vazia)') + '. Nucleo do painel OK.',
   });
 };
->>>>>>> ac98f5b (restore admin-vip)
