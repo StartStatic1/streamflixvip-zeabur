@@ -40,9 +40,6 @@ import kotlinx.coroutines.delay
 private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 
-/**
- * Home Cinema Flutuante — cards com elevação, ar generoso e hero suspenso.
- */
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -433,9 +430,13 @@ private fun ContentRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             itemsIndexed(row.items) { index, item ->
+                // Top 10 (trending) mistura filme e série — usa o tipo real do item.
+                // Nas outras fileiras o mediaType da row é confiável, mas resolvedMediaType
+                // também cobre o caso corretamente.
+                val clickType = item.resolvedMediaType.ifBlank { row.mediaType }
                 PosterCard(
                     item = item,
-                    onClick = { onItemClick(item.id, row.mediaType) },
+                    onClick = { onItemClick(item.id, clickType) },
                     rank = if (row.isRanked) index + 1 else null,
                 )
             }
@@ -450,6 +451,8 @@ private fun PosterCard(
     rank: Int? = null,
 ) {
     val posterUrl = item.poster_path?.let { TMDB_POSTER_BASE + it }
+    // Números do ranking com accent suave (não gritante)
+    val rankColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
 
     Row(verticalAlignment = Alignment.Bottom) {
         if (rank != null) {
@@ -457,7 +460,7 @@ private fun PosterCard(
                 text = "$rank",
                 fontSize = 58.sp,
                 fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = rankColor,
                 modifier = Modifier.offset(x = 10.dp),
             )
         }
