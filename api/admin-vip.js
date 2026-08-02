@@ -410,7 +410,7 @@ module.exports = async function handler(req, res) {
         xtream_pass: String(xtreamPass).trim(),
         priority: Number.isFinite(Number(priority)) ? Number(priority) : 10,
         is_active: true,
-        source_type: action === 'create-xtream-source' ? 'xtream' : (body.source_type || 'xtream'),
+        source_type: action === 'create-xtream-source' ? 'xtream_api' : (body.source_type || 'm3u'),
       }),
     });
     const result = await r.json();
