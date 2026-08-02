@@ -170,7 +170,7 @@ module.exports = async function handler(req, res) {
     );
     const rows = await r.json();
     if (!r.ok) { res.status(502).json({ error: 'Erro historico', detail: rows }); return; }
-    res.status(200).json({ redemptions: rows });
+    res.status(200).json({ users: rows });
     return;
   }
 
@@ -454,6 +454,42 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  // Apaga vip_sources por label em LOTES (sem return=representation).
+  // DELETE unico de 100k+ linhas + Prefer representation estoura timeout Vercel/PostgREST.
+  async function deleteVipSourcesByLabels(labels) {
+    const unique = [...new Set((labels || []).map((l) => String(l || '').trim()).filter(Boolean))];
+    let total = 0;
+    const BATCH = 1500;
+    const MAX_ROUNDS = 80; // 80 * 1500 = 120k linhas por invocacao
+    for (const label of unique) {
+      for (let round = 0; round < MAX_ROUNDS; round++) {
+        const listRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/vip_sources?source_label=eq.${encodeURIComponent(label)}&select=id&limit=${BATCH}`,
+          { headers: svcHeaders },
+        );
+        if (!listRes.ok) {
+          const detail = await listRes.text();
+          throw new Error('list vip_sources: ' + detail.slice(0, 200));
+        }
+        const rows = await listRes.json();
+        if (!Array.isArray(rows) || rows.length === 0) break;
+        const ids = rows.map((r) => r.id).filter(Boolean);
+        if (ids.length === 0) break;
+        const delRes = await fetch(
+          `${SUPABASE_URL}/rest/v1/vip_sources?id=in.(${ids.join(',')})`,
+          { method: 'DELETE', headers: { ...svcHeaders, Prefer: 'return=minimal' } },
+        );
+        if (!delRes.ok) {
+          const detail = await delRes.text();
+          throw new Error('delete vip_sources: ' + detail.slice(0, 200));
+        }
+        total += ids.length;
+        if (rows.length < BATCH) break;
+      }
+    }
+    return total;
+  }
+
   // Excluir fonte IPTV de verdade: remove a linha em iptv_sources E todas as
   // entradas em vip_sources cujo source_label = nome da fonte (é assim que o
   // sync grava: source_label = source.name). Sem isso o host some da aba IPTV
@@ -471,40 +507,42 @@ module.exports = async function handler(req, res) {
       res.status(404).json({ error: 'Fonte IPTV nao encontrada (ja foi excluida?)' });
       return;
     }
-    const sourceName = getRows[0].name;
+    const sourceName = String(getRows[0].name || '').trim();
 
-    // 1) Remove todos os servidores/filmes que o sync criou com esse nome
+    // Labels possiveis: nome exato + StreamFlix.nome (sync antigo/novo)
+    const labels = [sourceName];
+    if (sourceName && !sourceName.startsWith('StreamFlix.')) {
+      labels.push('StreamFlix.' + sourceName);
+    }
+    if (sourceName.startsWith('StreamFlix.')) {
+      labels.push(sourceName.slice('StreamFlix.'.length));
+    }
+
     let vipDeleted = 0;
-    if (sourceName) {
-      const delVip = await fetch(
-        `${SUPABASE_URL}/rest/v1/vip_sources?source_label=eq.${encodeURIComponent(sourceName)}`,
-        { method: 'DELETE', headers: { ...svcHeaders, Prefer: 'return=representation' } },
-      );
-      if (delVip.ok) {
-        try {
-          const deletedRows = await delVip.json();
-          vipDeleted = Array.isArray(deletedRows) ? deletedRows.length : 0;
-        } catch (_) {}
-      } else {
-        res.status(502).json({ error: 'Erro ao apagar fontes dos filmes (vip_sources)', detail: await delVip.text() });
-        return;
-      }
+    try {
+      vipDeleted = await deleteVipSourcesByLabels(labels);
+    } catch (err) {
+      res.status(502).json({
+        error: 'Erro ao apagar fontes dos filmes (vip_sources)',
+        detail: String(err && err.message ? err.message : err).slice(0, 300),
+      });
+      return;
     }
 
     // 2) Remove itens nao-match ligados a essa fonte
     await fetch(
       `${SUPABASE_URL}/rest/v1/iptv_unmatched_items?source_id=eq.${encodeURIComponent(sourceId)}`,
-      { method: 'DELETE', headers: svcHeaders },
+      { method: 'DELETE', headers: { ...svcHeaders, Prefer: 'return=minimal' } },
     ).catch(() => {});
 
     // 3) Remove a propria fonte IPTV
     const r = await fetch(`${SUPABASE_URL}/rest/v1/iptv_sources?id=eq.${encodeURIComponent(sourceId)}`, {
       method: 'DELETE',
-      headers: svcHeaders,
+      headers: { ...svcHeaders, Prefer: 'return=minimal' },
     });
     if (!r.ok) { res.status(502).json({ error: 'Erro excluir IPTV', detail: await r.text() }); return; }
 
-    res.status(200).json({ success: true, vipSourcesDeleted: vipDeleted, sourceName });
+    res.status(200).json({ success: true, vipSourcesDeleted: vipDeleted, sourceName, labelsTried: labels });
     return;
   }
 
@@ -513,19 +551,19 @@ module.exports = async function handler(req, res) {
   if (action === 'purge-source-label') {
     const label = (body.sourceLabel || body.source_label || '').trim();
     if (!label) { res.status(400).json({ error: 'Informe sourceLabel' }); return; }
-    const delVip = await fetch(
-      `${SUPABASE_URL}/rest/v1/vip_sources?source_label=eq.${encodeURIComponent(label)}`,
-      { method: 'DELETE', headers: { ...svcHeaders, Prefer: 'return=representation' } },
-    );
-    if (!delVip.ok) {
-      res.status(502).json({ error: 'Erro ao limpar vip_sources', detail: await delVip.text() });
-      return;
-    }
+    const labels = [label];
+    if (!label.startsWith('StreamFlix.')) labels.push('StreamFlix.' + label);
+    else labels.push(label.slice('StreamFlix.'.length));
     let deleted = 0;
     try {
-      const rows = await delVip.json();
-      deleted = Array.isArray(rows) ? rows.length : 0;
-    } catch (_) {}
+      deleted = await deleteVipSourcesByLabels(labels);
+    } catch (err) {
+      res.status(502).json({
+        error: 'Erro ao limpar vip_sources',
+        detail: String(err && err.message ? err.message : err).slice(0, 300),
+      });
+      return;
+    }
     res.status(200).json({ success: true, deleted, sourceLabel: label });
     return;
   }
