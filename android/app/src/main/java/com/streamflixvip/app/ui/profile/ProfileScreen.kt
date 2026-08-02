@@ -68,7 +68,6 @@ fun ProfileScreen(
     var isIptvActive by remember { mutableStateOf(iptvStore.hasCredentials) }
     var announcements by remember { mutableStateOf<List<AnnouncementItem>>(emptyList()) }
 
-    // Carrega avisos só se o usuário quer notificações
     LaunchedEffect(notificationsEnabled) {
         if (!notificationsEnabled) {
             announcements = emptyList()
@@ -118,11 +117,11 @@ fun ProfileScreen(
                     Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFF001820), modifier = Modifier.size(16.dp))
                 }
             }
-            Spacer(modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Text(displayName, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(userEmail ?: "—", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
@@ -133,7 +132,7 @@ fun ProfileScreen(
             }
         }
 
-        Spacer(modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         if (onMyListClick != null) {
             ProfileInfoCard(
@@ -143,10 +142,9 @@ fun ProfileScreen(
                 iconTint = Accent,
                 onClick = onMyListClick,
             )
-            Spacer(modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // Avisos (só com notificações ligadas)
         if (notificationsEnabled && announcements.isNotEmpty()) {
             SectionTitle("Avisos")
             announcements.forEach { item ->
@@ -160,9 +158,9 @@ fun ProfileScreen(
                         }
                     },
                 )
-                Spacer(modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Spacer(modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
         if (userId != null) {
@@ -176,7 +174,7 @@ fun ProfileScreen(
                 },
             )
             VipSection(viewModel = vipViewModel)
-            Spacer(modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(28.dp))
         }
 
         SectionTitle("Contato Oficial")
@@ -187,7 +185,7 @@ fun ProfileScreen(
             iconTint = Color(0xFF29B6F6),
             onClick = { uriHandler.openUri("mailto:$SUPPORT_EMAIL") },
         )
-        Spacer(modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         ProfileInfoCard(
             icon = Icons.Filled.Send,
             title = "Telegram Oficial",
@@ -196,7 +194,7 @@ fun ProfileScreen(
             onClick = { uriHandler.openUri(TELEGRAM_URL) },
         )
 
-        Spacer(modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         SectionTitle("Preferências")
 
@@ -208,7 +206,7 @@ fun ProfileScreen(
             onClick = { showIptvDialog = true },
         )
 
-        Spacer(modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         ProfileToggleCard(
             icon = Icons.Filled.Notifications,
@@ -222,7 +220,7 @@ fun ProfileScreen(
             },
         )
 
-        Spacer(modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         SectionTitle("Sobre")
         ProfileInfoCard(
@@ -233,7 +231,7 @@ fun ProfileScreen(
             onClick = {},
             showChevron = false,
         )
-        Spacer(modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         ProfileInfoCard(
             icon = Icons.Filled.Description,
             title = "Termos de Uso",
@@ -241,7 +239,7 @@ fun ProfileScreen(
             iconTint = Color(0xFF78909C),
             onClick = { showTermsDialog = true },
         )
-        Spacer(modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         ProfileInfoCard(
             icon = Icons.Filled.PrivacyTip,
             title = "Política de Privacidade",
@@ -250,7 +248,7 @@ fun ProfileScreen(
             onClick = { showPrivacyDialog = true },
         )
 
-        Spacer(modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         Surface(
             shape = RoundedCornerShape(12.dp),
@@ -268,12 +266,12 @@ fun ProfileScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(Icons.Filled.Logout, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text("Sair da Conta", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
             }
         }
 
-        Spacer(modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         Text(
             "StreamFlixVIP © 2026",
             fontSize = 11.sp,
@@ -281,7 +279,7 @@ fun ProfileScreen(
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Center,
         )
-        Spacer(modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
     }
 
     if (showTermsDialog) {
@@ -332,16 +330,16 @@ private fun AnnouncementCard(
             .fillMaxWidth()
             .then(if (hasLink) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
-        Column(modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(14.dp)) {
             Text(
                 item.typeLabel.uppercase(),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = typeColor,
             )
-            Spacer(modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(item.title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 item.body,
                 fontSize = 13.sp,
@@ -349,7 +347,7 @@ private fun AnnouncementCard(
                 lineHeight = 18.sp,
             )
             if (hasLink) {
-                Spacer(modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     "Toque para abrir →",
                     fontSize = 11.sp,
@@ -398,8 +396,8 @@ private fun ProfileInfoCard(
             ) {
                 Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
             }
-            Spacer(modifier.width(14.dp))
-            Column(modifier.weight(1f)) {
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -441,8 +439,8 @@ private fun ProfileToggleCard(
             ) {
                 Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(22.dp))
             }
-            Spacer(modifier.width(14.dp))
-            Column(modifier.weight(1f)) {
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
