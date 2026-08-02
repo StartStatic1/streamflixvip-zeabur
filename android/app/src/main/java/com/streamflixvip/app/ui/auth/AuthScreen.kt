@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -32,23 +33,11 @@ import coil.compose.AsyncImage
 import com.streamflixvip.app.data.CatalogRepository
 
 private val Gold = Color(0xFFD4AF37)
-private val DarkBg = Color(0xFF0A0A10)
+private val DarkBg = Color(0xFF05050A)
 private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
- * Tela de login por e-mail + código de 6 dígitos — mesmo fluxo de duas
- * etapas que o site já usa (signInWithOtp -> verifyOtp), só que em UI
- * nativa Compose em vez de modal HTML.
- *
- * Duas correções nesta versão:
- * 1. O Column antigo usava fillMaxSize() + Arrangement.Center SEM
- *    scroll — quando o teclado abre, o conteúdo centralizado não tinha
- *    pra onde "sobrar espaço", ficando espremido/cortado. Agora rola
- *    (verticalScroll) e respeita o teclado (imePadding), então digitar
- *    o e-mail ou o código nunca fica travado atrás do teclado.
- * 2. Fundo estático deu lugar a um "rolo de filme" de pôsteres reais
- *    (TMDB populares) rolando devagar atrás do formulário, com um
- *    overlay escuro por cima pra manter o foco no login.
+ * Login por e-mail + código — formulário em card flutuante sobre o rolo de posters.
  */
 @Composable
 fun AuthScreen(
@@ -65,19 +54,16 @@ fun AuthScreen(
     Box(Modifier.fillMaxSize().background(DarkBg)) {
         MovingPosterBackground()
 
-        // Overlay escuro por cima do rolo de pôsteres — forte o
-        // suficiente pra não competir com o formulário, mas ainda deixa
-        // o movimento visível no fundo (era esse o pedido: "sem tirar
-        // foco da tela login").
+        // Overlay mais suave — posters ficam mais visíveis (efeito "no ar")
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
+                            DarkBg.copy(alpha = 0.78f),
                             DarkBg.copy(alpha = 0.88f),
-                            DarkBg.copy(alpha = 0.94f),
-                            DarkBg.copy(alpha = 0.88f),
+                            DarkBg.copy(alpha = 0.78f),
                         ),
                     ),
                 ),
@@ -87,35 +73,47 @@ fun AuthScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .imePadding() // empurra o conteúdo pra cima do teclado em vez de deixá-lo cobrir os campos
-                .padding(24.dp),
+                .imePadding()
+                .padding(horizontal = 20.dp, vertical = 32.dp),
             verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                "StreamFlixVIP",
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                color = Gold,
-            )
-            Spacer(Modifier.height(8.dp))
+            // Card flutuante do formulário
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF0F0F16).copy(alpha = 0.92f),
+                shadowElevation = 16.dp,
+                tonalElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                ) {
+                    Text(
+                        "StreamFlixVIP",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Gold,
+                    )
+                    Spacer(Modifier.height(6.dp))
 
-            when (state.step) {
-                AuthStep.EnterEmail -> EmailStep(state, viewModel)
-                AuthStep.EnterCode -> CodeStep(state, viewModel)
-                AuthStep.LoggedIn -> Unit // tratado acima
+                    when (state.step) {
+                        AuthStep.EnterEmail -> EmailStep(state, viewModel)
+                        AuthStep.EnterCode -> CodeStep(state, viewModel)
+                        AuthStep.LoggedIn -> Unit
+                    }
+
+                    state.infoMessage?.let {
+                        Spacer(Modifier.height(12.dp))
+                        Text(it, color = Gold, fontSize = 13.sp)
+                    }
+                    state.errorMessage?.let {
+                        Spacer(Modifier.height(12.dp))
+                        Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                    }
+                }
             }
 
-            state.infoMessage?.let {
-                Spacer(Modifier.height(12.dp))
-                Text(it, color = Gold, fontSize = 13.sp)
-            }
-            state.errorMessage?.let {
-                Spacer(Modifier.height(12.dp))
-                Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
-            }
-
-            // Espaço extra no fim: garante que o botão nunca fica colado
-            // na borda inferior do teclado quando a rolagem chega ao fim.
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -123,7 +121,7 @@ fun AuthScreen(
 
 @Composable
 private fun EmailStep(state: AuthUiState, viewModel: AuthViewModel) {
-    Text("Entre com seu e-mail para continuar", fontSize = 14.sp, color = Color.White)
+    Text("Entre com seu e-mail para continuar", fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f))
     Spacer(Modifier.height(16.dp))
     OutlinedTextField(
         value = state.email,
@@ -132,24 +130,40 @@ private fun EmailStep(state: AuthUiState, viewModel: AuthViewModel) {
         singleLine = true,
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email),
         modifier = Modifier.fillMaxWidth(),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = Gold,
+            unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+            focusedLabelColor = Gold,
+            cursorColor = Gold,
+        ),
+        shape = RoundedCornerShape(14.dp),
     )
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(18.dp))
     Button(
         onClick = viewModel::sendCode,
         enabled = !state.isLoading,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(50.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Gold,
+            contentColor = Color.Black,
+        ),
     ) {
         if (state.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Color.Black)
         } else {
-            Text("Continuar")
+            Text("Continuar", fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
     }
 }
 
 @Composable
 private fun CodeStep(state: AuthUiState, viewModel: AuthViewModel) {
-    Text("Digite o código de 6 dígitos enviado para ${state.email}", fontSize = 14.sp, color = Color.White)
+    Text(
+        "Digite o código de 6 dígitos enviado para ${state.email}",
+        fontSize = 14.sp,
+        color = Color.White.copy(alpha = 0.85f),
+    )
     Spacer(Modifier.height(16.dp))
     OutlinedTextField(
         value = state.code,
@@ -158,28 +172,33 @@ private fun CodeStep(state: AuthUiState, viewModel: AuthViewModel) {
         singleLine = true,
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = Gold,
+            unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
+            focusedLabelColor = Gold,
+            cursorColor = Gold,
+        ),
+        shape = RoundedCornerShape(14.dp),
     )
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(18.dp))
     Button(
         onClick = viewModel::confirmCode,
         enabled = !state.isLoading,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(50.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Gold,
+            contentColor = Color.Black,
+        ),
     ) {
         if (state.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
+            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Color.Black)
         } else {
-            Text("Entrar")
+            Text("Entrar", fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
     }
 }
 
-/**
- * Fundo de "rolo de filme": várias fileiras de pôsteres reais (TMDB
- * populares) rolando devagar, cada fileira numa velocidade/direção
- * levemente diferente pra parecer orgânico em vez de um carrossel único
- * repetitivo. Preenche a tela inteira sem buracos duplicando a lista de
- * pôsteres o quanto for preciso.
- */
 @Composable
 private fun MovingPosterBackground() {
     var posterPaths by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -190,11 +209,8 @@ private fun MovingPosterBackground() {
         posterPaths = (movies + series).mapNotNull { it.poster_path }.distinct()
     }
 
-    if (posterPaths.isEmpty()) return // enquanto carrega, só o fundo escuro sólido aparece — nunca um flash de espaço vazio/quebrado
+    if (posterPaths.isEmpty()) return
 
-    // Reparte a lista em 4 fileiras horizontais, cada uma repetida
-    // várias vezes seguidas pra nunca deixar buraco na tela mesmo em
-    // telas bem largas — e cada fileira roda numa velocidade diferente.
     val rows = remember(posterPaths) {
         posterPaths.chunked((posterPaths.size / 4).coerceAtLeast(1)).take(4)
     }
@@ -204,8 +220,8 @@ private fun MovingPosterBackground() {
             if (rowPosters.isEmpty()) return@forEachIndexed
             PosterRow(
                 posters = rowPosters,
-                durationMillis = 18_000 + index * 4_000, // fileiras diferentes = velocidades diferentes, evita sincronismo repetitivo
-                reverse = index % 2 == 1, // alterna direção pra dar mais sensação de "rolo de filme" do que esteira única
+                durationMillis = 20_000 + index * 5_000,
+                reverse = index % 2 == 1,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -219,10 +235,6 @@ private fun PosterRow(
     reverse: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // Repete a lista várias vezes — a translação abaixo desloca só a
-    // largura de UMA repetição (não da fileira toda), então enquanto uma
-    // cópia sai pela esquerda a próxima já está entrando pela direita,
-    // sem deixar buraco vazio no meio da animação.
     val repeatedPosters = remember(posters) { List(6) { posters }.flatten() }
 
     val transition = rememberInfiniteTransition(label = "poster_row")
@@ -239,9 +251,9 @@ private fun PosterRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp)
-            .graphicsLayerTranslate(offset / 6f), // só 1/6 da largura total = 1 repetição, não a fileira inteira
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(vertical = 4.dp)
+            .graphicsLayerTranslate(offset / 6f),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         repeatedPosters.forEach { path ->
             AsyncImage(
@@ -249,15 +261,14 @@ private fun PosterRow(
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .width(70.dp)
+                    .width(72.dp)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(6.dp)),
+                    .clip(RoundedCornerShape(8.dp)),
             )
         }
     }
 }
 
-/** Translada a fileira inteira horizontalmente como fração da própria largura, criando o efeito de rolagem contínua. */
 private fun Modifier.graphicsLayerTranslate(fraction: Float): Modifier =
     this.then(
         Modifier.layout { measurable, constraints ->

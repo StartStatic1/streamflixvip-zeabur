@@ -155,8 +155,9 @@ private fun MainAppScaffold(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute in listOf("home", "search", "explore", "livetv", "genres", "mylist", "profile")
-    val showTopBar = currentRoute in listOf("home", "genres", "mylist", "profile")
+    // Cinema Flutuante — só 4 abas na bottom bar
+    val showBottomBar = currentRoute in listOf("home", "explore", "livetv", "profile")
+    val showTopBar = currentRoute in listOf("home", "explore", "livetv", "profile", "mylist", "genres")
 
     LaunchedEffect(userId) {
         if (userId != null) {
@@ -268,6 +269,7 @@ private fun MainAppScaffold(
                 }
             }
 
+            // Gêneros permanece acessível (ex: via Explorar ou deep link), só saiu da bottom bar
             composable("genres") {
                 val viewModel: GenreViewModel = viewModel()
                 GenreScreen(
@@ -299,6 +301,7 @@ private fun MainAppScaffold(
                 )
             }
 
+            // Favoritos / Minha Lista — acessível via Perfil ou navegação interna
             composable("mylist") {
                 val viewModel: MyListViewModel = viewModel(
                     factory = viewModelFactory { MyListViewModel(userId = userId, accessToken = accessToken) },
