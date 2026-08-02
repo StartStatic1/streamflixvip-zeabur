@@ -1,0 +1,12 @@
+{
+  "announcements": [
+    {
+      "id": "welcome-1",
+      "type": "info",
+      "title": "Bem-vindo aos avisos",
+      "body": "Quando houver filme novo, manutenção ou promoção, o aviso aparece aqui. Desative em Preferências se não quiser ver.",
+      "createdAt": "2026-08-02T18:00:00Z",
+      "active": true
+    }
+  ]
+}
