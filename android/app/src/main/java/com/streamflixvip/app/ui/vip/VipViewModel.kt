@@ -62,7 +62,7 @@ class VipViewModel(
                 planLabel = status.planLabel,
                 isLoadingStatus = false,
             )
-            VipStatusHolder.update(status.isVip)
+            VipStatusHolder.update(status.isVip, status.expiresAt)
         }
     }
 
@@ -89,7 +89,7 @@ class VipViewModel(
                         redeemSuccess = true,
                         redeemCode = "",
                     )
-                    VipStatusHolder.update(true)
+                    VipStatusHolder.update(true, result.expiresAt)
                 }
                 is RedeemResult.Failure -> {
                     _uiState.value = _uiState.value.copy(
