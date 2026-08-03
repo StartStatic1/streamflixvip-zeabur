@@ -716,6 +716,75 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+
+  // ── VIP por título (vip_titles) ──
+  if (action === 'get-vip-title') {
+    const tmdbId = body.tmdb_id;
+    const mediaType = body.media_type || 'movie';
+    if (tmdbId == null) { res.status(400).json({ error: 'Informe tmdb_id' }); return; }
+    const r = await fetch(
+      `\( {SUPABASE_URL}/rest/v1/vip_titles?tmdb_id=eq. \){encodeURIComponent(tmdbId)}&media_type=eq.${encodeURIComponent(mediaType)}&select=tmdb_id,media_type,vip_lock,vip_free_episode_limit&limit=1`,
+      { headers: svcHeaders },
+    );
+    const rows = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao buscar config VIP', detail: rows }); return; }
+    const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    res.status(200).json({
+      config: row
+        ? { vip_lock: !!row.vip_lock, vip_free_episode_limit: row.vip_free_episode_limit ?? null }
+        : { vip_lock: false, vip_free_episode_limit: null },
+    });
+    return;
+  }
+
+  if (action === 'set-vip-title') {
+    const tmdbId = body.tmdb_id;
+    const mediaType = body.media_type || 'movie';
+    const vipLock = !!body.vip_lock;
+    let freeLimit = body.vip_free_episode_limit;
+    if (freeLimit === '' || freeLimit === undefined) freeLimit = null;
+    if (freeLimit != null) freeLimit = parseInt(freeLimit, 10);
+    if (freeLimit != null && (isNaN(freeLimit) || freeLimit < 1)) freeLimit = null;
+    if (vipLock) freeLimit = null;
+    if (tmdbId == null) { res.status(400).json({ error: 'Informe tmdb_id' }); return; }
+
+    const payload = {
+      tmdb_id: Number(tmdbId),
+      media_type: mediaType,
+      vip_lock: vipLock,
+      vip_free_episode_limit: freeLimit,
+    };
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/vip_titles?on_conflict=tmdb_id,media_type`,
+      {
+        method: 'POST',
+        headers: { ...svcHeaders, Prefer: 'resolution=merge-duplicates,return=representation' },
+        body: JSON.stringify(payload),
+      },
+    );
+    const result = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao salvar config VIP', detail: result }); return; }
+    res.status(200).json({ success: true, config: Array.isArray(result) ? result[0] : result });
+    return;
+  }
+
+  if (action === 'get-vip-titles-batch') {
+    const items = Array.isArray(body.items) ? body.items : [];
+    if (!items.length) { res.status(200).json({ configs: [] }); return; }
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/vip_titles?select=tmdb_id,media_type,vip_lock,vip_free_episode_limit&limit=5000`,
+      { headers: svcHeaders },
+    );
+    const rows = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao buscar configs VIP', detail: rows }); return; }
+    const want = new Set(items.map((it) => `\( {it.media_type || 'movie'}: \){it.tmdb_id}`));
+    const configs = (Array.isArray(rows) ? rows : []).filter(
+      (row) => want.has(`\( {row.media_type}: \){row.tmdb_id}`) && (row.vip_lock || row.vip_free_episode_limit),
+    );
+    res.status(200).json({ configs });
+    return;
+  }
+
   res.status(501).json({
     error: 'Acao ainda nao restaurada: ' + (action || '(vazia)') + '. Nucleo do painel OK.',
   });
