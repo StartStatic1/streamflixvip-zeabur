@@ -25,10 +25,13 @@ data class LiveTvUiState(
         get() {
             val q = normalize(searchQuery)
             var list = channels
-            // Com busca ativa: procura em TODAS as categorias (senão parece "quebrado")
-            if (q.isEmpty() && selectedCategoryId != "all") {
+            // "Todos": esconde adulto (000). Adulto só na categoria 000.
+            if (q.isEmpty() && selectedCategoryId == "all") {
+                list = list.filter { it.categoryId != "000" }
+            } else if (q.isEmpty() && selectedCategoryId != "all") {
                 list = list.filter { it.categoryId == selectedCategoryId }
             }
+            // Com busca: procura em todos (incluindo 000 se o usuário digitar)
             if (q.isNotEmpty()) {
                 list = list.filter { normalize(it.name).contains(q) }
             }
