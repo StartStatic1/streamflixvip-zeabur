@@ -4,9 +4,16 @@
 //   1) tabela live_tv_sources (fontes só de TV — não misturam com sync VOD)
 //   2) fallback: iptv_sources (comportamento antigo)
 // Até 3 fontes, URLs agrupadas por nome para fallback no player.
+// Adulto / XXX: consolidado na categoria "000" e colocado no FINAL da lista.
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const MAX_SOURCES = 3;
+const ADULT_CATEGORY_ID = '000';
+const ADULT_CATEGORY_NAME = '000';
+
+// Nomes/palavras típicas de categorias e canais adultos (normalizados sem acento).
+const ADULT_RE =
+  /\b(adult|adulto|adultos|xxx|xx|x18|18\+|\+18|porn|porno|pornografia|sex|sexo|sexy|erot|erotica|erotico|nsfw|onlyfans|hot\s*live|canal\s*hot|playboy|sexshop|anal|lesbian|gay\s*xxx)\b/i;
 
 function supabaseHeaders(serviceKey) {
   return {
@@ -62,6 +69,14 @@ function normalizeName(name) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
+
+function isAdultText(text) {
+  const n = normalizeName(text);
+  if (!n) return false;
+  // "000" / "00" sozinho já é o bucket adulto em muitos painéis
+  if (n === '000' || n === '00' || n === '0') return true;
+  return ADULT_RE.test(n);
 }
 
 function buildLiveUrl(host, user, pass, streamId, extension) {
@@ -201,9 +216,25 @@ async function handler(req, res) {
       ),
     );
 
-    const categoryMap = new Map();
+    // Mapa categoryId original -> se é adulto
+    const adultCatIds = new Set();
     for (const r of results) {
       for (const c of r.categories) {
+        if (isAdultText(c.name) || isAdultText(c.id)) {
+          adultCatIds.add(String(c.id));
+        }
+      }
+    }
+
+    const categoryMap = new Map();
+    let hasAdult = false;
+
+    for (const r of results) {
+      for (const c of r.categories) {
+        if (adultCatIds.has(String(c.id)) || isAdultText(c.name)) {
+          hasAdult = true;
+          continue; // não listar Adult/XXX soltos — tudo vira "000"
+        }
         const key = normalizeName(c.name);
         if (!key) continue;
         if (!categoryMap.has(key)) categoryMap.set(key, { id: key, name: c.name });
@@ -215,10 +246,19 @@ async function handler(req, res) {
       for (const s of r.streams) {
         const key = normalizeName(s.name);
         if (!key) continue;
-        const catKey =
-          normalizeName(
-            r.categories.find((c) => c.id === s.categoryId)?.name || 'Outros',
-          ) || 'outros';
+
+        const rawCatName =
+          r.categories.find((c) => c.id === s.categoryId)?.name || 'Outros';
+        const isAdult =
+          adultCatIds.has(String(s.categoryId)) ||
+          isAdultText(rawCatName) ||
+          isAdultText(s.name);
+
+        if (isAdult) hasAdult = true;
+
+        const catKey = isAdult
+          ? ADULT_CATEGORY_ID
+          : normalizeName(rawCatName) || 'outros';
 
         let ch = channelMap.get(key);
         if (!ch) {
@@ -230,6 +270,9 @@ async function handler(req, res) {
             streams: [],
           };
           channelMap.set(key, ch);
+        } else if (isAdult) {
+          // Se qualquer fonte marcar como adulto, fica em 000
+          ch.categoryId = ADULT_CATEGORY_ID;
         }
         if (!ch.logo && s.logo) ch.logo = s.logo;
         if (!ch.streams.some((x) => x.url === s.url)) {
@@ -252,7 +295,14 @@ async function handler(req, res) {
       a.name.localeCompare(b.name, 'pt-BR'),
     );
     const usedCats = new Set(channels.map((c) => c.categoryId));
-    const filteredCategories = categories.filter((c) => usedCats.has(c.id));
+    let filteredCategories = categories.filter((c) => usedCats.has(c.id));
+
+    // Adulto sempre no FINAL, com id/nome "000" (não no início)
+    if (hasAdult && usedCats.has(ADULT_CATEGORY_ID)) {
+      filteredCategories = filteredCategories.filter((c) => c.id !== ADULT_CATEGORY_ID);
+      filteredCategories.push({ id: ADULT_CATEGORY_ID, name: ADULT_CATEGORY_NAME });
+    }
+
     const sourcesUsed = results.filter((r) => r.streams.length > 0).length;
 
     const payload = {
