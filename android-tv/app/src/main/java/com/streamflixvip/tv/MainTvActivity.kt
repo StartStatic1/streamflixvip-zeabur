@@ -18,6 +18,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.streamflixvip.tv.data.LocalWatchProgress
 import com.streamflixvip.tv.data.TvActivationManager
+import com.streamflixvip.tv.network.LiveChannel
 import com.streamflixvip.tv.network.NetworkModule
 import com.streamflixvip.tv.network.PostgrestFilter
 import com.streamflixvip.tv.network.VipSource
@@ -27,6 +28,8 @@ import com.streamflixvip.tv.ui.activation.ActivationTvScreen
 import com.streamflixvip.tv.ui.detail.DetailTvScreen
 import com.streamflixvip.tv.ui.home.CategoryTvScreen
 import com.streamflixvip.tv.ui.home.HomeTvScreen
+import com.streamflixvip.tv.ui.livetv.LivePlayerTvScreen
+import com.streamflixvip.tv.ui.livetv.LiveTvScreen
 import com.streamflixvip.tv.ui.player.PlayerTvScreen
 import com.streamflixvip.tv.ui.search.SearchTvScreen
 import com.streamflixvip.tv.ui.splash.SplashTvScreen
@@ -54,6 +57,9 @@ class MainTvActivity : ComponentActivity() {
                 var pendingTmdbId by remember { mutableStateOf(0) }
                 var pendingMediaType by remember { mutableStateOf("movie") }
                 var pendingPosterPath by remember { mutableStateOf<String?>(null) }
+
+                // Live TV (separado do player VOD — não mistura)
+                var pendingLiveChannel by remember { mutableStateOf<LiveChannel?>(null) }
 
                 fun openPlayer(
                     source: VipSource,
@@ -209,12 +215,41 @@ class MainTvActivity : ComponentActivity() {
                             },
                             onContinueClick = { entry -> resumeContinueWatching(entry) },
                             onNavigateToSearch = { navController.navigate("search") },
+                            onNavigateToLiveTv = { navController.navigate("live") },
                             onNavigateToMyList = { navController.navigate("mylist") },
                             onNavigateToAccount = { navController.navigate("account") },
                             onExploreCategory = { category ->
                                 navController.navigate("category/$category")
                             },
                         )
+                    }
+
+                    composable("live") {
+                        LiveTvScreen(
+                            onChannelClick = { channel ->
+                                pendingLiveChannel = channel
+                                navController.navigate("live-player") {
+                                    launchSingleTop = true
+                                }
+                            },
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+
+                    composable("live-player") {
+                        val channel = pendingLiveChannel
+                        if (channel != null) {
+                            LivePlayerTvScreen(
+                                channelName = channel.name,
+                                streams = channel.streams,
+                                onBack = {
+                                    pendingLiveChannel = null
+                                    navController.popBackStack()
+                                },
+                            )
+                        } else {
+                            LaunchedEffect(Unit) { navController.popBackStack() }
+                        }
                     }
 
                     composable(
