@@ -123,17 +123,25 @@ fun LivePlayerTvScreen(
         if (channelListVisible) channelListVisible = false else onBack()
     }
 
+    // Auto-hide. Nao roubar foco do chip atual a cada interacao —
+    // so foca Aspect na PRIMEIRA vez que os controles abrem.
+    var didInitialChipFocus by remember { mutableStateOf(false) }
     LaunchedEffect(controlsVisible, hideToken, channelListVisible) {
         if (controlsVisible && !channelListVisible) {
-            delay(50)
-            runCatching { aspectFocus.requestFocus() }
+            if (!didInitialChipFocus) {
+                delay(40)
+                runCatching { aspectFocus.requestFocus() }
+                didInitialChipFocus = true
+            }
             delay(6000)
             controlsVisible = false
+            didInitialChipFocus = false
             runCatching { rootFocus.requestFocus() }
         }
     }
     LaunchedEffect(controlsVisible, channelListVisible) {
         if (!controlsVisible && !channelListVisible) {
+            didInitialChipFocus = false
             delay(30)
             runCatching { rootFocus.requestFocus() }
         }
