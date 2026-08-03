@@ -777,9 +777,9 @@ module.exports = async function handler(req, res) {
     );
     const rows = await r.json();
     if (!r.ok) { res.status(502).json({ error: 'Erro ao buscar configs VIP', detail: rows }); return; }
-    const want = new Set(items.map((it) => `\( {it.media_type || 'movie'}: \){it.tmdb_id}`));
+    const want = new Set(items.map((it) => String(it.media_type || 'movie') + ':' + String(it.tmdb_id)));
     const configs = (Array.isArray(rows) ? rows : []).filter(
-      (row) => want.has(`\( {row.media_type}: \){row.tmdb_id}`) && (row.vip_lock || row.vip_free_episode_limit),
+      (row) => want.has(String(row.media_type) + ':' + String(row.tmdb_id)) && (row.vip_lock || row.vip_free_episode_limit),
     );
     res.status(200).json({ configs });
     return;
