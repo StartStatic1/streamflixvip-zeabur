@@ -4671,7 +4671,13 @@ document.addEventListener('click', (e) => {
     if (isHttp && pageIsHttps) {
       // Prioridade: Bunny CDN (cacheia e entrega mais rápido) > proxy próprio do Zeabur
       const proxyBase = STREAM_PROXY_BUNNY || STREAM_PROXY_VERCEL || STREAM_PROXY_ZEABUR;
-      if (proxyBase) return proxyBase + encodeURIComponent(url);
+      if (proxyBase) {
+        let proxied = proxyBase + encodeURIComponent(url);
+        if (_currentUser && _currentUser.id) {
+          proxied += '&userId=' + encodeURIComponent(_currentUser.id);
+        }
+        return proxied;
+      }
       return url;
     }
     return url;
@@ -5503,7 +5509,9 @@ document.addEventListener('click', (e) => {
   // ══════════════════════════════════════
   let _currentUser = null;
   let _vipStatus = { isVip: false, expiresAt: null, planLabel: null };
-  const VIP_LOCK_DAYS = 30; // títulos lançados há menos de 30 dias ficam bloqueados para não-VIP
+  // MODO TRAVA GLOBAL: free não assiste. Voltar: REQUIRE_VIP_FOR_ALL = false
+  const REQUIRE_VIP_FOR_ALL = true;
+  const VIP_LOCK_DAYS = 30; // só se REQUIRE_VIP_FOR_ALL = false
 
   function openAuthModal() {
     document.getElementById('authModal').classList.add('open');
@@ -5640,12 +5648,13 @@ document.addEventListener('click', (e) => {
   // (futuro ainda não estreou; sem data não há como avaliar).
   function isRecentReleaseLocked(item) {
     if (isVip()) return false;
+    if (typeof REQUIRE_VIP_FOR_ALL !== 'undefined' && REQUIRE_VIP_FOR_ALL) return true;
     const dateStr = item?.release_date || item?.first_air_date;
     if (!dateStr) return false;
     const releaseDate = new Date(dateStr);
     if (isNaN(releaseDate.getTime())) return false;
     const now = new Date();
-    if (releaseDate > now) return false; // ainda não lançou, não é "lançamento recente bloqueado"
+    if (releaseDate > now) return false;
     const diffDays = (now - releaseDate) / (1000 * 60 * 60 * 24);
     return diffDays <= VIP_LOCK_DAYS;
   }
