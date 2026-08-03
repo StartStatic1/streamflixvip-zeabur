@@ -1,11 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Banner mínimo 320x180dp exigido pelo launcher de TV (android:banner
-     no Manifest). Fundo escuro + texto dourado, provisório até você
-     substituir por uma arte de verdade. -->
+<!-- Banner 320x180 exigido pelo launcher de TV. Fundo escuro + disco cyan + play. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:width="320dp" android:height="180dp">
+    <!-- Fundo -->
+    <item>
         <shape android:shape="rectangle">
-            <solid android:color="#0A0A10" />
+            <solid android:color="#05050A" />
+            <size android:width="320dp" android:height="180dp" />
+        </shape>
+    </item>
+    <!-- Disco ciano centralizado (aprox.) -->
+    <item
+        android:width="72dp"
+        android:height="72dp"
+        android:gravity="center">
+        <shape android:shape="oval">
+            <solid android:color="#00E5FF" />
         </shape>
     </item>
 </layer-list>
