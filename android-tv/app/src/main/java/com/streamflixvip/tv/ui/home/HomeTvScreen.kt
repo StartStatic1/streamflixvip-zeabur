@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -71,6 +72,7 @@ fun HomeTvScreen(
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
     onContinueClick: (LocalWatchProgress) -> Unit = {},
     onNavigateToSearch: () -> Unit = {},
+    onNavigateToLiveTv: () -> Unit = {},
     onNavigateToMyList: () -> Unit = {},
     onNavigateToAccount: () -> Unit = {},
     onExploreCategory: (category: String) -> Unit = {},
@@ -134,6 +136,9 @@ fun HomeTvScreen(
                 }
                 Spacer(Modifier.height(36.dp))
                 NavRailItem(Icons.Filled.Home, "Início", selected = true, onClick = {})
+                Spacer(Modifier.height(18.dp))
+                // TV ao vivo — logo abaixo do Início (fácil de achar no D-pad)
+                NavRailItem(Icons.Filled.LiveTv, "TV ao vivo", selected = false, onClick = onNavigateToLiveTv)
                 Spacer(Modifier.height(18.dp))
                 NavRailItem(Icons.Filled.Search, "Buscar", selected = false, onClick = onNavigateToSearch)
                 Spacer(Modifier.height(18.dp))
