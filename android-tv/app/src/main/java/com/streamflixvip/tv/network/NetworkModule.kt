@@ -55,6 +55,13 @@ object NetworkModule {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
+    /** Live TV agrega várias fontes Xtream — timeout maior. */
+    private val liveTvOkHttp = OkHttpClient.Builder()
+        .addInterceptor(loggingInterceptor)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .build()
+
     val fastProbeClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.SECONDS)
@@ -78,6 +85,15 @@ object NetworkModule {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(VipApi::class.java)
+    }
+
+    val liveTvApi: LiveTvApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(liveTvOkHttp)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(LiveTvApi::class.java)
     }
 
     val supabaseApi: SupabaseApi by lazy {
