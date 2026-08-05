@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
 import java.text.Normalizer
 
 data class LiveTvUiState(
@@ -20,6 +21,8 @@ data class LiveTvUiState(
     val searchQuery: String = "",
     val sourcesUsed: Int = 0,
     val error: String? = null,
+    /** true quando o servidor recusou com VIP_REQUIRED (hard gate). */
+    val vipRequiredByServer: Boolean = false,
 ) {
     val filteredChannels: List<LiveChannel>
         get() {
@@ -56,7 +59,9 @@ class LiveTvViewModel : ViewModel() {
 
     fun load() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update {
+                it.copy(isLoading = true, error = null, vipRequiredByServer = false)
+            }
             runCatching {
                 NetworkModule.liveTvApi.getLiveTv()
             }.onSuccess { response ->
@@ -68,16 +73,26 @@ class LiveTvViewModel : ViewModel() {
                         },
                         channels = response.channels,
                         sourcesUsed = response.sourcesUsed,
+                        vipRequiredByServer = false,
                         error = if (response.channels.isEmpty()) {
                             "Nenhum canal disponível no momento."
                         } else null,
                     )
                 }
             }.onFailure { e ->
+                val isVipBlocked = (e as? HttpException)?.code() == 403
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        error = e.message ?: "Erro ao carregar canais",
+                        channels = emptyList(),
+                        categories = emptyList(),
+                        sourcesUsed = 0,
+                        vipRequiredByServer = isVipBlocked,
+                        error = if (isVipBlocked) {
+                            "VIP necessário para assistir TV ao vivo."
+                        } else {
+                            e.message ?: "Erro ao carregar canais"
+                        },
                     )
                 }
             }
