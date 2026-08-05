@@ -47,6 +47,13 @@ console.log(
     ? 'HARD (bloqueia não-VIP)'
     : 'SOFT (só loga)',
 );
+console.log(
+  'Auth gate filmes/séries:',
+  process.env.REQUIRE_AUTH_MEDIA === '1' ||
+    String(process.env.REQUIRE_AUTH_MEDIA || '').toLowerCase() === 'true'
+    ? 'HARD (exige login; vip_lock exige VIP)'
+    : 'SOFT (só loga)',
+);
 
 app.use(express.json({ limit: '2mb' }));
 
@@ -70,6 +77,7 @@ const activateTv     = require('./api/activate-tv.js');
 const tvStatus       = require('./api/tv-status.js');
 const r2Presign      = require('./api/r2-presign.js');
 const liveTv         = require('./api/live-tv.js');
+const mediaSources   = require('./api/media-sources.js');
 
 const wrap = (handler) => (req, res) => {
   Promise.resolve(handler(req, res)).catch((err) => {
@@ -98,6 +106,7 @@ app.all('/api/activate-tv',   wrap(activateTv));
 app.all('/api/tv-status',     wrap(tvStatus));
 app.all('/api/r2-presign',    wrap(r2Presign));
 app.all('/api/live-tv',       wrap(liveTv));
+app.all('/api/media-sources', wrap(mediaSources));
 
 app.use(express.static(STATIC_DIR, {
   extensions: ['html'],
