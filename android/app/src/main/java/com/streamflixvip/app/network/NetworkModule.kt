@@ -25,9 +25,7 @@ object NetworkModule {
 
     /**
      * Anexa Authorization + X-User-Id em toda request para o backend Express.
-     * Necessário pro gate VIP de /api/live-tv (lib/vip-gate.js) identificar
-     * o usuário real — APK crackeado que só força isVip local continua
-     * sem token válido e, com REQUIRE_VIP_LIVE_TV=1, não recebe canais.
+     * Necessário pro gate VIP de /api/live-tv e /api/media-sources.
      */
     private val sessionAuthInterceptor = Interceptor { chain ->
         val store = sessionStore
@@ -118,6 +116,15 @@ object NetworkModule {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(LiveTvApi::class.java)
+    }
+
+    val mediaSourcesApi: MediaSourcesApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(MediaSourcesApi::class.java)
     }
 
     val supabaseApi: SupabaseApi by lazy {
