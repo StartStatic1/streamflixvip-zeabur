@@ -98,13 +98,21 @@ android {
 }
 
 dependencies {
-    // Compose BOM — alinha as versões de todos os artefatos Compose
-    val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
-    implementation(composeBom)
-    androidTestImplementation(composeBom)
+    // Splash Screen API (Android 12+) — themes.xml referencia
+    // windowSplashScreen* attrs desta lib; sem ela o merge de resources falha.
+    implementation("androidx.core:core-splashscreen:1.0.1")
 
+    // Start.io (ex-StartApp) — ads SDK
+    implementation("com.startapp:inapp-sdk:5.1.0")
+
+    // Compose BOM — alinha as versões de todos os artefatos Compose
+    implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
     // "extended" traz ícones que não vêm no core (Groups, FavoriteBorder,
