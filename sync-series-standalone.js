@@ -1,7 +1,11 @@
-// sync-series-standalone.js — M3U series sync (restaurado + match por titulo)
+// sync-series-standalone.js — original + match por titulo
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const { parseM3U } = require('./lib/iptv-parser');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
+const DEFAULT_SOURCE_LABEL_PREFIX = 'MegaEmbed VIP';
 const MAX_RUNTIME_MS = 55 * 60 * 1000;
 
 function supabaseHeaders(serviceKey) {
@@ -30,9 +34,7 @@ async function sbUpsert(serviceKey, table, rows, onConflict) {
     });
     if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
   };
-  try {
-    await post(rows);
-  } catch (batchErr) {
+  try { await post(rows); } catch (batchErr) {
     for (const row of rows) {
       try { await post([row]); } catch (_) {}
     }
@@ -49,13 +51,7 @@ async function sbUpdate(serviceKey, table, filter, patch) {
 }
 
 function normalizeTitle(s) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 const TITLE_STOP = new Set(['a','o','as','os','de','da','do','das','dos','e','em','um','uma','the','of','and','in','on','to']);
 function titleTokens(s) {
@@ -99,10 +95,7 @@ async function searchTmdbSeries(baseTitle, tmdbApiKey) {
   const data = await res.json();
   if (!data.results || data.results.length === 0) return null;
   const ranked = data.results.map((r) => {
-    const score = Math.max(
-      titleSimilarity(baseTitle, r.name || ''),
-      titleSimilarity(baseTitle, r.original_name || ''),
-    );
+    const score = Math.max(titleSimilarity(baseTitle, r.name || ''), titleSimilarity(baseTitle, r.original_name || ''));
     return { r, score };
   }).filter((x) => x.score >= MIN_TITLE_SCORE)
     .sort((a, b) => b.score - a.score || (b.r.popularity || 0) - (a.r.popularity || 0));
@@ -110,113 +103,84 @@ async function searchTmdbSeries(baseTitle, tmdbApiKey) {
   return ranked[0].r;
 }
 
-function parseSeriesEntry(entry) {
-  // S01E02 / 1x02 / T1 EP2 patterns
-  const name = entry.title || entry.name || '';
-  const se = name.match(/[Ss](\d{1,2})\s*[EeXx](\d{1,3})/) || name.match(/(\d{1,2})[xX](\d{1,3})/);
-  let season = se ? parseInt(se[1], 10) : (entry.season || null);
-  let episode = se ? parseInt(se[2], 10) : (entry.episode || null);
-  let baseTitle = name
-    .replace(/[Ss]\d{1,2}\s*[EeXx]\d{1,3}.*/i, '')
-    .replace(/\d{1,2}[xX]\d{1,3}.*/i, '')
-    .replace(/\(\d{4}\)/g, '')
-    .replace(/\[.*?\]/g, '')
-    .trim();
-  return { baseTitle, season, episode, url: entry.url };
-}
-
 async function downloadM3U(source) {
-  const fs = require('fs');
-  const path = require('path');
-  const os = require('os');
-  const host = String(source.xtream_host || '').replace(/\/+$/, '');
-  const user = source.xtream_user;
-  const pass = source.xtream_pass;
-  if (!host || !user || !pass) throw new Error('Fonte sem host/user/pass');
-  const urls = [
-    `${host}/get.php?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&type=m3u_plus&output=ts`,
-    `${host}/get.php?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&type=m3u_plus`,
-  ];
-  const tmp = path.join(os.tmpdir(), `m3u-series-${source.id}-${Date.now()}.m3u`);
-  let lastErr = null;
-  for (const url of urls) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'IPTVSmarters/1.0 (Linux; Android)', Accept: '*/*' },
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) { lastErr = new Error(`HTTP ${res.status}`); continue; }
-      const text = await res.text();
-      if (!text || !text.includes('#EXT')) { lastErr = new Error('Nao e M3U'); continue; }
-      fs.writeFileSync(tmp, text, 'utf8');
-      console.log(`[m3u-series] baixado ${text.length} bytes`);
-      return tmp;
-    } catch (e) { lastErr = e; }
-  }
-  throw lastErr || new Error('Falha download M3U series');
+  const url = `${source.xtream_host}/get.php?username=${source.xtream_user}&password=${source.xtream_pass}&type=m3u_plus`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+  let res;
+  try {
+    res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'IPTVSmarters/1.0 (Linux; Android)', Accept: '*/*', Connection: 'keep-alive' },
+    });
+  } finally { clearTimeout(timeoutId); }
+  if (!res.ok) throw new Error(`Falha ao baixar M3U: HTTP ${res.status}`);
+  const tmpPath = path.join(os.tmpdir(), `iptv-series-${source.id}.m3u`);
+  const fileStream = fs.createWriteStream(tmpPath);
+  const reader = res.body.getReader();
+  await new Promise((resolve, reject) => {
+    function pump() {
+      reader.read().then(({ done, value }) => {
+        if (done) { fileStream.end(); return; }
+        fileStream.write(Buffer.from(value));
+        pump();
+      }).catch(reject);
+    }
+    pump();
+    fileStream.on('finish', resolve);
+    fileStream.on('error', reject);
+  });
+  return tmpPath;
 }
 
 async function processSource({ source, serviceKey, tmdbApiKey, timeLeft, seriesCache }) {
-  const fs = require('fs');
-  console.log(`[m3u-series] Fonte "${source.name}"`);
+  console.log(`[sync-series] Processando fonte: ${source.name || source.id}`);
   const filePath = await downloadM3U(source);
-  let entries;
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    entries = parseM3U(raw);
-  } finally {
-    try { fs.unlinkSync(filePath); } catch (_) {}
-  }
+  console.log('[sync-series] M3U baixado, parse...');
+  const allEpisodes = [];
+  await parseM3U(filePath, (entry) => {
+    if (!entry.classification) return;
+    if (entry.classification.kind !== 'episode' && entry.classification.kind !== 'anime') return;
+    allEpisodes.push(entry);
+  }, { dedupe: true });
+  fs.unlink(filePath, () => {});
+  console.log(`[sync-series] ${allEpisodes.length} episodios na playlist.`);
 
-  // so entradas que parecem episodio
-  const seriesEntries = [];
-  for (const e of entries) {
-    const p = parseSeriesEntry(e);
-    if (p.season != null && p.episode != null && p.baseTitle) seriesEntries.push({ ...p, raw: e });
-  }
-  console.log(`[m3u-series] ${seriesEntries.length} episodios detectados`);
-
-  let cursor = source.sync_cursor >= seriesEntries.length ? 0 : (source.sync_cursor || 0);
-  // series sync may use different cursor field - try series_sync_cursor if present
-  if (source.series_sync_cursor != null) {
-    cursor = source.series_sync_cursor >= seriesEntries.length ? 0 : source.series_sync_cursor;
-  }
-
+  let cursor = source.sync_cursor >= allEpisodes.length ? 0 : (source.sync_cursor || 0);
   let matched = 0, unmatchedCount = 0, processedThisRun = 0;
-  let vipRows = [];
+  let vipSourcesRows = [];
   const CONCURRENCY = 6;
 
-  while (cursor < seriesEntries.length && timeLeft() > 5000) {
-    const chunk = seriesEntries.slice(cursor, cursor + CONCURRENCY);
-    const results = await Promise.all(chunk.map(async (item) => {
+  while (cursor < allEpisodes.length && timeLeft() > 5000) {
+    const chunk = allEpisodes.slice(cursor, cursor + CONCURRENCY);
+    const results = await Promise.all(chunk.map(async (entry) => {
+      const { baseTitle, season, episode } = entry.classification;
       try {
-        const key = item.baseTitle.toLowerCase();
+        const key = String(baseTitle || '').toLowerCase();
         let series = seriesCache.get(key);
         if (series === undefined) {
-          series = await searchTmdbSeries(item.baseTitle, tmdbApiKey);
+          series = await searchTmdbSeries(baseTitle, tmdbApiKey);
           seriesCache.set(key, series);
         }
-        return { item, series, error: null };
+        return { entry, series, error: null };
       } catch (err) {
-        return { item, series: null, error: err };
+        return { entry, series: null, error: err };
       }
     }));
 
-    for (const { item, series, error } of results) {
+    for (const { entry, series, error } of results) {
+      const { baseTitle, season, episode } = entry.classification;
       if (error || !series) { unmatchedCount++; continue; }
       matched++;
-      vipRows.push({
+      vipSourcesRows.push({
         tmdb_id: series.id,
         media_type: 'tv',
-        season: item.season,
-        episode: item.episode,
-        title: series.name || item.baseTitle,
+        season,
+        episode,
+        title: series.name || baseTitle,
         poster_path: series.poster_path || null,
-        source_url: item.url,
-        source_label: source.name,
+        source_url: entry.url,
+        source_label: source.name || DEFAULT_SOURCE_LABEL_PREFIX,
         priority: source.priority,
         is_active: true,
       });
@@ -224,26 +188,25 @@ async function processSource({ source, serviceKey, tmdbApiKey, timeLeft, seriesC
 
     cursor += chunk.length;
     processedThisRun += chunk.length;
-    if (vipRows.length >= 80) {
-      await sbUpsert(serviceKey, 'vip_sources', vipRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
-      vipRows = [];
+    if (vipSourcesRows.length >= 100) {
+      await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
+      vipSourcesRows = [];
     }
   }
 
-  await sbUpsert(serviceKey, 'vip_sources', vipRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
+  await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
 
-  const isLastBatch = cursor >= seriesEntries.length;
+  const isLastBatch = cursor >= allEpisodes.length;
   const patch = {
+    sync_cursor: isLastBatch ? 0 : cursor,
     last_batch_at: new Date().toISOString(),
   };
-  // prefer series cursor fields if schema has them
-  patch.sync_cursor = isLastBatch ? 0 : cursor;
   if (isLastBatch) {
     patch.last_synced_at = new Date().toISOString();
-    patch.last_sync_stats = { series_matched: matched, series_unmatched: unmatchedCount, series_total: seriesEntries.length };
+    patch.last_sync_stats = { series_total: allEpisodes.length, series_matched: matched, series_unmatched: unmatchedCount };
   }
   await sbUpdate(serviceKey, 'iptv_sources', `id=eq.${source.id}`, patch);
-  console.log(`[m3u-series] "${source.name}": ${processedThisRun} ep, ${matched} ok`);
+  console.log(`[sync-series] "${source.name}": ${processedThisRun} ep, ${matched} ok`);
   return { done: isLastBatch };
 }
 
@@ -251,7 +214,7 @@ async function main() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const tmdbApiKey = process.env.TMDB_API_KEY;
   if (!serviceKey || !tmdbApiKey) {
-    console.error('[m3u-series] Faltam secrets');
+    console.error('[sync-series] Faltam secrets');
     process.exit(1);
   }
   const startTime = Date.now();
@@ -264,7 +227,7 @@ async function main() {
     "is_active=eq.true&or=(source_type.eq.m3u,source_type.is.null)&select=*&order=last_batch_at.asc.nullsfirst",
   );
   if (!sources.length) {
-    console.log('[m3u-series] Nenhuma fonte M3U ativa.');
+    console.log('[sync-series] Nenhuma fonte M3U ativa.');
     return;
   }
 
@@ -273,10 +236,10 @@ async function main() {
     try {
       await processSource({ source, serviceKey, tmdbApiKey, timeLeft, seriesCache });
     } catch (err) {
-      console.error(`[m3u-series] "${source.name}" falhou: ${err.message}`);
+      console.error(`[sync-series] "${source.name}" falhou: ${err.message}`);
     }
   }
-  console.log('[m3u-series] Fim.');
+  console.log('[sync-series] Fim.');
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
