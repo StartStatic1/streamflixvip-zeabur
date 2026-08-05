@@ -1,7 +1,11 @@
-// sync-standalone.js — M3U movies sync (restaurado + match por titulo)
+// sync-standalone.js — see repo history for full docs
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const { parseM3U, shouldKeepMovie } = require('./lib/iptv-parser');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
+const DEFAULT_SOURCE_LABEL_PREFIX = 'MegaEmbed VIP';
 const MAX_RUNTIME_MS = 55 * 60 * 1000;
 
 function supabaseHeaders(serviceKey) {
@@ -20,7 +24,19 @@ async function sbSelect(serviceKey, table, query) {
   return r.json();
 }
 
+function dedupeUpsertRows(rows, onConflict) {
+  const keys = String(onConflict || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (!keys.length) return rows;
+  const map = new Map();
+  for (const row of rows) {
+    const k = keys.map((key) => String(row[key] ?? '')).join('|');
+    map.set(k, row);
+  }
+  return [...map.values()];
+}
+
 async function sbUpsert(serviceKey, table, rows, onConflict) {
+  rows = dedupeUpsertRows(rows, onConflict);
   if (!rows.length) return;
   const post = async (payload) => {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?on_conflict=${onConflict}`, {
@@ -122,69 +138,66 @@ async function searchTmdbMovie(title, year, tmdbApiKey) {
 }
 
 async function downloadM3U(source) {
-  const fs = require('fs');
-  const path = require('path');
-  const os = require('os');
-  const host = String(source.xtream_host || '').replace(/\/+$/, '');
-  const user = source.xtream_user;
-  const pass = source.xtream_pass;
-  if (!host || !user || !pass) throw new Error('Fonte M3U sem host/user/pass');
-  const urls = [
-    `${host}/get.php?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&type=m3u_plus&output=ts`,
-    `${host}/get.php?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}&type=m3u_plus`,
-    `${host}/playlist.m3u?username=${encodeURIComponent(user)}&password=${encodeURIComponent(pass)}`,
-  ];
-  const tmp = path.join(os.tmpdir(), `m3u-${source.id || 'x'}-${Date.now()}.m3u`);
-  let lastErr = null;
-  for (const url of urls) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'IPTVSmarters/1.0 (Linux; Android)', Accept: '*/*' },
-      });
-      clearTimeout(timeoutId);
-      if (!res.ok) { lastErr = new Error(`HTTP ${res.status}`); continue; }
-      const text = await res.text();
-      if (!text || text.length < 50 || !text.includes('#EXT')) {
-        lastErr = new Error('Resposta nao parece M3U');
-        continue;
-      }
-      fs.writeFileSync(tmp, text, 'utf8');
-      console.log(`[m3u] baixado ${text.length} bytes de ${url.slice(0, 60)}...`);
-      return tmp;
-    } catch (e) {
-      lastErr = e;
-    }
+  const url = `${source.xtream_host}/get.php?username=${source.xtream_user}&password=${source.xtream_pass}&type=m3u_plus`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+  let res;
+  try {
+    res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'IPTVSmarters/1.0 (Linux; Android)',
+        Accept: '*/*',
+        Connection: 'keep-alive',
+      },
+    });
+  } finally {
+    clearTimeout(timeoutId);
   }
-  throw lastErr || new Error('Falha ao baixar M3U');
+  if (!res.ok) throw new Error(`Falha ao baixar M3U: HTTP ${res.status}`);
+  const tmpPath = path.join(os.tmpdir(), `iptv-standalone-${source.id}.m3u`);
+  const fileStream = fs.createWriteStream(tmpPath);
+  const reader = res.body.getReader();
+  await new Promise((resolve, reject) => {
+    function pump() {
+      reader.read().then(({ done, value }) => {
+        if (done) { fileStream.end(); return; }
+        fileStream.write(Buffer.from(value));
+        pump();
+      }).catch(reject);
+    }
+    pump();
+    fileStream.on('finish', resolve);
+    fileStream.on('error', reject);
+  });
+  return tmpPath;
 }
 
 async function processSource({ source, serviceKey, tmdbApiKey, timeLeft }) {
-  const fs = require('fs');
-  console.log(`[m3u] Fonte "${source.name}"`);
+  console.log(`[sync-standalone] Processando fonte: ${source.name || source.id}`);
   const filePath = await downloadM3U(source);
-  let entries;
-  try {
-    const raw = fs.readFileSync(filePath, 'utf8');
-    entries = parseM3U(raw).filter((e) => shouldKeepMovie(e));
-  } finally {
-    try { fs.unlinkSync(filePath); } catch (_) {}
-  }
-  console.log(`[m3u] ${entries.length} entradas de filme apos filtro`);
+  console.log('[sync-standalone] M3U baixado, iniciando parse...');
+  const allMovies = [];
+  await parseM3U(filePath, (entry) => {
+    // so filmes — ignora TV ao vivo / series / canais
+    if (!entry.classification || entry.classification.kind !== 'movie') return;
+    // bloqueia 4K, SD, adulto, sem ano, etc (lib/iptv-parser)
+    if (!shouldKeepMovie(entry)) return;
+    allMovies.push(entry);
+  }, { dedupe: true });
+  fs.unlink(filePath, () => {});
+  console.log(`[sync-standalone] ${allMovies.length} filmes encontrados na playlist.`);
 
-  let cursor = source.sync_cursor >= entries.length ? 0 : (source.sync_cursor || 0);
+  let cursor = source.sync_cursor >= allMovies.length ? 0 : (source.sync_cursor || 0);
   let matched = 0, unmatchedCount = 0, errors = 0, processedThisRun = 0;
-  let vipRows = [];
+  let vipSourcesRows = [];
   let unmatchedRows = [];
-  const CONCURRENCY = 8;
+  const CONCURRENCY = 10;
 
-  while (cursor < entries.length && timeLeft() > 5000) {
-    const chunk = entries.slice(cursor, cursor + CONCURRENCY);
+  while (cursor < allMovies.length && timeLeft() > 5000) {
+    const chunk = allMovies.slice(cursor, cursor + CONCURRENCY);
     const results = await Promise.all(chunk.map(async (entry) => {
-      const title = entry.title || entry.name || '';
-      const year = entry.year || null;
+      const { title, year } = entry.classification;
       try {
         const found = await searchTmdbMovie(title, year, tmdbApiKey);
         return { entry, found, error: null };
@@ -194,62 +207,54 @@ async function processSource({ source, serviceKey, tmdbApiKey, timeLeft }) {
     }));
 
     for (const { entry, found, error } of results) {
-      if (error) { errors++; continue; }
+      const { title, year } = entry.classification;
+      if (error) { errors++; console.error('[sync-standalone] erro casando', title, error.message); continue; }
       if (found) {
         matched++;
-        vipRows.push({
-          tmdb_id: found.id,
-          media_type: 'movie',
-          season: null,
-          episode: null,
-          title: found.title || entry.title,
-          poster_path: found.poster_path || null,
-          source_url: entry.url,
-          source_label: source.name,
-          priority: source.priority,
-          is_active: true,
+        vipSourcesRows.push({
+          tmdb_id: found.id, media_type: 'movie', season: null, episode: null,
+          title: found.title || title, poster_path: found.poster_path || null,
+          source_url: entry.url, source_label: source.name || DEFAULT_SOURCE_LABEL_PREFIX,
+          priority: source.priority, is_active: true,
         });
       } else {
         unmatchedCount++;
         unmatchedRows.push({
-          source_id: source.id,
-          raw_title: entry.title || '',
-          parsed_year: entry.year || null,
-          stream_url: entry.url || '',
-          reason: 'tmdb_not_found',
+          source_id: source.id, raw_title: entry.name, parsed_year: year,
+          stream_url: entry.url, reason: 'tmdb_not_found',
         });
       }
     }
 
     cursor += chunk.length;
     processedThisRun += chunk.length;
-    if (vipRows.length >= 80) {
-      await sbUpsert(serviceKey, 'vip_sources', vipRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
-      vipRows = [];
+    if (vipSourcesRows.length >= 100) {
+      await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
+      vipSourcesRows = [];
     }
-    if (unmatchedRows.length >= 80) {
+    if (unmatchedRows.length >= 100) {
       await sbUpsert(serviceKey, 'iptv_unmatched_items', unmatchedRows, 'source_id,stream_url');
       unmatchedRows = [];
     }
     if (processedThisRun % 200 === 0) {
-      console.log(`[m3u] progresso ${cursor}/${entries.length} (${matched} ok, ${unmatchedCount} sem match)`);
+      console.log(`[sync-standalone] progresso ${cursor}/${allMovies.length} (${matched} ok, ${unmatchedCount} sem match)`);
     }
   }
 
-  await sbUpsert(serviceKey, 'vip_sources', vipRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
+  await sbUpsert(serviceKey, 'vip_sources', vipSourcesRows, 'tmdb_id,media_type,season_key,episode_key,source_label');
   await sbUpsert(serviceKey, 'iptv_unmatched_items', unmatchedRows, 'source_id,stream_url');
 
-  const isLastBatch = cursor >= entries.length;
+  const isLastBatch = cursor >= allMovies.length;
   const patch = {
     sync_cursor: isLastBatch ? 0 : cursor,
     last_batch_at: new Date().toISOString(),
   };
   if (isLastBatch) {
     patch.last_synced_at = new Date().toISOString();
-    patch.last_sync_stats = { total: entries.length, matched, unmatched: unmatchedCount, errors };
+    patch.last_sync_stats = { total: allMovies.length, matched, unmatched: unmatchedCount, errors };
   }
   await sbUpdate(serviceKey, 'iptv_sources', `id=eq.${source.id}`, patch);
-  console.log(`[m3u] "${source.name}": ${processedThisRun} processados, ${matched} ok, ${unmatchedCount} sem match`);
+  console.log(`[sync-standalone] "${source.name}": ${processedThisRun} processados, ${matched} ok, ${unmatchedCount} sem match`);
   return { done: isLastBatch };
 }
 
@@ -257,20 +262,19 @@ async function main() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const tmdbApiKey = process.env.TMDB_API_KEY;
   if (!serviceKey || !tmdbApiKey) {
-    console.error('[m3u] Faltam SUPABASE_SERVICE_ROLE_KEY e/ou TMDB_API_KEY');
+    console.error('[sync-standalone] Faltam SUPABASE_SERVICE_ROLE_KEY e/ou TMDB_API_KEY');
     process.exit(1);
   }
   const startTime = Date.now();
   const timeLeft = () => MAX_RUNTIME_MS - (Date.now() - startTime);
 
-  // Fontes M3U (nao xtream_api)
   const sources = await sbSelect(
     serviceKey,
     'iptv_sources',
     "is_active=eq.true&or=(source_type.eq.m3u,source_type.is.null)&select=*&order=last_batch_at.asc.nullsfirst",
   );
   if (!sources.length) {
-    console.log('[m3u] Nenhuma fonte M3U ativa.');
+    console.log('[sync-standalone] Nenhuma fonte M3U ativa.');
     return;
   }
 
@@ -279,7 +283,7 @@ async function main() {
     try {
       await processSource({ source, serviceKey, tmdbApiKey, timeLeft });
     } catch (err) {
-      console.error(`[m3u] Fonte "${source.name}" falhou: ${err.message}`);
+      console.error(`[sync-standalone] Fonte "${source.name}" falhou: ${err.message}`);
       try {
         await sbUpdate(serviceKey, 'iptv_sources', `id=eq.${source.id}`, {
           last_batch_at: new Date().toISOString(),
@@ -288,7 +292,7 @@ async function main() {
       } catch (_) {}
     }
   }
-  console.log('[m3u] Execucao finalizada.');
+  console.log('[sync-standalone] Execucao finalizada.');
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
