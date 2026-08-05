@@ -5,6 +5,14 @@
 //   2) fallback: iptv_sources (comportamento antigo)
 // Até 3 fontes, URLs agrupadas por nome para fallback no player.
 // Adulto / XXX: consolidado na categoria "000" e colocado no FINAL da lista.
+//
+// SEGURANÇA VIP (lib/vip-gate.js):
+//   Por padrão NÃO bloqueia (app mobile/TV ainda não mandam JWT).
+//   Com REQUIRE_VIP_LIVE_TV=1 no ambiente: só responde canais se houver
+//   VIP válido (JWT Supabase, userId com vip_status ativo, ou deviceId TV).
+//   Ative o hard gate DEPOIS de publicar app que envia Authorization.
+
+const { enforceVipOrReject } = require('../lib/vip-gate');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const MAX_SOURCES = 3;
@@ -177,6 +185,12 @@ async function handler(req, res) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
     res.status(500).json({ error: 'Servidor sem SUPABASE_SERVICE_ROLE_KEY', categories: [], channels: [], sourcesUsed: 0 });
+    return;
+  }
+
+  // Gate VIP (soft por padrão — não quebra app sem token).
+  // Com REQUIRE_VIP_LIVE_TV=1: bloqueia se não houver VIP no banco.
+  if (await enforceVipOrReject(req, res, serviceKey, { feature: 'live-tv' })) {
     return;
   }
 
