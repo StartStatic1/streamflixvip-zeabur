@@ -2,6 +2,7 @@ package com.streamflixvip.app.network
 
 import com.squareup.moshi.Moshi
 import com.streamflixvip.app.BuildConfig
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -20,6 +21,27 @@ object NetworkModule {
         } else {
             HttpLoggingInterceptor.Level.NONE
         }
+    }
+
+    /**
+     * Anexa Authorization + X-User-Id em toda request para o backend Express.
+     * Necessário pro gate VIP de /api/live-tv (lib/vip-gate.js) identificar
+     * o usuário real — APK crackeado que só força isVip local continua
+     * sem token válido e, com REQUIRE_VIP_LIVE_TV=1, não recebe canais.
+     */
+    private val sessionAuthInterceptor = Interceptor { chain ->
+        val store = sessionStore
+        val original = chain.request()
+        val builder = original.newBuilder()
+        val token = store?.accessToken
+        if (!token.isNullOrBlank()) {
+            builder.header("Authorization", "Bearer $token")
+        }
+        val userId = store?.userId
+        if (!userId.isNullOrBlank()) {
+            builder.header("X-User-Id", userId)
+        }
+        chain.proceed(builder.build())
     }
 
     private val tokenAuthenticator = okhttp3.Authenticator { _, response ->
@@ -49,6 +71,7 @@ object NetworkModule {
     }
 
     private val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
         .authenticator(tokenAuthenticator)
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -56,7 +79,9 @@ object NetworkModule {
         .build()
 
     private val liveTvOkHttp = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
+        .authenticator(tokenAuthenticator)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
         .build()
