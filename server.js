@@ -15,6 +15,14 @@
 // alteração — só precisamos "plugar" cada handler numa rota, chamando-o
 // com o (req, res) do Express diretamente.
 
+// Carrega /root/streamflix/.env (PORT, keys, REQUIRE_VIP_LIVE_TV, etc.).
+// Sem isso o PM2 não enxerga variáveis que você só colocou no arquivo .env.
+try {
+  require('dotenv').config();
+} catch (_) {
+  // dotenv opcional se não estiver instalado
+}
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -32,6 +40,13 @@ function resolveStaticDir() {
 }
 const STATIC_DIR = resolveStaticDir();
 console.log('Servindo arquivos estáticos de:', STATIC_DIR);
+console.log(
+  'VIP gate Live TV:',
+  process.env.REQUIRE_VIP_LIVE_TV === '1' ||
+    String(process.env.REQUIRE_VIP_LIVE_TV || '').toLowerCase() === 'true'
+    ? 'HARD (bloqueia não-VIP)'
+    : 'SOFT (só loga)',
+);
 
 app.use(express.json({ limit: '2mb' }));
 
