@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -479,7 +480,7 @@ private fun NativePlayer(
                         Text("Nao foi possivel reproduzir", color = Color.White, fontSize = 16.sp, textAlign = TextAlign.Center)
                         Text(errorMessage ?: "", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp), textAlign = TextAlign.Center)
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Surface(color = Color(0xFFE50914), shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable {
+                            Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)), modifier = Modifier.clickable {
                                 retryAttempt = 0; errorMessage = null; isRecovering = true; reloadWithUrl(activeUrl)
                             }) {
                                 Text("Tentar de novo", color = Color.White, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
@@ -509,8 +510,9 @@ private fun NativePlayer(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (mediaType == "tv" && currentEpisode > 0) {
                     Surface(
-                        color = Color(0xFFE50914),
+                        color = Color.White.copy(alpha = 0.22f),
                         shape = RoundedCornerShape(20.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
                         modifier = Modifier.clickable { if (!isLoadingNext) MainScope().launch { playNextEpisode() } },
                     ) {
                         Text(
@@ -543,9 +545,12 @@ private fun NativePlayer(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text("Proximo episodio?", color = Color.White, fontSize = 14.sp)
-                    Surface(color = Color(0xFFE50914), shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable {
-                        MainScope().launch { playNextEpisode() }
-                    }) {
+                    Surface(
+                        color = Color.White.copy(alpha = 0.22f),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                        modifier = Modifier.clickable { MainScope().launch { playNextEpisode() } },
+                    ) {
                         Text("Assistir", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     }
                     Surface(color = Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable { showNextPrompt = false }) {
