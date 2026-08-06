@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -505,30 +506,47 @@ private fun NativePlayer(
             visible = controlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 52.dp),
+            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            val epLabel = if (mediaType == "tv" && currentSeason > 0 && currentEpisode > 0) {
+                "S${currentSeason} E${currentEpisode}"
+            } else null
+            Column {
+                Text(currentTitle, color = Color.White, fontSize = 15.sp, maxLines = 1)
+                if (epLabel != null) {
+                    Text(epLabel, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                }
+            }
+        }
+
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 12.dp, bottom = 8.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (mediaType == "tv" && currentEpisode > 0) {
                     Surface(
-                        color = Color.White.copy(alpha = 0.22f),
-                        shape = RoundedCornerShape(20.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                        color = Color.White.copy(alpha = 0.16f),
+                        shape = RoundedCornerShape(18.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
                         modifier = Modifier.clickable { if (!isLoadingNext) MainScope().launch { playNextEpisode() } },
                     ) {
                         Text(
-                            if (isLoadingNext) "Carregando..." else "Proximo Ep.",
+                            if (isLoadingNext) "..." else "Proximo",
                             color = Color.White,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         )
                     }
                 }
                 Surface(
-                    color = Color.White.copy(alpha = 0.14f),
-                    shape = RoundedCornerShape(20.dp),
+                    color = Color.White.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(18.dp),
                     modifier = Modifier.clickable { settingsPanel = SettingsPanel.MAIN },
                 ) {
-                    Text("Config", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
+                    Text("Ajustes", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                 }
             }
         }
@@ -537,24 +555,28 @@ private fun NativePlayer(
             Surface(
                 color = Color.Black.copy(alpha = 0.85f),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 80.dp, start = 16.dp, end = 16.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 56.dp, start = 16.dp, end = 16.dp),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("Proximo episodio?", color = Color.White, fontSize = 14.sp)
+                    Text("S${currentSeason} E${currentEpisode + 1} · Assistir agora?", color = Color.White, fontSize = 13.sp)
                     Surface(
-                        color = Color.White.copy(alpha = 0.22f),
+                        color = Color.White.copy(alpha = 0.18f),
                         shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.45f)),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
                         modifier = Modifier.clickable { MainScope().launch { playNextEpisode() } },
                     ) {
-                        Text("Assistir", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                        Text("Sim", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                     }
-                    Surface(color = Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable { showNextPrompt = false }) {
-                        Text("Nao", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                    Surface(
+                        color = Color.White.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.clickable { showNextPrompt = false },
+                    ) {
+                        Text("Nao", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                     }
                 }
             }
