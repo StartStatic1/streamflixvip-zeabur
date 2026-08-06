@@ -210,7 +210,7 @@ private fun NativePlayer(
     var selectedQualityLabel by remember { mutableStateOf("Automatico") }
     var playbackSpeed by remember { mutableStateOf(1f) }
     var settingsPanel by remember { mutableStateOf(SettingsPanel.NONE) }
-    var controlsVisible by remember { mutableStateOf(true) }
+    var controlsVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var retryAttempt by remember { mutableStateOf(0) }
     var isRecovering by remember { mutableStateOf(false) }
@@ -440,6 +440,9 @@ private fun NativePlayer(
                 PlayerView(context).apply {
                     player = exoPlayer
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    controllerShowTimeoutMs = 3500
+                    controllerHideOnTouch = true
+                    post { hideController() }
                     subtitleView?.let { sub ->
                         sub.setApplyEmbeddedStyles(false)
                         sub.setApplyEmbeddedFontSizes(false)
@@ -459,7 +462,10 @@ private fun NativePlayer(
                     fun hideNativeSettingsButton() {
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)?.visibility = android.view.View.GONE
                     }
-                    post { hideNativeSettingsButton() }
+                    post {
+                        hideNativeSettingsButton()
+                        hideController()
+                    }
                     setControllerVisibilityListener(
                         PlayerView.ControllerVisibilityListener { visibility ->
                             controlsVisible = visibility == android.view.View.VISIBLE
