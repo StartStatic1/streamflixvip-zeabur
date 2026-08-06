@@ -231,7 +231,7 @@ private fun NativePlayer(
     var retryAttempt by remember { mutableStateOf(0) }
     var isRecovering by remember { mutableStateOf(false) }
     var activeUrl by remember { mutableStateOf(url) }
-    var alternateSources by remember { mutableStateOf<List<String>>(emptyList()) }
+    var alternateSources by remember { mutableStateOf(emptyList<String>()) }
     var alternateIndex by remember { mutableStateOf(0) }
 
     val exoPlayer = remember {
@@ -353,7 +353,7 @@ private fun NativePlayer(
     }
 
     LaunchedEffect(errorMessage) {
-        val code = errorMessage ?: return@LaunchedEffect
+        if (errorMessage == null) return@LaunchedEffect
         if (isRecovering) return@LaunchedEffect
         if (retryAttempt < 2) {
             retryAttempt += 1
@@ -491,7 +491,7 @@ private fun NativePlayer(
         }
     }
 
-    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = {
@@ -788,7 +788,7 @@ private fun SettingsRow(label: String, value: String, onClick: () -> Unit) {
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun EmbedWebView(url: String) {
-    Box(Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         var isLoading by remember { mutableStateOf(true) }
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -812,7 +812,7 @@ private fun EmbedWebView(url: String) {
             },
         )
         if (isLoading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
         }
