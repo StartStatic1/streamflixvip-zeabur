@@ -1,7 +1,7 @@
 {
-  "versionCode": 39,
-  "versionName": "7.6.0",
+  "versionCode": 40,
+  "versionName": "7.6.1",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Novo servidor adicionado instalar essa versão para ter mais velocidade no conteúdo. "
+  "releaseNotes": "Player melhorado"
 }
