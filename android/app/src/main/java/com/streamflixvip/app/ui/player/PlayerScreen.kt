@@ -93,6 +93,10 @@ private enum class AspectMode(val label: String, val resizeMode: Int) {
 
 private val PLAYBACK_SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 
+private fun hideNativeSettingsButtonSafe(view: PlayerView) {
+    view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)?.visibility = android.view.View.GONE
+}
+
 private fun isLikelyHls(url: String): Boolean {
     val lower = url.lowercase()
     return lower.contains(".m3u8") || lower.contains("format=m3u8") || lower.contains("type=m3u8") ||
@@ -210,7 +214,7 @@ private fun NativePlayer(
     var selectedQualityLabel by remember { mutableStateOf("Automatico") }
     var playbackSpeed by remember { mutableStateOf(1f) }
     var settingsPanel by remember { mutableStateOf(SettingsPanel.NONE) }
-    var controlsVisible by remember { mutableStateOf(false) }
+    var controlsVisible by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var retryAttempt by remember { mutableStateOf(0) }
     var isRecovering by remember { mutableStateOf(false) }
@@ -222,6 +226,7 @@ private fun NativePlayer(
     var currentTitle by remember { mutableStateOf(title) }
     var isLoadingNext by remember { mutableStateOf(false) }
     var showNextPrompt by remember { mutableStateOf(false) }
+    var nextCountdown by remember { mutableStateOf(10) }
 
     val exoPlayer = remember {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
@@ -362,6 +367,44 @@ private fun NativePlayer(
         }
     }
 
+    suspend fun playPreviousEpisode() {
+        if (mediaType != "tv" || currentSeason <= 0 || currentEpisode <= 0) return
+        if (currentSeason == 1 && currentEpisode == 1) {
+            errorMessage = "Ja e o primeiro episodio"
+            return
+        }
+        isLoadingNext = true
+        showNextPrompt = false
+        try {
+            val tries = mutableListOf<Pair<Int, Int>>()
+            if (currentEpisode > 1) tries += currentSeason to (currentEpisode - 1)
+            if (currentSeason > 1) {
+                for (e in 30 downTo 1) tries += (currentSeason - 1) to e
+            }
+            var played = false
+            for ((s, e) in tries) {
+                val resp = try {
+                    NetworkModule.mediaSourcesApi.getEpisodeSources(tmdbId, "tv", s, e)
+                } catch (_: Exception) { continue }
+                val direct = resp.sources.filter { it.isDirectPlayable }
+                if (direct.isEmpty()) continue
+                val src = direct.first()
+                val urls = src.candidatePlaybackUrls(BuildConfig.API_BASE_URL, NetworkModule.ZEABUR_BASE_URL)
+                val playUrl = StreamUrlResolver.resolveFastest(urls).ifBlank { src.resolvedPlaybackUrl(BuildConfig.API_BASE_URL) }
+                if (playUrl.isBlank()) continue
+                currentSeason = s
+                currentEpisode = e
+                currentTitle = "$title — S${s}E${e}"
+                reloadWithUrl(playUrl, resetPosition = true)
+                played = true
+                break
+            }
+            if (!played) errorMessage = "Sem episodio anterior disponivel"
+        } finally {
+            isLoadingNext = false
+        }
+    }
+
     fun selectSubtitle(option: TrackOption?) {
         trackSelector.parameters = if (option == null) {
             selectedSubtitleLabel = "Desligada"
@@ -415,6 +458,19 @@ private fun NativePlayer(
         }
     }
 
+    LaunchedEffect(showNextPrompt) {
+        if (!showNextPrompt) return@LaunchedEffect
+        nextCountdown = 10
+        while (nextCountdown > 0 && showNextPrompt) {
+            delay(1000L)
+            if (!showNextPrompt) return@LaunchedEffect
+            nextCountdown -= 1
+        }
+        if (showNextPrompt && nextCountdown <= 0 && !isLoadingNext) {
+            playNextEpisode()
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             if (userId != null && accessToken != null) {
@@ -440,9 +496,12 @@ private fun NativePlayer(
                 PlayerView(context).apply {
                     player = exoPlayer
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    controllerShowTimeoutMs = 3500
+                    controllerShowTimeoutMs = 2800
                     controllerHideOnTouch = true
-                    post { hideController() }
+                    post {
+                        showController()
+                        hideNativeSettingsButtonSafe(this)
+                    }
                     subtitleView?.let { sub ->
                         sub.setApplyEmbeddedStyles(false)
                         sub.setApplyEmbeddedFontSizes(false)
@@ -462,10 +521,7 @@ private fun NativePlayer(
                     fun hideNativeSettingsButton() {
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)?.visibility = android.view.View.GONE
                     }
-                    post {
-                        hideNativeSettingsButton()
-                        hideController()
-                    }
+                    post { hideNativeSettingsButton() }
                     setControllerVisibilityListener(
                         PlayerView.ControllerVisibilityListener { visibility ->
                             controlsVisible = visibility == android.view.View.VISIBLE
@@ -533,6 +589,22 @@ private fun NativePlayer(
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (mediaType == "tv" && currentEpisode > 0) {
+                    val canPrev = !(currentSeason == 1 && currentEpisode == 1)
+                    if (canPrev) {
+                        Surface(
+                            color = Color.White.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(18.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.28f)),
+                            modifier = Modifier.clickable { if (!isLoadingNext) MainScope().launch { playPreviousEpisode() } },
+                        ) {
+                            Text(
+                                "Anterior",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                            )
+                        }
+                    }
                     Surface(
                         color = Color.White.copy(alpha = 0.16f),
                         shape = RoundedCornerShape(18.dp),
@@ -568,21 +640,25 @@ private fun NativePlayer(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("S${currentSeason} E${currentEpisode + 1} · Assistir agora?", color = Color.White, fontSize = 13.sp)
+                    Text(
+                        "S${currentSeason} E${currentEpisode + 1} · em ${nextCountdown}s",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                    )
                     Surface(
                         color = Color.White.copy(alpha = 0.18f),
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
                         modifier = Modifier.clickable { MainScope().launch { playNextEpisode() } },
                     ) {
-                        Text("Sim", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                        Text("Agora", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                     }
                     Surface(
                         color = Color.White.copy(alpha = 0.1f),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.clickable { showNextPrompt = false },
                     ) {
-                        Text("Nao", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                        Text("Cancelar", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                     }
                 }
             }
