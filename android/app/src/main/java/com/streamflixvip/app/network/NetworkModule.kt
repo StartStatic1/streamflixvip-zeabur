@@ -172,6 +172,15 @@ object NetworkModule {
             .create(AnnouncementsApi::class.java)
     }
 
+    val subtitlesApi: SubtitlesApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(SubtitlesApi::class.java)
+    }
+
     val favoritesApi: FavoritesApi by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.SUPABASE_URL + "/")
