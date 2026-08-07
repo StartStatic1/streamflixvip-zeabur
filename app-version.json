@@ -1,7 +1,7 @@
 {
-  "versionCode": 47,
-  "versionName": "7.6.8",
+  "versionCode": 48,
+  "versionName": "7.6.9",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Novas funções vip"
+  "releaseNotes": "Adicionado modo legenda online, se o filme não tiver opção de adicionar. "
 }
