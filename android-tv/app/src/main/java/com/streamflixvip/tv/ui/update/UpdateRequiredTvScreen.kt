@@ -84,7 +84,7 @@ fun UpdateRequiredTvScreen(
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     "Versao $versionName",
                     color = AccentSoft,
@@ -92,7 +92,7 @@ fun UpdateRequiredTvScreen(
                     fontWeight = FontWeight.SemiBold,
                 )
                 if (releaseNotes.isNotBlank()) {
-                    Spacer(Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                     Text(
                         releaseNotes,
                         color = Color(0xFFA1A1B5),
@@ -102,7 +102,7 @@ fun UpdateRequiredTvScreen(
                 }
 
                 if (isDownloading) {
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(modifier = Modifier.height(20.dp))
                     LinearProgressIndicator(
                         progress = { (downloadProgress.coerceIn(0, 100) / 100f) },
                         modifier = Modifier
@@ -112,7 +112,7 @@ fun UpdateRequiredTvScreen(
                         color = AccentSoft,
                         trackColor = Color.White.copy(alpha = 0.12f),
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         if (downloadProgress >= 100) {
                             "Download concluido — abrindo instalador…"
@@ -125,7 +125,7 @@ fun UpdateRequiredTvScreen(
                 }
 
                 if (!statusMessage.isNullOrBlank()) {
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         statusMessage,
                         color = Color(0xFFF87171),
@@ -133,7 +133,7 @@ fun UpdateRequiredTvScreen(
                     )
                 }
 
-                Spacer(Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 Button(
                     onClick = onDownloadClick,
                     enabled = !isDownloading,
@@ -152,13 +152,13 @@ fun UpdateRequiredTvScreen(
                             color = Color.White,
                             strokeWidth = 2.dp,
                         )
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
                         Text("Baixando…")
                     } else {
                         Text("Baixar e instalar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 }
-                Spacer(modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     "O download acontece dentro do app — sem abrir o navegador. Depois permita a instalacao.",
                     color = Color(0xFFA1A1B5).copy(alpha = 0.85f),
