@@ -38,6 +38,12 @@ import com.streamflixvip.tv.ui.theme.StreamFlixTvTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import com.streamflixvip.tv.BuildConfig
+import com.streamflixvip.tv.network.AppVersionResponse
+import com.streamflixvip.tv.ui.update.UpdateRequiredTvScreen
 
 class MainTvActivity : ComponentActivity() {
 
@@ -49,6 +55,43 @@ class MainTvActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val activationManager = remember { TvActivationManager(applicationContext) }
                 val scope = rememberCoroutineScope()
+                val context = LocalContext.current
+
+                var updateInfo by remember { mutableStateOf<AppVersionResponse?>(null) }
+                var isDownloadingUpdate by remember { mutableStateOf(false) }
+
+                LaunchedEffect(Unit) {
+                    try {
+                        val response = NetworkModule.appVersionApi.getVersion()
+                        if (response.forceUpdate && response.versionCode > BuildConfig.VERSION_CODE) {
+                            updateInfo = response
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+
+                if (updateInfo != null) {
+                    UpdateRequiredTvScreen(
+                        versionName = updateInfo!!.versionName,
+                        releaseNotes = updateInfo!!.releaseNotes ?: "",
+                        isDownloading = isDownloadingUpdate,
+                        onDownloadClick = {
+                            isDownloadingUpdate = true
+                            try {
+                                val url = updateInfo!!.apkUrl
+                                if (!url.isNullOrBlank()) {
+                                    context.startActivity(
+                                        Intent(Intent.ACTION_VIEW, Uri.parse(url)),
+                                    )
+                                }
+                            } catch (_: Exception) {
+                            } finally {
+                                isDownloadingUpdate = false
+                            }
+                        },
+                    )
+                    return@StreamFlixTvTheme
+                }
 
                 var pendingSource by remember { mutableStateOf<VipSource?>(null) }
                 var pendingSources by remember { mutableStateOf<List<VipSource>>(emptyList()) }
