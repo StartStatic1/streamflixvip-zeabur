@@ -85,6 +85,8 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.MergingMediaSource
+import androidx.media3.exoplayer.source.SingleSampleMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -506,29 +508,67 @@ private fun NativePlayer(
                 onlineSubtitlesError = resp.error ?: "Legenda vazia"
                 return
             }
+            var vtt = content.replace("\r\n", "\n").replace("\r", "\n")
+            if (!vtt.trimStart().startsWith("WEBVTT", ignoreCase = true)) {
+                vtt = "WEBVTT\n\n" + vtt.replace(",", ".")
+            }
             val file = File(context.cacheDir, "os_${tmdbId}_${currentSeason}_${currentEpisode}.vtt")
-            file.writeText(content)
-            val pos = exoPlayer.currentPosition
+            file.writeText(vtt, Charsets.UTF_8)
+
+            val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
             val wasPlaying = exoPlayer.playWhenReady
+
             val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
                 .setMimeType(MimeTypes.TEXT_VTT)
                 .setLanguage("pt")
                 .setLabel(item.release ?: "Online PT-BR")
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
                 .build()
-            val mediaItem = MediaItem.Builder()
-                .setUri(activeUrl)
-                .setSubtitleConfigurations(listOf(subConfig))
-                .build()
-            exoPlayer.setMediaItem(mediaItem)
-            exoPlayer.prepare()
-            exoPlayer.seekTo(pos)
-            exoPlayer.playWhenReady = wasPlaying
+
+            val videoItem = MediaItem.fromUri(activeUrl)
+            val videoSource = if (isLikelyHls(activeUrl)) {
+                HlsMediaSource.Factory(httpDataSourceFactory).createMediaSource(videoItem)
+            } else {
+                ProgressiveMediaSource.Factory(httpDataSourceFactory, extractorsFactory).createMediaSource(videoItem)
+            }
+            val subtitleSource = SingleSampleMediaSource.Factory(httpDataSourceFactory)
+                .createMediaSource(subConfig, C.TIME_UNSET)
+            val merged = MergingMediaSource(videoSource, subtitleSource)
+
             trackSelector.parameters = trackSelector.parameters.buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setPreferredTextLanguage("pt")
+                .setSelectUndeterminedTextLanguage(true)
+                .setIgnoredTextSelectionFlags(0)
                 .build()
-            val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "…" else it }
+
+            exoPlayer.setMediaSource(merged)
+            exoPlayer.prepare()
+            exoPlayer.seekTo(pos)
+            exoPlayer.playWhenReady = wasPlaying
+
+            exoPlayer.addListener(object : Player.Listener {
+                override fun onTracksChanged(tracks: Tracks) {
+                    val groups = tracks.groups
+                    for (gi in 0 until groups.size) {
+                        val group = groups[gi]
+                        if (group.type != C.TRACK_TYPE_TEXT) continue
+                        for (ti in 0 until group.length) {
+                            if (!group.isTrackSupported(ti)) continue
+                            trackSelector.parameters = trackSelector.parameters.buildUpon()
+                                .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, ti))
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                                .build()
+                            exoPlayer.removeListener(this)
+                            return
+                        }
+                    }
+                }
+            })
+
+            val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "..." else it }
             selectedSubtitleLabel = "Online: $short"
             onlineSubtitleApplied = true
             settingsPanel = SettingsPanel.MAIN
