@@ -105,7 +105,8 @@ fun LivePlayerTvScreen(
     }
     val activeChannel = channelList.getOrNull(currentIndex)
     val activeName = activeChannel?.name ?: channelName
-    val activeStreams = activeChannel?.streams?.takeIf { it.isNotEmpty() } ?: streams
+    val activeStreams = (activeChannel?.streams?.takeIf { it.isNotEmpty() } ?: streams)
+        .sortedBy { it.priority ?: 100 }
 
     var streamIndex by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
@@ -185,6 +186,8 @@ fun LivePlayerTvScreen(
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
             .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(10000)
+            .setReadTimeoutMs(12000)
             .setDefaultRequestProperties(mapOf("Referer" to url, "Connection" to "keep-alive", "Icy-MetaData" to "1"))
         val mediaItem = MediaItem.fromUri(url)
         val source = if (url.contains(".m3u8") || url.contains("/live/")) {
@@ -193,6 +196,15 @@ fun LivePlayerTvScreen(
             ProgressiveMediaSource.Factory(httpFactory, DefaultExtractorsFactory()).createMediaSource(mediaItem)
         }
         exoPlayer.setMediaSource(source); exoPlayer.prepare(); exoPlayer.playWhenReady = true
+
+        // Timeout: se nao ficar READY em 14s, tenta proxima fonte
+        delay(14000)
+        if (isLoading && streamIndex < activeStreams.size - 1) {
+            streamIndex += 1
+        } else if (isLoading && streamIndex >= activeStreams.size - 1) {
+            isLoading = false
+            errorMessage = "Nao foi possivel abrir este canal em nenhuma fonte."
+        }
     }
 
     DisposableEffect(Unit) { onDispose { exoPlayer.release() } }
