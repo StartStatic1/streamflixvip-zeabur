@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -19,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -70,9 +72,12 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            StreamFlixTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AppRoot()
+            // Garante LocalLifecycleOwner p/ lifecycle-compose (release/minify)
+            CompositionLocalProvider(LocalLifecycleOwner provides this) {
+                StreamFlixTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        AppRoot()
+                    }
                 }
             }
         }
