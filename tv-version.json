@@ -1,7 +1,7 @@
 {
-  "versionCode": 50,
-  "versionName": "1.0.0",
+  "versionCode": 3,
+  "versionName": "1.1.0",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Atualizacao inicial do sistema de update da TV"
+  "releaseNotes": "Otimizações, adicionado atualização remota"
 }
