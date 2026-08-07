@@ -79,6 +79,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.extractor.DefaultExtractorsFactory
@@ -517,6 +518,7 @@ private fun NativePlayer(
 
             val pos = exoPlayer.currentPosition.coerceAtLeast(0L)
             val wasPlaying = exoPlayer.playWhenReady
+            val durationUs = exoPlayer.duration.takeIf { it > 0L } ?: (5L * 60 * 60 * 1_000_000L)
 
             val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
                 .setMimeType(MimeTypes.TEXT_VTT)
@@ -534,6 +536,7 @@ private fun NativePlayer(
                         "Icy-MetaData" to "1",
                     ),
                 )
+            val localFactory = DefaultDataSource.Factory(context, dsFactory)
             val extFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
             val videoItem = MediaItem.fromUri(activeUrl)
             val videoSource = if (isLikelyHls(activeUrl)) {
@@ -541,8 +544,8 @@ private fun NativePlayer(
             } else {
                 ProgressiveMediaSource.Factory(dsFactory, extFactory).createMediaSource(videoItem)
             }
-            val subtitleSource = SingleSampleMediaSource.Factory(dsFactory)
-                .createMediaSource(subConfig, C.TIME_UNSET)
+            val subtitleSource = SingleSampleMediaSource.Factory(localFactory)
+                .createMediaSource(subConfig, durationUs)
             val merged = MergingMediaSource(videoSource, subtitleSource)
 
             trackSelector.parameters = trackSelector.parameters.buildUpon()
