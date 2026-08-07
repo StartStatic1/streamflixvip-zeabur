@@ -1,7 +1,7 @@
 {
-  "versionCode": 43,
-  "versionName": "7.6.4",
+  "versionCode": 44,
+  "versionName": "7.6.5",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Novas funções vip"
+  "releaseNotes": "Fix, corrigido"
 }
