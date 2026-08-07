@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import base64
+parts = [Path(f"scripts/gp/{i}.b64") for i in range(4)]
+for p in parts:
+    if not p.exists():
+        raise SystemExit(f"missing {p}")
+data = base64.b64decode("".join(p.read_text().strip() for p in parts))
+Path("scripts/patch_online_subs.py").write_bytes(data)
+print("wrote", len(data))
+assert b"Online (OpenSubtitles)" in data or b"fetchOnlineSubtitles" in data or b"new_select" in data
+print("ok")
