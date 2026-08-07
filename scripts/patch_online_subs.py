@@ -27,23 +27,40 @@ if "import java.io.File" not in t:
     )
 
 old_state = '    var selectedSubtitleLabel by remember { mutableStateOf("Desligada") }\n'
-new_state = "    var selectedSubtitleLabel by remember { mutableStateOf(\"Desligada\") }\n    var onlineSubtitles by remember { mutableStateOf(listOf<com.streamflixvip.app.network.SubtitleSearchItem>()) }\n    var onlineSubsLoading by remember { mutableStateOf(false) }\n    var onlineSubsError by remember { mutableStateOf<String?>(null) }\n    var onlineSubsFetched by remember { mutableStateOf(false) }\n    var applyingOnlineSub by remember { mutableStateOf(false) }\n"
+new_state = (
+    '    var selectedSubtitleLabel by remember { mutableStateOf("Desligada") }\n'
+    '    var onlineSubtitles by remember { mutableStateOf(listOf<com.streamflixvip.app.network.SubtitleSearchItem>()) }\n'
+    '    var onlineSubsLoading by remember { mutableStateOf(false) }\n'
+    '    var onlineSubsError by remember { mutableStateOf<String?>(null) }\n'
+    '    var onlineSubsFetched by remember { mutableStateOf(false) }\n'
+    '    var applyingOnlineSub by remember { mutableStateOf(false) }\n'
+)
 if old_state not in t:
     raise SystemExit("state not found")
 t = t.replace(old_state, new_state, 1)
 
-old_select = """    fun selectSubtitle(option: TrackOption?) {
-        trackSelector.parameters = if (option == null) {
-            selectedSubtitleLabel = \"Desligada\"
-            trackSelector.parameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
-        } else {
-            selectedSubtitleLabel = option.label
-            trackSelector.parameters.buildUpon().setOverrideForType(TrackSelectionOverride(option.group, option.trackIndex)).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
-        }
-    }
-"""
-# Load from artifact file via embedded json in this update - use simpler approach:
-# re-read was tested - write the tested script from artifacts using run in CI
+old_select = (
+    "    fun selectSubtitle(option: TrackOption?) {\n"
+    "        trackSelector.parameters = if (option == null) {\n"
+    "            selectedSubtitleLabel = \"Desligada\"\n"
+    "            trackSelector.parameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()\n"
+    "        } else {\n"
+    "            selectedSubtitleLabel = option.label\n"
+    "            trackSelector.parameters.buildUpon().setOverrideForType(TrackSelectionOverride(option.group, option.trackIndex)).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()\n"
+    "        }\n"
+    "    }\n"
+)
 
-# Actually the tested script is at artifacts - push binary-safe by reading the file content that was tested
-raise SystemExit('use full script from artifacts')
+new_select = open("scripts/_new_select.kt.txt").read() if False else None
+# Inline minimal version without external file - apply online via simpler path
+
+# For CI: if select block found, inject fetch functions after it using marker
+marker = "    fun selectSubtitle(option: TrackOption?) {"
+if marker not in t:
+    raise SystemExit("no selectSubtitle")
+
+# Use the tested file from repo artifact path - write from embedded base64 of full good script
+import base64
+# Will be replaced by full script content in next commit
+print("placeholder runner - need full script")
+raise SystemExit("incomplete - waiting full script body")
