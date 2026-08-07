@@ -16,6 +16,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -56,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
@@ -87,6 +91,7 @@ import com.streamflixvip.app.data.ProgressRepository
 import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.StreamUrlResolver
 import com.streamflixvip.app.network.VipSource
+import kotlin.math.abs
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -255,6 +260,7 @@ private fun NativePlayer(
     var gestureKind by remember { mutableStateOf<String?>(null) }
     var gestureValue by remember { mutableStateOf(0f) }
     var gestureHideJob by remember { mutableStateOf<Job?>(null) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
     val exoPlayer = remember {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
@@ -526,6 +532,7 @@ private fun NativePlayer(
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     controllerShowTimeoutMs = 2800
                     controllerHideOnTouch = true
+                    playerViewRef = this
                     post {
                         showController()
                         hideNativeSettingsButtonSafe(this)
@@ -562,38 +569,53 @@ private fun NativePlayer(
         )
 
         // Zonas de gesto: 28% esquerda = brilho, 28% direita = volume
+        // Toque simples = mostra/oculta controles; deslize vertical = ajusta
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(0.28f)
                 .align(Alignment.CenterStart)
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = {
-                            gestureHideJob?.cancel()
-                            gestureKind = "brightness"
-                            gestureValue = brightnessLevel
-                        },
-                        onVerticalDrag = { _, dragAmount ->
-                            val delta = -dragAmount / size.height.toFloat()
-                            brightnessLevel = (brightnessLevel + delta).coerceIn(0.01f, 1f)
-                            gestureValue = brightnessLevel
-                            val act = context as? android.app.Activity
-                            act?.window?.let { w ->
-                                val lp = w.attributes
-                                lp.screenBrightness = brightnessLevel
-                                w.attributes = lp
+                .pointerInput(brightnessLevel) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var totalY = 0f
+                        var dragging = false
+                        val startLevel = brightnessLevel
+                        drag(down.id) { change ->
+                            totalY += change.positionChange().y
+                            if (!dragging && abs(totalY) > 16f) {
+                                dragging = true
+                                gestureHideJob?.cancel()
+                                gestureKind = "brightness"
                             }
-                        },
-                        onDragEnd = {
+                            if (dragging) {
+                                change.consume()
+                                val delta = -totalY / size.height.toFloat()
+                                brightnessLevel = (startLevel + delta).coerceIn(0.01f, 1f)
+                                gestureValue = brightnessLevel
+                                val act = context as? android.app.Activity
+                                act?.window?.let { w ->
+                                    val lp = w.attributes
+                                    lp.screenBrightness = brightnessLevel
+                                    w.attributes = lp
+                                }
+                            }
+                        }
+                        if (!dragging) {
+                            val pv = playerViewRef
+                            if (pv != null) {
+                                if (pv.isControllerFullyVisible) pv.hideController() else pv.showController()
+                            } else {
+                                controlsVisible = !controlsVisible
+                            }
+                        } else {
                             gestureHideJob?.cancel()
                             gestureHideJob = MainScope().launch {
                                 delay(900)
                                 gestureKind = null
                             }
-                        },
-                        onDragCancel = { gestureKind = null },
-                    )
+                        }
+                    }
                 },
         )
         Box(
@@ -601,29 +623,43 @@ private fun NativePlayer(
                 .fillMaxHeight()
                 .fillMaxWidth(0.28f)
                 .align(Alignment.CenterEnd)
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = {
-                            gestureHideJob?.cancel()
-                            gestureKind = "volume"
-                            gestureValue = volumeLevel
-                        },
-                        onVerticalDrag = { _, dragAmount ->
-                            val delta = -dragAmount / size.height.toFloat()
-                            volumeLevel = (volumeLevel + delta).coerceIn(0f, 1f)
-                            gestureValue = volumeLevel
-                            val vol = (volumeLevel * maxVolume).toInt().coerceIn(0, maxVolume)
-                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, vol, 0)
-                        },
-                        onDragEnd = {
+                .pointerInput(volumeLevel, maxVolume) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var totalY = 0f
+                        var dragging = false
+                        val startLevel = volumeLevel
+                        drag(down.id) { change ->
+                            totalY += change.positionChange().y
+                            if (!dragging && abs(totalY) > 16f) {
+                                dragging = true
+                                gestureHideJob?.cancel()
+                                gestureKind = "volume"
+                            }
+                            if (dragging) {
+                                change.consume()
+                                val delta = -totalY / size.height.toFloat()
+                                volumeLevel = (startLevel + delta).coerceIn(0f, 1f)
+                                gestureValue = volumeLevel
+                                val vol = (volumeLevel * maxVolume).toInt().coerceIn(0, maxVolume)
+                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, vol, 0)
+                            }
+                        }
+                        if (!dragging) {
+                            val pv = playerViewRef
+                            if (pv != null) {
+                                if (pv.isControllerFullyVisible) pv.hideController() else pv.showController()
+                            } else {
+                                controlsVisible = !controlsVisible
+                            }
+                        } else {
                             gestureHideJob?.cancel()
                             gestureHideJob = MainScope().launch {
                                 delay(900)
                                 gestureKind = null
                             }
-                        },
-                        onDragCancel = { gestureKind = null },
-                    )
+                        }
+                    }
                 },
         )
 
