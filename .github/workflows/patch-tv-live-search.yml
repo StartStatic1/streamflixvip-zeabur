@@ -8,18 +8,26 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Restore LiveTv if corrupted
+
+      - name: Restore LiveTv + Player (versao boa)
         run: |
-          SZ=$(wc -c < android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LiveTvScreen.kt || echo 0)
-          if [ "$SZ" -lt 1000 ]; then
-            git show f03cecc4798e01d7ccb037e6eec1059e90b7ff30:android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LiveTvScreen.kt > android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LiveTvScreen.kt
-          fi
-          SZ2=$(wc -c < android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt || echo 0)
-          if [ "$SZ2" -lt 1000 ]; then
-            git show f03cecc4798e01d7ccb037e6eec1059e90b7ff30:android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt > android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
-          fi
-      - run: python3 scripts/patch_tv_adult.py
-      - run: python3 scripts/patch_tv_fallback.py
+          BASE="https://raw.githubusercontent.com/StartStatic1/streamflixvip-zeabur"
+          # Commit conhecido com LiveTvScreen/LivePlayer completos
+          GOOD="f03cecc4798e01d7ccb037e6eec1059e90b7ff30"
+          DIR="android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv"
+          mkdir -p "$DIR"
+          curl -fsSL "$BASE/$GOOD/$DIR/LiveTvScreen.kt" -o "$DIR/LiveTvScreen.kt"
+          curl -fsSL "$BASE/$GOOD/$DIR/LivePlayerTvScreen.kt" -o "$DIR/LivePlayerTvScreen.kt"
+          wc -c "$DIR/LiveTvScreen.kt" "$DIR/LivePlayerTvScreen.kt"
+          grep -q LiveTvViewModel "$DIR/LiveTvScreen.kt"
+          grep -q LivePlayerTvScreen "$DIR/LivePlayerTvScreen.kt"
+
+      - name: Adult filter
+        run: python3 scripts/patch_tv_adult.py
+
+      - name: Fallback timeout
+        run: python3 scripts/patch_tv_fallback.py
+
       - name: Commit
         run: |
           git config user.name github-actions
