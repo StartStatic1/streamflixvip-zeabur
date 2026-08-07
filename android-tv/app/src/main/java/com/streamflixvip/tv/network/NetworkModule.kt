@@ -14,6 +14,9 @@ object NetworkModule {
 
     var sessionStore: com.streamflixvip.tv.data.SessionStore? = null
 
+    /** Device ID estavel (Widevine) — VIP da TV e por ativacao de aparelho, nao JWT. */
+    var deviceId: String? = null
+
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = if (BuildConfig.DEBUG) {
             HttpLoggingInterceptor.Level.BODY
@@ -23,8 +26,8 @@ object NetworkModule {
     }
 
     /**
-     * Anexa Authorization + X-User-Id em toda request (igual ao mobile).
-     * Necessario pro gate VIP de /api/live-tv e /api/media-sources.
+     * Anexa Authorization + X-User-Id + X-Device-Id.
+     * Live TV no servidor valida VIP por JWT, userId OU deviceId (tv_activations).
      */
     private val sessionAuthInterceptor = okhttp3.Interceptor { chain ->
         val store = sessionStore
@@ -37,6 +40,10 @@ object NetworkModule {
         val userId = store?.userId
         if (!userId.isNullOrBlank()) {
             builder.header("X-User-Id", userId)
+        }
+        val dev = deviceId
+        if (!dev.isNullOrBlank()) {
+            builder.header("X-Device-Id", dev)
         }
         chain.proceed(builder.build())
     }
