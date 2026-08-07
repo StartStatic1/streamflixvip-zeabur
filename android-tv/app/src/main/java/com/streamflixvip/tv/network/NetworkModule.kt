@@ -22,6 +22,25 @@ object NetworkModule {
         }
     }
 
+    /**
+     * Anexa Authorization + X-User-Id em toda request (igual ao mobile).
+     * Necessario pro gate VIP de /api/live-tv e /api/media-sources.
+     */
+    private val sessionAuthInterceptor = okhttp3.Interceptor { chain ->
+        val store = sessionStore
+        val original = chain.request()
+        val builder = original.newBuilder()
+        val token = store?.accessToken
+        if (!token.isNullOrBlank()) {
+            builder.header("Authorization", "Bearer $token")
+        }
+        val userId = store?.userId
+        if (!userId.isNullOrBlank()) {
+            builder.header("X-User-Id", userId)
+        }
+        chain.proceed(builder.build())
+    }
+
     private val tokenAuthenticator = okhttp3.Authenticator { _, response ->
         if (response.request.header("X-Retry-After-Refresh") != null) {
             return@Authenticator null
@@ -49,15 +68,18 @@ object NetworkModule {
     }
 
     private val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
         .authenticator(tokenAuthenticator)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    /** Live TV agrega várias fontes Xtream — timeout maior. */
+    /** Live TV agrega varias fontes Xtream — timeout maior. */
     private val liveTvOkHttp = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
+        .authenticator(tokenAuthenticator)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
         .build()
