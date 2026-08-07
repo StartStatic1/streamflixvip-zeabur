@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -39,6 +41,8 @@ fun UpdateRequiredTvScreen(
     versionName: String,
     releaseNotes: String,
     isDownloading: Boolean,
+    downloadProgress: Int = 0,
+    statusMessage: String? = null,
     onDownloadClick: () -> Unit,
 ) {
     Box(
@@ -96,6 +100,39 @@ fun UpdateRequiredTvScreen(
                         lineHeight = 22.sp,
                     )
                 }
+
+                if (isDownloading) {
+                    Spacer(Modifier.height(20.dp))
+                    LinearProgressIndicator(
+                        progress = { (downloadProgress.coerceIn(0, 100) / 100f) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = AccentSoft,
+                        trackColor = Color.White.copy(alpha = 0.12f),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        if (downloadProgress >= 100) {
+                            "Download concluido — abrindo instalador…"
+                        } else {
+                            "Baixando… $downloadProgress%"
+                        },
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = 14.sp,
+                    )
+                }
+
+                if (!statusMessage.isNullOrBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        statusMessage,
+                        color = Color(0xFFF87171),
+                        fontSize = 14.sp,
+                    )
+                }
+
                 Spacer(Modifier.height(24.dp))
                 Button(
                     onClick = onDownloadClick,
@@ -116,14 +153,14 @@ fun UpdateRequiredTvScreen(
                             strokeWidth = 2.dp,
                         )
                         Spacer(Modifier.width(10.dp))
-                        Text("Abrindo download…")
+                        Text("Baixando…")
                     } else {
                         Text("Baixar e instalar", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(modifier.height(10.dp))
                 Text(
-                    "Apos baixar, permita a instalacao. A assinatura e a mesma — nao precisa desinstalar.",
+                    "O download acontece dentro do app — sem abrir o navegador. Depois permita a instalacao.",
                     color = Color(0xFFA1A1B5).copy(alpha = 0.85f),
                     fontSize = 12.sp,
                     textAlign = TextAlign.Start,
