@@ -523,16 +523,25 @@ private fun NativePlayer(
                 .setLanguage("pt")
                 .setLabel(item.release ?: "Online PT-BR")
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                .setRoleFlags(C.ROLE_FLAG_SUBTITLE)
                 .build()
 
+            val dsFactory = DefaultHttpDataSource.Factory()
+                .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
+                .setDefaultRequestProperties(
+                    mapOf(
+                        "Referer" to activeUrl,
+                        "Connection" to "keep-alive",
+                        "Icy-MetaData" to "1",
+                    ),
+                )
+            val extFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
             val videoItem = MediaItem.fromUri(activeUrl)
             val videoSource = if (isLikelyHls(activeUrl)) {
-                HlsMediaSource.Factory(httpDataSourceFactory).createMediaSource(videoItem)
+                HlsMediaSource.Factory(dsFactory).createMediaSource(videoItem)
             } else {
-                ProgressiveMediaSource.Factory(httpDataSourceFactory, extractorsFactory).createMediaSource(videoItem)
+                ProgressiveMediaSource.Factory(dsFactory, extFactory).createMediaSource(videoItem)
             }
-            val subtitleSource = SingleSampleMediaSource.Factory(httpDataSourceFactory)
+            val subtitleSource = SingleSampleMediaSource.Factory(dsFactory)
                 .createMediaSource(subConfig, C.TIME_UNSET)
             val merged = MergingMediaSource(videoSource, subtitleSource)
 
@@ -541,7 +550,6 @@ private fun NativePlayer(
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .setPreferredTextLanguage("pt")
                 .setSelectUndeterminedTextLanguage(true)
-                .setIgnoredTextSelectionFlags(0)
                 .build()
 
             exoPlayer.setMediaSource(merged)
