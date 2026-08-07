@@ -55,6 +55,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -261,6 +262,7 @@ private fun NativePlayer(
     var gestureValue by remember { mutableStateOf(0f) }
     var gestureHideJob by remember { mutableStateOf<Job?>(null) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    val gestureScope = rememberCoroutineScope()
 
     val exoPlayer = remember {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
@@ -569,13 +571,13 @@ private fun NativePlayer(
         )
 
         // Zonas de gesto: 28% esquerda = brilho, 28% direita = volume
-        // Toque simples = mostra/oculta controles; deslize vertical = ajusta
+        // Toque = controles; deslize vertical = ajusta (fluido, some sozinho)
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(0.28f)
                 .align(Alignment.CenterStart)
-                .pointerInput(brightnessLevel) {
+                .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         var totalY = 0f
@@ -583,20 +585,21 @@ private fun NativePlayer(
                         val startLevel = brightnessLevel
                         drag(down.id) { change ->
                             totalY += change.positionChange().y
-                            if (!dragging && abs(totalY) > 16f) {
+                            if (!dragging && abs(totalY) > 12f) {
                                 dragging = true
                                 gestureHideJob?.cancel()
                                 gestureKind = "brightness"
                             }
                             if (dragging) {
                                 change.consume()
-                                val delta = -totalY / size.height.toFloat()
-                                brightnessLevel = (startLevel + delta).coerceIn(0.01f, 1f)
-                                gestureValue = brightnessLevel
+                                val delta = -totalY / size.height.toFloat() * 1.35f
+                                val next = (startLevel + delta).coerceIn(0.01f, 1f)
+                                brightnessLevel = next
+                                gestureValue = next
                                 val act = context as? android.app.Activity
                                 act?.window?.let { w ->
                                     val lp = w.attributes
-                                    lp.screenBrightness = brightnessLevel
+                                    lp.screenBrightness = next
                                     w.attributes = lp
                                 }
                             }
@@ -610,8 +613,8 @@ private fun NativePlayer(
                             }
                         } else {
                             gestureHideJob?.cancel()
-                            gestureHideJob = MainScope().launch {
-                                delay(900)
+                            gestureHideJob = gestureScope.launch {
+                                delay(800)
                                 gestureKind = null
                             }
                         }
@@ -623,7 +626,7 @@ private fun NativePlayer(
                 .fillMaxHeight()
                 .fillMaxWidth(0.28f)
                 .align(Alignment.CenterEnd)
-                .pointerInput(volumeLevel, maxVolume) {
+                .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         var totalY = 0f
@@ -631,17 +634,18 @@ private fun NativePlayer(
                         val startLevel = volumeLevel
                         drag(down.id) { change ->
                             totalY += change.positionChange().y
-                            if (!dragging && abs(totalY) > 16f) {
+                            if (!dragging && abs(totalY) > 12f) {
                                 dragging = true
                                 gestureHideJob?.cancel()
                                 gestureKind = "volume"
                             }
                             if (dragging) {
                                 change.consume()
-                                val delta = -totalY / size.height.toFloat()
-                                volumeLevel = (startLevel + delta).coerceIn(0f, 1f)
-                                gestureValue = volumeLevel
-                                val vol = (volumeLevel * maxVolume).toInt().coerceIn(0, maxVolume)
+                                val delta = -totalY / size.height.toFloat() * 1.35f
+                                val next = (startLevel + delta).coerceIn(0f, 1f)
+                                volumeLevel = next
+                                gestureValue = next
+                                val vol = (next * maxVolume).toInt().coerceIn(0, maxVolume)
                                 audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, vol, 0)
                             }
                         }
@@ -654,8 +658,8 @@ private fun NativePlayer(
                             }
                         } else {
                             gestureHideJob?.cancel()
-                            gestureHideJob = MainScope().launch {
-                                delay(900)
+                            gestureHideJob = gestureScope.launch {
+                                delay(800)
                                 gestureKind = null
                             }
                         }
