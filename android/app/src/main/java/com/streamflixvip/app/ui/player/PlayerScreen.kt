@@ -73,6 +73,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
@@ -91,8 +92,10 @@ import com.streamflixvip.app.BuildConfig
 import com.streamflixvip.app.data.ProgressRepository
 import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.StreamUrlResolver
+import com.streamflixvip.app.network.SubtitleSearchItem
 import com.streamflixvip.app.network.VipSource
 import kotlin.math.abs
+import java.io.File
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -228,6 +231,10 @@ private fun NativePlayer(
     var audioOptions by remember { mutableStateOf(listOf<TrackOption>()) }
     var qualityOptions by remember { mutableStateOf(listOf<TrackOption>()) }
     var selectedSubtitleLabel by remember { mutableStateOf("Desligada") }
+    var onlineSubtitleResults by remember { mutableStateOf(listOf<SubtitleSearchItem>()) }
+    var onlineSubtitlesLoading by remember { mutableStateOf(false) }
+    var onlineSubtitlesError by remember { mutableStateOf<String?>(null) }
+    var onlineSubtitleApplied by remember { mutableStateOf(false) }
     var selectedAudioLabel by remember { mutableStateOf("Padrao") }
     var selectedQualityLabel by remember { mutableStateOf("Automatico") }
     var playbackSpeed by remember { mutableStateOf(1f) }
@@ -442,14 +449,96 @@ private fun NativePlayer(
     }
 
     fun selectSubtitle(option: TrackOption?) {
+        onlineSubtitleApplied = false
         trackSelector.parameters = if (option == null) {
             selectedSubtitleLabel = "Desligada"
             trackSelector.parameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
         } else {
-            selectedSubtitleLabel = option.label
+            selectedSubtitleLabel = "Stream: ${option.label}"
             trackSelector.parameters.buildUpon().setOverrideForType(TrackSelectionOverride(option.group, option.trackIndex)).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
         }
     }
+
+    suspend fun searchOnlineSubtitles() {
+        onlineSubtitlesLoading = true
+        onlineSubtitlesError = null
+        try {
+            val seasonArg = if (mediaType == "tv" && currentSeason > 0) currentSeason else null
+            val episodeArg = if (mediaType == "tv" && currentEpisode > 0) currentEpisode else null
+            val resp = NetworkModule.subtitlesApi.search(
+                tmdbId = tmdbId,
+                season = seasonArg,
+                episode = episodeArg,
+            )
+            if (!resp.error.isNullOrBlank()) {
+                onlineSubtitlesError = resp.error
+                onlineSubtitleResults = emptyList()
+            } else {
+                onlineSubtitleResults = resp.results.filter { it.file_id != null }.take(12)
+                if (onlineSubtitleResults.isEmpty()) {
+                    onlineSubtitlesError = "Nenhuma legenda PT-BR encontrada"
+                }
+            }
+        } catch (e: Exception) {
+            onlineSubtitlesError = e.message ?: "Falha na busca"
+            onlineSubtitleResults = emptyList()
+        } finally {
+            onlineSubtitlesLoading = false
+        }
+    }
+
+    suspend fun applyOnlineSubtitle(item: SubtitleSearchItem) {
+        val fileId = item.file_id ?: return
+        onlineSubtitlesLoading = true
+        onlineSubtitlesError = null
+        try {
+            val seasonArg = if (mediaType == "tv" && currentSeason > 0) currentSeason else null
+            val episodeArg = if (mediaType == "tv" && currentEpisode > 0) currentEpisode else null
+            val resp = NetworkModule.subtitlesApi.download(
+                fileId = fileId,
+                tmdbId = tmdbId,
+                mediaType = if (mediaType == "tv") "tv" else "movie",
+                season = seasonArg,
+                episode = episodeArg,
+            )
+            val content = resp.content
+            if (content.isNullOrBlank()) {
+                onlineSubtitlesError = resp.error ?: "Legenda vazia"
+                return
+            }
+            val file = File(context.cacheDir, "os_${tmdbId}_${currentSeason}_${currentEpisode}.vtt")
+            file.writeText(content)
+            val pos = exoPlayer.currentPosition
+            val wasPlaying = exoPlayer.playWhenReady
+            val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                .setMimeType(MimeTypes.TEXT_VTT)
+                .setLanguage("pt")
+                .setLabel(item.release ?: "Online PT-BR")
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .build()
+            val mediaItem = MediaItem.Builder()
+                .setUri(activeUrl)
+                .setSubtitleConfigurations(listOf(subConfig))
+                .build()
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            exoPlayer.seekTo(pos)
+            exoPlayer.playWhenReady = wasPlaying
+            trackSelector.parameters = trackSelector.parameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .build()
+            val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "…" else it }
+            selectedSubtitleLabel = "Online: $short"
+            onlineSubtitleApplied = true
+            settingsPanel = SettingsPanel.MAIN
+        } catch (e: Exception) {
+            onlineSubtitlesError = e.message ?: "Falha ao baixar legenda"
+        } finally {
+            onlineSubtitlesLoading = false
+        }
+    }
+
     fun selectAudio(option: TrackOption?) {
         trackSelector.parameters = if (option == null) {
             selectedAudioLabel = "Padrao"
@@ -860,9 +949,58 @@ private fun NativePlayer(
                         }
                         SettingsPanel.SUBTITLE -> {
                             SubmenuHeader("Legenda") { settingsPanel = SettingsPanel.MAIN }
-                            SubmenuItem("Desligada", selectedSubtitleLabel == "Desligada") { selectSubtitle(null); settingsPanel = SettingsPanel.MAIN }
-                            subtitleOptions.forEach { o ->
-                                SubmenuItem(o.label, selectedSubtitleLabel == o.label) { selectSubtitle(o); settingsPanel = SettingsPanel.MAIN }
+                            SubmenuItem("Desligada", selectedSubtitleLabel == "Desligada" && !onlineSubtitleApplied) {
+                                selectSubtitle(null); settingsPanel = SettingsPanel.MAIN
+                            }
+                            if (subtitleOptions.isNotEmpty()) {
+                                Text(
+                                    "Do stream",
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                )
+                                subtitleOptions.forEach { o ->
+                                    SubmenuItem(
+                                        "Stream: ${o.label}",
+                                        selectedSubtitleLabel == "Stream: ${o.label}" && !onlineSubtitleApplied,
+                                    ) { selectSubtitle(o); settingsPanel = SettingsPanel.MAIN }
+                                }
+                            }
+                            Text(
+                                "Online PT-BR",
+                                color = Color.White.copy(alpha = 0.55f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            )
+                            if (onlineSubtitlesLoading) {
+                                Text(
+                                    "Buscando…",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            } else {
+                                SubmenuItem("Buscar legendas online", false) {
+                                    MainScope().launch { searchOnlineSubtitles() }
+                                }
+                            }
+                            onlineSubtitlesError?.let { err ->
+                                Text(
+                                    err,
+                                    color = Color(0xFFFF8A80),
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                )
+                            }
+                            onlineSubtitleResults.forEach { item ->
+                                val label = buildString {
+                                    append(item.release ?: "Legenda")
+                                    if (item.downloads > 0) append(" · ${item.downloads} dl")
+                                    if (item.hd) append(" · HD")
+                                }.let { if (it.length > 42) it.take(42) + "…" else it }
+                                SubmenuItem(label, selectedSubtitleLabel.startsWith("Online:") && onlineSubtitleApplied) {
+                                    MainScope().launch { applyOnlineSubtitle(item) }
+                                }
                             }
                         }
                         SettingsPanel.AUDIO -> {
