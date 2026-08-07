@@ -1,0 +1,29 @@
+name: Patch TV Live Adult + Fallback
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore LiveTv if corrupted
+        run: |
+          SZ=$(wc -c < android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LiveTvScreen.kt || echo 0)
+          if [ "$SZ" -lt 1000 ]; then
+            git show f03cecc4798e01d7ccb037e6eec1059e90b7ff30:android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LiveTvScreen.kt > android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LiveTvScreen.kt
+          fi
+          SZ2=$(wc -c < android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt || echo 0)
+          if [ "$SZ2" -lt 1000 ]; then
+            git show f03cecc4798e01d7ccb037e6eec1059e90b7ff30:android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt > android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
+          fi
+      - run: python3 scripts/patch_tv_adult.py
+      - run: python3 scripts/patch_tv_fallback.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/
+          git commit -m "fix(tv): ocultar adulto + fallback timeout fontes" || echo nothing
+          git push
