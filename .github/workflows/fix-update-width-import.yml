@@ -19,6 +19,6 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add "$FILE" android/app/src/main/java/com/streamflixvip/app/ui/update/UpdateRequiredScreen.kt
+          git add android/app/src/main/java/com/streamflixvip/app/ui/update/UpdateRequiredScreen.kt
           git commit -m "fix(mobile): import Modifier.width no UpdateRequiredScreen" || echo nothing
           git push
