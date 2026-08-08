@@ -1,0 +1,48 @@
+name: Fix Continue Watching Params
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pass resume params to DetailScreen
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/java/com/streamflixvip/app/MainActivity.kt")
+          t = p.read_text()
+          if "resumeSeconds = resumeSeconds" in t and "DetailScreen" in t:
+              # already present somewhere - check DetailScreen call specifically
+              pass
+          old = """                DetailScreen(
+                    viewModel = viewModel,
+                    onPlaySource ="""
+          new = """                DetailScreen(
+                    viewModel = viewModel,
+                    resumeSeconds = resumeSeconds,
+                    initialSeason = initialSeason,
+                    initialEpisode = initialEpisode,
+                    onPlaySource ="""
+          if "resumeSeconds = resumeSeconds" in t[t.find("DetailScreen("):t.find("DetailScreen(")+400]:
+              print("already patched")
+          elif old not in t:
+              raise SystemExit("DetailScreen call not found")
+          else:
+              t = t.replace(old, new, 1)
+              p.write_text(t)
+              print("patched")
+          # verify
+          t = p.read_text()
+          idx = t.find("DetailScreen(")
+          print(t[idx:idx+280])
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/src/main/java/com/streamflixvip/app/MainActivity.kt
+          git commit -m "fix(mobile): passar resume/season/episode ao DetailScreen no continuar assistindo" || echo nothing
+          git push
