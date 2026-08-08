@@ -1,7 +1,7 @@
 {
-  "versionCode": 57,
-  "versionName": "8.7.0",
+  "versionCode": 58,
+  "versionName": "8.8.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Fix"
+  "releaseNotes": "Correções motor de atualização"
 }
