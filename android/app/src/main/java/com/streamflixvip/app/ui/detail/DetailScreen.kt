@@ -108,7 +108,7 @@ fun DetailScreen(
         }
         if (initialSeason > 0) {
             val ep = initialEpisode.coerceAtLeast(1)
-            viewModel.loadEpisodeSources(initialSeason, ep) { src ->
+            viewModel.loadEpisodeSources(initialSeason, ep, forceAutoPlay = true) { src ->
                 onPlaySource(src, initialSeason, ep, title, posterPath)
             }
         }

@@ -162,7 +162,7 @@ class DetailViewModel(
         }
     }
 
-    fun loadEpisodeSources(season: Int, episode: Int, onAutoPlay: (VipSource) -> Unit) {
+    fun loadEpisodeSources(season: Int, episode: Int, forceAutoPlay: Boolean = false, onAutoPlay: (VipSource) -> Unit) {
         val current = _uiState.value as? DetailUiState.Success ?: return
         val isVipNow = VipStatusHolder.isVipNow()
 
@@ -201,11 +201,20 @@ class DetailViewModel(
                     onAutoPlay(sources.first())
                 }
                 sources.size > 1 -> {
-                    _uiState.value = stillCurrent.copy(
-                        episodeSources = sources,
-                        isLoadingEpisodeSources = false,
-                        showServerPickerForEpisode = episode,
-                    )
+                    if (forceAutoPlay) {
+                        _uiState.value = stillCurrent.copy(
+                            episodeSources = sources,
+                            isLoadingEpisodeSources = false,
+                            showServerPickerForEpisode = null,
+                        )
+                        onAutoPlay(sources.first())
+                    } else {
+                        _uiState.value = stillCurrent.copy(
+                            episodeSources = sources,
+                            isLoadingEpisodeSources = false,
+                            showServerPickerForEpisode = episode,
+                        )
+                    }
                 }
                 else -> {
                     _uiState.value = stillCurrent.copy(

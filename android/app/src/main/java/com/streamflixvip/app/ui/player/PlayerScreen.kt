@@ -11,6 +11,7 @@ import android.view.WindowManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -145,6 +146,7 @@ private fun openInExternalPlayer(context: android.content.Context, url: String) 
 fun PlayerScreen(
     sourceUrl: String,
     isDirectPlayable: Boolean,
+    onBack: () -> Unit = {},
     userId: String?,
     accessToken: String?,
     tmdbId: Int,
@@ -176,7 +178,9 @@ fun PlayerScreen(
         onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
-    var resolvedUrl by remember(sourceUrl) { mutableStateOf<String?>(if (isDirectPlayable) null else sourceUrl) }
+    BackHandler { onBack() }
+
+        var resolvedUrl by remember(sourceUrl) { mutableStateOf<String?>(if (isDirectPlayable) null else sourceUrl) }
     LaunchedEffect(sourceUrl, isDirectPlayable) {
         if (isDirectPlayable) {
             val candidates = VipSource(source_url = sourceUrl, source_label = null, priority = null)
@@ -196,6 +200,7 @@ fun PlayerScreen(
     if (isDirectPlayable) {
         NativePlayer(
             url = currentResolvedUrl,
+            onBack = onBack,
             userId = userId,
             accessToken = accessToken,
             tmdbId = tmdbId,
@@ -215,6 +220,7 @@ fun PlayerScreen(
 @Composable
 private fun NativePlayer(
     url: String,
+    onBack: () -> Unit = {},
     userId: String?,
     accessToken: String?,
     tmdbId: Int,
@@ -868,8 +874,17 @@ private fun NativePlayer(
             visible = controlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 12.dp, end = 16.dp, top = 8.dp),
         ) {
+            Column {
+            Text(
+                "< Voltar",
+                color = Color.White,
+                fontSize = 14.sp,
+                modifier = Modifier
+                    .padding(bottom = 6.dp)
+                    .clickable { onBack() },
+            )
             val epLabel = if (mediaType == "tv" && currentSeason > 0 && currentEpisode > 0) {
                 "S${currentSeason} E${currentEpisode}"
             } else null
@@ -878,6 +893,7 @@ private fun NativePlayer(
                 if (epLabel != null) {
                     Text(epLabel, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
                 }
+            }
             }
         }
 
