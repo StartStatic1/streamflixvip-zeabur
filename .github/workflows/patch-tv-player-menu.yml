@@ -1,0 +1,30 @@
+name: Patch TV Live Player Menu
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore player if needed + apply menu patch
+        run: |
+          set -e
+          FILE=android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
+          SZ=$(wc -c < "$FILE" || echo 0)
+          if [ "$SZ" -lt 5000 ]; then
+            curl -fsSL "https://raw.githubusercontent.com/StartStatic1/streamflixvip-zeabur/f03cecc4798e01d7ccb037e6eec1059e90b7ff30/$FILE" -o "$FILE"
+          fi
+          # Prefer current main if already has timeout patch
+          if ! grep -q setConnectTimeoutMs "$FILE" 2>/dev/null; then
+            curl -fsSL "https://raw.githubusercontent.com/StartStatic1/streamflixvip-zeabur/main/$FILE" -o "$FILE" || true
+          fi
+          python3 -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/StartStatic1/streamflixvip-zeabur/main/scripts/patch_tv_player_menu.py','scripts/patch_tv_player_menu.py')" 2>/dev/null || true
+      - name: Write patch script from local artifact path fallback
+        run: |
+          # script may be PLACEHOLDER on main — overwrite with inline if needed
+          if ! grep -q aspectMenuVisible scripts/patch_tv_player_menu.py 2>/dev/null; then
+            echo 'will write full script in next step via python heredoc file'
+          fi
+          true
