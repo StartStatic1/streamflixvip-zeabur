@@ -254,20 +254,6 @@ private fun NativePlayer(
     var retryAttempt by remember { mutableStateOf(0) }
     var isRecovering by remember { mutableStateOf(false) }
     var activeUrl by remember { mutableStateOf(url) }
-
-    // Reaplica legenda online salva (filesDir) sem baixar de novo
-    LaunchedEffect(activeUrl, tmdbId, currentSeason, currentEpisode) {
-        val file = subtitleCacheFile()
-        val label = loadSavedSubtitleLabel()
-        if (file.exists() && file.length() > 10L && !label.isNullOrBlank()) {
-            // espera player ter fonte
-            kotlinx.coroutines.delay(600)
-            try {
-                applySubtitleFromFile(file, label)
-            } catch (_: Exception) {
-            }
-        }
-    }
     var alternateSources by remember { mutableStateOf(emptyList<String>()) }
     var alternateIndex by remember { mutableStateOf(0) }
     var currentSeason by remember { mutableStateOf(season) }
@@ -638,6 +624,20 @@ private fun NativePlayer(
             onlineSubtitlesError = e.message ?: "Falha ao baixar legenda"
         } finally {
             onlineSubtitlesLoading = false
+        }
+    }
+
+
+    // Reaplica legenda online salva (filesDir) sem baixar de novo
+    LaunchedEffect(activeUrl, tmdbId, currentSeason, currentEpisode) {
+        val file = subtitleCacheFile()
+        val label = loadSavedSubtitleLabel()
+        if (file.exists() && file.length() > 10L && !label.isNullOrBlank()) {
+            kotlinx.coroutines.delay(800)
+            try {
+                applySubtitleFromFile(file, label)
+            } catch (_: Exception) {
+            }
         }
     }
 
