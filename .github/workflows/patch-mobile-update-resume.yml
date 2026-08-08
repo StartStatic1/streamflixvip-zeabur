@@ -28,10 +28,7 @@ jobs:
           fi
 
       - name: Patch MainActivity and DetailScreen
-        run: |
-          set -e
-          cat scripts/core.b64.0 scripts/core.b64.1 | base64 -d > scripts/patch_mobile_update_resume_core.py
-          python3 scripts/patch_mobile_update_resume_core.py
+        run: python3 scripts/patch_mobile_update_resume_core.py
 
       - name: Commit
         run: |
