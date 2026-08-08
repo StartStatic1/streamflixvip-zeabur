@@ -234,29 +234,41 @@ fun LivePlayerTvScreen(
                     return@onPreviewKeyEvent false
                 }
                 when (code) {
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                        if (!controlsVisible) showControls() else {
-                            controlsVisible = !controlsVisible
-                            if (!controlsVisible) runCatching { rootFocus.requestFocus() }
-                        }
-                        true
-                    }
-                    KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (!controlsVisible) { switchChannel(+1); true } else { showControls(); false }
-                    }
-                    KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (!controlsVisible) { switchChannel(-1); true } else { showControls(); false }
-                    }
-                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (!controlsVisible) { showControls(); true } else { showControls(); false }
-                    }
-                    KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_MENU -> {
-                        channelListVisible = !channelListVisible
-                        if (channelListVisible) controlsVisible = true
-                        true
-                    }
-                    else -> if (!controlsVisible) { showControls(); true } else false
-                }
+          KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+              if (!controlsVisible) {
+                  showControls()
+                  true
+              } else {
+                  false // deixa Surface/onClick do chip receber OK
+              }
+          }
+          KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+              if (!controlsVisible) showControls()
+              true
+          }
+          KeyEvent.KEYCODE_CHANNEL_UP -> {
+              switchChannel(+1); true
+          }
+          KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+              switchChannel(-1); true
+          }
+          KeyEvent.KEYCODE_DPAD_UP -> {
+              if (!controlsVisible) { switchChannel(+1); true } else false
+          }
+          KeyEvent.KEYCODE_DPAD_DOWN -> {
+              if (!controlsVisible) { switchChannel(-1); true } else false
+          }
+          KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+              if (!controlsVisible) { showControls(); true } else false
+          }
+          KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_MENU -> {
+              aspectMenuVisible = false
+              channelListVisible = !channelListVisible
+              if (channelListVisible) controlsVisible = false
+              true
+          }
+          else -> if (!controlsVisible) { showControls(); true } else false
+      }
             },
     ) {
         AndroidView(
@@ -306,8 +318,7 @@ fun LivePlayerTvScreen(
                     color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, maxLines = 2,
                 )
                 Spacer(Modifier.height(18.dp))
-                if (aspectMenuVisible) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         LiveAspect.entries.forEach { mode ->
                             val selected = aspect == mode
                             LiveTvChip(
@@ -327,11 +338,11 @@ fun LivePlayerTvScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     LiveTvChip(
                         Icons.Filled.AspectRatio,
-                        if (aspectMenuVisible) "Fechar" else aspect.label,
+                        aspect.label,
                         Modifier.focusRequester(aspectFocus),
-                        selected = aspectMenuVisible,
-                    ) {
-                        aspectMenuVisible = !aspectMenuVisible
+                        ) {
+                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
+                        aspectMenuVisible = false
                         showControls()
                     }
                     if (channelList.isNotEmpty()) {
@@ -348,7 +359,7 @@ fun LivePlayerTvScreen(
                         LiveTvChip(Icons.Filled.List, "Lista") {
                             aspectMenuVisible = false
                             channelListVisible = true
-                            showControls()
+                            controlsVisible = false
                         }
                     }
                     if (activeStreams.size > 1) {
