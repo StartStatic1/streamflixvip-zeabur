@@ -8,62 +8,46 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Remove broken aspect submenu braces
+      - name: Fix unbalanced braces in LivePlayer
         run: |
           python3 << 'PY'
           from pathlib import Path
           p = Path("android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt")
           t = p.read_text()
-          if t.count("{") == t.count("}") and "LiveAspect.entries.forEach" not in t.split("Spacer(Modifier.height(18.dp))")[1][:800]:
-              # already clean if forEach not right after first spacer in controls
-              pass
-          old = """                Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        LiveAspect.entries.forEach { mode ->
-                            val selected = aspect == mode
-                            LiveTvChip(
-                                Icons.Filled.AspectRatio,
-                                mode.label,
-                                selected = selected,
-                            ) {
-                                aspect = mode
-                                aspectMenuVisible = false
-                                showControls()
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LiveTvChip(
-                        Icons.Filled.AspectRatio,
-                        aspect.label,
-                        Modifier.focusRequester(aspectFocus),
-                        ) {
-                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
-                        aspectMenuVisible = false
-                        showControls()
-                    }"""
-          new = """                Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LiveTvChip(
-                        Icons.Filled.AspectRatio,
-                        aspect.label,
-                        Modifier.focusRequester(aspectFocus),
-                    ) {
-                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
-                        aspectMenuVisible = false
-                        showControls()
-                    }"""
-          if old not in t:
-              if t.count("{") == t.count("}"):
-                  print("already balanced, nothing to do")
-                  raise SystemExit(0)
-              raise SystemExit("broken block not found and braces unbalanced")
-          t = t.replace(old, new, 1)
+          if "LiveAspect.entries.forEach" not in t and t.count("{") == t.count("}"):
+              print("already clean")
+              raise SystemExit(0)
+          marker = "LiveAspect.entries.forEach { mode ->"
+          i = t.find(marker)
+          if i < 0:
+              raise SystemExit("forEach marker missing")
+          start = t.rfind("                Spacer(Modifier.height(18.dp))\n", 0, i)
+          end_marker = (
+              "                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {\n"
+              "                    LiveTvChip(\n"
+              "                        Icons.Filled.AspectRatio,\n"
+              "                        aspect.label,"
+          )
+          j = t.find(end_marker, i)
+          if start < 0 or j < 0:
+              raise SystemExit(f"bounds missing start={start} j={j}")
+          new = (
+              "                Spacer(Modifier.height(18.dp))\n"
+              "                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {\n"
+              "                    LiveTvChip(\n"
+              "                        Icons.Filled.AspectRatio,\n"
+              "                        aspect.label,"
+          )
+          t = t[:start] + new + t[j + len(end_marker):]
+          t = t.replace(
+              "Modifier.focusRequester(aspectFocus),\n                        ) {",
+              "Modifier.focusRequester(aspectFocus),\n                    ) {",
+              1,
+          )
           if t.count("{") != t.count("}"):
-              raise SystemExit(f"still unbalanced {{ {t.count('{')} }} {t.count('}')}")
+              raise SystemExit(f"unbalanced {{ {t.count('{')} }} {t.count('}')}")
+          if "LiveAspect.entries.forEach" in t:
+              raise SystemExit("forEach still present")
           p.write_text(t)
           print("ok", len(t), "braces", t.count("{"))
           PY
