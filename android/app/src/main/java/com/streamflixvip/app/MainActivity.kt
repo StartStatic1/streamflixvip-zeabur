@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -101,6 +102,8 @@ private fun AppRoot() {
 
     var updateInfo by remember { mutableStateOf<com.streamflixvip.app.network.AppVersionResponse?>(null) }
     var isDownloadingUpdate by remember { mutableStateOf(false) }
+    var updateError by remember { mutableStateOf<String?>(null) }
+    val updateScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         try {
@@ -118,24 +121,31 @@ private fun AppRoot() {
             releaseNotes = updateInfo!!.releaseNotes ?: "",
             isDownloading = isDownloadingUpdate,
             onDownloadClick = {
-                val url = updateInfo!!.apkUrl
-                if (url.isBlank()) return@UpdateRequiredScreen
-                isDownloadingUpdate = true
-                (context as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch {
-                    try {
-                        if (!com.streamflixvip.app.update.ApkInstaller.canInstallPackages(context)) {
-                            com.streamflixvip.app.update.ApkInstaller.openInstallPermissionSettings(context)
-                            isDownloadingUpdate = false
-                            return@launch
-                        }
-                        val file = com.streamflixvip.app.update.ApkInstaller.download(context, url) { }
-                        com.streamflixvip.app.update.ApkInstaller.install(context, file)
-                    } catch (_: Exception) {
-                    } finally {
-                        isDownloadingUpdate = false
-                    }
-                }
-            },
+      val url = updateInfo!!.apkUrl
+      if (url.isBlank()) {
+          updateError = "URL de atualizacao vazia"
+          return@UpdateRequiredScreen
+      }
+      updateError = null
+      isDownloadingUpdate = true
+      updateScope.launch {
+          try {
+              if (!com.streamflixvip.app.update.ApkInstaller.canInstallPackages(context)) {
+                  com.streamflixvip.app.update.ApkInstaller.openInstallPermissionSettings(context)
+                  updateError = "Ative permitir desta fonte e toque Baixar de novo"
+                            android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()
+                  return@launch
+              }
+              val file = com.streamflixvip.app.update.ApkInstaller.download(context, url) { }
+              com.streamflixvip.app.update.ApkInstaller.install(context, file)
+          } catch (e: Exception) {
+              updateError = e.message ?: "Falha no download/instalacao"
+                        android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()
+          } finally {
+              isDownloadingUpdate = false
+          }
+      }
+  },
         )
         return
     }

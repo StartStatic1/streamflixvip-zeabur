@@ -160,7 +160,7 @@ fun UpdateRequiredScreen(
             androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
 
             Text(
-                text = "O download abre no seu navegador. Depois de instalar, abra o app de novo.",
+                text = "O download acontece dentro do app. Se pedir permissao, ative e toque Baixar de novo.",
                 fontSize = 12.sp,
                 color = Color.White.copy(alpha = 0.45f),
                 textAlign = TextAlign.Center,
