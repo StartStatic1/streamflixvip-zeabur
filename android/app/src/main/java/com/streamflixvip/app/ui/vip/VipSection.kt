@@ -93,21 +93,21 @@ fun VipSection(viewModel: VipViewModel) {
 
                 VipPlanCard(
                     title = "1 Mês",
-                    price = "R$ 19,90",
+                    price = "R$ 9,90",
                     priceSuffix = "/mês",
                     badge = null,
                     highlighted = false,
-                    onClick = { viewModel.startPayment(19.90, "VIP 30 Dias", 720) },
+                    onClick = { viewModel.startPayment(9.90, "VIP 30 Dias", 720) },
                 )
                 Spacer(Modifier.height(10.dp))
 
                 VipPlanCard(
                     title = "3 Meses",
-                    price = "R$ 49,90",
+                    price = "R$ 24,90",
                     priceSuffix = "/3 meses",
-                    badge = "Economize R$ 9,80",
+                    badge = "Economize R$ 4,80",
                     highlighted = true,
-                    onClick = { viewModel.startPayment(49.90, "VIP 90 Dias", 2160) },
+                    onClick = { viewModel.startPayment(24.90, "VIP 90 Dias", 2160) },
                 )
                 Spacer(Modifier.height(10.dp))
 
