@@ -373,6 +373,9 @@ private fun MainAppScaffold(
                 )
                 DetailScreen(
                     viewModel = viewModel,
+                    resumeSeconds = resumeSeconds,
+                    initialSeason = initialSeason,
+                    initialEpisode = initialEpisode,
                     onPlaySource = { source, season, episode, title, posterPath ->
                         val encodedUrl = URLEncoder.encode(
                             source.resolvedPlaybackUrl(BuildConfig.API_BASE_URL),
