@@ -1,0 +1,164 @@
+name: Fix Player Back Glass
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wire onBack and glass arrow
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          import re
+
+          # 1) MainActivity — passar onBack de verdade
+          ma = Path("android/app/src/main/java/com/streamflixvip/app/MainActivity.kt")
+          t = ma.read_text()
+          idx = t.find("PlayerScreen(")
+          if idx < 0:
+              raise SystemExit("PlayerScreen call missing")
+          snippet = t[idx:idx+500]
+          if "onBack = { navController.popBackStack() }" not in snippet:
+              old = "PlayerScreen(\n                        sourceUrl = url,\n                        isDirectPlayable = isDirect,"
+              new = "PlayerScreen(\n                        sourceUrl = url,\n                        isDirectPlayable = isDirect,\n                        onBack = { navController.popBackStack() },"
+              if old not in t:
+                  # indent flexivel
+                  m = re.search(r"PlayerScreen\(\s*\n\s*sourceUrl = url,\s*\n\s*isDirectPlayable = isDirect,", t)
+                  if not m:
+                      raise SystemExit("PlayerScreen pattern not found")
+                  t = t[:m.end()] + "\n                        onBack = { navController.popBackStack() }," + t[m.end():]
+              else:
+                  t = t.replace(old, new, 1)
+              ma.write_text(t)
+              print("MainActivity onBack wired")
+          else:
+              print("MainActivity onBack already")
+
+          # 2) PlayerScreen — seta vidro circular no lugar do texto < Voltar
+          ps = Path("android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt")
+          t = ps.read_text()
+
+          if "import androidx.compose.material.icons.automirrored.filled.ArrowBack" not in t:
+              if "import androidx.compose.material.icons.filled.BrightnessHigh" in t:
+                  t = t.replace(
+                      "import androidx.compose.material.icons.filled.BrightnessHigh",
+                      "import androidx.compose.material.icons.filled.BrightnessHigh\nimport androidx.compose.material.icons.automirrored.filled.ArrowBack",
+                      1,
+                  )
+              else:
+                  t = t.replace(
+                      "import androidx.compose.material.icons.Icons",
+                      "import androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.automirrored.filled.ArrowBack",
+                      1,
+                  )
+
+          # Remover bloco texto < Voltar e Column extra feio
+          # Procurar padrao atual e trocar por Surface circular vidro
+          old_ui = None
+          # Variante com texto < Voltar
+          if '"< Voltar"' in t or "\u003c Voltar" in t or "< Voltar" in t:
+              # Replace from AnimatedVisibility TopStart through the messy structure
+              # Use simpler approach: replace the Text Voltar block with glass button
+              pat = r'Text\(\s*"< Voltar",\s*color = Color\.White,\s*fontSize = 14\.sp,\s*modifier = Modifier\s*\.padding\(bottom = 6\.dp\)\s*\.clickable \{ onBack\(\) \},\s*\)'
+              glass = '''Surface(
+                onClick = onBack,
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = Color.White.copy(alpha = 0.18f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                modifier = Modifier.size(40.dp),
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Voltar",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))'''
+              t2, n = re.subn(pat, glass, t, count=1, flags=re.S)
+              if n:
+                  t = t2
+                  print("glass button replaced text")
+              else:
+                  print("WARN text pattern not matched, trying line-based")
+                  # line based fallback
+                  lines = t.splitlines(True)
+                  out = []
+                  i = 0
+                  replaced = False
+                  while i < len(lines):
+                      if not replaced and '"< Voltar"' in lines[i]:
+                          # skip until closing paren of Text(
+                          while i < len(lines) and not (lines[i].strip() == ')' or lines[i].rstrip().endswith('),')):
+                              i += 1
+                          i += 1  # skip the closing
+                          out.append('''            Surface(
+                onClick = onBack,
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = Color.White.copy(alpha = 0.18f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                modifier = Modifier.size(40.dp),
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Voltar",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+''')
+                          replaced = True
+                          continue
+                      out.append(lines[i])
+                      i += 1
+                  t = ''.join(out)
+                  print("glass button line-based", replaced)
+
+          # Garantir structure Row around back+title if still Column only with glass
+          # Ensure BackHandler is not empty - already calls onBack()
+
+          # Surface onClick needs material3 Surface with onClick - available in material3
+          # If Surface onClick not available, use Modifier.clickable on Surface
+
+          # Fix: Material3 Surface has onClick overload with experimental - use clickable instead to be safe
+          t = t.replace(
+              "Surface(\n                onClick = onBack,\n                shape = androidx.compose.foundation.shape.CircleShape,",
+              "Surface(\n                shape = androidx.compose.foundation.shape.CircleShape,",
+              1,
+          )
+          if "Modifier = Modifier.size(40.dp),\n            ) {\n                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {\n                    Icon(\n                        imageVector = Icons.AutoMirrored.Filled.ArrowBack," in t:
+              t = t.replace(
+                  "modifier = Modifier.size(40.dp),\n            ) {\n                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {\n                    Icon(\n                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,",
+                  "modifier = Modifier.size(40.dp).clickable { onBack() },\n            ) {\n                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {\n                    Icon(\n                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,",
+                  1,
+              )
+
+          # Import CircleShape if needed - using FQCN already
+          # Need width import for Spacer(Modifier.width)
+          if "layout.width" not in t and "Modifier.width(8.dp)" in t:
+              if "import androidx.compose.foundation.layout.size" in t:
+                  t = t.replace(
+                      "import androidx.compose.foundation.layout.size",
+                      "import androidx.compose.foundation.layout.size\nimport androidx.compose.foundation.layout.width",
+                      1,
+                  )
+
+          ps.write_text(t)
+          print("PlayerScreen UI ok")
+          print("DONE")
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/
+          git commit -m "fix(mobile): onBack no player + seta vidro circular" || echo nothing
+          git push
