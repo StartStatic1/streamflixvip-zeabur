@@ -1,0 +1,76 @@
+name: Fix TV Live Player Syntax
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove broken aspect submenu braces
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path("android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt")
+          t = p.read_text()
+          if t.count("{") == t.count("}") and "LiveAspect.entries.forEach" not in t.split("Spacer(Modifier.height(18.dp))")[1][:800]:
+              # already clean if forEach not right after first spacer in controls
+              pass
+          old = """                Spacer(Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LiveAspect.entries.forEach { mode ->
+                            val selected = aspect == mode
+                            LiveTvChip(
+                                Icons.Filled.AspectRatio,
+                                mode.label,
+                                selected = selected,
+                            ) {
+                                aspect = mode
+                                aspectMenuVisible = false
+                                showControls()
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LiveTvChip(
+                        Icons.Filled.AspectRatio,
+                        aspect.label,
+                        Modifier.focusRequester(aspectFocus),
+                        ) {
+                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
+                        aspectMenuVisible = false
+                        showControls()
+                    }"""
+          new = """                Spacer(Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LiveTvChip(
+                        Icons.Filled.AspectRatio,
+                        aspect.label,
+                        Modifier.focusRequester(aspectFocus),
+                    ) {
+                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
+                        aspectMenuVisible = false
+                        showControls()
+                    }"""
+          if old not in t:
+              if t.count("{") == t.count("}"):
+                  print("already balanced, nothing to do")
+                  raise SystemExit(0)
+              raise SystemExit("broken block not found and braces unbalanced")
+          t = t.replace(old, new, 1)
+          if t.count("{") != t.count("}"):
+              raise SystemExit(f"still unbalanced {{ {t.count('{')} }} {t.count('}')}")
+          p.write_text(t)
+          print("ok", len(t), "braces", t.count("{"))
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
+          git commit -m "fix(tv): sintaxe LivePlayer — remover bloco aspecto quebrado" || echo nothing
+          git push
