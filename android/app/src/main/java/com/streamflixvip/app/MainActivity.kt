@@ -102,6 +102,7 @@ private fun AppRoot() {
 
     var updateInfo by remember { mutableStateOf<com.streamflixvip.app.network.AppVersionResponse?>(null) }
     var isDownloadingUpdate by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(-1) }
     var updateError by remember { mutableStateOf<String?>(null) }
     val updateScope = rememberCoroutineScope()
 
@@ -120,32 +121,49 @@ private fun AppRoot() {
             versionName = updateInfo!!.versionName,
             releaseNotes = updateInfo!!.releaseNotes ?: "",
             isDownloading = isDownloadingUpdate,
+            downloadProgress = downloadProgress,
+            errorMessage = updateError,
             onDownloadClick = {
-      val url = updateInfo!!.apkUrl
-      if (url.isBlank()) {
-          updateError = "URL de atualizacao vazia"
-          return@UpdateRequiredScreen
-      }
-      updateError = null
-      isDownloadingUpdate = true
-      updateScope.launch {
-          try {
-              if (!com.streamflixvip.app.update.ApkInstaller.canInstallPackages(context)) {
-                  com.streamflixvip.app.update.ApkInstaller.openInstallPermissionSettings(context)
-                  updateError = "Ative permitir desta fonte e toque Baixar de novo"
+                val url = updateInfo!!.apkUrl
+                if (url.isBlank()) {
+                    updateError = "URL vazia"
+                    return@UpdateRequiredScreen
+                }
+                updateError = null
+                isDownloadingUpdate = true
+                downloadProgress = 0
+                updateScope.launch {
+                    try {
+                        if (!com.streamflixvip.app.update.ApkInstaller.canInstallPackages(context)) {
+                            com.streamflixvip.app.update.ApkInstaller.openInstallPermissionSettings(context)
+                            updateError = "Ative permitir desta fonte e toque Baixar de novo"
                             android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()
-                  return@launch
-              }
-              val file = com.streamflixvip.app.update.ApkInstaller.download(context, url) { }
-              com.streamflixvip.app.update.ApkInstaller.install(context, file)
-          } catch (e: Exception) {
-              updateError = e.message ?: "Falha no download/instalacao"
+                            return@launch
+                        }
+                        val file = com.streamflixvip.app.update.ApkInstaller.download(context, url) { pct ->
+                            downloadProgress = pct
+                        }
+                        downloadProgress = 100
+                        com.streamflixvip.app.update.ApkInstaller.install(context, file)
+                        android.widget.Toast.makeText(context, "Abrindo instalador...", android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        updateError = (e.message ?: "Falha") + " — abrindo navegador"
                         android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()
-          } finally {
-              isDownloadingUpdate = false
-          }
-      }
-  },
+                        try {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(url),
+                                )
+                            )
+                        } catch (_: Exception) {
+                        }
+                    } finally {
+                        isDownloadingUpdate = false
+                        downloadProgress = -1
+                    }
+                }
+            },
         )
         return
     }
