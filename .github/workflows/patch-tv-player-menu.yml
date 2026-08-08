@@ -8,23 +8,195 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Restore player if needed + apply menu patch
+      - name: Apply menu UX patch
         run: |
-          set -e
-          FILE=android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
-          SZ=$(wc -c < "$FILE" || echo 0)
-          if [ "$SZ" -lt 5000 ]; then
-            curl -fsSL "https://raw.githubusercontent.com/StartStatic1/streamflixvip-zeabur/f03cecc4798e01d7ccb037e6eec1059e90b7ff30/$FILE" -o "$FILE"
-          fi
-          # Prefer current main if already has timeout patch
-          if ! grep -q setConnectTimeoutMs "$FILE" 2>/dev/null; then
-            curl -fsSL "https://raw.githubusercontent.com/StartStatic1/streamflixvip-zeabur/main/$FILE" -o "$FILE" || true
-          fi
-          python3 -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/StartStatic1/streamflixvip-zeabur/main/scripts/patch_tv_player_menu.py','scripts/patch_tv_player_menu.py')" 2>/dev/null || true
-      - name: Write patch script from local artifact path fallback
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path('android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt')
+          t = p.read_text()
+          if 'aspectMenuVisible' in t:
+              print('already'); raise SystemExit(0)
+          assert 'LivePlayerTvScreen' in t and len(t) > 5000
+
+          t = t.replace(
+          '''    var controlsVisible by remember { mutableStateOf(true) }
+    var channelListVisible by remember { mutableStateOf(false) }
+    var aspect by remember { mutableStateOf(LiveAspect.FIT) }
+    var hideToken by remember { mutableIntStateOf(0) }
+''',
+          '''    var controlsVisible by remember { mutableStateOf(true) }
+    var channelListVisible by remember { mutableStateOf(false) }
+    var aspectMenuVisible by remember { mutableStateOf(false) }
+    var aspect by remember { mutableStateOf(LiveAspect.FIT) }
+    var hideToken by remember { mutableIntStateOf(0) }
+''',
+          1,
+          )
+
+          t = t.replace(
+          '''    BackHandler {
+        if (channelListVisible) channelListVisible = false else onBack()
+    }
+''',
+          '''    BackHandler {
+        when {
+            channelListVisible -> channelListVisible = false
+            aspectMenuVisible -> aspectMenuVisible = false
+            else -> onBack()
+        }
+    }
+''',
+          1,
+          )
+
+          t = t.replace(
+          '''    LaunchedEffect(controlsVisible, hideToken, channelListVisible) {
+        if (controlsVisible && !channelListVisible) {
+            if (!didInitialChipFocus) {
+                delay(40)
+                runCatching { aspectFocus.requestFocus() }
+                didInitialChipFocus = true
+            }
+            delay(6000)
+            controlsVisible = false
+            didInitialChipFocus = false
+            runCatching { rootFocus.requestFocus() }
+        }
+    }
+''',
+          '''    LaunchedEffect(controlsVisible, hideToken, channelListVisible, aspectMenuVisible) {
+        if (controlsVisible && !channelListVisible && !aspectMenuVisible) {
+            if (!didInitialChipFocus) {
+                delay(40)
+                runCatching { aspectFocus.requestFocus() }
+                didInitialChipFocus = true
+            }
+            delay(10000)
+            controlsVisible = false
+            aspectMenuVisible = false
+            didInitialChipFocus = false
+            runCatching { rootFocus.requestFocus() }
+        }
+    }
+''',
+          1,
+          )
+
+          old = '''                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LiveTvChip(Icons.Filled.AspectRatio, aspect.label, Modifier.focusRequester(aspectFocus)) {
+                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]; showControls()
+                    }
+                    if (channelList.size > 1) {
+                        LiveTvChip(Icons.Filled.KeyboardArrowUp, "CH+") { switchChannel(+1) }
+                        LiveTvChip(Icons.Filled.KeyboardArrowDown, "CH-") { switchChannel(-1) }
+                        LiveTvChip(Icons.Filled.List, "Lista") { channelListVisible = true; showControls() }
+                    }
+                    if (activeStreams.size > 1) {
+                        LiveTvChip(Icons.Filled.SwapHoriz, "Fonte ${streamIndex + 1}/${activeStreams.size}") {
+                            streamIndex = (streamIndex + 1) % activeStreams.size; isLoading = true; errorMessage = null; showControls()
+                        }
+                    }
+                    LiveTvChip(Icons.Filled.Refresh, "Reload") {
+                        val cur = streamIndex; streamIndex = -1; streamIndex = cur.coerceAtLeast(0)
+                        isLoading = true; errorMessage = null; showControls()
+                    }
+                }
+'''
+          new = '''                if (aspectMenuVisible) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LiveAspect.entries.forEach { mode ->
+                            LiveTvChip(Icons.Filled.AspectRatio, mode.label, selected = aspect == mode) {
+                                aspect = mode; aspectMenuVisible = false; showControls()
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LiveTvChip(Icons.Filled.AspectRatio, if (aspectMenuVisible) "Fechar" else aspect.label, Modifier.focusRequester(aspectFocus), selected = aspectMenuVisible) {
+                        aspectMenuVisible = !aspectMenuVisible; showControls()
+                    }
+                    if (channelList.isNotEmpty()) {
+                        if (channelList.size > 1) {
+                            LiveTvChip(Icons.Filled.KeyboardArrowUp, "CH+") { aspectMenuVisible = false; switchChannel(+1) }
+                            LiveTvChip(Icons.Filled.KeyboardArrowDown, "CH-") { aspectMenuVisible = false; switchChannel(-1) }
+                        }
+                        LiveTvChip(Icons.Filled.List, "Lista") { aspectMenuVisible = false; channelListVisible = true; showControls() }
+                    }
+                    if (activeStreams.size > 1) {
+                        LiveTvChip(Icons.Filled.SwapHoriz, "Fonte ${streamIndex + 1}/${activeStreams.size}") {
+                            streamIndex = (streamIndex + 1) % activeStreams.size; isLoading = true; errorMessage = null; showControls()
+                        }
+                    }
+                    LiveTvChip(Icons.Filled.Refresh, "Reload") {
+                        val cur = streamIndex; streamIndex = -1; streamIndex = cur.coerceAtLeast(0)
+                        isLoading = true; errorMessage = null; showControls()
+                    }
+                }
+'''
+          if old not in t:
+              raise SystemExit('controls row not found')
+          t = t.replace(old, new, 1)
+
+          t = t.replace(
+          '''@Composable
+private fun LiveTvChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.White.copy(alpha = 0.12f),
+            focusedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.35f),
+        ),
+''',
+          '''@Composable
+private fun LiveTvChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) Color(0xFF00E5FF).copy(alpha = 0.28f) else Color.White.copy(alpha = 0.12f),
+            focusedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.40f),
+        ),
+''',
+          1,
+          )
+
+          t = t.replace(
+          '''            LaunchedEffect(currentIndex) {
+                runCatching { listState.scrollToItem(currentIndex.coerceIn(0, channelList.lastIndex)) }
+                delay(80); runCatching { firstFocus.requestFocus() }
+            }
+''',
+          '''            LaunchedEffect(channelListVisible, currentIndex) {
+                if (!channelListVisible) return@LaunchedEffect
+                runCatching { listState.scrollToItem(currentIndex.coerceIn(0, channelList.lastIndex.coerceAtLeast(0))) }
+                delay(120)
+                runCatching { firstFocus.requestFocus() }
+            }
+''',
+          1,
+          )
+
+          p.write_text(t)
+          assert 'aspectMenuVisible' in t
+          print('ok', len(t))
+          PY
+      - name: Commit
         run: |
-          # script may be PLACEHOLDER on main — overwrite with inline if needed
-          if ! grep -q aspectMenuVisible scripts/patch_tv_player_menu.py 2>/dev/null; then
-            echo 'will write full script in next step via python heredoc file'
-          fi
-          true
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
+          git commit -m "fix(tv): menu player — aspecto 3 opcoes + lista focavel" || echo nothing
+          git push
