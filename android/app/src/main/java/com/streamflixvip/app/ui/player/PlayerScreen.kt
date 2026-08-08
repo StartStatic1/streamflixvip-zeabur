@@ -48,6 +48,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessHigh
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -878,11 +879,22 @@ private fun NativePlayer(
         ) {
             Column {
             Text(
-                "< Voltar",
-                color = Color.White,
-                fontSize = 14.sp,
-                modifier = Modifier
-                    .padding(bottom = 6.dp)
+Surface(
+                shape = androidx.compose.foundation.shape.CircleShape,
+                color = Color.White.copy(alpha = 0.18f),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                modifier = Modifier.size(40.dp).clickable { onBack() },
+            ) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Voltar",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
                     .clickable { onBack() },
             )
             val epLabel = if (mediaType == "tv" && currentSeason > 0 && currentEpisode > 0) {
