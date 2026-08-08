@@ -1,0 +1,26 @@
+name: Patch Mobile VIP Prices
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update prices
+        run: |
+          FILE=android/app/src/main/java/com/streamflixvip/app/ui/vip/VipSection.kt
+          sed -i 's/R\$ 19,90/R\$ 9,90/g' "$FILE"
+          sed -i 's/startPayment(19.90/startPayment(9.90/g' "$FILE"
+          sed -i 's/R\$ 49,90/R\$ 24,90/g' "$FILE"
+          sed -i 's/Economize R\$ 9,80/Economize R\$ 4,80/g' "$FILE"
+          sed -i 's/startPayment(49.90/startPayment(24.90/g' "$FILE"
+          grep -n 'R\$' "$FILE" | head -20
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/src/main/java/com/streamflixvip/app/ui/vip/VipSection.kt
+          git commit -m "feat(mobile): precos VIP 9,90 / 24,90 / 99,90" || echo nothing
+          git push
