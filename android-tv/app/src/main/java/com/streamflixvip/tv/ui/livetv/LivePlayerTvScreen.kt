@@ -319,28 +319,11 @@ fun LivePlayerTvScreen(
                 )
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        LiveAspect.entries.forEach { mode ->
-                            val selected = aspect == mode
-                            LiveTvChip(
-                                Icons.Filled.AspectRatio,
-                                mode.label,
-                                selected = selected,
-                            ) {
-                                aspect = mode
-                                aspectMenuVisible = false
-                                showControls()
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     LiveTvChip(
                         Icons.Filled.AspectRatio,
                         aspect.label,
                         Modifier.focusRequester(aspectFocus),
-                        ) {
+                    ) {
                         aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
                         aspectMenuVisible = false
                         showControls()
