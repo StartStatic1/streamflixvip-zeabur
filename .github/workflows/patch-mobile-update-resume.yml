@@ -1,0 +1,57 @@
+name: Patch Mobile Update + Resume
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ApkInstaller + FileProvider + Manifest
+        run: |
+          set -e
+          mkdir -p android/app/src/main/java/com/streamflixvip/app/update
+          mkdir -p android/app/src/main/res/xml
+
+          # Adaptar do TV
+          sed -e 's/com.streamflixvip.tv.update/com.streamflixvip.app.update/g' \
+              -e 's/StreamFlixVIP-TV-Updater/StreamFlixVIP-Mobile-Updater/g' \
+              -e 's/streamflix-tv-update.apk/streamflix-update.apk/g' \
+              android-tv/app/src/main/java/com/streamflixvip/tv/update/ApkInstaller.kt \
+              > android/app/src/main/java/com/streamflixvip/app/update/ApkInstaller.kt
+
+          cat > android/app/src/main/res/xml/file_paths.xml << 'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths>
+              <cache-path name="apk_cache" path="." />
+              <files-path name="apk_files" path="." />
+              <external-cache-path name="apk_ext_cache" path="." />
+              <external-files-path name="apk_ext_files" path="." />
+          </paths>
+          EOF
+          # fix leading spaces from heredoc indent
+          sed -i 's/^          //' android/app/src/main/res/xml/file_paths.xml
+
+          MAN=android/app/src/main/AndroidManifest.xml
+          if ! grep -q REQUEST_INSTALL_PACKAGES "$MAN"; then
+            sed -i 's|android.permission.WAKE_LOCK" />|android.permission.WAKE_LOCK" />\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />|' "$MAN"
+          fi
+          if ! grep -q fileprovider "$MAN"; then
+            python3 -c "
+          from pathlib import Path
+          p=Path('android/app/src/main/AndroidManifest.xml')
+          t=p.read_text()
+          block='''        <provider
+              android:name=\"androidx.core.content.FileProvider\"
+              android:authorities=\"\${applicationId}.fileprovider\"
+              android:exported=\"false\"
+              android:grantUriPermissions=\"true\">
+              <meta-data
+                  android:name=\"android.support.FILE_PROVIDER_PATHS\"
+                  android:resource=\"@xml/file_paths\" />
+          </provider>
+
+          '''
+          # escape dollar for yaml was \\\${ - in file we need \
