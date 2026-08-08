@@ -8,9 +8,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Write and run patch script
+      - name: Decode script and apply
         run: |
-          echo "PLACEHOLDER_B64" | base64 -d > scripts/fix_tv_player_dpad.py
+          set -e
+          base64 -d scripts/fix_tv_player_dpad.b64 > scripts/fix_tv_player_dpad.py
           python3 scripts/fix_tv_player_dpad.py
       - name: Commit
         run: |
