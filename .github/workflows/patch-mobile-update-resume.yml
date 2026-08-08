@@ -26,10 +26,12 @@ jobs:
           if ! grep -q fileprovider android/app/src/main/AndroidManifest.xml; then
             sed -i 's|    </application>|        <provider android:name="androidx.core.content.FileProvider" android:authorities="$${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" /></provider>\n    </application>|' android/app/src/main/AndroidManifest.xml
           fi
-          head -2 android/app/src/main/java/com/streamflixvip/app/update/ApkInstaller.kt
 
       - name: Patch MainActivity and DetailScreen
-        run: python3 scripts/patch_mobile_update_resume_core.py
+        run: |
+          set -e
+          cat scripts/core.b64.0 scripts/core.b64.1 | base64 -d > scripts/patch_mobile_update_resume_core.py
+          python3 scripts/patch_mobile_update_resume_core.py
 
       - name: Commit
         run: |
