@@ -2,6 +2,7 @@
 from pathlib import Path
 import re
 
+# --- UpdateRequiredScreen ---
 p = Path("android/app/src/main/java/com/streamflixvip/app/ui/update/UpdateRequiredScreen.kt")
 t = p.read_text()
 
@@ -68,6 +69,7 @@ if "errorMessage?.let" not in t:
 p.write_text(t)
 print("UpdateRequiredScreen done")
 
+# --- MainActivity ---
 p = Path("android/app/src/main/java/com/streamflixvip/app/MainActivity.kt")
 t = p.read_text()
 
@@ -78,57 +80,60 @@ if "var downloadProgress" not in t:
         1,
     )
 
-start = t.find("            onDownloadClick = {")
-if start < 0:
+# Find onDownloadClick with flexible indent
+idx = t.find("onDownloadClick = {")
+if idx < 0:
     raise SystemExit("onDownloadClick missing")
-end = t.find("\n            },", start)
-if end < 0:
+# start of line
+start = t.rfind("\n", 0, idx) + 1
+# Find closing "}," after launch block — look for line that is only spaces + },
+rest = t[idx:]
+m = re.search(r"\n[ \t]*\},", rest)
+if not m:
     raise SystemExit("end missing")
-end = t.find("\n", end + 1)
+end = idx + m.end()
 
-new = (
-"            onDownloadClick = {\n"
-"                val url = updateInfo!!.apkUrl\n"
-"                if (url.isBlank()) {\n"
-"                    updateError = \"URL vazia\"\n"
-"                    return@UpdateRequiredScreen\n"
-"                }\n"
-"                updateError = null\n"
-"                isDownloadingUpdate = true\n"
-"                downloadProgress = 0\n"
-"                updateScope.launch {\n"
-"                    try {\n"
-"                        if (!com.streamflixvip.app.update.ApkInstaller.canInstallPackages(context)) {\n"
-"                            com.streamflixvip.app.update.ApkInstaller.openInstallPermissionSettings(context)\n"
-"                            updateError = \"Ative permitir desta fonte e toque Baixar de novo\"\n"
-"                            android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()\n"
-"                            return@launch\n"
-"                        }\n"
-"                        val file = com.streamflixvip.app.update.ApkInstaller.download(context, url) { pct ->\n"
-"                            downloadProgress = pct\n"
-"                        }\n"
-"                        downloadProgress = 100\n"
-"                        com.streamflixvip.app.update.ApkInstaller.install(context, file)\n"
-"                        android.widget.Toast.makeText(context, \"Abrindo instalador...\", android.widget.Toast.LENGTH_SHORT).show()\n"
-"                    } catch (e: Exception) {\n"
-"                        updateError = (e.message ?: \"Falha\") + \" — abrindo navegador\"\n"
-"                        android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()\n"
-"                        try {\n"
-"                            context.startActivity(\n"
-"                                android.content.Intent(\n"
-"                                    android.content.Intent.ACTION_VIEW,\n"
-"                                    android.net.Uri.parse(url),\n"
-"                                )\n"
-"                            )\n"
-"                        } catch (_: Exception) {\n"
-"                        }\n"
-"                    } finally {\n"
-"                        isDownloadingUpdate = false\n"
-"                        downloadProgress = -1\n"
-"                    }\n"
-"                }\n"
-"            },"
-)
+new = """            onDownloadClick = {
+                val url = updateInfo!!.apkUrl
+                if (url.isBlank()) {
+                    updateError = "URL vazia"
+                    return@UpdateRequiredScreen
+                }
+                updateError = null
+                isDownloadingUpdate = true
+                downloadProgress = 0
+                updateScope.launch {
+                    try {
+                        if (!com.streamflixvip.app.update.ApkInstaller.canInstallPackages(context)) {
+                            com.streamflixvip.app.update.ApkInstaller.openInstallPermissionSettings(context)
+                            updateError = "Ative permitir desta fonte e toque Baixar de novo"
+                            android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()
+                            return@launch
+                        }
+                        val file = com.streamflixvip.app.update.ApkInstaller.download(context, url) { pct ->
+                            downloadProgress = pct
+                        }
+                        downloadProgress = 100
+                        com.streamflixvip.app.update.ApkInstaller.install(context, file)
+                        android.widget.Toast.makeText(context, "Abrindo instalador...", android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        updateError = (e.message ?: "Falha") + " — abrindo navegador"
+                        android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()
+                        try {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(url),
+                                )
+                            )
+                        } catch (_: Exception) {
+                        }
+                    } finally {
+                        isDownloadingUpdate = false
+                        downloadProgress = -1
+                    }
+                }
+            },"""
 t = t[:start] + new + t[end:]
 
 if "downloadProgress = downloadProgress" not in t:
