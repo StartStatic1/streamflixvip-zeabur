@@ -114,6 +114,7 @@ fun LivePlayerTvScreen(
     var sourceLabel by remember { mutableStateOf("") }
     var controlsVisible by remember { mutableStateOf(true) }
     var channelListVisible by remember { mutableStateOf(false) }
+    var aspectMenuVisible by remember { mutableStateOf(false) }
     var aspect by remember { mutableStateOf(LiveAspect.FIT) }
     var hideToken by remember { mutableIntStateOf(0) }
 
@@ -121,21 +122,26 @@ fun LivePlayerTvScreen(
     val aspectFocus = remember { FocusRequester() }
 
     BackHandler {
-        if (channelListVisible) channelListVisible = false else onBack()
+        when {
+            channelListVisible -> channelListVisible = false
+            aspectMenuVisible -> aspectMenuVisible = false
+            else -> onBack()
+        }
     }
 
     // Auto-hide. Nao roubar foco do chip atual a cada interacao —
     // so foca Aspect na PRIMEIRA vez que os controles abrem.
     var didInitialChipFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(controlsVisible, hideToken, channelListVisible) {
-        if (controlsVisible && !channelListVisible) {
+    LaunchedEffect(controlsVisible, hideToken, channelListVisible, aspectMenuVisible) {
+        if (controlsVisible && !channelListVisible && !aspectMenuVisible) {
             if (!didInitialChipFocus) {
                 delay(40)
                 runCatching { aspectFocus.requestFocus() }
                 didInitialChipFocus = true
             }
-            delay(6000)
+            delay(10000)
             controlsVisible = false
+            aspectMenuVisible = false
             didInitialChipFocus = false
             runCatching { rootFocus.requestFocus() }
         }
@@ -300,23 +306,69 @@ fun LivePlayerTvScreen(
                     color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, maxLines = 2,
                 )
                 Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    LiveTvChip(Icons.Filled.AspectRatio, aspect.label, Modifier.focusRequester(aspectFocus)) {
-                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]; showControls()
+                if (aspectMenuVisible) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        LiveAspect.entries.forEach { mode ->
+                            val selected = aspect == mode
+                            LiveTvChip(
+                                Icons.Filled.AspectRatio,
+                                mode.label,
+                                selected = selected,
+                            ) {
+                                aspect = mode
+                                aspectMenuVisible = false
+                                showControls()
+                            }
+                        }
                     }
-                    if (channelList.size > 1) {
-                        LiveTvChip(Icons.Filled.KeyboardArrowUp, "CH+") { switchChannel(+1) }
-                        LiveTvChip(Icons.Filled.KeyboardArrowDown, "CH-") { switchChannel(-1) }
-                        LiveTvChip(Icons.Filled.List, "Lista") { channelListVisible = true; showControls() }
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LiveTvChip(
+                        Icons.Filled.AspectRatio,
+                        if (aspectMenuVisible) "Fechar" else aspect.label,
+                        Modifier.focusRequester(aspectFocus),
+                        selected = aspectMenuVisible,
+                    ) {
+                        aspectMenuVisible = !aspectMenuVisible
+                        showControls()
+                    }
+                    if (channelList.isNotEmpty()) {
+                        if (channelList.size > 1) {
+                            LiveTvChip(Icons.Filled.KeyboardArrowUp, "CH+") {
+                                aspectMenuVisible = false
+                                switchChannel(+1)
+                            }
+                            LiveTvChip(Icons.Filled.KeyboardArrowDown, "CH-") {
+                                aspectMenuVisible = false
+                                switchChannel(-1)
+                            }
+                        }
+                        LiveTvChip(Icons.Filled.List, "Lista") {
+                            aspectMenuVisible = false
+                            channelListVisible = true
+                            showControls()
+                        }
                     }
                     if (activeStreams.size > 1) {
-                        LiveTvChip(Icons.Filled.SwapHoriz, "Fonte ${streamIndex + 1}/${activeStreams.size}") {
-                            streamIndex = (streamIndex + 1) % activeStreams.size; isLoading = true; errorMessage = null; showControls()
+                        LiveTvChip(
+                            Icons.Filled.SwapHoriz,
+                            "Fonte " + (streamIndex + 1).toString() + "/" + activeStreams.size.toString(),
+                        ) {
+                            streamIndex = (streamIndex + 1) % activeStreams.size
+                            isLoading = true
+                            errorMessage = null
+                            showControls()
                         }
                     }
                     LiveTvChip(Icons.Filled.Refresh, "Reload") {
-                        val cur = streamIndex; streamIndex = -1; streamIndex = cur.coerceAtLeast(0)
-                        isLoading = true; errorMessage = null; showControls()
+                        val cur = streamIndex
+                        streamIndex = -1
+                        streamIndex = cur.coerceAtLeast(0)
+                        isLoading = true
+                        errorMessage = null
+                        showControls()
                     }
                 }
             }
@@ -330,9 +382,11 @@ fun LivePlayerTvScreen(
         ) {
             val listState = rememberLazyListState()
             val firstFocus = remember { FocusRequester() }
-            LaunchedEffect(currentIndex) {
-                runCatching { listState.scrollToItem(currentIndex.coerceIn(0, channelList.lastIndex)) }
-                delay(80); runCatching { firstFocus.requestFocus() }
+            LaunchedEffect(channelListVisible, currentIndex) {
+                if (!channelListVisible) return@LaunchedEffect
+                runCatching { listState.scrollToItem(currentIndex.coerceIn(0, channelList.lastIndex.coerceAtLeast(0))) }
+                delay(120)
+                runCatching { firstFocus.requestFocus() }
             }
             Column(
                 Modifier.fillMaxSize().background(Color(0xF00B0B14))
@@ -407,14 +461,15 @@ private fun LiveTvChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
     onClick: () -> Unit,
 ) {
     Surface(
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.White.copy(alpha = 0.12f),
-            focusedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.35f),
+            containerColor = if (selected) Color(0xFF00E5FF).copy(alpha = 0.28f) else Color.White.copy(alpha = 0.12f),
+            focusedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.40f),
         ),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF00E5FF)), shape = RoundedCornerShape(24.dp)),
