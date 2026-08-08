@@ -8,6 +8,7 @@
          apaga a tela no meio do filme, comportamento clássico que
          denuncia app mal feito. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Torna visíveis os apps capazes de abrir vídeo via ACTION_VIEW —
          necessário a partir do Android 11 (API 30) pro seletor de
@@ -42,5 +43,6 @@
             </intent-filter>
         </activity>
 
+        <provider android:name="androidx.core.content.FileProvider" android:authorities="$${applicationId}.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" /></provider>
     </application>
 </manifest>

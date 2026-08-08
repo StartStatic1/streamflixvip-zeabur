@@ -63,6 +63,9 @@ private const val TMDB_POSTER_SMALL_BASE = "https://image.tmdb.org/t/p/w342"
 @Composable
 fun DetailScreen(
     viewModel: DetailViewModel,
+    resumeSeconds: Int = 0,
+    initialSeason: Int = -1,
+    initialEpisode: Int = -1,
     onPlaySource: (source: VipSource, season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
     onBack: () -> Unit,
     onUpgradeClick: () -> Unit,
@@ -90,6 +93,25 @@ fun DetailScreen(
     // simples porque filme não depende de buscar fontes sob demanda — a
     // lista já veio pronta no carregamento inicial da tela.
     var showMovieServerPicker by remember { mutableStateOf(false) }
+    var autoResumedContinue by remember { mutableStateOf(false) }
+    val successForResume = state as? DetailUiState.Success
+    LaunchedEffect(successForResume, resumeSeconds) {
+        if (autoResumedContinue || resumeSeconds <= 0) return@LaunchedEffect
+        val s = successForResume ?: return@LaunchedEffect
+        autoResumedContinue = true
+        val title = s.details.title ?: s.details.name ?: "Sem titulo"
+        val posterPath = s.details.poster_path
+        if (s.movieSources.isNotEmpty() && initialSeason <= 0) {
+            onPlaySource(s.movieSources.first(), 0, 0, title, posterPath)
+            return@LaunchedEffect
+        }
+        if (initialSeason > 0) {
+            val ep = initialEpisode.coerceAtLeast(1)
+            viewModel.loadEpisodeSources(initialSeason, ep) { src ->
+                onPlaySource(src, initialSeason, ep, title, posterPath)
+            }
+        }
+    }
 
     when (val s = state) {
         is DetailUiState.Loading -> {

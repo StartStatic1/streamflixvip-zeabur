@@ -3,6 +3,7 @@ package com.streamflixvip.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -116,16 +118,22 @@ private fun AppRoot() {
             releaseNotes = updateInfo!!.releaseNotes ?: "",
             isDownloading = isDownloadingUpdate,
             onDownloadClick = {
+                val url = updateInfo!!.apkUrl
+                if (url.isBlank()) return@UpdateRequiredScreen
                 isDownloadingUpdate = true
-                try {
-                    val intent = android.content.Intent(
-                        android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse(updateInfo!!.apkUrl),
-                    )
-                    context.startActivity(intent)
-                } catch (_: Exception) {
-                } finally {
-                    isDownloadingUpdate = false
+                (context as? androidx.activity.ComponentActivity)?.lifecycleScope?.launch {
+                    try {
+                        if (!com.streamflixvip.app.update.ApkInstaller.canInstallPackages(context)) {
+                            com.streamflixvip.app.update.ApkInstaller.openInstallPermissionSettings(context)
+                            isDownloadingUpdate = false
+                            return@launch
+                        }
+                        val file = com.streamflixvip.app.update.ApkInstaller.download(context, url) { }
+                        com.streamflixvip.app.update.ApkInstaller.install(context, file)
+                    } catch (_: Exception) {
+                    } finally {
+                        isDownloadingUpdate = false
+                    }
                 }
             },
         )
