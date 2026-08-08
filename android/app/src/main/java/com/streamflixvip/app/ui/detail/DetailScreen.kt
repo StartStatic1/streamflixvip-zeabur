@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,7 +95,7 @@ fun DetailScreen(
     // simples porque filme não depende de buscar fontes sob demanda — a
     // lista já veio pronta no carregamento inicial da tela.
     var showMovieServerPicker by remember { mutableStateOf(false) }
-    var autoResumedContinue by remember { mutableStateOf(false) }
+    var autoResumedContinue by rememberSaveable { mutableStateOf(false) }
     val successForResume = state as? DetailUiState.Success
     LaunchedEffect(successForResume, resumeSeconds) {
         if (autoResumedContinue || resumeSeconds <= 0) return@LaunchedEffect
