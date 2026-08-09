@@ -8,38 +8,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Add AdMob dep and proguard
+      - name: Add AdMob dependency
         run: |
-          python3 << 'PY'
-          from pathlib import Path
-
-          g = Path("android/app/build.gradle.kts")
-          t = g.read_text()
-          if "play-services-ads" not in t:
-              t = t.replace(
-                  'implementation("com.startapp:inapp-sdk:5.1.0")',
-                  'implementation("com.startapp:inapp-sdk:5.1.0")\n\n    // Google AdMob\n    implementation("com.google.android.gms:play-services-ads:23.3.0")',
-                  1,
-              )
-              g.write_text(t)
-              print("gradle ok")
-          else:
-              print("gradle already")
-
-          pr = Path("android/app/proguard-rules.pro")
-          pt = pr.read_text()
-          if "com.google.android.gms.ads" not in pt:
-              pt += """
-
-# AdMob / GMS
--keep class com.google.android.gms.ads.** { *; }
--dontwarn com.google.android.gms.ads.**
-"""
-              pr.write_text(pt)
-              print("proguard ok")
-          else:
-              print("proguard already")
-          PY
+          if ! grep -q play-services-ads android/app/build.gradle.kts; then
+            sed -i 's|implementation("com.startapp:inapp-sdk:5.1.0")|implementation("com.startapp:inapp-sdk:5.1.0")\n\n    // Google AdMob\n    implementation("com.google.android.gms:play-services-ads:23.3.0")|' android/app/build.gradle.kts
+          fi
+          if ! grep -q 'com.google.android.gms.ads' android/app/proguard-rules.pro; then
+            printf '\n# AdMob / GMS\n-keep class com.google.android.gms.ads.** { *; }\n-dontwarn com.google.android.gms.ads.**\n' >> android/app/proguard-rules.pro
+          fi
+          grep -n play-services-ads android/app/build.gradle.kts
       - name: Commit
         run: |
           git config user.name github-actions
