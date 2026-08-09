@@ -50,6 +50,33 @@ async function sbUpdate(serviceKey, table, filter, patch) {
   if (!r.ok) throw new Error(`Supabase update falhou (${table}): ${r.status} ${await r.text()}`);
 }
 
+
+const MAX_SOURCES_PER_EPISODE = 2;
+
+async function episodeSourceCount(serviceKey, tmdbId, season, episode, cache) {
+  const key = `tv:${tmdbId}:${season}:${episode}`;
+  if (cache.has(key)) return cache.get(key);
+  const q =
+    `tmdb_id=eq.${encodeURIComponent(tmdbId)}` +
+    `&media_type=eq.tv` +
+    `&season=eq.${encodeURIComponent(season)}` +
+    `&episode=eq.${encodeURIComponent(episode)}` +
+    `&select=id&limit=10`;
+  try {
+    const rows = await sbSelect(serviceKey, 'vip_sources', q);
+    const n = Array.isArray(rows) ? rows.length : 0;
+    cache.set(key, n);
+    return n;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function bumpEpisodeCount(cache, tmdbId, season, episode) {
+  const key = `tv:${tmdbId}:${season}:${episode}`;
+  cache.set(key, (cache.get(key) || 0) + 1);
+}
+
 function normalizeTitle(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -149,6 +176,7 @@ async function processSource({ source, serviceKey, tmdbApiKey, timeLeft, seriesC
   let cursor = source.sync_cursor >= allEpisodes.length ? 0 : (source.sync_cursor || 0);
   let matched = 0, unmatchedCount = 0, processedThisRun = 0;
   let vipSourcesRows = [];
+  const countCache = new Map();
   const CONCURRENCY = 6;
 
   while (cursor < allEpisodes.length && timeLeft() > 5000) {
@@ -172,6 +200,10 @@ async function processSource({ source, serviceKey, tmdbApiKey, timeLeft, seriesC
       const { baseTitle, season, episode } = entry.classification;
       if (error || !series) { unmatchedCount++; continue; }
       matched++;
+      const existing = await episodeSourceCount(serviceKey, series.id, season, episode, countCache);
+      if (existing >= MAX_SOURCES_PER_EPISODE) {
+        continue;
+      }
       vipSourcesRows.push({
         tmdb_id: series.id,
         media_type: 'tv',
@@ -184,6 +216,7 @@ async function processSource({ source, serviceKey, tmdbApiKey, timeLeft, seriesC
         priority: source.priority,
         is_active: true,
       });
+      bumpEpisodeCount(countCache, series.id, season, episode);
     }
 
     cursor += chunk.length;
