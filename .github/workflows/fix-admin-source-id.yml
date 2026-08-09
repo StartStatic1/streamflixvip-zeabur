@@ -8,56 +8,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Patch admin-vip.js
-        run: |
-          FILE=api/admin-vip.js
-          # toggle-source: aceitar sourceId e isActive
-          sed -i "s/if (action === 'toggle-source') {/if (action === 'toggle-source') {\n    const id = body.id || body.sourceId;\n    const is_active = body.is_active !== undefined ? body.is_active : body.isActive;\n    if (!id) { res.status(400).json({ error: 'Informe id' }); return; }\n    \/\/ patched aliases/" "$FILE"
-          # remove old const { id, is_active } = body for toggle if duplicated - careful
-          # Simpler python one-liner without heredoc issues
-          python3 -c "
-from pathlib import Path
-p=Path('api/admin-vip.js')
-t=p.read_text()
-# toggle
-t=t.replace(
-'''  if (action === \"toggle-source\") {
-    const { id, is_active } = body;
-    if (!id) { res.status(400).json({ error: \"Informe id\" }); return; }''',
-'''  if (action === \"toggle-source\") {
-    const id = body.id || body.sourceId;
-    const is_active = body.is_active !== undefined ? body.is_active : body.isActive;
-    if (!id) { res.status(400).json({ error: \"Informe id\" }); return; }''',
-1)
-# Actually use single quotes in JS source
-t=p.read_text()
-old1=\"\"\"  if (action === 'toggle-source') {
-    const { id, is_active } = body;
-    if (!id) { res.status(400).json({ error: 'Informe id' }); return; }\"\"\"
-new1=\"\"\"  if (action === 'toggle-source') {
-    const id = body.id || body.sourceId;
-    const is_active = body.is_active !== undefined ? body.is_active : body.isActive;
-    if (!id) { res.status(400).json({ error: 'Informe id' }); return; }\"\"\"
-old2=\"\"\"  if (action === 'delete-source') {
-    const { id } = body;
-    if (!id) { res.status(400).json({ error: 'Informe id' }); return; }\"\"\"
-new2=\"\"\"  if (action === 'delete-source') {
-    const id = body.id || body.sourceId;
-    if (!id) { res.status(400).json({ error: 'Informe id' }); return; }\"\"\"
-old3=\"\"\"  if (action === 'update-source') {
-    const { id, source_url, source_label, priority, season, episode, title } = body;
-    if (!id) { res.status(400).json({ error: 'Informe id' }); return; }\"\"\"
-new3=\"\"\"  if (action === 'update-source') {
-    const id = body.id || body.sourceId;
-    const { source_url, source_label, priority, season, episode, title } = body;
-    if (!id) { res.status(400).json({ error: 'Informe id' }); return; }\"\"\"
-assert old1 in t, 'toggle missing'
-assert old2 in t, 'delete missing'
-t=t.replace(old1,new1,1).replace(old2,new2,1)
-if old3 in t: t=t.replace(old3,new3,1)
-p.write_text(t)
-print('ok')
-"
+      - name: Apply fix
+        run: python3 scripts/fix_admin_source_id.py
       - name: Commit
         run: |
           git config user.name github-actions
