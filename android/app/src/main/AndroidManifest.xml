@@ -4,16 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <!-- Mantém a tela acesa durante a reprodução — sem isso o Android
-         apaga a tela no meio do filme, comportamento clássico que
-         denuncia app mal feito. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
-    <!-- Torna visíveis os apps capazes de abrir vídeo via ACTION_VIEW —
-         necessário a partir do Android 11 (API 30) pro seletor de
-         "Player externo" (VLC, MX Player etc.) funcionar de forma
-         confiável em todos os fabricantes, mesmo usando createChooser. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />
@@ -30,6 +23,11 @@
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
+        <!-- AdMob App ID (producao). Unidades de anuncio de teste ficam no AdsHelper.USE_TEST_ADS -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-2866002449649160~7637166025" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,6 +41,14 @@
             </intent-filter>
         </activity>
 
-        <provider android:name="androidx.core.content.FileProvider" android:authorities="com.streamflixvip.app.fileprovider" android:exported="false" android:grantUriPermissions="true"><meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" /></provider>
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.streamflixvip.app.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>
