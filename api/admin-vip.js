@@ -305,7 +305,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'update-source') {
-    const { id, source_url, source_label, priority, season, episode, title } = body;
+    const id = body.id || body.sourceId;
+    const { source_url, source_label, priority, season, episode, title } = body;
     if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
     const patch = {};
     if (source_url !== undefined) patch.source_url = source_url;
@@ -326,7 +327,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'toggle-source') {
-    const { id, is_active } = body;
+    const id = body.id || body.sourceId;
+    const is_active = body.is_active !== undefined ? body.is_active : body.isActive;
     if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -339,7 +341,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'delete-source') {
-    const { id } = body;
+    const id = body.id || body.sourceId;
     if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(id)}`, {
       method: 'DELETE',
