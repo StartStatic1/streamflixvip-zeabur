@@ -34,7 +34,7 @@ import com.startapp.sdk.adsbase.adlisteners.VideoListener
 object AdsHelper {
     private const val TAG = "AdsHelper"
 
-    const val USE_TEST_ADS = true
+    const val USE_TEST_ADS = false
 
     private val REWARDED_ID: String
         get() = if (USE_TEST_ADS) {
