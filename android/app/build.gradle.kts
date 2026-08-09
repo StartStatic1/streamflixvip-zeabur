@@ -105,6 +105,9 @@ dependencies {
     // Start.io (ex-StartApp) — ads SDK
     implementation("com.startapp:inapp-sdk:5.1.0")
 
+    // Google AdMob
+    implementation("com.google.android.gms:play-services-ads:23.3.0")
+
     // Compose BOM — alinha as versões de todos os artefatos Compose
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")

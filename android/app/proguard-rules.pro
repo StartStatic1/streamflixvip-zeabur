@@ -86,3 +86,7 @@
 
 # NAO manter -keep class com.streamflixvip.app.** { *; }
 # Isso impedia ofuscar a logica do app.
+
+# AdMob / GMS
+-keep class com.google.android.gms.ads.** { *; }
+-dontwarn com.google.android.gms.ads.**
