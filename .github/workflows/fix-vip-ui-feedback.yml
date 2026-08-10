@@ -1,0 +1,19 @@
+name: Fix VIP UI Feedback
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch
+        run: python3 scripts/fix_vip_ui_feedback.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add api/media-sources.js android/app/
+          git commit -m "fix: EP VIP mostra cadeado/CTA; API devolve vipConfig no body" || echo nothing
+          git push
