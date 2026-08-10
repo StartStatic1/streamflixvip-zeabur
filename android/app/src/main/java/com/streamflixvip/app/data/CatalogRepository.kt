@@ -5,6 +5,7 @@ import com.streamflixvip.app.network.PostgrestFilter
 import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.VipSource
+import retrofit2.HttpException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -86,45 +87,32 @@ class CatalogRepository {
      * Supabase direto (comportamento antigo).
      */
     suspend fun getSourcesForMovie(tmdbId: Int): List<VipSource> {
+        // Sem fallback Supabase: senão free fura o vip_lock do painel.
         try {
             val res = mediaSources.getMovieSources(tmdbId)
+            if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED") return emptyList()
             if (res.sources.isNotEmpty()) return prioritize(res.sources)
-            // API respondeu mas vazia — título sem fonte cadastrada
-            if (res.error == null) return emptyList()
+            return emptyList()
+        } catch (e: HttpException) {
+            if (e.code() == 401 || e.code() == 403) return emptyList()
+            return emptyList()
         } catch (_: Exception) {
-            // soft / rede: fallback
-        }
-        return try {
-            prioritize(
-                supabase.getSourcesForMovie(
-                    apiKey = anonKey,
-                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
-                    mediaTypeFilter = PostgrestFilter.eq("movie"),
-                ),
-            )
-        } catch (_: Exception) {
-            emptyList()
+            return emptyList()
         }
     }
 
     suspend fun getSourcesForEpisode(tmdbId: Int, season: Int, episode: Int): List<VipSource> {
+        // Sem fallback Supabase: EP acima do limite / série trancada não pode vazar URL.
         try {
             val res = mediaSources.getEpisodeSources(tmdbId, season = season, episode = episode)
+            if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED") return emptyList()
             if (res.sources.isNotEmpty()) return prioritize(res.sources)
-            if (res.error == null) return emptyList()
+            return emptyList()
+        } catch (e: HttpException) {
+            if (e.code() == 401 || e.code() == 403) return emptyList()
+            return emptyList()
         } catch (_: Exception) {
-        }
-        return try {
-            prioritize(
-                supabase.getSourcesForEpisode(
-                    apiKey = anonKey,
-                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
-                    seasonFilter = PostgrestFilter.eq(season),
-                    episodeFilter = PostgrestFilter.eq(episode),
-                ),
-            )
-        } catch (_: Exception) {
-            emptyList()
+            return emptyList()
         }
     }
 
