@@ -5,6 +5,8 @@ import com.streamflixvip.app.network.PostgrestFilter
 import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.VipSource
+import com.streamflixvip.app.network.requiresVip
+import com.streamflixvip.app.data.VipStatusHolder
 import retrofit2.HttpException
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -87,32 +89,53 @@ class CatalogRepository {
      * Supabase direto (comportamento antigo).
      */
     suspend fun getSourcesForMovie(tmdbId: Int): List<VipSource> {
-        // Sem fallback Supabase: senão free fura o vip_lock do painel.
+        // 1) API (respeita VIP). 2) Fallback Supabase so se titulo NAO exige VIP.
         try {
             val res = mediaSources.getMovieSources(tmdbId)
             if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED") return emptyList()
             if (res.sources.isNotEmpty()) return prioritize(res.sources)
-            return emptyList()
         } catch (e: HttpException) {
             if (e.code() == 401 || e.code() == 403) return emptyList()
-            return emptyList()
         } catch (_: Exception) {
-            return emptyList()
+        }
+        val config = getVipTitleConfig(tmdbId, "movie")
+        if (requiresVip(config, null) && !VipStatusHolder.isVipNow()) return emptyList()
+        return try {
+            prioritize(
+                supabase.getSourcesForMovie(
+                    apiKey = anonKey,
+                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
+                    mediaTypeFilter = PostgrestFilter.eq("movie"),
+                ),
+            )
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 
     suspend fun getSourcesForEpisode(tmdbId: Int, season: Int, episode: Int): List<VipSource> {
-        // Sem fallback Supabase: EP acima do limite / série trancada não pode vazar URL.
+        // API primeiro; fallback Supabase so se EP NAO exige VIP (respeita free ate N).
         try {
             val res = mediaSources.getEpisodeSources(tmdbId, season = season, episode = episode)
             if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED") return emptyList()
             if (res.sources.isNotEmpty()) return prioritize(res.sources)
-            return emptyList()
         } catch (e: HttpException) {
             if (e.code() == 401 || e.code() == 403) return emptyList()
-            return emptyList()
         } catch (_: Exception) {
-            return emptyList()
+        }
+        val config = getVipTitleConfig(tmdbId, "tv")
+        if (requiresVip(config, episode) && !VipStatusHolder.isVipNow()) return emptyList()
+        return try {
+            prioritize(
+                supabase.getSourcesForEpisode(
+                    apiKey = anonKey,
+                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
+                    seasonFilter = PostgrestFilter.eq(season),
+                    episodeFilter = PostgrestFilter.eq(episode),
+                ),
+            )
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 
