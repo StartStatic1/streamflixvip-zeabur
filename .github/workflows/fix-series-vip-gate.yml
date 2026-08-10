@@ -1,0 +1,19 @@
+name: Fix Series VIP Gate
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch API
+        run: python3 scripts/fix_series_vip_gate.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add api/media-sources.js
+          git commit -m "fix(api): respeitar vip_lock e free_episode_limit em series" || echo nothing
+          git push
