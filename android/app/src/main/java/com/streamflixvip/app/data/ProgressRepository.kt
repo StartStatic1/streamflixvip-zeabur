@@ -109,4 +109,24 @@ class ProgressRepository {
         } catch (_: Exception) {
         }
     }
+
+    /** Remove o titulo da lista Continuar assistindo (todos os EPs desse tmdb). */
+    suspend fun removeFromContinueWatching(
+        accessToken: String,
+        userId: String,
+        tmdbId: Int,
+        mediaType: String,
+    ) {
+        try {
+            api.deleteProgressByTitle(
+                apiKey = anonKey,
+                bearerToken = "Bearer $accessToken",
+                userIdFilter = PostgrestFilter.eq(userId),
+                tmdbIdFilter = PostgrestFilter.eq(tmdbId),
+                mediaTypeFilter = PostgrestFilter.eq(mediaType),
+            )
+        } catch (_: Exception) {
+        }
+    }
+
 }

@@ -235,6 +235,7 @@ private fun MainAppScaffold(
                 HomeScreen(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
+                    onContinueWatchingDismiss = { entry -> viewModel.dismissContinueWatching(entry) },
                     onContinueWatchingClick = { entry ->
                         navController.navigate(
                             "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",

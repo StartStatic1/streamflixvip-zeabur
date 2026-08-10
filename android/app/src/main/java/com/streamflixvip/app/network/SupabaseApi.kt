@@ -211,6 +211,15 @@ interface WatchProgressApi {
         @Query("season") seasonFilter: String,
         @Query("episode") episodeFilter: String,
     )
+
+    @retrofit2.http.DELETE("rest/v1/watch_progress")
+    suspend fun deleteProgressByTitle(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
+    )
 }
 
 @JsonClass(generateAdapter = true)

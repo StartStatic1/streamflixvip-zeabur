@@ -132,4 +132,19 @@ class HomeViewModel(
             }
         }
     }
+
+    fun dismissContinueWatching(entry: WatchProgressEntry) {
+        val uid = userId
+        val token = accessToken
+        if (uid == null || token == null) return
+        viewModelScope.launch {
+            progressRepository.removeFromContinueWatching(token, uid, entry.tmdb_id, entry.media_type)
+            val cur = _uiState.value as? HomeUiState.Success ?: return@launch
+            _uiState.value = cur.copy(
+                continueWatching = cur.continueWatching.filterNot {
+                    it.tmdb_id == entry.tmdb_id && it.media_type == entry.media_type
+                },
+            )
+        }
+    }
 }

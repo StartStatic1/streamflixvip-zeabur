@@ -45,6 +45,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
     onContinueWatchingClick: (WatchProgressEntry) -> Unit,
+    onContinueWatchingDismiss: (WatchProgressEntry) -> Unit = {},
     onSeeAllClick: (HomeRowExploreLink) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -86,7 +87,7 @@ fun HomeScreen(
                 if (s.continueWatching.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(28.dp))
-                        ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick)
+                        ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick, onItemDismiss = onContinueWatchingDismiss)
                         Spacer(Modifier.height(12.dp))
                     }
                 }
@@ -307,6 +308,7 @@ private fun StartIoBanner() {
 private fun ContinueWatchingRow(
     entries: List<WatchProgressEntry>,
     onItemClick: (WatchProgressEntry) -> Unit,
+    onItemDismiss: (WatchProgressEntry) -> Unit = {},
 ) {
     Column {
         Text(
@@ -323,6 +325,7 @@ private fun ContinueWatchingRow(
                 ContinueWatchingCard(
                     entry = entry,
                     onClick = { onItemClick(entry) },
+                    onDismiss = { onItemDismiss(entry) },
                 )
             }
         }
@@ -333,6 +336,7 @@ private fun ContinueWatchingRow(
 private fun ContinueWatchingCard(
     entry: WatchProgressEntry,
     onClick: () -> Unit,
+    onDismiss: () -> Unit = {},
 ) {
     val posterUrl = entry.poster_path?.let { TMDB_POSTER_BASE + it }
 
@@ -362,6 +366,19 @@ private fun ContinueWatchingCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
+            // X para tirar da lista Continuar assistindo
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .clickable { onDismiss() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("✕", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
