@@ -118,10 +118,11 @@ async function handler(req, res) {
   // Sempre respeita vip_titles do painel (lock total ou grátis até EP N).
   // Soft (REQUIRE_AUTH_MEDIA off) só dispensa login em título NÃO-VIP.
   if (needsVip && !access.isVip) {
+    // 200 (nao 403): app precisa ler vipConfig no body para mostrar cadeado/CTA.
     console.warn(
       `[media-sources] BLOCK vip_lock tmdb=${tmdbId} ep=${episode} user=${access.userId || '-'}`,
     );
-    res.status(403).json({
+    res.status(200).json({
       error: 'VIP necessário para este título/episódio.',
       code: 'VIP_REQUIRED',
       sources: [],

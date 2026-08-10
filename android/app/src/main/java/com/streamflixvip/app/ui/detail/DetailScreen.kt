@@ -407,7 +407,7 @@ private fun DetailContent(
                             isLoading = state.isLoadingEpisodeSources && state.selectedSeason == state.expandedSeason && state.selectedEpisode == ep.episode_number,
                             isLocked = state.episodeIsLocked(ep.episode_number, isVip),
                             onToggleExpand = { onToggleEpisodeExpanded(ep.episode_number) },
-                            onPlay = { onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) },
+                            onPlay = { if (state.episodeIsLocked(ep.episode_number, isVip)) onUpgradeClick() else onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) },
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -423,7 +423,7 @@ private fun DetailContent(
                                 isSelected = state.selectedSeason == state.expandedSeason && state.selectedEpisode == epNum,
                                 isLoading = state.isLoadingEpisodeSources && state.selectedSeason == state.expandedSeason && state.selectedEpisode == epNum,
                                 isLocked = state.episodeIsLocked(epNum, isVip),
-                                onClick = { onSelectEpisode(state.expandedSeason ?: 1, epNum, title, posterPath) },
+                                onClick = { if (state.episodeIsLocked(epNum, isVip)) onUpgradeClick() else onSelectEpisode(state.expandedSeason ?: 1, epNum, title, posterPath) },
                             )
                         }
                     }

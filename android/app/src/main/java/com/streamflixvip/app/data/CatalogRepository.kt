@@ -142,16 +142,34 @@ class CatalogRepository {
     private fun prioritize(sources: List<VipSource>): List<VipSource> =
         sources.sortedByDescending { it.source_label == "MegaEmbed VIP" }
 
-    suspend fun getVipTitleConfig(tmdbId: Int, mediaType: String): com.streamflixvip.app.network.VipTitleConfig? =
-        try {
+    
+    /** Busca vip_titles via API media-sources (body sempre legivel). */
+    suspend fun probeVipConfigFromApi(tmdbId: Int, mediaType: String): com.streamflixvip.app.network.VipTitleConfig? {
+        return try {
+            val res = if (mediaType == "tv") {
+                mediaSources.getEpisodeSources(tmdbId, season = 1, episode = 1)
+            } else {
+                mediaSources.getMovieSources(tmdbId)
+            }
+            res.vipConfig
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun getVipTitleConfig(tmdbId: Int, mediaType: String): com.streamflixvip.app.network.VipTitleConfig? {
+        val fromDb = try {
             supabase.getVipTitleConfig(
                 apiKey = anonKey,
                 tmdbIdFilter = PostgrestFilter.eq(tmdbId),
                 mediaTypeFilter = PostgrestFilter.eq(mediaType),
             ).firstOrNull()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
+        if (fromDb != null) return fromDb
+        return probeVipConfigFromApi(tmdbId, mediaType)
+    }
 
     suspend fun getTitlesByGenre(genreId: Int, category: GenreCategory, page: Int = 1): List<TmdbItem> {
         val mediaType = category.mediaTypeOrDefault
