@@ -1,0 +1,19 @@
+name: Fix Player HTTP Headers
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch player
+        run: python3 scripts/fix_player_http_headers.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          git commit -m "fix(player): UA browser, Referer origem, redirect http-https" || echo nothing
+          git push
