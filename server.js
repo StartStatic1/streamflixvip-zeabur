@@ -1,19 +1,11 @@
 // server.js
 //
-// Servidor Express que hospeda o StreamFlixVIP no Zeabur, em paralelo com
-// a instância que já roda na Vercel (mesmo Supabase, mesmo catálogo).
+// Servidor Express do StreamFlixVIP (Hetzner VPS).
+// Cada arquivo em api/*.js exporta `async function handler(req, res)`
+// e é registrado como rota Express abaixo.
 //
-// Por que existe: a Vercel (plano Hobby) tem limite de 12 Serverless
-// Functions por deploy e limites de "fair use" que já causaram bloqueio
-// do time inteiro. Rodar uma cópia no Zeabur (que cobra por recurso de
-// container, não por quantidade de arquivos/execuções) dá redundância:
-// se um cair, o outro continua no ar.
-//
-// Como funciona: cada arquivo em api/*.js já exporta uma função no
-// formato `async function handler(req, res)` (padrão Vercel Serverless
-// Function). Esse mesmo formato é compatível com Express quase sem
-// alteração — só precisamos "plugar" cada handler numa rota, chamando-o
-// com o (req, res) do Express diretamente.
+// Deploy: /root/streamflix no servidor StreamFlix-server (PM2).
+// Env: carrega .env da pasta do projeto (PORT, keys, gates VIP, etc.).
 
 // Carrega /root/streamflix/.env (PORT, keys, REQUIRE_VIP_LIVE_TV, etc.).
 // Sem isso o PM2 não enxerga variáveis que você só colocou no arquivo .env.
@@ -121,7 +113,7 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`StreamFlixVIP (espelho Zeabur) rodando na porta ${PORT}`);
+  console.log(`StreamFlixVIP rodando na porta ${PORT}`);
 });
 
 setInterval(() => {
