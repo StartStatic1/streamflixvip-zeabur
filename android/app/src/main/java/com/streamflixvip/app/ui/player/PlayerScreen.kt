@@ -123,6 +123,36 @@ private fun hideNativeSettingsButtonSafe(view: PlayerView) {
     view.findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)?.visibility = android.view.View.GONE
 }
 
+
+/** Factory HTTP para IPTV/CDN: muitos painéis bloqueiam UA do ExoPlayer e
+ *  exigem redirect http→https (CDN). Referer = origem do host, nao a URL inteira. */
+private fun httpDataSourceFactoryFor(streamUrl: String): DefaultHttpDataSource.Factory {
+    val origin = try {
+        val u = Uri.parse(streamUrl)
+        val scheme = u.scheme ?: "http"
+        val host = u.host ?: return DefaultHttpDataSource.Factory()
+        "$scheme://$host/"
+    } catch (_: Exception) {
+        streamUrl
+    }
+    return DefaultHttpDataSource.Factory()
+        .setUserAgent(
+            "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        )
+        .setAllowCrossProtocolRedirects(true)
+        .setConnectTimeoutMs(20_000)
+        .setReadTimeoutMs(30_000)
+        .setDefaultRequestProperties(
+            mapOf(
+                "Referer" to origin,
+                "Origin" to origin.trimEnd('/'),
+                "Accept" to "*/*",
+                "Connection" to "keep-alive",
+            ),
+        )
+}
+
 private fun isLikelyHls(url: String): Boolean {
     val lower = url.lowercase()
     return lower.contains(".m3u8") || lower.contains("format=m3u8") || lower.contains("type=m3u8") ||
@@ -282,9 +312,7 @@ private fun NativePlayer(
     val gestureScope = rememberCoroutineScope()
 
     val exoPlayer = remember {
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
-            .setDefaultRequestProperties(mapOf("Referer" to url, "Connection" to "keep-alive", "Icy-MetaData" to "1"))
+        val httpDataSourceFactory = httpDataSourceFactoryFor(url)
         val extractorsFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
         val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory).setDataSourceFactory(httpDataSourceFactory)
         val mediaItem = MediaItem.fromUri(url)
@@ -338,9 +366,7 @@ private fun NativePlayer(
             errorMessage = null
             isRecovering = true
             activeUrl = streamUrl
-            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
-                .setDefaultRequestProperties(mapOf("Referer" to streamUrl, "Connection" to "keep-alive", "Icy-MetaData" to "1"))
+            val httpDataSourceFactory = httpDataSourceFactoryFor(streamUrl)
             val extractorsFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
             val mediaItem = MediaItem.fromUri(streamUrl)
             val mediaSource = if (isLikelyHls(streamUrl)) {
@@ -505,15 +531,7 @@ private fun NativePlayer(
             .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
             .build()
 
-        val dsFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
-            .setDefaultRequestProperties(
-                mapOf(
-                    "Referer" to activeUrl,
-                    "Connection" to "keep-alive",
-                    "Icy-MetaData" to "1",
-                ),
-            )
+        val dsFactory = httpDataSourceFactoryFor(activeUrl)
         val localFactory = DefaultDataSource.Factory(context, dsFactory)
         val extFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
         val videoItem = MediaItem.fromUri(activeUrl)
