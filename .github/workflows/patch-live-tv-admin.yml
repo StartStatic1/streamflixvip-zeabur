@@ -8,13 +8,50 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Apply patch
-        run: python3 scripts/patch_live_tv_admin.py
+        with:
+          fetch-depth: 50
+      - name: Restore placeholders and set MAX_SOURCES=5
+        run: |
+          set -e
+          for f in api/live-tv.js api/admin-vip.js; do
+            sz=$(wc -c < "$f" || echo 0)
+            if grep -q '^PLACEHOLDER' "$f" 2>/dev/null || [ "$sz" -lt 100 ]; then
+              echo "Restoring $f (size=$sz)"
+              found=0
+              for c in $(git log --pretty=format:%H -- "$f"); do
+                if git show "$c:$f" 2>/dev/null | head -c 20 | grep -vq PLACEHOLDER; then
+                  git show "$c:$f" > "$f"
+                  echo "Restored $f from $c ($(wc -c < "$f") bytes)"
+                  found=1
+                  break
+                fi
+              done
+              if [ "$found" != 1 ]; then echo "FAILED restore $f"; exit 1; fi
+            else
+              echo "OK $f already ($sz bytes)"
+            fi
+          done
+          sed -i 's/const MAX_SOURCES = 3;/const MAX_SOURCES = 5;/' api/live-tv.js
+          grep -n MAX_SOURCES api/live-tv.js
+          # update-live-tv-source
+          if ! grep -q "update-live-tv-source" api/admin-vip.js; then
+            python3 scripts/add_update_live_tv.py || python3 -c "
+from pathlib import Path
+s = Path('api/admin-vip.js').read_text()
+needle = \"if (action === 'delete-live-tv-source')\"
+i = s.find(needle)
+assert i>0
+end = s.find('\n  if (action ===', i+10)
+block = '''\n  if (action === \'update-live-tv-source\') {\n    const { sourceId } = body;\n    if (!sourceId) { res.status(400).json({ error: \'Informe sourceId\' }); return; }\n    const patch = {};\n    if (body.name != null && String(body.name).trim()) patch.name = String(body.name).trim();\n    if (body.xtreamHost != null || body.xtream_host != null) {\n      const h = String(body.xtreamHost || body.xtream_host || \'\').trim().replace(/\\/+$/, \'\');\n      if (h) patch.xtream_host = h;\n    }\n    if (body.xtreamUser != null || body.xtream_user != null) {\n      const u = String(body.xtreamUser || body.xtream_user || \'\').trim();\n      if (u) patch.xtream_user = u;\n    }\n    if (body.xtreamPass != null || body.xtream_pass != null) {\n      const p = String(body.xtreamPass || body.xtream_pass || \'\').trim();\n      if (p) patch.xtream_pass = p;\n    }\n    if (body.priority != null) patch.priority = Number(body.priority) || 10;\n    if (!Object.keys(patch).length) { res.status(400).json({ error: \'Nada para atualizar\' }); return; }\n    const r = await fetch(\\`\\${SUPABASE_URL}/rest/v1/live_tv_sources?id=eq.\\${encodeURIComponent(sourceId)}\\`, {\n      method: \'PATCH\', headers: svcHeaders, body: JSON.stringify(patch),\n    });\n    if (!r.ok) { res.status(502).json({ error: \'Erro atualizar live TV\', detail: await r.text() }); return; }\n    res.status(200).json({ success: true });\n    return;\n  }\n'''
+Path('api/admin-vip.js').write_text(s[:end]+block+s[end:])
+print('added update-live-tv-source')
+"
+          fi
+          grep -c update-live-tv-source api/admin-vip.js
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Public/admin.html api/live-tv.js api/admin-vip.js
-          git status
-          git commit -m "feat(admin): aba TV ao vivo + fallback 5 fontes; remove Embeds" || echo nothing
+          git add api/live-tv.js api/admin-vip.js
+          git commit -m "fix(api): restore live-tv/admin-vip + MAX_SOURCES=5" || echo nothing
           git push
