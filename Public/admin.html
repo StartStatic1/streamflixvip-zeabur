@@ -724,7 +724,7 @@
     <button class="panel-tab" data-tab="ads" onclick="switchTab('ads')">📢 Anúncios</button>
     <button class="panel-tab" data-tab="announcements" onclick="switchTab('announcements')">🔔 Avisos App</button>
     <button class="panel-tab" data-tab="iptv" onclick="switchTab('iptv')">📡 IPTV</button>
-    <button class="panel-tab" data-tab="embeds" onclick="switchTab('embeds')">🔗 Embeds</button>
+    <button class="panel-tab" data-tab="livetv" onclick="switchTab('livetv')">📺 TV ao vivo</button>
   </nav>
 
   <main>
@@ -1202,44 +1202,28 @@
       </div>
     </section>
 
-    <section id="tab-embeds" class="tab-panel" style="display:none">
+
+    <section id="tab-livetv" class="tab-panel" style="display:none">
       <div class="card">
-        <div class="card-title">🔗 Novo parceiro de embed</div>
+        <div class="card-title">📺 Nova fonte de TV ao vivo</div>
         <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">
-          Gera uma key única pra distribuir o player (/embed) num site de terceiro via iframe.
-          Domínio é opcional — se preenchido, o player só toca naquele site; se vazio, funciona em qualquer lugar
-          (útil pra testar, mas recomendado travar depois). Desativar aqui derruba o player na hora,
-          em qualquer site que esteja usando essa key.
+          Só canais ao vivo (Xtream). Até <b>5 fontes ativas</b> por prioridade (menor = primeiro), com fallback no player.
         </p>
-
-        <label>Nome do parceiro (só pra você identificar no painel)</label>
-        <input type="text" id="embedLabelInput" placeholder="ex: Site do João"/>
-
-        <label style="margin-top:14px">Domínio autorizado (opcional)</label>
-        <input type="text" id="embedDomainInput" placeholder="ex: sitedoparceiro.com"/>
-
-        <div style="display:flex;gap:10px;margin-top:14px;align-items:center">
-          <label style="margin:0;display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="embedAdsInput" checked style="width:auto"/> Ads ativados
-          </label>
+        <label>Nome</label>
+        <input type="text" id="liveTvNameInput" placeholder="ex: StreamFlix.Svent"/>
+        <label style="margin-top:14px">Host</label>
+        <input type="text" id="liveTvHostInput" placeholder="ex: http://sventank.com"/>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <div style="flex:1"><label>Usuário</label><input type="text" id="liveTvUserInput"/></div>
+          <div style="flex:1"><label>Senha</label><input type="text" id="liveTvPassInput"/></div>
         </div>
-
-        <label style="margin-top:14px">Ad Zone ID do Monetag (opcional — deixe vazio pra usar a padrão)</label>
-        <input type="text" id="embedAdZoneInput" placeholder="ex: 123456"/>
-
-        <label style="margin-top:14px">Notas (opcional)</label>
-        <input type="text" id="embedNotesInput" placeholder="observações livres"/>
-
-        <button class="btn-primary" style="margin-top:16px" id="saveEmbedBtn" onclick="saveEmbedPartner()">Gerar key</button>
+        <label style="margin-top:14px">Prioridade (menor = primeiro)</label>
+        <input type="number" id="liveTvPriorityInput" value="10"/>
+        <button class="btn-primary" style="margin-top:16px" id="saveLiveTvBtn" onclick="saveLiveTvSource()">Salvar fonte de TV</button>
       </div>
-
       <div class="card" style="margin-top:24px">
-        <div class="card-title">📋 Parceiros cadastrados</div>
-        <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">
-          A key completa aparece só na criação (copie e guarde). Depois disso, o painel mostra
-          só os primeiros caracteres pra você identificar qual é qual.
-        </p>
-        <div class="table-wrap" id="embedListWrap"></div>
+        <div class="card-title">📋 Fontes de TV</div>
+        <div class="table-wrap" id="liveTvListWrap"></div>
       </div>
     </section>
   </main>
@@ -1903,7 +1887,7 @@
     if (tab === 'ads') loadAds();
     if (tab === 'announcements' && typeof loadAnnouncements === 'function') loadAnnouncements();
     if (tab === 'iptv') loadIptvSources();
-    if (tab === 'embeds') loadEmbedPartners();
+    if (tab === 'livetv') loadLiveTvSources();
     if (tab === 'dashboard') loadDashboard();
     if (tab === 'activations') loadActivations();
 
@@ -3309,326 +3293,83 @@
     loadIptvSources();
   }
 
-  // ════════════════════════════════════════════════════════════
-  // ABA: EMBEDS (parceiros do player distribuído)
-  // ════════════════════════════════════════════════════════════
-  let _allEmbedPartners = [];
-  let _justCreatedKey = null; // guarda a key recém-criada pra mostrar completa só uma vez
 
-  async function loadEmbedPartners() {
-    const data = await api('list-embed-partners');
-    if (data.error) { showToast('❌ ' + data.error); return; }
-    _allEmbedPartners = data.partners || [];
-    renderEmbedList();
+  let _allLiveTvSources = [];
+  async function loadLiveTvSources() {
+    const data = await api('list-live-tv-sources');
+    if (data.error) { showToast('❌ ' + (data.error.message || data.error)); return; }
+    _allLiveTvSources = data.sources || [];
+    renderLiveTvList();
   }
-
-  function maskKey(key) {
-    if (!key) return '';
-    return key.slice(0, 8) + '••••••••';
+  function renderLiveTvList() {
+    const wrap = document.getElementById('liveTvListWrap');
+    if (!_allLiveTvSources.length) {
+      wrap.innerHTML = '<p style="color:var(--muted);padding:20px;text-align:center">Nenhuma fonte de TV. Cadastre acima.</p>';
+      return;
+    }
+    wrap.innerHTML = `<table><thead><tr><th>Nome</th><th>Host</th><th>User</th><th>Pri</th><th>Status</th><th></th></tr></thead><tbody>
+      ${_allLiveTvSources.map(s => `<tr>
+        <td>${escapeHtml(s.name)}</td>
+        <td style="font-size:0.75rem;color:var(--muted)">${escapeHtml(s.xtream_host||'')}</td>
+        <td style="font-size:0.75rem;color:var(--muted)">${escapeHtml(s.xtream_user||'')}</td>
+        <td>${s.priority??'—'}</td>
+        <td><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Ativa':'Pausada'}</span></td>
+        <td style="white-space:nowrap">
+          <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="editLiveTvSource('${s.id}')">✏️</button>
+          <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleLiveTvSource('${s.id}', ${!s.is_active})">${s.is_active?'⏸️':'▶️'}</button>
+          <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="deleteLiveTvSource('${s.id}', '${escapeHtml(s.name).replace(/'/g,"\\'")}')">🗑️</button>
+        </td></tr>`).join('')}
+    </tbody></table>`;
   }
-
-  // ── Modal: gerar código do iframe pra um parceiro ──
-  // Isso é a peça que faltava no fluxo: até aqui o admin gerava a KEY, mas
-  // tinha que montar a URL/código do iframe manualmente. Este modal monta
-  // o <iframe> pronto (com key + tmdb id + tipo) pra copiar e colar direto
-  // no site do parceiro, e também deixa testar em uma aba nova.
-  let _embedCodePartner = null;
-
-  function openEmbedCodeModal(partnerId) {
-    const p = _allEmbedPartners.find(x => x.id === partnerId);
-    if (!p) return;
-    _embedCodePartner = p;
-
-    document.getElementById('embedCodePartnerLabel').textContent = p.label;
-    document.getElementById('embedCodePartnerDomain').textContent = 'Código de embed para este parceiro';
-
-    // Diagrama "seu servidor → site do parceiro"
-    document.getElementById('embedFlowMyDomain').textContent = window.location.hostname;
-    document.getElementById('embedFlowTheirDomain').textContent = p.domain || 'qualquer site';
-
-    const hostChip = document.getElementById('embedStatusHost');
-    if (p.domain) {
-      hostChip.className = 'embed-status-chip warn';
-      hostChip.textContent = `🔒 Travado em ${p.domain}`;
+  async function saveLiveTvSource() {
+    const name = document.getElementById('liveTvNameInput').value.trim();
+    const xtreamHost = document.getElementById('liveTvHostInput').value.trim().replace(/\/+$/, '');
+    const xtreamUser = document.getElementById('liveTvUserInput').value.trim();
+    const xtreamPass = document.getElementById('liveTvPassInput').value.trim();
+    const priority = parseInt(document.getElementById('liveTvPriorityInput').value, 10) || 10;
+    const btn = document.getElementById('saveLiveTvBtn');
+    const editingId = btn.dataset.editingId || '';
+    if (!name || !xtreamHost || !xtreamUser) { showToast('Preencha nome, host e usuário.'); return; }
+    if (!editingId && !xtreamPass) { showToast('Preencha a senha.'); return; }
+    if (!/^https?:\/\//i.test(xtreamHost)) { showToast('Host precisa de http:// ou https://'); return; }
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    let result;
+    if (editingId) {
+      const payload = { sourceId: editingId, name, xtreamHost, xtreamUser, priority };
+      if (xtreamPass) payload.xtreamPass = xtreamPass;
+      result = await api('update-live-tv-source', payload);
     } else {
-      hostChip.className = 'embed-status-chip neutral';
-      hostChip.textContent = '🌐 Sem trava — qualquer site';
+      result = await api('create-live-tv-source', { name, xtreamHost, xtreamUser, xtreamPass, priority });
     }
-
-    // Chips de Ads/Ativo + textos dos botões manuais
-    refreshEmbedModalStatus();
-
-    document.getElementById('embedCodeDomainWarning').style.display = p.domain ? 'flex' : 'none';
-
-    document.getElementById('embedCodeTmdbInput').value = '';
-    document.getElementById('embedCodeTypeInput').value = 'movie';
-    document.getElementById('embedCodeSeasonInput').value = '';
-    document.getElementById('embedCodeEpisodeInput').value = '';
-    updateEmbedCodePreview();
-
-    document.getElementById('embedCodeOverlay').classList.add('open');
+    btn.disabled = false; btn.textContent = 'Salvar fonte de TV'; delete btn.dataset.editingId;
+    if (result.error) { showToast('❌ ' + (result.error.message || result.error)); return; }
+    showToast(editingId ? '✅ Atualizado!' : '✅ Fonte de TV salva!');
+    ['liveTvNameInput','liveTvHostInput','liveTvUserInput','liveTvPassInput'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('liveTvPriorityInput').value = '10';
+    loadLiveTvSources();
   }
-
-  function closeEmbedCodeModal() {
-    document.getElementById('embedCodeOverlay').classList.remove('open');
-    _embedCodePartner = null;
+  function editLiveTvSource(id) {
+    const s = _allLiveTvSources.find(x => x.id === id); if (!s) return;
+    document.getElementById('liveTvNameInput').value = s.name || '';
+    document.getElementById('liveTvHostInput').value = s.xtream_host || '';
+    document.getElementById('liveTvUserInput').value = s.xtream_user || '';
+    document.getElementById('liveTvPassInput').value = '';
+    document.getElementById('liveTvPassInput').placeholder = 'em branco = manter senha';
+    document.getElementById('liveTvPriorityInput').value = s.priority ?? 10;
+    const btn = document.getElementById('saveLiveTvBtn');
+    btn.dataset.editingId = id; btn.textContent = 'Salvar alterações';
+    showToast('✏️ Editando — senha só se for trocar');
   }
-
-  // Monta a URL do embed a partir dos campos preenchidos. Retorna '' se
-  // ainda não tem o mínimo necessário (key do parceiro + tmdb id).
-  function buildEmbedUrl() {
-    if (!_embedCodePartner) return '';
-    const tmdb = document.getElementById('embedCodeTmdbInput').value.trim();
-    if (!tmdb) return '';
-    const type = document.getElementById('embedCodeTypeInput').value;
-    const season = document.getElementById('embedCodeSeasonInput').value.trim();
-    const episode = document.getElementById('embedCodeEpisodeInput').value.trim();
-
-    const origin = window.location.origin; // mesmo domínio do painel = mesmo domínio do site público
-    let url = `${origin}/embed/?key=${encodeURIComponent(_embedCodePartner.key)}&tmdb=${encodeURIComponent(tmdb)}&type=${encodeURIComponent(type)}`;
-    if (type === 'tv' && season)  url += `&season=${encodeURIComponent(season)}`;
-    if (type === 'tv' && episode) url += `&episode=${encodeURIComponent(episode)}`;
-    return url;
+  async function toggleLiveTvSource(id, st) {
+    const r = await api('toggle-live-tv-source', { sourceId: id, isActive: st });
+    if (r.error) { showToast('❌ ' + r.error); return; }
+    showToast(st ? '▶️ Ativa' : '⏸️ Pausada'); loadLiveTvSources();
   }
-
-  function updateEmbedCodePreview() {
-    const isTv = document.getElementById('embedCodeTypeInput').value === 'tv';
-    document.getElementById('embedCodeSeasonWrap').style.display = isTv ? 'block' : 'none';
-    document.getElementById('embedCodeEpisodeWrap').style.display = isTv ? 'block' : 'none';
-
-    const url = buildEmbedUrl();
-    const output = document.getElementById('embedCodeOutput');
-    if (!url) {
-      output.value = '';
-      output.placeholder = 'Preencha o TMDB ID pra gerar o código.';
-      return;
-    }
-    output.value = `<iframe src="${url}" width="100%" height="480" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
-  }
-
-  function copyEmbedCode() {
-    const output = document.getElementById('embedCodeOutput');
-    if (!output.value) { showToast('⚠️ Preencha o TMDB ID antes de copiar.'); return; }
-    navigator.clipboard.writeText(output.value);
-    showToast('📋 Código copiado!');
-  }
-
-  // Abre a URL do embed sozinha (sem o wrapper <iframe>) numa aba nova.
-  // Isso testa o player "puro", mas ATENÇÃO: se o parceiro tiver domínio
-  // travado, abrir direto assim tem Referer vazio (não veio de dentro de
-  // um iframe em outro site) e por isso o player vai mostrar "Conteúdo
-  // indisponível" — esse é o comportamento correto da trava de domínio,
-  // não um bug. Pra testar como o parceiro veria de verdade, use a página
-  // /embed/teste-host.html (link abaixo do botão).
-  function openEmbedCodeTestTab() {
-    const url = buildEmbedUrl();
-    if (!url) { showToast('⚠️ Preencha o TMDB ID antes de testar.'); return; }
-    window.open(url, '_blank');
-  }
-
-  function renderEmbedList() {
-    const wrap = document.getElementById('embedListWrap');
-    if (!_allEmbedPartners.length) {
-      wrap.innerHTML = `<p style="color:var(--muted);font-size:0.85rem;padding:20px 0;text-align:center">Nenhum parceiro cadastrado ainda.</p>`;
-      return;
-    }
-    wrap.innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>Parceiro</th>
-            <th>Key</th>
-            <th>Domínio</th>
-            <th>Ads</th>
-            <th>Status</th>
-            <th>Último uso</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${_allEmbedPartners.map(p => `
-            <tr>
-              <td>${escapeHtml(p.label)}</td>
-              <td style="font-family:monospace;font-size:0.75rem">
-                ${p.key === _justCreatedKey
-                  ? `<span style="color:var(--green)">${escapeHtml(p.key)}</span> <button class="btn-secondary" style="width:auto;padding:2px 6px;font-size:0.7rem" onclick="navigator.clipboard.writeText('${p.key}');showToast('📋 Key copiada')">copiar</button>`
-                  : maskKey(p.key)}
-              </td>
-              <td style="font-size:0.75rem;color:var(--muted)">${p.domain ? escapeHtml(p.domain) : '<em>qualquer site</em>'}</td>
-              <td>
-                <span class="pill ${p.ads_enabled ? 'active' : 'inactive'}" style="cursor:pointer" onclick="toggleEmbedAds('${p.id}', ${!p.ads_enabled})" title="Clique pra alternar">
-                  ${p.ads_enabled ? 'Ativados' : 'Desativados'}
-                </span>
-              </td>
-              <td>
-                <span class="pill ${p.active ? 'active' : 'inactive'}">
-                  ${p.active ? 'Ativo' : 'Bloqueado'}
-                </span>
-              </td>
-              <td style="font-size:0.75rem;color:var(--muted)">${p.last_used_at ? new Date(p.last_used_at).toLocaleString('pt-BR') : 'nunca usado'}</td>
-              <td style="white-space:nowrap">
-                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="openEmbedCodeModal('${p.id}')" title="Gerar código do iframe">&lt;/&gt;</button>
-                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleEmbedPartner('${p.id}', ${!p.active})" title="${p.active ? 'Bloquear' : 'Reativar'}">
-                  ${p.active ? '🚫' : '▶️'}
-                </button>
-                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleEmbedStats('${p.key}', '${p.id}')" title="Ver estatísticas (adblock/sandbox/ads)">📊</button>
-                <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="deleteEmbedPartner('${p.id}', '${escapeHtml(p.label).replace(/'/g, "\\'")}')" title="Excluir parceiro">🗑️</button>
-              </td>
-            </tr>
-            <tr id="embedStatsRow-${p.id}" style="display:none">
-              <td colspan="7" style="background:rgba(255,255,255,0.02)">
-                <div id="embedStatsContent-${p.id}" style="padding:12px;font-size:0.8rem;color:var(--muted)">Carregando...</div>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    `;
-  }
-
-  // Alterna a exibição do painel de estatísticas (adblock/sandbox/ads)
-  // de um parceiro específico, buscando os dados agregados dos últimos
-  // 7 dias só quando o painel é aberto (não carrega tudo de uma vez).
-  async function toggleEmbedStats(partnerKey, partnerId) {
-    const row = document.getElementById(`embedStatsRow-${partnerId}`);
-    const content = document.getElementById(`embedStatsContent-${partnerId}`);
-    const isHidden = row.style.display === 'none';
-    row.style.display = isHidden ? 'table-row' : 'none';
-    if (!isHidden) return; // fechando — não precisa buscar de novo
-
-    content.innerHTML = 'Carregando estatísticas...';
-    const result = await api('embed-telemetry-stats', { partnerKey, days: 7 });
-    if (result.error) { content.innerHTML = `❌ ${result.error}`; return; }
-
-    if (!result.total) {
-      content.innerHTML = 'Nenhuma sessão registrada nos últimos 7 dias ainda.';
-      return;
-    }
-
-    const adStatusLabels = {
-      loaded: '✅ Ad carregou',
-      blocked: '🚫 Bloqueado',
-      error: '⚠️ Erro',
-      not_attempted: '➖ Sem ad configurado',
-    };
-    const adStatusHtml = Object.entries(result.adStatusCount)
-      .map(([k, v]) => `${adStatusLabels[k] || k}: <strong style="color:#fff">${v}</strong>`)
-      .join(' &nbsp;•&nbsp; ');
-
-    content.innerHTML = `
-      <div style="display:flex;flex-wrap:wrap;gap:20px">
-        <div>📈 Sessões (7 dias): <strong style="color:#fff">${result.total}</strong></div>
-        <div>🛡️ Adblock detectado: <strong style="color:#fff">${result.adblockPct ?? '—'}%</strong></div>
-        <div>📦 Sandbox detectado: <strong style="color:#fff">${result.sandboxPct ?? '—'}%</strong></div>
-      </div>
-      <div style="margin-top:8px">${adStatusHtml}</div>
-    `;
-  }
-
-  async function saveEmbedPartner() {
-    const label = document.getElementById('embedLabelInput').value.trim();
-    const domain = document.getElementById('embedDomainInput').value.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-    const adsEnabled = document.getElementById('embedAdsInput').checked;
-    const adZoneId = document.getElementById('embedAdZoneInput').value.trim();
-    const notes = document.getElementById('embedNotesInput').value.trim();
-
-    if (!label) { showToast('Informe o nome do parceiro.'); return; }
-
-    const btn = document.getElementById('saveEmbedBtn');
-    btn.disabled = true;
-    btn.textContent = 'Gerando...';
-
-    const result = await api('create-embed-partner', { label, domain, adsEnabled, adZoneId, notes });
-
-    btn.disabled = false;
-    btn.textContent = 'Gerar key';
-    if (result.error) { showToast('❌ ' + (result.error?.message || result.error)); return; }
-
-    _justCreatedKey = result.partner.key;
-    showToast('✅ Parceiro criado! Copie a key abaixo — ela só aparece completa agora.');
-    document.getElementById('embedLabelInput').value = '';
-    document.getElementById('embedDomainInput').value = '';
-    document.getElementById('embedAdZoneInput').value = '';
-    document.getElementById('embedNotesInput').value = '';
-    document.getElementById('embedAdsInput').checked = true;
-    loadEmbedPartners();
-  }
-
-  async function toggleEmbedPartner(partnerId, newState) {
-    const result = await api('toggle-embed-partner', { partnerId, active: newState });
-    if (result.error) { showToast('❌ ' + result.error); return; }
-    showToast(newState ? '▶️ Parceiro reativado' : '🚫 Parceiro bloqueado — o player dele para de tocar agora');
-    loadEmbedPartners();
-  }
-
-  async function toggleEmbedAds(partnerId, newState) {
-    const result = await api('toggle-embed-ads', { partnerId, adsEnabled: newState });
-    if (result.error) { showToast('❌ ' + result.error); return; }
-    showToast(newState ? '📢 Ads ativados pra esse parceiro' : '🔕 Ads desativados pra esse parceiro');
-    loadEmbedPartners();
-  }
-
-  // Controles manuais dentro do próprio modal de "gerar código" — pra não
-  // precisar fechar o modal, achar a linha na tabela e voltar. Reaproveita
-  // as mesmas actions de toggleEmbedPartner/toggleEmbedAds, só que atualiza
-  // o estado local (_embedCodePartner) e os chips/botões sem fechar o modal.
-  async function toggleEmbedFromModal(what) {
-    if (!_embedCodePartner) return;
-    const p = _embedCodePartner;
-
-    if (what === 'active') {
-      const result = await api('toggle-embed-partner', { partnerId: p.id, active: !p.active });
-      if (result.error) { showToast('❌ ' + result.error); return; }
-      p.active = !p.active;
-      showToast(p.active ? '▶️ Parceiro reativado' : '🚫 Parceiro bloqueado — o player dele para de tocar agora');
-    } else if (what === 'ads') {
-      const result = await api('toggle-embed-ads', { partnerId: p.id, adsEnabled: !p.ads_enabled });
-      if (result.error) { showToast('❌ ' + result.error); return; }
-      p.ads_enabled = !p.ads_enabled;
-      showToast(p.ads_enabled ? '📢 Ads ativados pra esse parceiro' : '🔕 Ads desativados pra esse parceiro');
-    }
-
-    // Atualiza a lista em memória (evita esperar um novo fetch pra
-    // refletir na tabela quando o modal for fechado) e re-renderiza os
-    // chips/botões do próprio modal.
-    const idx = _allEmbedPartners.findIndex(x => x.id === p.id);
-    if (idx > -1) _allEmbedPartners[idx] = p;
-    renderEmbedList();
-    refreshEmbedModalStatus();
-  }
-
-  // Atualiza só os chips/botões do modal (sem reconstruir o modal inteiro,
-  // pra não perder o que o admin já digitou no TMDB ID / temporada / etc).
-  function refreshEmbedModalStatus() {
-    const p = _embedCodePartner;
-    if (!p) return;
-
-    const adsChip = document.getElementById('embedStatusAds');
-    if (p.ads_enabled) {
-      adsChip.className = 'embed-status-chip ok';
-      adsChip.textContent = p.ad_zone_id ? `📢 Ads on · zona ${p.ad_zone_id}` : '📢 Ads on · zona padrão';
-    } else {
-      adsChip.className = 'embed-status-chip neutral';
-      adsChip.textContent = '📢 Ads desligados';
-    }
-
-    const activeChip = document.getElementById('embedStatusActive');
-    activeChip.className = p.active ? 'embed-status-chip ok' : 'embed-status-chip warn';
-    activeChip.textContent = p.active ? '✅ Parceiro ativo' : '🚫 Parceiro bloqueado';
-
-    const activeBtn = document.getElementById('embedModalToggleActiveBtn');
-    activeBtn.textContent = p.active ? '🚫 Bloquear parceiro' : '▶️ Reativar parceiro';
-
-    const adsBtn = document.getElementById('embedModalToggleAdsBtn');
-    adsBtn.textContent = p.ads_enabled ? '🔕 Desligar Ads' : '📢 Ligar Ads';
-  }
-
-  async function deleteEmbedPartner(partnerId, label) {
-    if (!confirm(`Excluir o parceiro "${label}"? A key para de funcionar imediatamente. Essa ação não pode ser desfeita.`)) return;
-    const result = await api('delete-embed-partner', { partnerId });
-    if (result.error) { showToast('❌ ' + result.error); return; }
-    showToast(`🗑️ Parceiro "${label}" excluído`);
-    loadEmbedPartners();
+  async function deleteLiveTvSource(id, name) {
+    if (!confirm('Excluir fonte de TV "' + name + '"?')) return;
+    const r = await api('delete-live-tv-source', { sourceId: id });
+    if (r.error) { showToast('❌ ' + r.error); return; }
+    showToast('🗑️ Removida'); loadLiveTvSources();
   }
 
   // ════════════════════════════════════════════════════════════

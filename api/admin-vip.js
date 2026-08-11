@@ -574,6 +574,33 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  if (action === 'update-live-tv-source') {
+    const { sourceId } = body;
+    if (!sourceId) { res.status(400).json({ error: 'Informe sourceId' }); return; }
+    const patch = {};
+    if (body.name != null && String(body.name).trim()) patch.name = String(body.name).trim();
+    if (body.xtreamHost != null || body.xtream_host != null) {
+      const h = String(body.xtreamHost || body.xtream_host || '').trim().replace(/\/+$/, '');
+      if (h) patch.xtream_host = h;
+    }
+    if (body.xtreamUser != null || body.xtream_user != null) {
+      const u = String(body.xtreamUser || body.xtream_user || '').trim();
+      if (u) patch.xtream_user = u;
+    }
+    if (body.xtreamPass != null || body.xtream_pass != null) {
+      const p = String(body.xtreamPass || body.xtream_pass || '').trim();
+      if (p) patch.xtream_pass = p;
+    }
+    if (body.priority != null) patch.priority = Number(body.priority) || 10;
+    if (!Object.keys(patch).length) { res.status(400).json({ error: 'Nada para atualizar' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_sources?id=eq.${encodeURIComponent(sourceId)}`, {
+      method: 'PATCH', headers: svcHeaders, body: JSON.stringify(patch),
+    });
+    if (!r.ok) { res.status(502).json({ error: 'Erro atualizar live TV', detail: await r.text() }); return; }
+    res.status(200).json({ success: true });
+    return;
+  }
+
   if (action === 'list-ads') {
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_ads?select=*&order=created_at.desc`, { headers: svcHeaders });
     const rows = await r.json();
