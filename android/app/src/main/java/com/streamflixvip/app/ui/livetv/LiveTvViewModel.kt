@@ -20,7 +20,7 @@ data class LiveTvUiState(
     val isLoading: Boolean = true,
     val categories: List<LiveCategory> = emptyList(),
     val channels: List<LiveChannel> = emptyList(),
-    val selectedCategoryId: String = "all",
+    val selectedCategoryId: String = "abertos",
     val searchQuery: String = "",
     val sourcesUsed: Int = 0,
     val error: String? = null,
@@ -40,7 +40,7 @@ data class LiveTvUiState(
 
             if (tab == LiveTvTab.FAVORITES) {
                 list = list.filter { favoriteIds.contains(it.id) }
-            } else {
+            } else if (brandFilter == null) {
                 if (selectedCategoryId == "all") {
                     list = list.filter { it.categoryId != "000" }
                 } else {
@@ -86,9 +86,14 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
             }.onSuccess { response ->
                 val cleaned = cleanCategoriesAndChannels(response.categories, response.channels)
                 val favs = LiveTvFavoritesStore.getIds(getApplication())
+                val defaultCat = cleaned.categories
+                    .firstOrNull { it.id == "abertos" }?.id
+                    ?: cleaned.categories.firstOrNull { it.id != "all" }?.id
+                    ?: "all"
                 val autoSelect = _uiState.value.selectedChannelId
                     ?: cleaned.channels.firstOrNull { favs.contains(it.id) }?.id
-                    ?: cleaned.channels.firstOrNull { it.categoryId != "000" }?.id
+                    ?: cleaned.channels.firstOrNull { it.categoryId == defaultCat }?.id
+                    ?: cleaned.channels.firstOrNull()?.id
 
                 _uiState.update {
                     it.copy(
@@ -97,6 +102,7 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
                         channels = cleaned.channels,
                         sourcesUsed = response.sourcesUsed,
                         favoriteIds = favs,
+                        selectedCategoryId = defaultCat,
                         selectedChannelId = autoSelect,
                         vipRequiredByServer = false,
                         error = if (cleaned.channels.isEmpty()) {
@@ -125,7 +131,14 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectCategory(id: String) {
-        _uiState.update { it.copy(selectedCategoryId = id, searchQuery = "", tab = LiveTvTab.CHANNELS) }
+        _uiState.update {
+            it.copy(
+                selectedCategoryId = id,
+                searchQuery = "",
+                tab = LiveTvTab.CHANNELS,
+                brandFilter = null,
+            )
+        }
     }
 
     fun setSearch(query: String) {
@@ -139,7 +152,7 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setTab(tab: LiveTvTab) {
-        _uiState.update { it.copy(tab = tab, searchQuery = "") }
+        _uiState.update { it.copy(tab = tab, searchQuery = "", brandFilter = null) }
     }
 
     fun selectChannel(channel: LiveChannel) {
@@ -163,54 +176,126 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
     ): Cleaned {
         val idToRawName = rawCats.associate { it.id to (it.name ?: it.id) }
 
-        fun bucket(rawName: String, rawId: String): String? {
-            val n = LiveTvUiState.normalize("$rawName $rawId")
+        fun isJunkChannel(name: String): Boolean {
+            val n = LiveTvUiState.normalize(name)
+            if (n.contains("24h") || n.contains("24 h") || n.contains("24hrs") ||
+                n.contains("24 horas") || n.contains("lendas do cinema") ||
+                n.contains("lendas cinema")
+            ) {
+                return true
+            }
+            if (Regex("""\\s+-\\s*s\\d+\\s*$""").containsMatchIn(n)) return true
+            if (Regex("""\\bs\\d+\\s*$""").containsMatchIn(n)) {
+                val actors = listOf(
+                    "smith", "snipes", "damme", "chan", "statham", "cruise", "dicaprio",
+                    "schwarzenegger", "stallone", "willis", "cage", "diesel",
+                    "vin diesel", "keanu", "reeves", "pitt", "depp", "affleck", "reynolds",
+                    "hardy", "jackie", "jet li", "seagal", "lundgren",
+                    "van damme", "wesley", "jason", "bruce lee", "chuck norris",
+                )
+                if (actors.any { n.contains(it) }) return true
+            }
+            return false
+        }
+
+        fun bucket(rawName: String, rawId: String, channelName: String): String? {
+            val n = LiveTvUiState.normalize("$rawName $rawId $channelName")
             if (n.contains("adult") || n.contains("xxx") || n.contains("porn") ||
                 n == "000" || n == "00" || n.contains("+18") || n.contains("18+")
             ) {
                 return "000"
             }
-            return when {
-                n.contains("esporte") || n.contains("sport") || n.contains("futebol") -> "esportes"
-                n.contains("filme") || n.contains("cinema") || n.contains("telecine") ||
-                    n.contains("hbo") || n.contains("premiere") || n.contains("paramount") ||
-                    n.contains("universal") || n.contains("megapix") -> "filmes"
-                n.contains("serie") || n.contains("series") || n.contains("novela") -> "series"
-                n.contains("noticia") || n.contains("news") || n.contains("jornal") -> "noticias"
-                n.contains("infantil") || n.contains("kids") || n.contains("cartoon") ||
-                    n.contains("disney") || n.contains("nick") -> "infantil"
-                n.contains("aberto") || n.contains("abertos") || n.contains("globo") ||
-                    n.contains("sbt") || n.contains("record") || n.contains("band") ||
-                    n.contains("cultura") || n.contains("tv aberta") -> "abertos"
-                n.contains("musica") || n.contains("music") || n.contains("mtv") -> "musica"
-                n.contains("document") || n.contains("doc ") -> "docs"
-                else -> null
+            if (n.contains("anime") || n.contains("otaku") || n.contains("naruto") ||
+                n.contains("dragon ball") || n.contains("one piece")
+            ) {
+                return "anime"
             }
+            if (n.contains("discovery") || n.contains("animal planet") ||
+                n.contains("nat geo") || n.contains("national geographic") ||
+                n.contains("history channel") || n.contains("history 2") ||
+                n.contains("h&h") || n.contains("h e h") || n.contains("home health") ||
+                n.contains("investigation discovery")
+            ) {
+                return "discovery"
+            }
+            if (n.contains("cartoon") || n.contains("desenh") || n.contains("infantil") ||
+                n.contains("kids") || n.contains("gloob") || n.contains("nick") ||
+                n.contains("disney channel") || n.contains("disney jr") ||
+                n.contains("baby tv") || n.contains("tooncast") || n.contains("cartoonito") ||
+                n.contains("zoomoo") || n.contains("tv ra tim bum") || n.contains("boomerang")
+            ) {
+                return "desenhos"
+            }
+            if (n.contains("esporte") || n.contains("sport") || n.contains("futebol") ||
+                n.contains("premiere") || n.contains("sportv") || n.contains("combate") ||
+                n.contains("band sports") || n.contains("espn")
+            ) {
+                return "esportes"
+            }
+            if (n.contains("telecine") || n.contains("megapix") || n.contains("cinemax") ||
+                n.contains("tcm") || n.contains("space ") || n.contains("filme") ||
+                n.contains("cinema") || (n.contains("hbo") && !n.contains("series"))
+            ) {
+                return "filmes"
+            }
+            if (n.contains("serie") || n.contains("series") || n.contains("novela") ||
+                n.contains("fx ") || n.contains("axn") || n.contains("sony") ||
+                n.contains("warner") || n.contains("universal tv") || n.contains("star channel")
+            ) {
+                return "series"
+            }
+            if (n.contains("noticia") || n.contains("news") || n.contains("jornal") ||
+                n.contains("cnn") || n.contains("band news") || n.contains("globo news") ||
+                n.contains("record news") || n.contains("jovem pan")
+            ) {
+                return "noticias"
+            }
+            if (n.contains("document") || n.contains("doc ") || n.contains("docs")) {
+                return "docs"
+            }
+            if (n.contains("aberto") || n.contains("abertos") || n.contains("globo") ||
+                n.contains("sbt") || n.contains("record") || n.contains("band") ||
+                n.contains("cultura") || n.contains("tv aberta") || n.contains("rede tv") ||
+                n.contains("gazeta") || n.contains("cnt ") || n.contains("tv brasil")
+            ) {
+                return "abertos"
+            }
+            if (n.contains("musica") || n.contains("music") || n.contains("mtv") ||
+                n.contains("music box")
+            ) {
+                return "musica"
+            }
+            return null
         }
 
         val label = mapOf(
-            "all" to "Canais",
             "abertos" to "Abertos",
             "esportes" to "Esportes",
             "filmes" to "Filmes",
             "series" to "Séries",
-            "noticias" to "Notícias",
-            "infantil" to "Infantil",
-            "musica" to "Música",
+            "desenhos" to "Desenhos",
+            "anime" to "Anime",
+            "discovery" to "Discovery",
             "docs" to "Docs",
+            "noticias" to "Notícias",
+            "musica" to "Música",
             "outros" to "Outros",
         )
 
         val channelBuckets = linkedMapOf<String, MutableList<LiveChannel>>()
         for (ch in rawChannels) {
+            if (isJunkChannel(ch.name)) continue
             val rawCatName = idToRawName[ch.categoryId ?: ""] ?: (ch.categoryId ?: "")
-            val b = bucket(rawCatName, ch.categoryId ?: "") ?: "outros"
+            val b = bucket(rawCatName, ch.categoryId ?: "", ch.name) ?: "outros"
             if (b == "000") continue
             channelBuckets.getOrPut(b) { mutableListOf() }.add(ch.copy(categoryId = b))
         }
 
-        val order = listOf("abertos", "esportes", "filmes", "series", "noticias", "infantil", "musica", "docs", "outros")
-        val categories = mutableListOf(LiveCategory("all", "Canais"))
+        val order = listOf(
+            "abertos", "esportes", "filmes", "series", "desenhos", "anime",
+            "discovery", "docs", "noticias", "musica", "outros",
+        )
+        val categories = mutableListOf<LiveCategory>()
         for (key in order) {
             if (channelBuckets[key].orEmpty().isNotEmpty()) {
                 categories.add(LiveCategory(key, label[key] ?: key))
