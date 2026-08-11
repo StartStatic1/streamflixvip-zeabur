@@ -190,20 +190,6 @@ fun LiveTvScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item {
-                    val all = state.brandFilter == null
-                    FilterChip(
-                        selected = all,
-                        onClick = { viewModel.setBrandFilter(null) },
-                        label = { Text("Todos", fontSize = 12.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Accent.copy(alpha = 0.22f),
-                            selectedLabelColor = Accent,
-                            containerColor = Color.White.copy(alpha = 0.05f),
-                            labelColor = Color.White.copy(alpha = 0.7f),
-                        ),
-                    )
-                }
                 items(
                     listOf("telecine" to "Telecine", "hbo" to "HBO", "premiere" to "Premiere"),
                     key = { it.first },
@@ -347,7 +333,8 @@ private fun LiveInlinePlayer(
     val context = LocalContext.current
     val streams = channel?.streams.orEmpty()
     var streamIndex by remember(channel?.id) { mutableIntStateOf(0) }
-    var loading by remember(channel?.id) { mutableStateOf(true) }
+    var loading by remember(channel?.id) { mutableStateOf(channel != null) }
+    var isPlaying by remember { mutableStateOf(false) }
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply { playWhenReady = true }
@@ -361,10 +348,19 @@ private fun LiveInlinePlayer(
         if (channel == null || streams.isEmpty()) {
             exoPlayer.stop()
             loading = false
+            isPlaying = false
+            return@LaunchedEffect
+        }
+        val url = streams.getOrNull(streamIndex)?.url ?: return@LaunchedEffect
+        val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
+        if (currentUri == url &&
+            (exoPlayer.playbackState == Player.STATE_READY || exoPlayer.isPlaying)
+        ) {
+            loading = false
             return@LaunchedEffect
         }
         loading = true
-        val url = streams.getOrNull(streamIndex)?.url ?: return@LaunchedEffect
+        isPlaying = false
         exoPlayer.setMediaItem(MediaItem.fromUri(url))
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
@@ -373,12 +369,25 @@ private fun LiveInlinePlayer(
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) loading = false
+                when (playbackState) {
+                    Player.STATE_READY -> loading = false
+                    Player.STATE_BUFFERING -> {
+                        if (!isPlaying && !exoPlayer.isPlaying) loading = true
+                    }
+                }
+            }
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+                if (playing) loading = false
             }
             override fun onPlayerError(error: PlaybackException) {
                 val next = streamIndex + 1
-                if (next < streams.size) streamIndex = next
-                else loading = false
+                if (next < streams.size) {
+                    streamIndex = next
+                    loading = true
+                } else {
+                    loading = false
+                }
             }
         }
         exoPlayer.addListener(listener)
@@ -419,7 +428,7 @@ private fun LiveInlinePlayer(
             }
         }
 
-        if (loading && channel != null) {
+        if (loading && !isPlaying && channel != null) {
             CircularProgressIndicator(
                 Modifier.align(Alignment.Center),
                 color = Accent,

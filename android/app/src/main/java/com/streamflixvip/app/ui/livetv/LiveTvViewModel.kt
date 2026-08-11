@@ -189,7 +189,7 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         val label = mapOf(
-            "all" to "Todos",
+            "all" to "Canais",
             "abertos" to "Abertos",
             "esportes" to "Esportes",
             "filmes" to "Filmes",
@@ -210,7 +210,7 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         val order = listOf("abertos", "esportes", "filmes", "series", "noticias", "infantil", "musica", "docs", "outros")
-        val categories = mutableListOf(LiveCategory("all", "Todos"))
+        val categories = mutableListOf(LiveCategory("all", "Canais"))
         for (key in order) {
             if (channelBuckets[key].orEmpty().isNotEmpty()) {
                 categories.add(LiveCategory(key, label[key] ?: key))
