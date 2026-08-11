@@ -1,7 +1,7 @@
 {
-  "versionCode": 68,
-  "versionName": "9.0.0",
+  "versionCode": 69,
+  "versionName": "9.1.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias na aba canais"
+  "releaseNotes": "Melhorias, fix"
 }
