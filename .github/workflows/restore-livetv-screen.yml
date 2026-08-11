@@ -1,4 +1,4 @@
-name: Restore Live TV Screen Sidebar
+name: Restore LiveTvScreen
 on:
   workflow_dispatch:
 jobs:
@@ -9,11 +9,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Restore Screen
-        run: python3 scripts/apply_livetv_screen_chunks.py
+        run: python3 scripts/apply_livetv_screen_parts.py
       - name: Commit
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add android/app/src/main/java/com/streamflixvip/app/ui/livetv/LiveTvScreen.kt
-          git commit -m "fix(livetv): sidebar esquerda Telecine HBO Premiere Discovery" || echo nothing
+          git commit -m "fix(livetv): restore LiveTvScreen sidebar layout" || echo nothing
           git push
