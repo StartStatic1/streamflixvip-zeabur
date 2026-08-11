@@ -1,6 +1,8 @@
 name: patch-live-tv-admin
+
 on:
   workflow_dispatch:
+
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -10,7 +12,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 50
-      - name: Restore placeholders and MAX_SOURCES
+
+      - name: Restore and set MAX_SOURCES
         run: |
           set -e
           for f in api/live-tv.js api/admin-vip.js; do
@@ -20,16 +23,15 @@ jobs:
               echo "Restoring $f"
               found=0
               for c in $(git log --pretty=format:%H -- "$f"); do
-                headc=$(git show "$c:$f" 2>/dev/null | head -c 30 || true)
-                case "$headc" in
-                  *PLACEHOLDER*) continue ;;
-                  *)
-                    git show "$c:$f" > "$f"
+                if git cat-file -e "$c:$f" 2>/dev/null; then
+                  git show "$c:$f" > /tmp/cand
+                  if ! grep -q PLACEHOLDER /tmp/cand; then
+                    cp /tmp/cand "$f"
                     echo "Restored $f from $c ($(wc -c < "$f") bytes)"
                     found=1
                     break
-                    ;;
-                esac
+                  fi
+                fi
               done
               if [ "$found" != 1 ]; then echo "FAILED $f"; exit 1; fi
             fi
@@ -37,6 +39,7 @@ jobs:
           sed -i 's/const MAX_SOURCES = 3;/const MAX_SOURCES = 5;/' api/live-tv.js
           grep MAX_SOURCES api/live-tv.js
           wc -c api/live-tv.js api/admin-vip.js
+
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
