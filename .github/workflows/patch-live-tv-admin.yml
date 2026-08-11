@@ -1,0 +1,20 @@
+name: patch-live-tv-admin
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: python3 scripts/patch_live_tv_admin.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Public/admin.html api/live-tv.js api/admin-vip.js
+          git status
+          git commit -m "feat(admin): aba TV ao vivo + fallback 5 fontes; remove Embeds" || echo nothing
+          git push
