@@ -1,0 +1,134 @@
+name: Fix Live TV Dedupe
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: API dedupe SD adult
+        run: python3 scripts/fix_live_tv_dedupe.py
+      - name: App brand shortcuts
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+
+          p = Path("android/app/src/main/java/com/streamflixvip/app/ui/livetv/LiveTvViewModel.kt")
+          t = p.read_text()
+          if "brandFilter" not in t:
+              t = t.replace(
+                  "val selectedChannelId: String? = null,\n) {",
+                  "val selectedChannelId: String? = null,\n    val brandFilter: String? = null,\n) {",
+                  1,
+              )
+              old = '''            } else {
+                if (selectedCategoryId == "all") {
+                    list = list.filter { it.categoryId != "000" }
+                } else {
+                    list = list.filter { it.categoryId == selectedCategoryId }
+                }
+            }
+
+            if (q.isNotEmpty()) {
+                list = list.filter { normalize(it.name).contains(q) }
+            }'''
+              new = '''            } else {
+                if (selectedCategoryId == "all") {
+                    list = list.filter { it.categoryId != "000" }
+                } else {
+                    list = list.filter { it.categoryId == selectedCategoryId }
+                }
+            }
+
+            brandFilter?.let { brand ->
+                list = list.filter { normalize(it.name).contains(brand) }
+            }
+
+            if (q.isNotEmpty()) {
+                list = list.filter { normalize(it.name).contains(q) }
+            }'''
+              if old not in t:
+                  raise SystemExit("filter block missing in VM")
+              t = t.replace(old, new, 1)
+              method = '''
+    fun setBrandFilter(brand: String?) {
+        _uiState.update {
+            it.copy(brandFilter = brand, tab = LiveTvTab.CHANNELS, searchQuery = "")
+        }
+    }
+
+'''
+              t = t.replace("fun setTab(tab: LiveTvTab)", method + "    fun setTab(tab: LiveTvTab)", 1)
+              p.write_text(t)
+              print("VM brand ok")
+          else:
+              print("VM already")
+
+          s = Path("android/app/src/main/java/com/streamflixvip/app/ui/livetv/LiveTvScreen.kt")
+          st = s.read_text()
+          if "setBrandFilter" not in st:
+              needle = "        Spacer(Modifier.height(8.dp))\n\n        // \u2500\u2500 Categorias"
+              # try without unicode
+              needle2 = '''        Spacer(Modifier.height(8.dp))
+
+        // ── Categorias (só na aba Canais) ──'''
+              insert = '''        Spacer(Modifier.height(8.dp))
+
+        if (state.tab == LiveTvTab.CHANNELS) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item {
+                    val all = state.brandFilter == null
+                    FilterChip(
+                        selected = all,
+                        onClick = { viewModel.setBrandFilter(null) },
+                        label = { Text("Todos", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Accent.copy(alpha = 0.22f),
+                            selectedLabelColor = Accent,
+                            containerColor = Color.White.copy(alpha = 0.05f),
+                            labelColor = Color.White.copy(alpha = 0.7f),
+                        ),
+                    )
+                }
+                items(
+                    listOf("telecine" to "Telecine", "hbo" to "HBO", "premiere" to "Premiere"),
+                    key = { it.first },
+                ) { (id, label) ->
+                    val sel = state.brandFilter == id
+                    FilterChip(
+                        selected = sel,
+                        onClick = { viewModel.setBrandFilter(if (sel) null else id) },
+                        label = { Text(label, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Accent.copy(alpha = 0.22f),
+                            selectedLabelColor = Accent,
+                            containerColor = Color.White.copy(alpha = 0.05f),
+                            labelColor = Color.White.copy(alpha = 0.7f),
+                        ),
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+
+        // ── Categorias (só na aba Canais) ──'''
+              if needle2 not in st:
+                  raise SystemExit("screen needle missing")
+              st = st.replace(needle2, insert, 1)
+              s.write_text(st)
+              print("Screen brand ok")
+          else:
+              print("Screen already")
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add api/live-tv.js android/app/src/main/java/com/streamflixvip/app/ui/livetv/
+          git commit -m "fix(live-tv): unificar canais, filtrar SD, atalhos Telecine/HBO/Premiere" || echo nothing
+          git push
