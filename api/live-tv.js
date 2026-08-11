@@ -70,6 +70,31 @@ async function xtreamFetch(baseUrl, username, password, action, params = {}) {
   }
 }
 
+
+function channelMergeKey(name) {
+  let n = normalizeName(name);
+  if (!n) return '';
+  n = n.replace(/^\d+\s+/, '');
+  n = n.replace(/\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\s*hd)\b/g, ' ');
+  n = n.replace(/\b(canais?|legenda|legendado|dublado|multi|audio|server|opcao|opt|option|backup|alt)\b/g, ' ');
+  n = n.replace(/\s+/g, ' ').trim();
+  return n;
+}
+
+function qualityScore(name) {
+  const n = normalizeName(name);
+  if (/\b(4k|uhd)\b/.test(n)) return 50;
+  if (/\bfhd\b/.test(n) || /full\s*hd/.test(n)) return 40;
+  if (/\bhd\b/.test(n) && !/\bsd\b/.test(n)) return 30;
+  if (/\bsd\b/.test(n)) return 5;
+  return 20;
+}
+
+function isSdOnlyName(name) {
+  const n = normalizeName(name);
+  return /\bsd\b/.test(n) && !/\b(hd|fhd|uhd|4k|full\s*hd)\b/.test(n);
+}
+
 function normalizeName(name) {
   return String(name || '')
     .toLowerCase()
@@ -258,8 +283,8 @@ async function handler(req, res) {
     const channelMap = new Map();
     for (const r of results) {
       for (const s of r.streams) {
-        const key = normalizeName(s.name);
-        if (!key) continue;
+        const key = channelMergeKey(s.name);
+        if (!key || key.length < 2) continue;
 
         const rawCatName =
           r.categories.find((c) => c.id === s.categoryId)?.name || 'Outros';
@@ -289,20 +314,39 @@ async function handler(req, res) {
           ch.categoryId = ADULT_CATEGORY_ID;
         }
         if (!ch.logo && s.logo) ch.logo = s.logo;
+        if (qualityScore(s.name) > qualityScore(ch.name)) {
+          ch.name = String(s.name || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || s.name;
+        }
         if (!ch.streams.some((x) => x.url === s.url)) {
+          const basePri = r.priority ?? 100;
+          const q = qualityScore(s.name);
           ch.streams.push({
             url: s.url,
             label: s.sourceLabel,
-            priority: r.priority ?? 100,
+            priority: basePri + (q >= 30 ? 0 : q <= 5 ? 400 : 80),
+            quality: q,
           });
         }
       }
     }
 
-    const channels = Array.from(channelMap.values()).map((ch) => ({
-      ...ch,
-      streams: ch.streams.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)),
-    }));
+    let channels = Array.from(channelMap.values()).map((ch) => {
+      let streams = ch.streams.slice().sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
+      const hasGood = streams.some((s) => (s.quality ?? 20) >= 30);
+      if (hasGood) {
+        streams = streams.filter((s) => (s.quality ?? 20) >= 20);
+      }
+      const cleanName = String(ch.name || '')
+        .replace(/\s*\([^)]*\)\s*/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return {
+        ...ch,
+        name: cleanName || ch.name,
+        streams: streams.map(({ url, label, priority }) => ({ url, label, priority })),
+      };
+    });
+    channels = channels.filter((c) => c.categoryId !== ADULT_CATEGORY_ID);
     channels.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
     const categories = Array.from(categoryMap.values()).sort((a, b) =>
@@ -311,11 +355,8 @@ async function handler(req, res) {
     const usedCats = new Set(channels.map((c) => c.categoryId));
     let filteredCategories = categories.filter((c) => usedCats.has(c.id));
 
-    // Adulto sempre no FINAL, com id/nome "000" (não no início)
-    if (hasAdult && usedCats.has(ADULT_CATEGORY_ID)) {
-      filteredCategories = filteredCategories.filter((c) => c.id !== ADULT_CATEGORY_ID);
-      filteredCategories.push({ id: ADULT_CATEGORY_ID, name: ADULT_CATEGORY_NAME });
-    }
+    // Adulto nao entra na lista publica
+    filteredCategories = filteredCategories.filter((c) => c.id !== ADULT_CATEGORY_ID);
 
     const sourcesUsed = results.filter((r) => r.streams.length > 0).length;
 

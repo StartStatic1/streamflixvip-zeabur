@@ -28,6 +28,7 @@ data class LiveTvUiState(
     val tab: LiveTvTab = LiveTvTab.CHANNELS,
     val favoriteIds: Set<String> = emptySet(),
     val selectedChannelId: String? = null,
+    val brandFilter: String? = null,
 ) {
     val selectedChannel: LiveChannel?
         get() = selectedChannelId?.let { id -> channels.find { it.id == id } }
@@ -45,6 +46,10 @@ data class LiveTvUiState(
                 } else {
                     list = list.filter { it.categoryId == selectedCategoryId }
                 }
+            }
+
+            brandFilter?.let { brand ->
+                list = list.filter { normalize(it.name).contains(brand) }
             }
 
             if (q.isNotEmpty()) {
@@ -125,6 +130,12 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setSearch(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
+    }
+
+    fun setBrandFilter(brand: String?) {
+        _uiState.update {
+            it.copy(brandFilter = brand, tab = LiveTvTab.CHANNELS, searchQuery = "")
+        }
     }
 
     fun setTab(tab: LiveTvTab) {

@@ -185,6 +185,46 @@ fun LiveTvScreen(
 
         Spacer(Modifier.height(8.dp))
 
+        if (state.tab == LiveTvTab.CHANNELS) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item {
+                    val all = state.brandFilter == null
+                    FilterChip(
+                        selected = all,
+                        onClick = { viewModel.setBrandFilter(null) },
+                        label = { Text("Todos", fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Accent.copy(alpha = 0.22f),
+                            selectedLabelColor = Accent,
+                            containerColor = Color.White.copy(alpha = 0.05f),
+                            labelColor = Color.White.copy(alpha = 0.7f),
+                        ),
+                    )
+                }
+                items(
+                    listOf("telecine" to "Telecine", "hbo" to "HBO", "premiere" to "Premiere"),
+                    key = { it.first },
+                ) { (id, label) ->
+                    val sel = state.brandFilter == id
+                    FilterChip(
+                        selected = sel,
+                        onClick = { viewModel.setBrandFilter(if (sel) null else id) },
+                        label = { Text(label, fontSize = 12.sp) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Accent.copy(alpha = 0.22f),
+                            selectedLabelColor = Accent,
+                            containerColor = Color.White.copy(alpha = 0.05f),
+                            labelColor = Color.White.copy(alpha = 0.7f),
+                        ),
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+        }
+
         // ── Categorias (só na aba Canais) ──
         if (state.tab == LiveTvTab.CHANNELS && state.searchQuery.isEmpty()) {
             LazyRow(
