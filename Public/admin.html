@@ -1225,6 +1225,27 @@
         <div class="card-title">📋 Fontes de TV</div>
         <div class="table-wrap" id="liveTvListWrap"></div>
       </div>
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">➕ Canal manual (.ts / URL)</div>
+        <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">Cole URL .ts/.m3u8 ou bloco M3U (#EXTINF + link). Label <b>Manual</b>.</p>
+        <label>Colar M3U (opcional)</label>
+        <textarea id="manualRawInput" rows="3" style="width:100%;font-family:monospace;font-size:0.8rem"></textarea>
+        <label style="margin-top:14px">Nome</label>
+        <input type="text" id="manualNameInput" placeholder="ex: BAND TOCANTINS"/>
+        <label style="margin-top:14px">URL do stream</label>
+        <input type="text" id="manualUrlInput" placeholder="http://.../.ts"/>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <div style="flex:1"><label>Logo</label><input type="text" id="manualLogoInput"/></div>
+          <div style="flex:1"><label>Grupo</label><input type="text" id="manualGroupInput" value="Manuais"/></div>
+        </div>
+        <label style="margin-top:14px">Prioridade</label>
+        <input type="number" id="manualPriorityInput" value="1"/>
+        <button class="btn-primary" style="margin-top:16px" id="saveManualBtn" onclick="saveManualChannel()">Salvar canal manual</button>
+      </div>
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">📋 Canais manuais</div>
+        <div class="table-wrap" id="manualListWrap"></div>
+      </div>
     </section>
   </main>
 </div>
@@ -1887,7 +1908,7 @@
     if (tab === 'ads') loadAds();
     if (tab === 'announcements' && typeof loadAnnouncements === 'function') loadAnnouncements();
     if (tab === 'iptv') loadIptvSources();
-    if (tab === 'livetv') loadLiveTvSources();
+    if (tab === 'livetv') { loadLiveTvSources(); loadLiveTvManuals(); }
     if (tab === 'dashboard') loadDashboard();
     if (tab === 'activations') loadActivations();
 
@@ -3293,6 +3314,59 @@
     loadIptvSources();
   }
 
+
+
+  let _allManualChannels = [];
+  async function loadLiveTvManuals() {
+    const data = await api('list-live-tv-manual');
+    if (data.error) {
+      const wrap = document.getElementById('manualListWrap');
+      if (wrap) wrap.innerHTML = `<p style="color:#f59e0b;padding:16px">⚠️ ${escapeHtml(String(data.error.message||data.error))}</p>`;
+      return;
+    }
+    _allManualChannels = data.channels || [];
+    const wrap = document.getElementById('manualListWrap');
+    if (!_allManualChannels.length) { wrap.innerHTML = '<p style="color:var(--muted);padding:20px;text-align:center">Nenhum canal manual.</p>'; return; }
+    wrap.innerHTML = `<table><thead><tr><th>Nome</th><th>Grupo</th><th>URL</th><th>Pri</th><th></th></tr></thead><tbody>${_allManualChannels.map(c=>`<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.group_title||'')}</td><td style="font-size:0.7rem;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.stream_url||'')}</td><td>${c.priority??'—'}</td><td><button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="editManualChannel('${c.id}')">✏️</button> <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleManualChannel('${c.id}',${!c.is_active})">${c.is_active?'⏸️':'▶️'}</button> <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="deleteManualChannel('${c.id}','${escapeHtml(c.name).replace(/'/g,"\\'")}')">🗑️</button></td></tr>`).join('')}</tbody></table>`;
+  }
+  async function saveManualChannel() {
+    const name = document.getElementById('manualNameInput').value.trim();
+    const streamUrl = document.getElementById('manualUrlInput').value.trim();
+    const logo = document.getElementById('manualLogoInput').value.trim();
+    const groupTitle = document.getElementById('manualGroupInput').value.trim() || 'Manuais';
+    const priority = parseInt(document.getElementById('manualPriorityInput').value,10)||1;
+    const raw = document.getElementById('manualRawInput').value.trim();
+    const btn = document.getElementById('saveManualBtn');
+    const editingId = btn.dataset.editingId || '';
+    if (!editingId && !streamUrl && !raw) { showToast('Informe URL ou M3U'); return; }
+    btn.disabled = true;
+    const result = editingId
+      ? await api('update-live-tv-manual', { channelId: editingId, name, streamUrl, logo, groupTitle, priority })
+      : await api('create-live-tv-manual', { name, streamUrl, logo, groupTitle, priority, raw });
+    btn.disabled = false; delete btn.dataset.editingId; btn.textContent = 'Salvar canal manual';
+    if (result.error) { showToast('❌ '+(result.error.message||result.error)); return; }
+    showToast('✅ Canal salvo');
+    ['manualNameInput','manualUrlInput','manualLogoInput','manualRawInput'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('manualGroupInput').value='Manuais'; loadLiveTvManuals();
+  }
+  function editManualChannel(id) {
+    const c = _allManualChannels.find(x=>x.id===id); if(!c) return;
+    document.getElementById('manualNameInput').value=c.name||'';
+    document.getElementById('manualUrlInput').value=c.stream_url||'';
+    document.getElementById('manualLogoInput').value=c.logo||'';
+    document.getElementById('manualGroupInput').value=c.group_title||'Manuais';
+    document.getElementById('manualPriorityInput').value=c.priority??1;
+    const btn=document.getElementById('saveManualBtn'); btn.dataset.editingId=id; btn.textContent='Salvar alterações';
+  }
+  async function toggleManualChannel(id,st) {
+    const r=await api('toggle-live-tv-manual',{channelId:id,isActive:st});
+    if(r.error){showToast('❌ '+r.error);return;} showToast(st?'▶️':'⏸️'); loadLiveTvManuals();
+  }
+  async function deleteManualChannel(id,name) {
+    if(!confirm('Excluir "'+name+'"?'))return;
+    const r=await api('delete-live-tv-manual',{channelId:id});
+    if(r.error){showToast('❌ '+r.error);return;} showToast('🗑️'); loadLiveTvManuals();
+  }
 
   let _allLiveTvSources = [];
   async function loadLiveTvSources() {
