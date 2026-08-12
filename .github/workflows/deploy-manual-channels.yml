@@ -1,0 +1,24 @@
+name: deploy-manual-channels
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble API + SQL
+        run: python3 scripts/manual_push/assemble.py
+      - name: Patch admin.html UI
+        run: python3 scripts/manual_push/apply_manual_admin.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/admin-vip.js api/live-tv.js Public/admin.html scripts/live_tv_manual_channels.sql
+          git status
+          git commit -m "feat(admin): canais manuais TV (.ts/M3U) no painel + merge live-tv" || echo nothing
+          git push
