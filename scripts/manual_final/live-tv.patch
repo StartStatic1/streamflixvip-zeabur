@@ -22,7 +22,7 @@
  async function loadSourceRows(serviceKey) {
    try {
      let rows = await sbSelect(
-@@ -221,28 +236,48 @@
+@@ -223,7 +238,25 @@
      const { rows: sources, origin } = await loadSourceRows(serviceKey);
      const withCreds = sources.filter(hasXtreamCreds).slice(0, MAX_SOURCES);
  
@@ -49,23 +49,21 @@
        res.status(200).json({
          categories: [],
          channels: [],
-         sourcesUsed: 0,
-         diagnostic: {
+@@ -232,29 +265,15 @@
            origin,
            sourcesInDb: sources.length,
            withCredentials: 0,
--          hint: origin === 'live_tv_sources'
++          manuals: 0,
+           hint: origin === 'live_tv_sources'
 -            ? 'Nenhuma fonte em live_tv_sources com host/user/pass. Cadastre na aba TV ao vivo do admin.'
 -            : 'Nenhuma fonte IPTV com credenciais. Cadastre live_tv_sources (recomendado) ou ative iptv_sources.',
-+          manuals: 0,
-+          hint: origin === 'live_tv_sources'
 +            ? 'Nenhuma fonte Xtream nem canal manual. Cadastre na aba TV ao vivo.'
 +            : 'Nenhuma fonte IPTV com credenciais nem canal manual.',
          },
        });
        return;
      }
--
+ 
 -    const results = await Promise.all(
 -      withCreds.map((s) =>
 -        loadFromSource(s).catch((err) => {
@@ -80,13 +78,15 @@
 -        }),
 -      ),
 -    );
- 
+-
      // Mapa categoryId original -> se é adulto
      const adultCatIds = new Set();
-@@ -328,6 +363,41 @@
+     for (const r of results) {
+@@ -330,6 +349,35 @@
        }
      }
  
++
 +    for (const m of manuals) {
 +      const url = String(m.stream_url || '').trim();
 +      const name = String(m.name || '').trim() || 'Canal manual';
@@ -99,16 +99,10 @@
 +      }
 +      let ch = channelMap.get(key);
 +      if (!ch) {
-+        ch = {
-+          id: key,
-+          name,
-+          logo: m.logo || '',
-+          categoryId: catKey,
-+          streams: [],
-+        };
++        ch = { id: key, name, logo: m.logo || '', categoryId: catKey, streams: [] };
 +        channelMap.set(key, ch);
-+      } else {
-+        if (!ch.logo && m.logo) ch.logo = m.logo;
++      } else if (!ch.logo && m.logo) {
++        ch.logo = m.logo;
 +      }
 +      if (!ch.streams.some((x) => x.url === url)) {
 +        ch.streams.push({
