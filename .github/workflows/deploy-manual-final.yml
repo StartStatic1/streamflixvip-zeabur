@@ -10,13 +10,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Assemble
-        run: python3 scripts/manual_final/assemble.py
+      - name: Apply patches
+        run: |
+          patch -p0 < scripts/manual_final/live-tv.patch
+          patch -p0 < scripts/manual_final/admin-vip.patch
+          patch -p0 < scripts/manual_final/admin-html.patch
+          grep -c loadManualChannels api/live-tv.js
+          grep -c list-live-tv-manual api/admin-vip.js
+          grep -c loadLiveTvManuals Public/admin.html
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add api/admin-vip.js api/live-tv.js Public/admin.html
-          git status
+          git add api/live-tv.js api/admin-vip.js Public/admin.html
           git commit -m "feat: canais manuais TV (.ts/M3U) no painel e na grade" || echo nothing
           git push
