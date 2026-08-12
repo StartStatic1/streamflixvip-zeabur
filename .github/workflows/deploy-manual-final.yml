@@ -12,9 +12,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Apply patches
         run: |
-          patch -p0 < scripts/manual_final/live-tv.patch
-          patch -p0 < scripts/manual_final/admin-vip.patch
-          patch -p0 < scripts/manual_final/admin-html.patch
+          patch -p1 < scripts/manual_final/live-tv.patch
+          patch -p1 < scripts/manual_final/admin-vip.patch
+          patch -p1 < scripts/manual_final/admin-html.patch
           grep -c loadManualChannels api/live-tv.js
           grep -c list-live-tv-manual api/admin-vip.js
           grep -c loadLiveTvManuals Public/admin.html
