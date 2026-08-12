@@ -1,0 +1,84 @@
+name: tmdb-image-proxy-android
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rewrite image.tmdb.org to TmdbImages proxy
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('android/app/src/main/java')
+          for f in root.rglob('*.kt'):
+              if f.name == 'TmdbImages.kt':
+                  continue
+              t = f.read_text()
+              orig = t
+              if 'image.tmdb.org' not in t and 'TMDB_POSTER' not in t and 'TMDB_BACKDROP' not in t and 'TMDB_STILL' not in t:
+                  continue
+
+              t = re.sub(r'private const val TMDB_POSTER_BASE = "https://image\.tmdb\.org/t/p/w\d+"\n', '', t)
+              t = re.sub(r'private const val TMDB_BACKDROP_BASE = "https://image\.tmdb\.org/t/p/w\d+"\n', '', t)
+              t = re.sub(r'private const val TMDB_STILL_BASE = "https://image\.tmdb\.org/t/p/w\d+"\n', '', t)
+              t = re.sub(r'private const val TMDB_POSTER_SMALL_BASE = "https://image\.tmdb\.org/t/p/w\d+"\n', '', t)
+
+              t = t.replace('TMDB_POSTER_BASE + it', 'TmdbImages.poster(it)')
+              t = t.replace('TMDB_BACKDROP_BASE + it', 'TmdbImages.backdrop(it)')
+              t = t.replace('TMDB_STILL_BASE + it', 'TmdbImages.still(it)')
+              t = t.replace('TMDB_POSTER_SMALL_BASE + it', 'TmdbImages.poster(it)')
+              t = t.replace('TMDB_BACKDROP_BASE + featured.backdropPath', 'TmdbImages.backdrop(featured.backdropPath)')
+              t = t.replace('TMDB_POSTER_BASE + path', 'TmdbImages.poster(path)')
+              t = t.replace('"$TMDB_POSTER_BASE$path"', 'TmdbImages.poster(path)')
+              t = t.replace('"$TMDB_POSTER_BASE$posterPath"', 'TmdbImages.poster(posterPath)')
+              t = t.replace('"$TMDB_STILL_BASE${episode.still_path}"', 'TmdbImages.still(episode.still_path)')
+              t = t.replace('"https://image.tmdb.org/t/p/w500$it"', 'TmdbImages.poster(it, "w500")')
+
+              t = re.sub(
+                  r'"https://image\.tmdb\.org/t/p/(w\d+|original)\$\{([^}]+)\}"',
+                  r'TmdbImages.url(\2, "\1")',
+                  t,
+              )
+
+              if 'TmdbImages' in t and 'import com.streamflixvip.app.network.TmdbImages' not in t:
+                  lines = t.splitlines(True)
+                  out = []
+                  inserted = False
+                  for line in lines:
+                      out.append(line)
+                      if not inserted and line.startswith('package '):
+                          out.append('\n')
+                          out.append('import com.streamflixvip.app.network.TmdbImages\n')
+                          inserted = True
+                  t = ''.join(out)
+
+              if t != orig:
+                  f.write_text(t)
+                  print('updated', f)
+
+          left = []
+          for f in root.rglob('*.kt'):
+              if f.name == 'TmdbImages.kt':
+                  continue
+              tt = f.read_text()
+              if 'image.tmdb.org' in tt or re.search(r'TMDB_(POSTER|BACKDROP|STILL)_', tt):
+                  left.append(str(f))
+          print('remaining', left)
+          if left:
+              raise SystemExit('still has direct tmdb image refs')
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/
+          git status
+          git commit -m "feat(android): capas via /api/tmdb-image proxy" || echo nothing
+          git push
