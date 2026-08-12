@@ -65,9 +65,7 @@ private enum class LiveAspect(val label: String, val mode: Int) {
 private fun isHlsUrl(url: String): Boolean {
     val u = url.lowercase()
     if (".m3u8" in u) return true
-    // MPEG-TS direto — nunca tratar como HLS (mesmo com /live/ no path)
     if (u.endsWith(".ts") || ".ts?" in u || ".ts&" in u || "/ts/" in u) return false
-    // Xtream /live/user/pass/id sem extensao costuma ser HLS
     if ("/live/" in u) return true
     return false
 }
@@ -113,14 +111,12 @@ fun LivePlayerScreen(
     }
 
     val context = view.context
-    // reloadToken forca reabrir a mesma fonte (stall / Reload)
     var reloadToken by remember { mutableIntStateOf(0) }
     var retryOnSame by remember { mutableIntStateOf(0) }
     var bufferingSince by remember { mutableStateOf<Long?>(null) }
 
     val exoPlayer = remember {
         val loadControl = DefaultLoadControl.Builder()
-            // Buffer generoso pra live/.ts (evita tela congelada em rede instavel)
             .setBufferDurationsMs(
                 /* minBufferMs */ 15_000,
                 /* maxBufferMs */ 50_000,
@@ -134,7 +130,6 @@ fun LivePlayerScreen(
             .build()
             .apply {
                 playWhenReady = true
-                setSeekParameters(androidx.media3.common.SeekParameters.CLOSEST_SYNC)
             }
     }
 
@@ -189,7 +184,6 @@ fun LivePlayerScreen(
         }
     }
 
-    // Watchdog: buffering > 12s sem STATE_READY → reabre a fonte (stall tipico de .ts)
     LaunchedEffect(bufferingSince, streamIndex, reloadToken) {
         val started = bufferingSince ?: return@LaunchedEffect
         while (true) {
