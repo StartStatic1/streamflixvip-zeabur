@@ -37,7 +37,7 @@
      if (tab === 'dashboard') loadDashboard();
      if (tab === 'activations') loadActivations();
  
-@@ -3294,6 +3315,62 @@
+@@ -3294,6 +3315,59 @@
    }
  
  
