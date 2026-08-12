@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.home
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -37,8 +39,6 @@ import com.streamflixvip.app.data.VipStatusHolder
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
-private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 
 @Composable
 fun HomeScreen(
@@ -144,8 +144,8 @@ private fun HeroBanner(
             pageSpacing = 0.dp,
         ) { page ->
             val item = items[page]
-            val heroImage = item.backdrop_path?.let { TMDB_BACKDROP_BASE + it }
-                ?: item.poster_path?.let { TMDB_POSTER_BASE + it }
+            val heroImage = item.backdrop_path?.let { TmdbImages.backdrop(it) }
+                ?: item.poster_path?.let { TmdbImages.poster(it) }
             val overview = item.overview?.takeIf { it.isNotBlank() }
                 ?: "Confira detalhes, nota e opções para assistir."
 
@@ -338,7 +338,7 @@ private fun ContinueWatchingCard(
     onClick: () -> Unit,
     onDismiss: () -> Unit = {},
 ) {
-    val posterUrl = entry.poster_path?.let { TMDB_POSTER_BASE + it }
+    val posterUrl = entry.poster_path?.let { TmdbImages.poster(it) }
 
     Column(
         modifier = Modifier
@@ -467,7 +467,7 @@ private fun PosterCard(
     onClick: () -> Unit,
     rank: Int? = null,
 ) {
-    val posterUrl = item.poster_path?.let { TMDB_POSTER_BASE + it }
+    val posterUrl = item.poster_path?.let { TmdbImages.poster(it) }
     // Números do ranking com accent suave (não gritante)
     val rankColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
 

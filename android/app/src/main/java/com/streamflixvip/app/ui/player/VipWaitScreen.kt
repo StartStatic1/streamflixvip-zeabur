@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.player
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -28,7 +30,6 @@ import coil.compose.AsyncImage
 import com.streamflixvip.app.ads.AdsHelper
 import kotlinx.coroutines.delay
 
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
  * Gate pra usuários não-VIP antes do player.
@@ -80,7 +81,7 @@ fun VipWaitScreen(
         ) {
             if (posterPath != null) {
                 AsyncImage(
-                    model = "$TMDB_POSTER_BASE$posterPath",
+                    model = TmdbImages.poster(posterPath),
                     contentDescription = title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.detail
 
+import com.streamflixvip.app.network.TmdbImages
+
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -50,9 +52,6 @@ import com.streamflixvip.app.network.TmdbSeason
 import com.streamflixvip.app.network.VipSource
 import com.streamflixvip.app.ads.AdsHelper
 
-private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
-private const val TMDB_STILL_BASE = "https://image.tmdb.org/t/p/w300"
-private const val TMDB_POSTER_SMALL_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
  * Tela de Detalhes: backdrop, sinopse, gêneros — e a lista de fontes
@@ -251,8 +250,8 @@ private fun DetailContent(
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
     val posterPath = details.poster_path
-    val backdropUrl = details.backdrop_path?.let { TMDB_BACKDROP_BASE + it }
-    val posterUrl = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+    val backdropUrl = details.backdrop_path?.let { TmdbImages.backdrop(it) }
+    val posterUrl = posterPath?.let { TmdbImages.poster(it, "w500") }
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -739,7 +738,7 @@ private fun CineverseEpisodeRow(
                 ) {
                     if (episode.still_path != null) {
                         AsyncImage(
-                            model = "$TMDB_STILL_BASE${episode.still_path}",
+                            model = TmdbImages.still(episode.still_path),
                             contentDescription = episode.displayName,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
@@ -1467,7 +1466,7 @@ private fun TrailerModal(
 
 @Composable
 private fun SimilarTitleCard(item: TmdbItem, onClick: () -> Unit) {
-    val posterUrl = item.poster_path?.let { TMDB_POSTER_SMALL_BASE + it }
+    val posterUrl = item.poster_path?.let { TmdbImages.poster(it) }
 
     Column(
         modifier = Modifier

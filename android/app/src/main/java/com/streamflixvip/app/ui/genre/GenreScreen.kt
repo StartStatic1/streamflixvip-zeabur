@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.genre
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,8 +35,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.streamflixvip.app.data.GenreCategory
 
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w185"
-private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 
 // Paleta de gradientes rotativa — cada card pega uma cor por posição,
 // só pra dar variedade visual (igual aos prints de referência), sem
@@ -160,7 +160,7 @@ private fun FeaturedGenreBanner(featured: FeaturedGenre, onExploreClick: () -> U
     ) {
         if (featured.backdropPath != null) {
             AsyncImage(
-                model = TMDB_BACKDROP_BASE + featured.backdropPath,
+                model = TmdbImages.backdrop(featured.backdropPath),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -215,7 +215,7 @@ private fun GenreCardView(
         Row(modifier = Modifier.align(Alignment.BottomEnd).padding(end = 6.dp)) {
             card.posters.forEachIndexed { i, path ->
                 AsyncImage(
-                    model = TMDB_POSTER_BASE + path,
+                    model = TmdbImages.poster(path),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

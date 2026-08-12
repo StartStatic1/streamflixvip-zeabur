@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.genre
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,7 +29,6 @@ import com.streamflixvip.app.data.GenreCategory
 import com.streamflixvip.app.network.TmdbItem
 import kotlinx.coroutines.launch
 
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
  * Grade de pôsteres de um gênero, com rolagem infinita — carrega a
@@ -115,7 +116,7 @@ fun GenreDetailScreen(
                         modifier = Modifier.clickable { onItemClick(item.id, item.resolvedMediaType) },
                     ) {
                         AsyncImage(
-                            model = TMDB_POSTER_BASE + item.poster_path,
+                            model = TmdbImages.poster(it)em.poster_path,
                             contentDescription = item.displayTitle,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier

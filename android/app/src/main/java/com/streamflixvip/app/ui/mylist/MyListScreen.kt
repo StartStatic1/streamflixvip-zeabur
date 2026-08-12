@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.mylist
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -35,7 +37,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.FavoriteEntry
 
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
  * Tela Favoritos: pills de filtro por tipo (com contagem), e grade de
@@ -215,7 +216,7 @@ private fun FavoriteCard(
     onClick: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    val posterUrl = favorite.poster_path?.let { TMDB_POSTER_BASE + it }
+    val posterUrl = favorite.poster_path?.let { TmdbImages.poster(it) }
 
     Column(modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)) {
         Box(
