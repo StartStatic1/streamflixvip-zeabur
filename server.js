@@ -2,18 +2,14 @@
 //
 // Servidor Express do StreamFlixVIP (Hetzner VPS).
 // Cada arquivo em api/*.js exporta `async function handler(req, res)`
-// e é registrado como rota Express abaixo.
+// e e registrado como rota Express abaixo.
 //
 // Deploy: /root/streamflix no servidor StreamFlix-server (PM2).
 // Env: carrega .env da pasta do projeto (PORT, keys, gates VIP, etc.).
 
-// Carrega /root/streamflix/.env (PORT, keys, REQUIRE_VIP_LIVE_TV, etc.).
-// Sem isso o PM2 não enxerga variáveis que você só colocou no arquivo .env.
 try {
   require('dotenv').config();
-} catch (_) {
-  // dotenv opcional se não estiver instalado
-}
+} catch (_) {}
 
 const express = require('express');
 const path = require('path');
@@ -31,20 +27,20 @@ function resolveStaticDir() {
   return path.join(__dirname, 'public');
 }
 const STATIC_DIR = resolveStaticDir();
-console.log('Servindo arquivos estáticos de:', STATIC_DIR);
+console.log('Servindo arquivos estaticos de:', STATIC_DIR);
 console.log(
   'VIP gate Live TV:',
   process.env.REQUIRE_VIP_LIVE_TV === '1' ||
     String(process.env.REQUIRE_VIP_LIVE_TV || '').toLowerCase() === 'true'
-    ? 'HARD (bloqueia não-VIP)'
-    : 'SOFT (só loga)',
+    ? 'HARD (bloqueia nao-VIP)'
+    : 'SOFT (so loga)',
 );
 console.log(
-  'Auth gate filmes/séries:',
+  'Auth gate filmes/series:',
   process.env.REQUIRE_AUTH_MEDIA === '1' ||
     String(process.env.REQUIRE_AUTH_MEDIA || '').toLowerCase() === 'true'
     ? 'HARD (exige login; vip_lock exige VIP)'
-    : 'SOFT (só loga)',
+    : 'SOFT (so loga)',
 );
 
 app.use(express.json({ limit: '2mb' }));
@@ -62,6 +58,7 @@ const redeemVip      = require('./api/redeem-vip.js');
 const streamProxy    = require('./api/stream-proxy.js');
 const subtitles      = require('./api/subtitles.js');
 const tmdb           = require('./api/tmdb.js');
+const tmdbImage      = require('./api/tmdb-image.js');
 const trackLogin     = require('./api/track-login.js');
 const vipStatus      = require('./api/vip-status.js');
 const mercadopago    = require('./api/mercadopago.js');
@@ -73,7 +70,7 @@ const mediaSources   = require('./api/media-sources.js');
 
 const wrap = (handler) => (req, res) => {
   Promise.resolve(handler(req, res)).catch((err) => {
-    console.error('Erro não tratado na rota:', err);
+    console.error('Erro nao tratado na rota:', err);
     if (!res.headersSent) res.status(500).json({ error: 'Erro interno do servidor' });
   });
 };
@@ -91,6 +88,7 @@ app.all('/api/redeem-vip',    wrap(redeemVip));
 app.all('/api/stream-proxy',  wrap(streamProxy));
 app.all('/api/subtitles',     wrap(subtitles));
 app.all('/api/tmdb',          wrap(tmdb));
+app.all('/api/tmdb-image',    wrap(tmdbImage));
 app.all('/api/track-login',   wrap(trackLogin));
 app.all('/api/vip-status',    wrap(vipStatus));
 app.all('/api/mercadopago/*', wrap(mercadopago));
@@ -106,7 +104,7 @@ app.use(express.static(STATIC_DIR, {
 
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) {
-    res.status(404).json({ error: 'Rota de API não encontrada' });
+    res.status(404).json({ error: 'Rota de API nao encontrada' });
     return;
   }
   res.sendFile(path.join(STATIC_DIR, 'index.html'));
@@ -120,6 +118,6 @@ setInterval(() => {
   const used = process.memoryUsage();
   const rssMB = Math.round(used.rss / 1024 / 1024);
   if (rssMB > 1200) {
-    console.warn(`⚠️ Memória alta: ${rssMB}MB em uso (RSS). Considere reiniciar ou investigar streams presos.`);
+    console.warn(`Memoria alta: ${rssMB}MB em uso (RSS). Considere reiniciar ou investigar streams presos.`);
   }
 }, 30000);
