@@ -10,10 +10,11 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Assemble API + SQL
-        run: python3 scripts/manual_push/assemble.py
-      - name: Patch admin.html UI
-        run: python3 scripts/manual_push/apply_manual_admin.py
+      - name: Join API apply script
+        run: |
+          cat scripts/manual_push/apply_manual_api_p0.py scripts/manual_push/apply_manual_api_p1.py > scripts/manual_push/apply_manual_api.py
+          python3 scripts/manual_push/apply_manual_api.py
+          python3 scripts/manual_push/apply_manual_admin.py
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
