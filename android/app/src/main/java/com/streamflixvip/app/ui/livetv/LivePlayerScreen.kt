@@ -44,10 +44,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.streamflixvip.app.network.LiveStreamOption
@@ -57,6 +59,17 @@ private enum class LiveAspect(val label: String, val mode: Int) {
     FIT("Ajustar", AspectRatioFrameLayout.RESIZE_MODE_FIT),
     FILL("Preencher", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
     STRETCH("Esticar", AspectRatioFrameLayout.RESIZE_MODE_FILL),
+}
+
+/** HLS so com .m3u8 (ou path /live/ SEM .ts). .ts puro = Progressive. */
+private fun isHlsUrl(url: String): Boolean {
+    val u = url.lowercase()
+    if (".m3u8" in u) return true
+    // MPEG-TS direto — nunca tratar como HLS (mesmo com /live/ no path)
+    if (u.endsWith(".ts") || ".ts?" in u || ".ts&" in u || "/ts/" in u) return false
+    // Xtream /live/user/pass/id sem extensao costuma ser HLS
+    if ("/live/" in u) return true
+    return false
 }
 
 @Composable
@@ -100,34 +113,108 @@ fun LivePlayerScreen(
     }
 
     val context = view.context
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            playWhenReady = true
-            addListener(object : Player.Listener {
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_READY) {
-                        isLoading = false
-                        errorMessage = null
-                    }
-                }
+    // reloadToken forca reabrir a mesma fonte (stall / Reload)
+    var reloadToken by remember { mutableIntStateOf(0) }
+    var retryOnSame by remember { mutableIntStateOf(0) }
+    var bufferingSince by remember { mutableStateOf<Long?>(null) }
 
-                override fun onPlayerError(error: PlaybackException) {
-                    android.util.Log.e("LivePlayer", "Erro stream $streamIndex: ${error.errorCodeName}", error)
-                    val next = streamIndex + 1
-                    if (next < streams.size) {
-                        streamIndex = next
-                        isLoading = true
-                        errorMessage = null
-                    } else {
+    val exoPlayer = remember {
+        val loadControl = DefaultLoadControl.Builder()
+            // Buffer generoso pra live/.ts (evita tela congelada em rede instavel)
+            .setBufferDurationsMs(
+                /* minBufferMs */ 15_000,
+                /* maxBufferMs */ 50_000,
+                /* bufferForPlaybackMs */ 2_500,
+                /* bufferForPlaybackAfterRebufferMs */ 5_000,
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+        ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
+            .build()
+            .apply {
+                playWhenReady = true
+                setSeekParameters(androidx.media3.common.SeekParameters.CLOSEST_SYNC)
+            }
+    }
+
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_READY -> {
                         isLoading = false
-                        errorMessage = "Não foi possível abrir este canal em nenhuma fonte."
+                        errorMessage = null
+                        bufferingSince = null
+                        retryOnSame = 0
+                    }
+                    Player.STATE_BUFFERING -> {
+                        isLoading = true
+                        if (bufferingSince == null) bufferingSince = System.currentTimeMillis()
+                    }
+                    Player.STATE_IDLE, Player.STATE_ENDED -> {
+                        if (playbackState == Player.STATE_ENDED && streams.isNotEmpty()) {
+                            android.util.Log.w("LivePlayer", "Stream ended — reload mesma fonte")
+                            reloadToken++
+                        }
                     }
                 }
-            })
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                android.util.Log.e("LivePlayer", "Erro stream $streamIndex (retry=$retryOnSame): ${error.errorCodeName}", error)
+                if (retryOnSame < 2) {
+                    retryOnSame++
+                    isLoading = true
+                    errorMessage = null
+                    reloadToken++
+                    return
+                }
+                retryOnSame = 0
+                val next = streamIndex + 1
+                if (next < streams.size) {
+                    streamIndex = next
+                    isLoading = true
+                    errorMessage = null
+                } else {
+                    isLoading = false
+                    errorMessage = "Nao foi possivel abrir este canal em nenhuma fonte."
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
         }
     }
 
-    LaunchedEffect(streamIndex, streams) {
+    // Watchdog: buffering > 12s sem STATE_READY → reabre a fonte (stall tipico de .ts)
+    LaunchedEffect(bufferingSince, streamIndex, reloadToken) {
+        val started = bufferingSince ?: return@LaunchedEffect
+        while (true) {
+            delay(1000)
+            val since = bufferingSince ?: return@LaunchedEffect
+            if (System.currentTimeMillis() - since < 12_000) continue
+            android.util.Log.w("LivePlayer", "Stall >12s — reload fonte $streamIndex")
+            bufferingSince = null
+            if (retryOnSame < 2) {
+                retryOnSame++
+                reloadToken++
+            } else {
+                retryOnSame = 0
+                val next = streamIndex + 1
+                if (next < streams.size) {
+                    streamIndex = next
+                } else {
+                    reloadToken++
+                }
+            }
+            return@LaunchedEffect
+        }
+    }
+
+    LaunchedEffect(streamIndex, streams, reloadToken) {
         if (streams.isEmpty()) {
             errorMessage = "Canal sem URL de stream"
             isLoading = false
@@ -136,33 +223,44 @@ fun LivePlayerScreen(
         val option = streams.getOrNull(streamIndex) ?: return@LaunchedEffect
         isLoading = true
         errorMessage = null
+        bufferingSince = System.currentTimeMillis()
         sourceLabel = option.label?.takeIf { it.isNotBlank() } ?: "Fonte ${streamIndex + 1}"
 
         val url = option.url
         val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
+            .setUserAgent("VLC/3.0.18 LibVLC/3.0.18")
             .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(12_000)
+            .setReadTimeoutMs(20_000)
             .setDefaultRequestProperties(
                 mapOf(
-                    "Referer" to url,
+                    "Referer" to url.substringBefore("?").substringBeforeLast("/") + "/",
                     "Connection" to "keep-alive",
+                    "Accept" to "*/*",
                     "Icy-MetaData" to "1",
                 ),
             )
+
         val mediaItem = MediaItem.fromUri(url)
-        val source = if (url.contains(".m3u8") || url.contains("/live/")) {
-            HlsMediaSource.Factory(httpFactory).createMediaSource(mediaItem)
+        val extractorsFactory = DefaultExtractorsFactory()
+            .setTsExtractorFlags(
+                DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES
+                    or DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS
+                    or DefaultTsPayloadReaderFactory.FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS,
+            )
+            .setConstantBitrateSeekingEnabled(true)
+
+        val source = if (isHlsUrl(url)) {
+            HlsMediaSource.Factory(httpFactory)
+                .setAllowChunklessPreparation(true)
+                .createMediaSource(mediaItem)
         } else {
-            ProgressiveMediaSource.Factory(httpFactory, DefaultExtractorsFactory())
+            ProgressiveMediaSource.Factory(httpFactory, extractorsFactory)
                 .createMediaSource(mediaItem)
         }
         exoPlayer.setMediaSource(source)
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
-    }
-
-    DisposableEffect(Unit) {
-        onDispose { exoPlayer.release() }
     }
 
     Box(
@@ -178,7 +276,6 @@ fun LivePlayerScreen(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     player = exoPlayer
-                    // Live: sem controller nativo (sem seek bar / tempo 00:00)
                     useController = false
                     resizeMode = aspect.mode
                     layoutParams = ViewGroup.LayoutParams(
@@ -318,6 +415,7 @@ fun LivePlayerScreen(
                                 label = "Fonte",
                                 onClick = {
                                     streamIndex = (streamIndex + 1) % streams.size
+                                    retryOnSame = 0
                                     isLoading = true
                                     errorMessage = null
                                     controlsVisible = true
@@ -328,12 +426,11 @@ fun LivePlayerScreen(
                             icon = Icons.Filled.Refresh,
                             label = "Reload",
                             onClick = {
-                                val current = streamIndex
-                                streamIndex = -1
-                                streamIndex = current.coerceAtLeast(0)
+                                retryOnSame = 0
                                 isLoading = true
                                 errorMessage = null
                                 controlsVisible = true
+                                reloadToken++
                             },
                         )
                     }
@@ -363,8 +460,10 @@ fun LivePlayerScreen(
                 if (streams.size > 1) {
                     TextButton(onClick = {
                         streamIndex = 0
+                        retryOnSame = 0
                         isLoading = true
                         errorMessage = null
+                        reloadToken++
                     }) { Text("Tentar de novo") }
                 }
                 TextButton(onClick = onBack) { Text("Voltar") }
