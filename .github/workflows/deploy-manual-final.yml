@@ -10,13 +10,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Join and run do_patch
+      - name: Apply patches
         run: |
-          cat scripts/manual_final/do_p0.py scripts/manual_final/do_p1.py > scripts/manual_final/do_patch.py
-          python3 scripts/manual_final/do_patch.py
+          patch -p1 < scripts/manual_final/live-tv.patch
+          patch -p1 < scripts/manual_final/admin-vip.patch
+          patch -p1 < scripts/manual_final/admin-html.patch
           grep -c loadManualChannels api/live-tv.js
           grep -c list-live-tv-manual api/admin-vip.js
           grep -c loadLiveTvManuals Public/admin.html
+          head -3 api/live-tv.js
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"
