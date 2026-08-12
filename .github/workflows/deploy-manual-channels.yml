@@ -10,9 +10,38 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Join API apply script
+      - name: Decode and apply
         run: |
-          cat scripts/manual_push/apply_manual_api_p0.py scripts/manual_push/apply_manual_api_p1.py > scripts/manual_push/apply_manual_api.py
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          # Prefer full local scripts if present; else decode b64 parts
+          api = Path('scripts/manual_push/apply_manual_api.py')
+          if not api.exists() or api.stat().st_size < 1000:
+              parts = []
+              i = 0
+              while Path(f'scripts/manual_push/api_b64_{i}.txt').exists():
+                  parts.append(Path(f'scripts/manual_push/api_b64_{i}.txt').read_text().strip())
+                  i += 1
+              if not parts:
+                  # fallback: join p0+p1 py fragments
+                  p0 = Path('scripts/manual_push/apply_manual_api_p0.py').read_text()
+                  p1 = Path('scripts/manual_push/apply_manual_api_p1.py').read_text() if Path('scripts/manual_push/apply_manual_api_p1.py').exists() else ''
+                  api.write_text(p0+p1)
+              else:
+                  api.write_bytes(base64.b64decode(''.join(parts)))
+          adm = Path('scripts/manual_push/apply_manual_admin.py')
+          if not adm.exists() or adm.stat().st_size < 500:
+              parts = []
+              i = 0
+              while Path(f'scripts/manual_push/adm_b64_{i}.txt').exists():
+                  parts.append(Path(f'scripts/manual_push/adm_b64_{i}.txt').read_text().strip())
+                  i += 1
+              if parts:
+                  adm.write_bytes(base64.b64decode(''.join(parts)))
+          print('api', api.stat().st_size if api.exists() else 0)
+          print('adm', adm.stat().st_size if adm.exists() else 0)
+          PY
           python3 scripts/manual_push/apply_manual_api.py
           python3 scripts/manual_push/apply_manual_admin.py
       - name: Commit
