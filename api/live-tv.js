@@ -75,6 +75,7 @@ function channelMergeKey(name) {
   let n = normalizeName(name);
   if (!n) return '';
   n = n.replace(/^\d+\s+/, '');
+  n = n.replace(/^(br|pt|us|uk|ar|mx|lat|latam|sp|es|fr|de|it|cl|pe|co|uy|py)\s+/, '');
   n = n.replace(/\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\s*hd|vip|premium|raw|aac|ac3)\b/g, ' ');
   n = n.replace(/\b(canais?|leg|legenda|legendado|legendada|legend|sub|subs|subtitle|legendas|dublado|dublada|multi|audio|server|opcao|opt|option|backup|alt)\b/g, ' ');
   n = n.replace(/\s+/g, ' ').trim();
@@ -423,6 +424,29 @@ async function handler(req, res) {
       };
     });
     channels = channels.filter((c) => c.categoryId !== ADULT_CATEGORY_ID);
+
+    // Junta canais com o mesmo nome na tela (BR HBO + HBO -> um item)
+    {
+      const byDisplay = new Map();
+      for (const ch of channels) {
+        const dn = normalizeName(ch.name);
+        if (!dn) continue;
+        const prev = byDisplay.get(dn);
+        if (!prev) { byDisplay.set(dn, ch); continue; }
+        const seen = new Set(prev.streams.map((s) => s.url));
+        for (const s of ch.streams) {
+          if (!seen.has(s.url)) { prev.streams.push(s); seen.add(s.url); }
+        }
+        if (!prev.logo && ch.logo) prev.logo = ch.logo;
+        if ((ch.name || '').length < (prev.name || '').length) prev.name = ch.name;
+        if (ch.streams.length > prev.streams.length) prev.id = ch.id;
+      }
+      channels = Array.from(byDisplay.values()).map((ch) => ({
+        ...ch,
+        streams: ch.streams.slice().sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)),
+      }));
+    }
+
     channels.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
     const categories = Array.from(categoryMap.values()).sort((a, b) =>
