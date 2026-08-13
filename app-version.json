@@ -1,7 +1,7 @@
 {
-  "versionCode": 70,
-  "versionName": "9.2.0",
+  "versionCode": 71,
+  "versionName": "9.3.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias nos canais, novos Adiconados"
+  "releaseNotes": "Corrigido bloqueio de capas, Adiconado proxy para evitar. "
 }
