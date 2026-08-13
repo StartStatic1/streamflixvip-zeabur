@@ -96,7 +96,17 @@ fun LivePlayerScreen(
         }
     }
 
-    var streamIndex by remember { mutableIntStateOf(0) }
+    val qualityOrder = listOf("4K", "FHD", "HD", "STD", "SD")
+    val orderedStreams = remember(streams) {
+        streams.sortedBy { s ->
+            val i = qualityOrder.indexOf(s.quality ?: "STD")
+            if (i < 0) 50 else i
+        }
+    }
+    var streamIndex by remember(orderedStreams) { mutableIntStateOf(0) }
+    var selectedQuality by remember(orderedStreams) {
+        mutableStateOf(orderedStreams.firstOrNull()?.quality)
+    }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var sourceLabel by remember { mutableStateOf("") }
@@ -148,7 +158,7 @@ fun LivePlayerScreen(
                         if (bufferingSince == null) bufferingSince = System.currentTimeMillis()
                     }
                     Player.STATE_IDLE, Player.STATE_ENDED -> {
-                        if (playbackState == Player.STATE_ENDED && streams.isNotEmpty()) {
+                        if (playbackState == Player.STATE_ENDED && orderedStreams.isNotEmpty()) {
                             android.util.Log.w("LivePlayer", "Stream ended — reload mesma fonte")
                             reloadToken++
                         }
@@ -167,7 +177,7 @@ fun LivePlayerScreen(
                 }
                 retryOnSame = 0
                 val next = streamIndex + 1
-                if (next < streams.size) {
+                if (next < orderedStreams.size) {
                     streamIndex = next
                     isLoading = true
                     errorMessage = null
@@ -198,7 +208,7 @@ fun LivePlayerScreen(
             } else {
                 retryOnSame = 0
                 val next = streamIndex + 1
-                if (next < streams.size) {
+                if (next < orderedStreams.size) {
                     streamIndex = next
                 } else {
                     reloadToken++
@@ -209,16 +219,23 @@ fun LivePlayerScreen(
     }
 
     LaunchedEffect(streamIndex, streams, reloadToken) {
-        if (streams.isEmpty()) {
+        if (orderedStreams.isEmpty()) {
             errorMessage = "Canal sem URL de stream"
             isLoading = false
             return@LaunchedEffect
         }
-        val option = streams.getOrNull(streamIndex) ?: return@LaunchedEffect
+        val option = orderedStreams.getOrNull(streamIndex) ?: return@LaunchedEffect
         isLoading = true
         errorMessage = null
         bufferingSince = System.currentTimeMillis()
-        sourceLabel = option.label?.takeIf { it.isNotBlank() } ?: "Fonte ${streamIndex + 1}"
+        sourceLabel = buildString {
+            val q = option.quality?.takeIf { it.isNotBlank() }
+            val lab = option.label?.takeIf { it.isNotBlank() }
+            if (q != null) append(q)
+            if (q != null && lab != null) append(" · ")
+            append(lab ?: "Fonte ${streamIndex + 1}")
+        }
+        selectedQuality = option.quality ?: selectedQuality
 
         val url = option.url
         val httpFactory = DefaultHttpDataSource.Factory()
@@ -371,6 +388,40 @@ fun LivePlayerScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        val qualities = remember(orderedStreams) {
+                            qualityOrder.filter { q -> orderedStreams.any { it.quality == q } }
+                        }
+                        if (qualities.size > 1) {
+                            Spacer(Modifier.height(6.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                qualities.forEach { q ->
+                                    val selected = selectedQuality == q
+                                    Text(
+                                        text = q,
+                                        color = if (selected) Color.Black else Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(
+                                                if (selected) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.15f),
+                                            )
+                                            .clickable {
+                                                selectedQuality = q
+                                                val idx = orderedStreams.indexOfFirst { it.quality == q }
+                                                if (idx >= 0) {
+                                                    streamIndex = idx
+                                                    retryOnSame = 0
+                                                    isLoading = true
+                                                    errorMessage = null
+                                                    controlsVisible = true
+                                                }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(3.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -385,9 +436,9 @@ fun LivePlayerScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            if (streams.size > 1) {
+                            if (orderedStreams.size > 1) {
                                 Text(
-                                    "${streamIndex + 1}/${streams.size}",
+                                    "${streamIndex + 1}/${orderedStreams.size}",
                                     color = Color.White.copy(alpha = 0.7f),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
@@ -410,16 +461,16 @@ fun LivePlayerScreen(
                                 controlsVisible = true
                             },
                         )
-                        if (streams.size > 1) {
+                        if (orderedStreams.size > 1) {
                             LiveChip(
                                 icon = Icons.Filled.SwapHoriz,
-                                label = if (streams.size > 1) {
-                                    "Fonte ${streamIndex + 1}/${streams.size}"
+                                label = if (orderedStreams.size > 1) {
+                                    "Fonte ${streamIndex + 1}/${orderedStreams.size}"
                                 } else {
                                     "Fonte"
                                 },
                                 onClick = {
-                                    streamIndex = (streamIndex + 1) % streams.size
+                                    streamIndex = (streamIndex + 1) % orderedStreams.size
                                     retryOnSame = 0
                                     isLoading = true
                                     errorMessage = null
@@ -462,7 +513,7 @@ fun LivePlayerScreen(
             ) {
                 Text(msg, color = Color.White, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(12.dp))
-                if (streams.size > 1) {
+                if (orderedStreams.size > 1) {
                     TextButton(onClick = {
                         streamIndex = 0
                         retryOnSame = 0

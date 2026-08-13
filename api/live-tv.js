@@ -75,10 +75,25 @@ function channelMergeKey(name) {
   let n = normalizeName(name);
   if (!n) return '';
   n = n.replace(/^\d+\s+/, '');
-  n = n.replace(/\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\s*hd)\b/g, ' ');
+  n = n.replace(/\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\s*hd|vip|premium|raw|aac|ac3)\b/g, ' ');
   n = n.replace(/\b(canais?|legenda|legendado|dublado|multi|audio|server|opcao|opt|option|backup|alt)\b/g, ' ');
   n = n.replace(/\s+/g, ' ').trim();
   return n;
+}
+
+function displayBaseName(name) {
+  let s = String(name || '').replace(/\s*\([^)]*\)\s*/g, ' ');
+  s = s.replace(/\b(SD|HD|FHD|UHD|4K|8K|H264|H265|HEVC|HDR|FULL\s*HD|VIP)\b/gi, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s || String(name || '').trim();
+}
+
+function qualityLabelFromScore(q) {
+  if (q >= 50) return '4K';
+  if (q >= 40) return 'FHD';
+  if (q >= 30) return 'HD';
+  if (q <= 5) return 'SD';
+  return 'STD';
 }
 
 function qualityScore(name) {
@@ -384,14 +399,16 @@ async function handler(req, res) {
       if (hasGood) {
         streams = streams.filter((s) => (s.quality ?? 20) >= 20);
       }
-      const cleanName = String(ch.name || '')
-        .replace(/\s*\([^)]*\)\s*/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
+      const baseName = displayBaseName(ch.name) || ch.name;
       return {
         ...ch,
-        name: cleanName || ch.name,
-        streams: streams.map(({ url, label, priority }) => ({ url, label, priority })),
+        name: baseName,
+        streams: streams.map(({ url, label, priority, quality }) => ({
+          url,
+          label,
+          priority,
+          quality: qualityLabelFromScore(quality ?? 20),
+        })),
       };
     });
     channels = channels.filter((c) => c.categoryId !== ADULT_CATEGORY_ID);
