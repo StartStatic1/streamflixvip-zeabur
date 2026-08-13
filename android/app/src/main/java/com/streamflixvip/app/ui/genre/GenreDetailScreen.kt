@@ -31,10 +31,7 @@ import kotlinx.coroutines.launch
 
 
 /**
- * Grade de pôsteres de um gênero, com rolagem infinita — carrega a
- * próxima página automaticamente quando a pessoa se aproxima do final
- * da lista atual, em vez de exigir um botão "carregar mais" ou travar
- * tudo numa única página fixa.
+ * Grade de posters de um genero, com rolagem infinita.
  */
 @Composable
 fun GenreDetailScreen(
@@ -53,7 +50,6 @@ fun GenreDetailScreen(
     var reachedEnd by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // Carrega a primeira página sempre que gênero ou categoria mudam.
     LaunchedEffect(genreId, category) {
         isLoadingFirstPage = true
         currentPage = 1
@@ -62,8 +58,6 @@ fun GenreDetailScreen(
         isLoadingFirstPage = false
     }
 
-    // Observa a posição de rolagem: quando faltam poucos itens pro fim
-    // da lista já carregada, dispara a busca da próxima página.
     LaunchedEffect(gridState, items) {
         snapshotFlowLastVisibleIndex(gridState).collect { lastVisible ->
             val nearEnd = lastVisible != null && lastVisible >= items.size - 6
@@ -100,7 +94,7 @@ fun GenreDetailScreen(
             }
         } else if (items.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Text("Nenhum título encontrado nesse gênero.")
+                Text("Nenhum titulo encontrado nesse genero.")
             }
         } else {
             LazyVerticalGrid(
@@ -116,7 +110,7 @@ fun GenreDetailScreen(
                         modifier = Modifier.clickable { onItemClick(item.id, item.resolvedMediaType) },
                     ) {
                         AsyncImage(
-                            model = TmdbImages.poster(it)em.poster_path,
+                            model = TmdbImages.poster(item.poster_path),
                             contentDescription = item.displayTitle,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
@@ -141,6 +135,5 @@ fun GenreDetailScreen(
     }
 }
 
-/** Índice do último item visível na grade — usado só pra decidir quando carregar mais páginas. */
 private fun snapshotFlowLastVisibleIndex(state: LazyGridState) =
     snapshotFlow { state.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
