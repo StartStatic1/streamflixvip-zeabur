@@ -1,0 +1,81 @@
+name: fix-continue-watching
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply progress + home refresh
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+
+          # ProgressRepository
+          p = Path('android/app/src/main/java/com/streamflixvip/app/data/ProgressRepository.kt')
+          t = p.read_text()
+          old = '''        if (durationSeconds <= 0 || positionSeconds < 5) return\n        val fraction = positionSeconds.toFloat() / durationSeconds\n        if (fraction >= 0.95f) {\n            removeProgress(accessToken, userId, tmdbId, mediaType, season, episode)\n            return\n        }\n        try {\n            api.upsertProgress(\n                apiKey = anonKey,\n                bearerToken = "Bearer $accessToken",\n                body = WatchProgressUpsert(\n                    user_id = userId,\n                    tmdb_id = tmdbId,\n                    media_type = mediaType,\n                    season = season,\n                    episode = episode,\n                    title = title,\n                    poster_path = posterPath,\n                    position_seconds = positionSeconds,\n                    duration_seconds = durationSeconds,\n                ),\n            )\n        } catch (_: Exception) {\n            // Falha ao salvar progresso nunca deve travar/interromper a reprodução.\n        }'''
+          new = '''        if (positionSeconds < 15) return\n        val effectiveDuration = if (durationSeconds > 0) {\n            durationSeconds\n        } else {\n            maxOf(positionSeconds + 120, positionSeconds * 2)\n        }\n        if (durationSeconds > 0) {\n            val fraction = positionSeconds.toFloat() / durationSeconds\n            if (fraction >= 0.95f) {\n                removeProgress(accessToken, userId, tmdbId, mediaType, season, episode)\n                return\n            }\n        }\n        try {\n            api.upsertProgress(\n                apiKey = anonKey,\n                bearerToken = "Bearer $accessToken",\n                body = WatchProgressUpsert(\n                    user_id = userId,\n                    tmdb_id = tmdbId,\n                    media_type = mediaType,\n                    season = season,\n                    episode = episode,\n                    title = title,\n                    poster_path = posterPath,\n                    position_seconds = positionSeconds,\n                    duration_seconds = effectiveDuration,\n                ),\n            )\n        } catch (e: Exception) {\n            android.util.Log.w("ProgressRepo", "Falha ao salvar progresso tmdb=$tmdbId: ${e.message}")\n        }'''
+          if old not in t:
+              raise SystemExit('ProgressRepository pattern missing')
+          p.write_text(t.replace(old, new, 1))
+          print('ProgressRepository ok')
+
+          # PlayerScreen persist
+          p = Path('android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt')
+          t = p.read_text()
+          t = t.replace(
+              'private const val PROGRESS_SAVE_INTERVAL_MS = 15_000L',
+              'private const val PROGRESS_SAVE_INTERVAL_MS = 10_000L',
+          )
+          old = '''    suspend fun persistCurrentPosition() {\n        if (userId == null || accessToken == null) return\n        val positionSeconds = (exoPlayer.currentPosition / 1000).toInt()\n        val durationSeconds = (exoPlayer.duration / 1000).toInt()\n        if (durationSeconds <= 0) return\n        progressRepository.saveProgress(\n            accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,\n            currentTitle, posterPath, positionSeconds, durationSeconds,\n        )\n    }'''
+          new = '''    suspend fun persistCurrentPosition() {\n        if (userId == null || accessToken == null) return\n        val positionMs = exoPlayer.currentPosition\n        if (positionMs < 15_000L) return\n        val positionSeconds = (positionMs / 1000).toInt()\n        val rawDur = exoPlayer.duration\n        val durationSeconds = if (rawDur > 0L) (rawDur / 1000).toInt() else 0\n        progressRepository.saveProgress(\n            accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,\n            currentTitle, posterPath, positionSeconds, durationSeconds,\n        )\n    }'''
+          if old not in t:
+              raise SystemExit('persistCurrentPosition missing')
+          t = t.replace(old, new, 1)
+          old = '''            if (userId != null && accessToken != null) {\n                val positionSeconds = (exoPlayer.currentPosition / 1000).toInt()\n                val durationSeconds = (exoPlayer.duration / 1000).toInt()\n                if (durationSeconds > 0) {\n                    GlobalScope.launch(Dispatchers.IO) {\n                        progressRepository.saveProgress(\n                            accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,\n                            currentTitle, posterPath, positionSeconds, durationSeconds,\n                        )\n                    }\n                }\n            }'''
+          new = '''            if (userId != null && accessToken != null) {\n                val positionSeconds = (exoPlayer.currentPosition / 1000).toInt()\n                val rawDur = exoPlayer.duration\n                val durationSeconds = if (rawDur > 0L) (rawDur / 1000).toInt() else 0\n                if (positionSeconds >= 15) {\n                    GlobalScope.launch(Dispatchers.IO) {\n                        progressRepository.saveProgress(\n                            accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,\n                            currentTitle, posterPath, positionSeconds, durationSeconds,\n                        )\n                    }\n                }\n            }'''
+          if old not in t:
+              raise SystemExit('onDispose save missing')
+          p.write_text(t.replace(old, new, 1))
+          print('PlayerScreen ok')
+
+          # HomeViewModel
+          p = Path('android/app/src/main/java/com/streamflixvip/app/ui/home/HomeViewModel.kt')
+          t = p.read_text()
+          if 'fun refreshContinueWatching' not in t:
+              block = '''\n    fun refreshContinueWatching() {\n        if (userId == null || accessToken == null) return\n        viewModelScope.launch {\n            val list = runCatching {\n                progressRepository.getContinueWatching(accessToken, userId)\n            }.getOrElse { emptyList() }\n            val cur = _uiState.value\n            if (cur is HomeUiState.Success) {\n                _uiState.value = cur.copy(continueWatching = list)\n            }\n        }\n    }\n\n'''
+              t = t.replace('    fun loadHome() {', block + '    fun loadHome() {', 1)
+              p.write_text(t)
+          print('HomeViewModel ok')
+
+          # HomeScreen
+          p = Path('android/app/src/main/java/com/streamflixvip/app/ui/home/HomeScreen.kt')
+          t = p.read_text()
+          if 'refreshContinueWatching' not in t:
+              if 'LocalLifecycleOwner' not in t:
+                  t = t.replace(
+                      'import androidx.compose.runtime.*\n',
+                      'import androidx.compose.runtime.*\nimport androidx.compose.ui.platform.LocalLifecycleOwner\nimport androidx.lifecycle.Lifecycle\nimport androidx.lifecycle.LifecycleEventObserver\n',
+                      1,
+                  )
+              marker = '    val state by viewModel.uiState.collectAsState()\n'
+              inject = marker + '''\n    val lifecycleOwner = LocalLifecycleOwner.current\n    DisposableEffect(lifecycleOwner) {\n        val observer = LifecycleEventObserver { _, event ->\n            if (event == Lifecycle.Event.ON_RESUME) {\n                viewModel.refreshContinueWatching()\n            }\n        }\n        lifecycleOwner.lifecycle.addObserver(observer)\n        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }\n    }\n\n'''
+              if marker not in t:
+                  raise SystemExit('HomeScreen marker missing')
+              t = t.replace(marker, inject, 1)
+              p.write_text(t)
+          print('HomeScreen ok')
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/
+          git status
+          git commit -m "fix: continuar assistindo grava sem duracao + refresh na home" || echo nothing
+          git push
