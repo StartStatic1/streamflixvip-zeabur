@@ -497,8 +497,20 @@ private fun ChannelRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (selected) {
-                Text("Tocando agora", color = Accent, fontSize = 11.sp)
+            val nSources = channel.streams.size
+            val hasManual = channel.streams.any { it.label.equals("Manual", ignoreCase = true) }
+            when {
+                selected -> Text("Tocando agora", color = Accent, fontSize = 11.sp)
+                nSources > 1 -> Text(
+                    buildString {
+                        append(nSources)
+                        append(" fontes")
+                        if (hasManual) append(" · Manual")
+                    },
+                    color = Color.White.copy(alpha = 0.45f),
+                    fontSize = 11.sp,
+                )
+                hasManual -> Text("Manual", color = Color(0xFF34D399), fontSize = 11.sp)
             }
         }
         IconButton(onClick = onToggleFavorite, modifier = Modifier.size(34.dp)) {

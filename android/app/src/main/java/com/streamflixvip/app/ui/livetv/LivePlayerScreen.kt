@@ -372,21 +372,28 @@ fun LivePlayerScreen(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Spacer(Modifier.height(3.dp))
-                        Text(
-                            buildString {
-                                append(sourceLabel)
-                                if (streams.size > 1) {
-                                    append("  ·  ")
-                                    append(streamIndex + 1)
-                                    append('/')
-                                    append(streams.size)
-                                }
-                            },
-                            color = Color.White.copy(alpha = 0.55f),
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            val isManual = sourceLabel.equals("Manual", ignoreCase = true)
+                            Text(
+                                sourceLabel.ifBlank { "Fonte ${streamIndex + 1}" },
+                                color = if (isManual) Color(0xFF34D399) else Color(0xFFFBBF24),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            if (streams.size > 1) {
+                                Text(
+                                    "${streamIndex + 1}/${streams.size}",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
                     }
 
                     Spacer(Modifier.width(12.dp))
@@ -406,7 +413,11 @@ fun LivePlayerScreen(
                         if (streams.size > 1) {
                             LiveChip(
                                 icon = Icons.Filled.SwapHoriz,
-                                label = "Fonte",
+                                label = if (streams.size > 1) {
+                                    "Fonte ${streamIndex + 1}/${streams.size}"
+                                } else {
+                                    "Fonte"
+                                },
                                 onClick = {
                                     streamIndex = (streamIndex + 1) % streams.size
                                     retryOnSame = 0
