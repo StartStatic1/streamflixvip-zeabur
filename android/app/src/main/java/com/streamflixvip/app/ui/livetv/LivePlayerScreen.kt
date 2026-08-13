@@ -96,10 +96,10 @@ fun LivePlayerScreen(
         }
     }
 
-    val qualityOrder = listOf("4K", "FHD", "HD", "STD", "SD")
+    val qualityOrder = listOf("4K", "FHD", "HD", "Padrao", "SD")
     val orderedStreams = remember(streams) {
         streams.sortedBy { s ->
-            val i = qualityOrder.indexOf(s.quality ?: "STD")
+            val i = qualityOrder.indexOf(s.quality ?: "Padrao")
             if (i < 0) 50 else i
         }
     }
@@ -107,6 +107,7 @@ fun LivePlayerScreen(
     var selectedQuality by remember(orderedStreams) {
         mutableStateOf(orderedStreams.firstOrNull()?.quality)
     }
+    var selectedLeg by remember(orderedStreams) { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var sourceLabel by remember { mutableStateOf("") }
@@ -391,7 +392,8 @@ fun LivePlayerScreen(
                         val qualities = remember(orderedStreams) {
                             qualityOrder.filter { q -> orderedStreams.any { it.quality == q } }
                         }
-                        if (qualities.size > 1) {
+                        val hasLeg = remember(orderedStreams) { orderedStreams.any { it.leg == true } }
+                        if (qualities.size > 1 || hasLeg) {
                             Spacer(Modifier.height(6.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 qualities.forEach { q ->
@@ -403,19 +405,35 @@ fun LivePlayerScreen(
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(6.dp))
-                                            .background(
-                                                if (selected) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.15f),
-                                            )
+                                            .background(if (selected) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.15f))
                                             .clickable {
                                                 selectedQuality = q
-                                                val idx = orderedStreams.indexOfFirst { it.quality == q }
-                                                if (idx >= 0) {
-                                                    streamIndex = idx
-                                                    retryOnSame = 0
-                                                    isLoading = true
-                                                    errorMessage = null
-                                                    controlsVisible = true
-                                                }
+                                                val idx = orderedStreams.indexOfFirst {
+                                                    it.quality == q && (if (selectedLeg) it.leg == true else it.leg != true)
+                                                }.let { i -> if (i >= 0) i else orderedStreams.indexOfFirst { it.quality == q } }
+                                                if (idx >= 0) { streamIndex = idx; retryOnSame = 0; isLoading = true; errorMessage = null; controlsVisible = true }
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    )
+                                }
+                                if (hasLeg) {
+                                    val legOn = selectedLeg
+                                    Text(
+                                        text = "LEG",
+                                        color = if (legOn) Color.Black else Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (legOn) Color(0xFF34D399) else Color.White.copy(alpha = 0.15f))
+                                            .clickable {
+                                                selectedLeg = !selectedLeg
+                                                val wantLeg = !legOn
+                                                val q = selectedQuality
+                                                val idx = orderedStreams.indexOfFirst {
+                                                    (q == null || it.quality == q) && (if (wantLeg) it.leg == true else it.leg != true)
+                                                }.let { i -> if (i >= 0) i else orderedStreams.indexOfFirst { if (wantLeg) it.leg == true else it.leg != true } }
+                                                if (idx >= 0) { streamIndex = idx; retryOnSame = 0; isLoading = true; errorMessage = null; controlsVisible = true }
                                             }
                                             .padding(horizontal = 8.dp, vertical = 4.dp),
                                     )

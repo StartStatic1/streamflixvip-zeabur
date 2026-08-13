@@ -9,6 +9,7 @@ data class LiveStreamOption(
     val label: String? = null,
     val priority: Int? = null,
     val quality: String? = null,
+    val leg: Boolean? = null,
 )
 
 @JsonClass(generateAdapter = true)

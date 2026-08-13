@@ -76,7 +76,7 @@ function channelMergeKey(name) {
   if (!n) return '';
   n = n.replace(/^\d+\s+/, '');
   n = n.replace(/\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\s*hd|vip|premium|raw|aac|ac3)\b/g, ' ');
-  n = n.replace(/\b(canais?|legenda|legendado|dublado|multi|audio|server|opcao|opt|option|backup|alt)\b/g, ' ');
+  n = n.replace(/\b(canais?|leg|legenda|legendado|legendada|legend|sub|subs|subtitle|legendas|dublado|dublada|multi|audio|server|opcao|opt|option|backup|alt)\b/g, ' ');
   n = n.replace(/\s+/g, ' ').trim();
   return n;
 }
@@ -84,6 +84,7 @@ function channelMergeKey(name) {
 function displayBaseName(name) {
   let s = String(name || '').replace(/\s*\([^)]*\)\s*/g, ' ');
   s = s.replace(/\b(SD|HD|FHD|UHD|4K|8K|H264|H265|HEVC|HDR|FULL\s*HD|VIP)\b/gi, ' ');
+  s = s.replace(/\b(LEG|LEGENDADO|LEGENDADA|SUB|DUB|DUBLADO)\b/gi, ' ');
   s = s.replace(/\s+/g, ' ').trim();
   return s || String(name || '').trim();
 }
@@ -93,7 +94,12 @@ function qualityLabelFromScore(q) {
   if (q >= 40) return 'FHD';
   if (q >= 30) return 'HD';
   if (q <= 5) return 'SD';
-  return 'STD';
+  return 'Padrao';
+}
+
+function isLegendadoName(name) {
+  const n = normalizeName(name);
+  return /\b(leg|legenda|legendado|legendada|legend|sub|subs|subtitle|legendas)\b/.test(n);
 }
 
 function qualityScore(name) {
@@ -348,7 +354,9 @@ async function handler(req, res) {
           ch.categoryId = ADULT_CATEGORY_ID;
         }
         if (!ch.logo && s.logo) ch.logo = s.logo;
-        if (qualityScore(s.name) > qualityScore(ch.name)) {
+        const sLeg = isLegendadoName(s.name);
+        const chLeg = isLegendadoName(ch.name);
+        if ((!sLeg && chLeg) || (sLeg === chLeg && qualityScore(s.name) > qualityScore(ch.name))) {
           ch.name = String(s.name || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || s.name;
         }
         if (!ch.streams.some((x) => x.url === s.url)) {
@@ -359,6 +367,7 @@ async function handler(req, res) {
             label: s.sourceLabel,
             priority: basePri + (q >= 30 ? 0 : q <= 5 ? 400 : 80),
             quality: q,
+            leg: sLeg,
           });
         }
       }
@@ -388,6 +397,7 @@ async function handler(req, res) {
           label: 'Manual',
           priority: Number.isFinite(Number(m.priority)) ? Number(m.priority) : 1,
           quality: 40,
+          leg: isLegendadoName(name),
         });
       }
     }
@@ -403,11 +413,12 @@ async function handler(req, res) {
       return {
         ...ch,
         name: baseName,
-        streams: streams.map(({ url, label, priority, quality }) => ({
+        streams: streams.map(({ url, label, priority, quality, leg }) => ({
           url,
           label,
           priority,
           quality: qualityLabelFromScore(quality ?? 20),
+          leg: !!leg,
         })),
       };
     });
