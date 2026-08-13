@@ -1,0 +1,80 @@
+name: feat-leg-padrao
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply LEG + Padrao
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+
+          p = Path('api/live-tv.js')
+          t = p.read_text()
+
+          old = '''function channelMergeKey(name) {\n  let n = normalizeName(name);\n  if (!n) return '';\n  n = n.replace(/^\\d+\\s+/, '');\n  n = n.replace(/\\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\\s*hd|vip|premium|raw|aac|ac3)\\b/g, ' ');\n  n = n.replace(/\\b(canais?|legenda|legendado|dublado|multi|audio|server|opcao|opt|option|backup|alt)\\b/g, ' ');\n  n = n.replace(/\\s+/g, ' ').trim();\n  return n;\n}\n\nfunction displayBaseName(name) {\n  let s = String(name || '').replace(/\\s*\\([^)]*\\)\\s*/g, ' ');\n  s = s.replace(/\\b(SD|HD|FHD|UHD|4K|8K|H264|H265|HEVC|HDR|FULL\\s*HD|VIP)\\b/gi, ' ');\n  s = s.replace(/\\s+/g, ' ').trim();\n  return s || String(name || '').trim();\n}\n\nfunction qualityLabelFromScore(q) {\n  if (q >= 50) return '4K';\n  if (q >= 40) return 'FHD';\n  if (q >= 30) return 'HD';\n  if (q <= 5) return 'SD';\n  return 'STD';\n}'''
+
+          new = '''function channelMergeKey(name) {\n  let n = normalizeName(name);\n  if (!n) return '';\n  n = n.replace(/^\\d+\\s+/, '');\n  n = n.replace(/\\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\\s*hd|vip|premium|raw|aac|ac3)\\b/g, ' ');\n  n = n.replace(/\\b(canais?|leg|legenda|legendado|legendada|legend|sub|subs|subtitle|legendas|dublado|dublada|multi|audio|server|opcao|opt|option|backup|alt)\\b/g, ' ');\n  n = n.replace(/\\s+/g, ' ').trim();\n  return n;\n}\n\nfunction displayBaseName(name) {\n  let s = String(name || '').replace(/\\s*\\([^)]*\\)\\s*/g, ' ');\n  s = s.replace(/\\b(SD|HD|FHD|UHD|4K|8K|H264|H265|HEVC|HDR|FULL\\s*HD|VIP)\\b/gi, ' ');\n  s = s.replace(/\\b(LEG|LEGENDADO|LEGENDADA|SUB|DUB|DUBLADO)\\b/gi, ' ');\n  s = s.replace(/\\s+/g, ' ').trim();\n  return s || String(name || '').trim();\n}\n\nfunction qualityLabelFromScore(q) {\n  if (q >= 50) return '4K';\n  if (q >= 40) return 'FHD';\n  if (q >= 30) return 'HD';\n  if (q <= 5) return 'SD';\n  return 'Padrao';\n}\n\nfunction isLegendadoName(name) {\n  const n = normalizeName(name);\n  return /\\b(leg|legenda|legendado|legendada|legend|sub|subs|subtitle|legendas)\\b/.test(n);\n}'''
+
+          if old not in t:
+              raise SystemExit('merge block missing')
+          t = t.replace(old, new, 1)
+
+          old = '''        if (!ch.logo && s.logo) ch.logo = s.logo;\n        if (qualityScore(s.name) > qualityScore(ch.name)) {\n          ch.name = String(s.name || '').replace(/\\s*\\([^)]*\\)\\s*/g, ' ').replace(/\\s+/g, ' ').trim() || s.name;\n        }\n        if (!ch.streams.some((x) => x.url === s.url)) {\n          const basePri = r.priority ?? 100;\n          const q = qualityScore(s.name);\n          ch.streams.push({\n            url: s.url,\n            label: s.sourceLabel,\n            priority: basePri + (q >= 30 ? 0 : q <= 5 ? 400 : 80),\n            quality: q,\n          });\n        }'''
+          new = '''        if (!ch.logo && s.logo) ch.logo = s.logo;\n        const sLeg = isLegendadoName(s.name);\n        const chLeg = isLegendadoName(ch.name);\n        if ((!sLeg && chLeg) || (sLeg === chLeg && qualityScore(s.name) > qualityScore(ch.name))) {\n          ch.name = String(s.name || '').replace(/\\s*\\([^)]*\\)\\s*/g, ' ').replace(/\\s+/g, ' ').trim() || s.name;\n        }\n        if (!ch.streams.some((x) => x.url === s.url)) {\n          const basePri = r.priority ?? 100;\n          const q = qualityScore(s.name);\n          ch.streams.push({\n            url: s.url,\n            label: s.sourceLabel,\n            priority: basePri + (q >= 30 ? 0 : q <= 5 ? 400 : 80),\n            quality: q,\n            leg: sLeg,\n          });\n        }'''
+          if old not in t:
+              raise SystemExit('stream push missing')
+          t = t.replace(old, new, 1)
+
+          t = t.replace(
+            '''        ch.streams.push({\n          url,\n          label: 'Manual',\n          priority: Number.isFinite(Number(m.priority)) ? Number(m.priority) : 1,\n          quality: 40,\n        });''',
+            '''        ch.streams.push({\n          url,\n          label: 'Manual',\n          priority: Number.isFinite(Number(m.priority)) ? Number(m.priority) : 1,\n          quality: 40,\n          leg: isLegendadoName(name),\n        });''',
+          )
+
+          t = t.replace(
+            '''        streams: streams.map(({ url, label, priority, quality }) => ({\n          url,\n          label,\n          priority,\n          quality: qualityLabelFromScore(quality ?? 20),\n        })),''',
+            '''        streams: streams.map(({ url, label, priority, quality, leg }) => ({\n          url,\n          label,\n          priority,\n          quality: qualityLabelFromScore(quality ?? 20),\n          leg: !!leg,\n        })),''',
+          )
+          p.write_text(t)
+          print('live-tv.js ok')
+
+          p = Path('android/app/src/main/java/com/streamflixvip/app/network/LiveTvApi.kt')
+          t = p.read_text()
+          if 'val leg' not in t:
+              t = t.replace(
+                  'val quality: String? = null,\n)',
+                  'val quality: String? = null,\n    val leg: Boolean? = null,\n)',
+              )
+              p.write_text(t)
+          print('LiveTvApi ok')
+
+          p = Path('android/app/src/main/java/com/streamflixvip/app/ui/livetv/LivePlayerScreen.kt')
+          t = p.read_text()
+          t = t.replace('listOf("4K", "FHD", "HD", "STD", "SD")', 'listOf("4K", "FHD", "HD", "Padrao", "SD")')
+          t = t.replace('s.quality ?: "STD"', 's.quality ?: "Padrao"')
+          if 'selectedLeg' not in t:
+              t = t.replace(
+                  '''    var selectedQuality by remember(orderedStreams) {\n        mutableStateOf(orderedStreams.firstOrNull()?.quality)\n    }\n''',
+                  '''    var selectedQuality by remember(orderedStreams) {\n        mutableStateOf(orderedStreams.firstOrNull()?.quality)\n    }\n    var selectedLeg by remember(orderedStreams) { mutableStateOf(false) }\n''',
+              )
+          old_q = '''                        val qualities = remember(orderedStreams) {\n                            qualityOrder.filter { q -> orderedStreams.any { it.quality == q } }\n                        }\n                        if (qualities.size > 1) {\n                            Spacer(Modifier.height(6.dp))\n                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {\n                                qualities.forEach { q ->\n                                    val selected = selectedQuality == q\n                                    Text(\n                                        text = q,\n                                        color = if (selected) Color.Black else Color.White,\n                                        fontSize = 11.sp,\n                                        fontWeight = FontWeight.Bold,\n                                        modifier = Modifier\n                                            .clip(RoundedCornerShape(6.dp))\n                                            .background(\n                                                if (selected) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.15f),\n                                            )\n                                            .clickable {\n                                                selectedQuality = q\n                                                val idx = orderedStreams.indexOfFirst { it.quality == q }\n                                                if (idx >= 0) {\n                                                    streamIndex = idx\n                                                    retryOnSame = 0\n                                                    isLoading = true\n                                                    errorMessage = null\n                                                    controlsVisible = true\n                                                }\n                                            }\n                                            .padding(horizontal = 8.dp, vertical = 4.dp),\n                                    )\n                                }\n                            }\n                        }'''
+          new_q = '''                        val qualities = remember(orderedStreams) {\n                            qualityOrder.filter { q -> orderedStreams.any { it.quality == q } }\n                        }\n                        val hasLeg = remember(orderedStreams) { orderedStreams.any { it.leg == true } }\n                        if (qualities.size > 1 || hasLeg) {\n                            Spacer(Modifier.height(6.dp))\n                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {\n                                qualities.forEach { q ->\n                                    val selected = selectedQuality == q\n                                    Text(\n                                        text = q,\n                                        color = if (selected) Color.Black else Color.White,\n                                        fontSize = 11.sp,\n                                        fontWeight = FontWeight.Bold,\n                                        modifier = Modifier\n                                            .clip(RoundedCornerShape(6.dp))\n                                            .background(if (selected) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.15f))\n                                            .clickable {\n                                                selectedQuality = q\n                                                val idx = orderedStreams.indexOfFirst {\n                                                    it.quality == q && (if (selectedLeg) it.leg == true else it.leg != true)\n                                                }.let { i -> if (i >= 0) i else orderedStreams.indexOfFirst { it.quality == q } }\n                                                if (idx >= 0) { streamIndex = idx; retryOnSame = 0; isLoading = true; errorMessage = null; controlsVisible = true }\n                                            }\n                                            .padding(horizontal = 8.dp, vertical = 4.dp),\n                                    )\n                                }\n                                if (hasLeg) {\n                                    val legOn = selectedLeg\n                                    Text(\n                                        text = "LEG",\n                                        color = if (legOn) Color.Black else Color.White,\n                                        fontSize = 11.sp,\n                                        fontWeight = FontWeight.Bold,\n                                        modifier = Modifier\n                                            .clip(RoundedCornerShape(6.dp))\n                                            .background(if (legOn) Color(0xFF34D399) else Color.White.copy(alpha = 0.15f))\n                                            .clickable {\n                                                selectedLeg = !selectedLeg\n                                                val wantLeg = !legOn\n                                                val q = selectedQuality\n                                                val idx = orderedStreams.indexOfFirst {\n                                                    (q == null || it.quality == q) && (if (wantLeg) it.leg == true else it.leg != true)\n                                                }.let { i -> if (i >= 0) i else orderedStreams.indexOfFirst { if (wantLeg) it.leg == true else it.leg != true } }\n                                                if (idx >= 0) { streamIndex = idx; retryOnSame = 0; isLoading = true; errorMessage = null; controlsVisible = true }\n                                            }\n                                            .padding(horizontal = 8.dp, vertical = 4.dp),\n                                    )\n                                }\n                            }\n                        }'''
+          if old_q not in t:
+              raise SystemExit('qualities UI missing')
+          t = t.replace(old_q, new_q, 1)
+          p.write_text(t)
+          print('LivePlayerScreen ok')
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/live-tv.js android/
+          git commit -m "feat(tv): LEG no merge + chip LEG + STD vira Padrao" || echo nothing
+          git push
