@@ -1,0 +1,39 @@
+name: fix-live-dedupe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dedupe by display name
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path('api/live-tv.js')
+          t = p.read_text()
+
+          old = '''function channelMergeKey(name) {\n  let n = normalizeName(name);\n  if (!n) return '';\n  n = n.replace(/^\\d+\\s+/, '');\n  n = n.replace(/\\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\\s*hd|vip|premium|raw|aac|ac3)\\b/g, ' ');\n  n = n.replace(/\\b(canais?|leg|legenda|legendado|legendada|legend|sub|subs|subtitle|legendas|dublado|dublada|multi|audio|server|opcao|opt|option|backup|alt)\\b/g, ' ');\n  n = n.replace(/\\s+/g, ' ').trim();\n  return n;\n}'''
+          new = '''function channelMergeKey(name) {\n  let n = normalizeName(name);\n  if (!n) return '';\n  n = n.replace(/^\\d+\\s+/, '');\n  n = n.replace(/^(br|pt|us|uk|ar|mx|lat|latam|sp|es|fr|de|it|cl|pe|co|uy|py)\\s+/, '');\n  n = n.replace(/\\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\\s*hd|vip|premium|raw|aac|ac3)\\b/g, ' ');\n  n = n.replace(/\\b(canais?|leg|legenda|legendado|legendada|legend|sub|subs|subtitle|legendas|dublado|dublada|multi|audio|server|opcao|opt|option|backup|alt)\\b/g, ' ');\n  n = n.replace(/\\s+/g, ' ').trim();\n  return n;\n}'''
+          if old not in t:
+              raise SystemExit('merge key missing')
+          t = t.replace(old, new, 1)
+
+          old = '''    channels = channels.filter((c) => c.categoryId !== ADULT_CATEGORY_ID);\n    channels.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));\n'''
+          new = '''    channels = channels.filter((c) => c.categoryId !== ADULT_CATEGORY_ID);\n\n    // Junta canais com o mesmo nome na tela (BR HBO + HBO -> um item)\n    {\n      const byDisplay = new Map();\n      for (const ch of channels) {\n        const dn = normalizeName(ch.name);\n        if (!dn) continue;\n        const prev = byDisplay.get(dn);\n        if (!prev) { byDisplay.set(dn, ch); continue; }\n        const seen = new Set(prev.streams.map((s) => s.url));\n        for (const s of ch.streams) {\n          if (!seen.has(s.url)) { prev.streams.push(s); seen.add(s.url); }\n        }\n        if (!prev.logo && ch.logo) prev.logo = ch.logo;\n        if ((ch.name || '').length < (prev.name || '').length) prev.name = ch.name;\n        if (ch.streams.length > prev.streams.length) prev.id = ch.id;\n      }\n      channels = Array.from(byDisplay.values()).map((ch) => ({\n        ...ch,\n        streams: ch.streams.slice().sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)),\n      }));\n    }\n\n    channels.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));\n'''
+          if old not in t:
+              raise SystemExit('filter block missing')
+          p.write_text(t.replace(old, new, 1))
+          print('dedupe ok')
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/live-tv.js
+          git commit -m "fix(tv): dedupe lista pelo nome exibido + prefixo BR" || echo nothing
+          git push
