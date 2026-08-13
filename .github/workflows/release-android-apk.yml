@@ -1,29 +1,14 @@
 name: Build Android APK - Release (Publicar)
 
-# Só roda quando VOCÊ aciona manualmente (aba Actions → este workflow
-# → "Run workflow"). Não dispara sozinho com push, de propósito —
-# publicar uma versão nova pros usuários é uma decisão consciente,
-# não algo que deveria acontecer a cada commit.
-#
-# O que faz sozinho a partir do número de versão que você informar:
-#   1. Incrementa o versionCode no build.gradle.kts (+1 sobre o atual)
-#   2. Builda o APK de RELEASE (assinado, debuggable=false — o que
-#      lojas terceiras exigem, diferente do workflow de debug)
-#   3. Publica o APK em Public/downloads/app-latest.apk
-#   4. Atualiza app-version.json com o novo número (o app detecta
-#      sozinho na próxima vez que abrir)
-#   5. Comita e sobe tudo — build.gradle.kts, o APK novo e o JSON —
-#      de volta pro repositório
-
 on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Nome da versão (ex: 4.4.0)'
+        description: 'Nome da versao (ex: 4.4.0)'
         required: true
         type: string
       release_notes:
-        description: 'O que mudou nesta versão (aparece na tela de update do app)'
+        description: 'O que mudou nesta versao (aparece na tela de update do app)'
         required: true
         type: string
 
@@ -35,7 +20,7 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout do repositório
+      - name: Checkout do repositorio
         uses: actions/checkout@v4
 
       - name: Configurar JDK 17
@@ -49,7 +34,7 @@ jobs:
         run: |
           CURRENT=$(grep -oP 'versionCode\s*=\s*\K\d+' android/app/build.gradle.kts)
           NEW=$((CURRENT + 1))
-          echo "Versão atual: $CURRENT → nova: $NEW"
+          echo "Versao atual: $CURRENT -> nova: $NEW"
           echo "code=$NEW" >> "$GITHUB_OUTPUT"
 
       - name: Atualizar versionCode/versionName no build.gradle.kts
@@ -59,41 +44,59 @@ jobs:
           echo "--- Conferindo ---"
           grep -E "versionCode|versionName" android/app/build.gradle.kts
 
-      - name: Gerar wrapper do Gradle (versão fixa 8.7)
+      - name: Setup Gradle 8.7 (oficial, com cache)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+          cache-read-only: false
+
+      - name: Gerar wrapper (retry se services.gradle.org falhar)
         working-directory: android
         run: |
-          curl -sL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
-          unzip -q /tmp/gradle.zip -d /tmp
-          /tmp/gradle-8.7/bin/gradle wrapper --gradle-version 8.7
+          set +e
+          for i in 1 2 3; do
+            if gradle wrapper --gradle-version 8.7; then
+              echo "wrapper ok (tentativa $i)"
+              break
+            fi
+            echo "falha tentativa $i — aguardando..."
+            sleep $((i * 15))
+            if [ "$i" = "3" ]; then
+              echo "Falha ao gerar wrapper; seguindo com gradle global"
+            fi
+          done
+          set -e
+          if [ -f gradlew ]; then chmod +x gradlew; fi
 
-      - name: Dar permissão de execução ao gradlew
-        working-directory: android
-        run: chmod +x gradlew
-
-      - name: Restaurar keystore fixa (mesma chave sempre — evita conflito de assinatura ao atualizar)
+      - name: Restaurar keystore fixa
         working-directory: android
         run: echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > app/debug.keystore
 
-      - name: Buildar APK de release (debuggable=false, aceito por lojas de terceiros)
+      - name: Buildar APK de release
         working-directory: android
         env:
           DEBUG_KEYSTORE_PATH: debug.keystore
           DEBUG_KEYSTORE_PASSWORD: streamflixvip123
           DEBUG_KEY_ALIAS: streamflixvip-debug
           DEBUG_KEY_PASSWORD: streamflixvip123
-        run: ./gradlew assembleRelease --no-daemon
+        run: |
+          if [ -x ./gradlew ]; then
+            ./gradlew assembleRelease --no-daemon
+          else
+            gradle assembleRelease --no-daemon
+          fi
 
-      - name: Enviar APK como artefato (backup/histórico no Actions)
+      - name: Enviar APK como artefato
         uses: actions/upload-artifact@v4
         with:
           name: streamflixvip-release-apk-${{ inputs.version_name }}
           path: android/app/build/outputs/apk/release/app-release.apk
           retention-days: 90
 
-      - name: Publicar APK em Public/downloads (o mesmo link que o app já usa)
+      - name: Publicar APK em Public/downloads
         run: cp android/app/build/outputs/apk/release/app-release.apk Public/downloads/app-latest.apk
 
-      - name: Atualizar app-version.json (o app passa a enxergar a atualização sozinho)
+      - name: Atualizar app-version.json
         run: |
           cat > app-version.json << EOF
           {
@@ -106,7 +109,7 @@ jobs:
           EOF
           cat app-version.json
 
-      - name: Commit + push do APK novo, versão e JSON atualizados
+      - name: Commit + push do APK novo, versao e JSON atualizados
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
