@@ -38,11 +38,18 @@ class ProgressRepository {
         positionSeconds: Int,
         durationSeconds: Int,
     ) {
-        if (durationSeconds <= 0 || positionSeconds < 5) return
-        val fraction = positionSeconds.toFloat() / durationSeconds
-        if (fraction >= 0.95f) {
-            removeProgress(accessToken, userId, tmdbId, mediaType, season, episode)
-            return
+        if (positionSeconds < 15) return
+        val effectiveDuration = if (durationSeconds > 0) {
+            durationSeconds
+        } else {
+            maxOf(positionSeconds + 120, positionSeconds * 2)
+        }
+        if (durationSeconds > 0) {
+            val fraction = positionSeconds.toFloat() / durationSeconds
+            if (fraction >= 0.95f) {
+                removeProgress(accessToken, userId, tmdbId, mediaType, season, episode)
+                return
+            }
         }
         try {
             api.upsertProgress(
@@ -57,11 +64,11 @@ class ProgressRepository {
                     title = title,
                     poster_path = posterPath,
                     position_seconds = positionSeconds,
-                    duration_seconds = durationSeconds,
+                    duration_seconds = effectiveDuration,
                 ),
             )
-        } catch (_: Exception) {
-            // Falha ao salvar progresso nunca deve travar/interromper a reprodução.
+        } catch (e: Exception) {
+            android.util.Log.w("ProgressRepo", "Falha ao salvar progresso tmdb=$tmdbId: ${e.message}")
         }
     }
 

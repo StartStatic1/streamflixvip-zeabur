@@ -109,7 +109,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private const val PROGRESS_SAVE_INTERVAL_MS = 15_000L
+private const val PROGRESS_SAVE_INTERVAL_MS = 10_000L
 
 private enum class AspectMode(val label: String, val resizeMode: Int) {
     FIT("16:9", AspectRatioFrameLayout.RESIZE_MODE_FIT),
@@ -680,9 +680,11 @@ private fun NativePlayer(
 
     suspend fun persistCurrentPosition() {
         if (userId == null || accessToken == null) return
-        val positionSeconds = (exoPlayer.currentPosition / 1000).toInt()
-        val durationSeconds = (exoPlayer.duration / 1000).toInt()
-        if (durationSeconds <= 0) return
+        val positionMs = exoPlayer.currentPosition
+        if (positionMs < 15_000L) return
+        val positionSeconds = (positionMs / 1000).toInt()
+        val rawDur = exoPlayer.duration
+        val durationSeconds = if (rawDur > 0L) (rawDur / 1000).toInt() else 0
         progressRepository.saveProgress(
             accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,
             currentTitle, posterPath, positionSeconds, durationSeconds,
@@ -720,8 +722,9 @@ private fun NativePlayer(
         onDispose {
             if (userId != null && accessToken != null) {
                 val positionSeconds = (exoPlayer.currentPosition / 1000).toInt()
-                val durationSeconds = (exoPlayer.duration / 1000).toInt()
-                if (durationSeconds > 0) {
+                val rawDur = exoPlayer.duration
+                val durationSeconds = if (rawDur > 0L) (rawDur / 1000).toInt() else 0
+                if (positionSeconds >= 15) {
                     GlobalScope.launch(Dispatchers.IO) {
                         progressRepository.saveProgress(
                             accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,

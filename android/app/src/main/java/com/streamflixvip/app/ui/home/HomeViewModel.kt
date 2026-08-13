@@ -58,6 +58,20 @@ class HomeViewModel(
         loadHome()
     }
 
+
+    fun refreshContinueWatching() {
+        if (userId == null || accessToken == null) return
+        viewModelScope.launch {
+            val list = runCatching {
+                progressRepository.getContinueWatching(accessToken, userId)
+            }.getOrElse { emptyList() }
+            val cur = _uiState.value
+            if (cur is HomeUiState.Success) {
+                _uiState.value = cur.copy(continueWatching = list)
+            }
+        }
+    }
+
     fun loadHome() {
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
