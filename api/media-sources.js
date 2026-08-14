@@ -11,6 +11,7 @@
 //
 // GET /api/media-sources?tmdb_id=123&type=movie
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&episode=2
+// GET /api/media-sources?tmdb_id=123&type=tv&season=1&list_episodes=1
 
 const { resolveVipAccess } = require('../lib/vip-gate');
 
@@ -55,6 +56,21 @@ function titleRequiresVip(config, episodeNumber) {
   return false;
 }
 
+async function loadEpisodesWithSources(serviceKey, tmdbId, season) {
+  const q =
+    SUPABASE_URL + '/rest/v1/vip_sources?tmdb_id=eq.' + encodeURIComponent(tmdbId) +
+    '&media_type=eq.tv&is_active=eq.true&season=eq.' + encodeURIComponent(season) +
+    '&select=episode';
+  const r = await fetch(q, { headers: sbHeaders(serviceKey) });
+  if (!r.ok) throw new Error('vip_sources episodes ' + r.status);
+  const rows = await r.json();
+  const set = new Set();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    if (row.episode != null) set.add(Number(row.episode));
+  });
+  return [...set].filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+}
+
 async function loadSources(serviceKey, tmdbId, mediaType, season, episode) {
   let q =
     `${SUPABASE_URL}/rest/v1/vip_sources?tmdb_id=eq.${encodeURIComponent(tmdbId)}` +
@@ -72,7 +88,7 @@ async function loadSources(serviceKey, tmdbId, mediaType, season, episode) {
 
   const r = await fetch(q, { headers: sbHeaders(serviceKey) });
   if (!r.ok) {
-    const body = await r.text().catch(() => '');
+    const body = await r.text();
     throw new Error(`vip_sources ${r.status}: ${body.slice(0, 180)}`);
   }
   const rows = await r.json();
@@ -80,6 +96,13 @@ async function loadSources(serviceKey, tmdbId, mediaType, season, episode) {
 }
 
 async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Método não permitido', sources: [] });
     return;
@@ -91,8 +114,8 @@ async function handler(req, res) {
     return;
   }
 
-  const tmdbId = String(req.query.tmdb_id || req.query.tmdb || '').trim();
-  const mediaType = String(req.query.type || req.query.media_type || 'movie').trim().toLowerCase();
+  const tmdbId = req.query.tmdb_id;
+  const mediaType = String(req.query.type || req.query.media_type || '').toLowerCase();
   const season = req.query.season != null && req.query.season !== '' ? parseInt(req.query.season, 10) : null;
   const episode =
     req.query.episode != null && req.query.episode !== '' ? parseInt(req.query.episode, 10) : null;
@@ -106,19 +129,26 @@ async function handler(req, res) {
     return;
   }
 
+  // Modo lista: quais EPs da temporada tem fonte (app marca "Sem fonte")
+  if (String(req.query.list_episodes || '') === '1' && mediaType === 'tv' && season != null) {
+    try {
+      const episodesWithSources = await loadEpisodesWithSources(serviceKey, tmdbId, season);
+      res.status(200).json({ sources: [], episodesWithSources });
+    } catch (err) {
+      console.error('[media-sources] list_episodes', err);
+      res.status(500).json({ error: err.message || 'Erro', sources: [], episodesWithSources: [] });
+    }
+    return;
+  }
+
   const hard = isMediaAuthHard();
-  const access = await resolveVipAccess(req, serviceKey);
-  // resolveVipAccess usa REQUIRE_VIP_LIVE_TV para o flag hard interno;
-  // aqui usamos REQUIRE_AUTH_MEDIA separado.
+  const access = await resolveVipAccess(req);
   const loggedIn = access.source === 'jwt' || access.source === 'userId' || access.source === 'deviceId';
 
   const vipConfig = await loadVipTitleConfig(serviceKey, tmdbId, mediaType);
   const needsVip = titleRequiresVip(vipConfig, mediaType === 'tv' ? episode : null);
 
-  // Sempre respeita vip_titles do painel (lock total ou grátis até EP N).
-  // Soft (REQUIRE_AUTH_MEDIA off) só dispensa login em título NÃO-VIP.
   if (needsVip && !access.isVip) {
-    // 200 (nao 403): app precisa ler vipConfig no body para mostrar cadeado/CTA.
     console.warn(
       `[media-sources] BLOCK vip_lock tmdb=${tmdbId} ep=${episode} user=${access.userId || '-'}`,
     );
@@ -159,7 +189,6 @@ async function handler(req, res) {
 
   try {
     let sources = await loadSources(serviceKey, tmdbId, mediaType, season, episode);
-    // Mesma prioridade visual do app: MegaEmbed VIP no topo
     sources = sources.slice().sort((a, b) => {
       const aVip = a.source_label === 'MegaEmbed VIP' ? 1 : 0;
       const bVip = b.source_label === 'MegaEmbed VIP' ? 1 : 0;
