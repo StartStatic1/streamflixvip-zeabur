@@ -1814,9 +1814,9 @@ private fun MovieRequestCard() {
         modifier = Modifier.fillMaxWidth().padding(16.dp),
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text("Este filme ainda nao esta no catalogo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Este filme ainda não está no catálogo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
-            Text("Quer assistir? Peca no nosso canal e a equipe analisa a inclusao o mais rapido possivel.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
+            Text("Quer assistir? Peça no nosso canal e a equipe analisa a inclusão o mais rápido possível.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
             Spacer(Modifier.height(14.dp))
             Button(onClick = { try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(telegramUrl))) } catch (_: Exception) { } }, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
                 Text("Pedir este filme no Telegram", fontWeight = FontWeight.SemiBold)
