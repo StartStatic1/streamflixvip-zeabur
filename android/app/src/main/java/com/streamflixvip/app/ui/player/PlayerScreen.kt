@@ -243,7 +243,7 @@ fun PlayerScreen(
             resumeSeconds = resumeSeconds,
         )
     } else {
-        EmbedWebView(url = currentResolvedUrl)
+        EmbedWebView(url = currentResolvedUrl, userId = userId, accessToken = accessToken, tmdbId = tmdbId, mediaType = mediaType, season = season, episode = episode, title = title, posterPath = posterPath)
     }
 }
 
@@ -681,7 +681,7 @@ private fun NativePlayer(
     suspend fun persistCurrentPosition() {
         if (userId == null || accessToken == null) return
         val positionMs = exoPlayer.currentPosition
-        if (positionMs < 15_000L) return
+        if (positionMs < 10_000L) return
         val positionSeconds = (positionMs / 1000).toInt()
         val rawDur = exoPlayer.duration
         val durationSeconds = if (rawDur > 0L) (rawDur / 1000).toInt() else 0
@@ -724,7 +724,7 @@ private fun NativePlayer(
                 val positionSeconds = (exoPlayer.currentPosition / 1000).toInt()
                 val rawDur = exoPlayer.duration
                 val durationSeconds = if (rawDur > 0L) (rawDur / 1000).toInt() else 0
-                if (positionSeconds >= 15) {
+                if (positionSeconds >= 10) {
                     GlobalScope.launch(Dispatchers.IO) {
                         progressRepository.saveProgress(
                             accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,
@@ -1213,7 +1213,36 @@ private fun SettingsRow(label: String, value: String, onClick: () -> Unit) {
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun EmbedWebView(url: String) {
+private fun EmbedWebView(
+    url: String,
+    userId: String? = null,
+    accessToken: String? = null,
+    tmdbId: Int = 0,
+    mediaType: String = "movie",
+    season: Int = 0,
+    episode: Int = 0,
+    title: String = "",
+    posterPath: String? = null,
+) {
+    val progressRepository = remember { ProgressRepository() }
+    LaunchedEffect(userId, accessToken, tmdbId, mediaType, season, episode) {
+        if (userId == null || accessToken == null || tmdbId <= 0) return@LaunchedEffect
+        delay(12_000L)
+        var pos = 15
+        val estDuration = if (mediaType == "tv") 2700 else 5400
+        while (true) {
+            try {
+                progressRepository.saveProgress(
+                    accessToken, userId, tmdbId, mediaType, season, episode,
+                    title, posterPath, pos, estDuration,
+                )
+            } catch (_: Exception) { }
+            delay(15_000L)
+            pos += 15
+            if (pos > estDuration - 60) break
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         var isLoading by remember { mutableStateOf(true) }
         AndroidView(

@@ -38,7 +38,7 @@ class ProgressRepository {
         positionSeconds: Int,
         durationSeconds: Int,
     ) {
-        if (positionSeconds < 15) return
+        if (positionSeconds < 10) return
         val effectiveDuration = if (durationSeconds > 0) {
             durationSeconds
         } else {
