@@ -12,6 +12,7 @@ data class MediaSourcesResponse(
     val isVip: Boolean = false,
     val error: String? = null,
     val code: String? = null,
+    val episodesWithSources: List<Int> = emptyList(),
 )
 
 interface MediaSourcesApi {
@@ -27,5 +28,13 @@ interface MediaSourcesApi {
         @Query("type") type: String = "tv",
         @Query("season") season: Int,
         @Query("episode") episode: Int,
+    ): MediaSourcesResponse
+
+    @GET("api/media-sources")
+    suspend fun getSeasonEpisodesWithSources(
+        @Query("tmdb_id") tmdbId: Int,
+        @Query("type") type: String = "tv",
+        @Query("season") season: Int,
+        @Query("list_episodes") listEpisodes: Int = 1,
     ): MediaSourcesResponse
 }
