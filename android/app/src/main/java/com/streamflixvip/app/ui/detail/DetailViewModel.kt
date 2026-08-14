@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixvip.app.data.CatalogRepository
 import com.streamflixvip.app.data.VipStatusHolder
+import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.TmdbResponse
@@ -41,6 +42,7 @@ sealed interface DetailUiState {
         val canPostComments: Boolean = false,
         val isFavorite: Boolean = false,
         val isTogglingFavorite: Boolean = false,
+        val episodesWithSources: Set<Int>? = null,
     ) : DetailUiState {
         val trailerKey: String? get() = details.trailerKey
         fun movieIsLocked(isVip: Boolean): Boolean = !isVip && requiresVip(vipConfig, episodeNumber = null)
@@ -133,9 +135,20 @@ class DetailViewModel(
         _uiState.value = current.copy(expandedSeason = season, episodesOfExpandedSeason = emptyList(), isLoadingEpisodes = true)
         viewModelScope.launch {
             val episodes = repository.getSeasonEpisodes(tmdbId, season)
+            var withSources: Set<Int>? = null
+            try {
+                val resp = NetworkModule.mediaSourcesApi.getSeasonEpisodesWithSources(tmdbId = tmdbId, season = season)
+                withSources = resp.episodesWithSources.toSet()
+            } catch (_: Exception) {
+                withSources = null
+            }
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             if (stillCurrent.expandedSeason == season) {
-                _uiState.value = stillCurrent.copy(episodesOfExpandedSeason = episodes, isLoadingEpisodes = false)
+                _uiState.value = stillCurrent.copy(
+                    episodesOfExpandedSeason = episodes,
+                    isLoadingEpisodes = false,
+                    episodesWithSources = withSources,
+                )
             }
         }
     }
@@ -252,9 +265,20 @@ class DetailViewModel(
         )
         viewModelScope.launch {
             val episodes = repository.getSeasonEpisodes(tmdbId, season)
+            var withSources: Set<Int>? = null
+            try {
+                val resp = NetworkModule.mediaSourcesApi.getSeasonEpisodesWithSources(tmdbId = tmdbId, season = season)
+                withSources = resp.episodesWithSources.toSet()
+            } catch (_: Exception) {
+                withSources = null
+            }
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             if (stillCurrent.expandedSeason == season) {
-                _uiState.value = stillCurrent.copy(episodesOfExpandedSeason = episodes, isLoadingEpisodes = false)
+                _uiState.value = stillCurrent.copy(
+                    episodesOfExpandedSeason = episodes,
+                    isLoadingEpisodes = false,
+                    episodesWithSources = withSources,
+                )
             }
         }
     }

@@ -339,7 +339,7 @@ private fun DetailContent(
             } else if (state.movieSources.isEmpty()) {
                 item {
                     Text(
-                        "Nenhuma fonte disponível ainda para este título.",
+                        "__MOVIE_CTA__",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(16.dp),
@@ -405,8 +405,9 @@ private fun DetailContent(
                             isSelected = state.selectedSeason == state.expandedSeason && state.selectedEpisode == ep.episode_number,
                             isLoading = state.isLoadingEpisodeSources && state.selectedSeason == state.expandedSeason && state.selectedEpisode == ep.episode_number,
                             isLocked = state.episodeIsLocked(ep.episode_number, isVip),
+                            isAvailable = state.episodesWithSources?.contains(ep.episode_number) != false,
                             onToggleExpand = { onToggleEpisodeExpanded(ep.episode_number) },
-                            onPlay = { if (state.episodeIsLocked(ep.episode_number, isVip)) onUpgradeClick() else onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) },
+                            onPlay = { val hasSource = state.episodesWithSources?.contains(ep.episode_number) != false; when { state.episodeIsLocked(ep.episode_number, isVip) -> onUpgradeClick(); !hasSource -> {}; else -> onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) } },
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -653,6 +654,7 @@ private fun CineverseEpisodeRow(
     isSelected: Boolean,
     isLoading: Boolean,
     isLocked: Boolean,
+    isAvailable: Boolean = true,
     onToggleExpand: () -> Unit,
     onPlay: () -> Unit,
 ) {
@@ -673,11 +675,12 @@ private fun CineverseEpisodeRow(
                     .size(38.dp)
                     .clip(androidx.compose.foundation.shape.CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable(onClick = onPlay),
+                    .clickable(enabled = isLocked || isAvailable, onClick = onPlay),
                 contentAlignment = Alignment.Center,
             ) {
                 when {
                     isLocked -> Text("🔒", fontSize = 14.sp)
+                    !isAvailable -> Text("⏳", fontSize = 14.sp)
                     isLoading -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     else -> Icon(
                         Icons.Filled.PlayArrow,
@@ -693,10 +696,11 @@ private fun CineverseEpisodeRow(
                     "${episode.episode_number}. ${episode.displayName}",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    color = when { !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f); isSelected -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.onSurface },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (!isAvailable) { Text("Em breve", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
                 episode.displayRuntime?.let {
                     Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -1800,6 +1804,27 @@ private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovieRequestCard() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val telegramUrl = "https://t.me/streamflixofc/7335"
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Este filme ainda nao esta no catalogo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            Text("Quer assistir? Peca no nosso canal e a equipe analisa a inclusao o mais rapido possivel.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
+            Spacer(Modifier.height(14.dp))
+            Button(onClick = { try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(telegramUrl))) } catch (_: Exception) { } }, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Text("Pedir este filme no Telegram", fontWeight = FontWeight.SemiBold)
             }
         }
     }
