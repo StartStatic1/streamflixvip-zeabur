@@ -142,7 +142,9 @@ async function handler(req, res) {
   }
 
   const hard = isMediaAuthHard();
-  const access = await resolveVipAccess(req);
+  // IMPORTANTE: serviceKey obrigatorio — sem ele checkVipStatus sempre retorna isVip=false
+  // e titulos VIP_LOCK aparecem como "sem fonte" mesmo para usuarios VIP.
+  const access = await resolveVipAccess(req, serviceKey);
   const loggedIn = access.source === 'jwt' || access.source === 'userId' || access.source === 'deviceId';
 
   const vipConfig = await loadVipTitleConfig(serviceKey, tmdbId, mediaType);
@@ -183,7 +185,7 @@ async function handler(req, res) {
     );
   } else {
     console.log(
-      `[media-sources] soft-pass tmdb=${tmdbId} type=${mediaType} source=${access.source} (REQUIRE_AUTH_MEDIA off)`,
+      `[media-sources] soft-pass tmdb=${tmdbId} type=${mediaType} source=${access.source} vip=${access.isVip}`,
     );
   }
 
