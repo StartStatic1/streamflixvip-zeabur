@@ -338,12 +338,7 @@ private fun DetailContent(
                 }
             } else if (state.movieSources.isEmpty()) {
                 item {
-                    Text(
-                        "__MOVIE_CTA__",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
+                    MovieRequestCard()
                 }
             }
             item {
