@@ -2,6 +2,7 @@ package com.streamflixvip.app.ui.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.streamflixvip.app.data.AuthTokenHelper
 import com.streamflixvip.app.data.CatalogRepository
 import com.streamflixvip.app.data.VipStatusHolder
 import com.streamflixvip.app.network.NetworkModule
@@ -338,9 +339,11 @@ class DetailViewModel(
 
     fun toggleFavorite() {
         val current = _uiState.value as? DetailUiState.Success ?: return
-        val uid = userId ?: return
-        val token = accessToken ?: return
         if (current.isTogglingFavorite) return
+
+        val store = NetworkModule.sessionStore
+        val uid = store?.userId ?: userId
+        if (uid.isNullOrBlank()) return
 
         val wasFavorite = current.isFavorite
         val title = current.details.title ?: current.details.name
@@ -350,19 +353,39 @@ class DetailViewModel(
         _uiState.value = current.copy(isFavorite = !wasFavorite, isTogglingFavorite = true)
 
         viewModelScope.launch {
-            val success = if (wasFavorite) {
-                favoritesRepository.removeFavorite(token, uid, tmdbId, mediaType)
-            } else {
-                favoritesRepository.addFavorite(
-                    accessToken = token,
-                    userId = uid,
-                    tmdbId = tmdbId,
-                    mediaType = mediaType,
-                    title = title,
-                    posterPath = posterPath,
-                    originalLanguage = originalLanguage,
-                )
+            var token = AuthTokenHelper.validAccessToken()
+            if (token.isNullOrBlank()) {
+                val still = _uiState.value as? DetailUiState.Success ?: return@launch
+                _uiState.value = still.copy(isFavorite = wasFavorite, isTogglingFavorite = false)
+                return@launch
             }
+
+            suspend fun attempt(): Boolean {
+                val t = token ?: return false
+                return if (wasFavorite) {
+                    favoritesRepository.removeFavorite(t, uid, tmdbId, mediaType)
+                } else {
+                    favoritesRepository.addFavorite(
+                        accessToken = t,
+                        userId = uid,
+                        tmdbId = tmdbId,
+                        mediaType = mediaType,
+                        title = title,
+                        posterPath = posterPath,
+                        originalLanguage = originalLanguage,
+                    )
+                }
+            }
+
+            var success = attempt()
+            if (!success) {
+                val refreshed = AuthTokenHelper.forceRefresh()
+                if (!refreshed.isNullOrBlank()) {
+                    token = refreshed
+                    success = attempt()
+                }
+            }
+
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             _uiState.value = if (success) {
                 stillCurrent.copy(isTogglingFavorite = false)
