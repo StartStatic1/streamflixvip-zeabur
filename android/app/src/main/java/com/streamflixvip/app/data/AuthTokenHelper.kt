@@ -3,41 +3,58 @@ package com.streamflixvip.app.data
 import android.util.Base64
 import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.RefreshTokenRequest
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
- * Garante access_token válido antes de chamadas autenticadas (favoritos, etc).
- * Se o JWT estiver perto de expirar (ou já expirou), renova com refresh_token.
+ * Garante access_token válido antes de favoritos / progresso / etc.
+ * Mutex evita race de refresh (Supabase rotaciona refresh_token — 2 refreshes
+ * paralelos invalidam um deles e o app "perde" a sessão até relogar).
  */
 object AuthTokenHelper {
 
-    suspend fun validAccessToken(skewSeconds: Long = 120): String? {
+    private val refreshMutex = Mutex()
+
+    suspend fun validAccessToken(skewSeconds: Long = 180): String? {
         val store = NetworkModule.sessionStore ?: return null
         val access = store.accessToken ?: return null
         val refresh = store.refreshToken ?: return access
 
         if (!isExpiredOrNear(access, skewSeconds)) return access
-
-        return tryRefresh(store, refresh) ?: access
+        return tryRefresh(store, refresh, skewSeconds) ?: store.accessToken
     }
 
-    /** Força refresh (usado no retry após falha). */
     suspend fun forceRefresh(): String? {
         val store = NetworkModule.sessionStore ?: return null
         val refresh = store.refreshToken ?: return store.accessToken
-        return tryRefresh(store, refresh)
+        return tryRefresh(store, refresh, skewSeconds = 0)
     }
 
-    private suspend fun tryRefresh(store: SessionStore, refreshToken: String): String? =
+    /** userId atual da sessão (sempre do store, nunca valor congelado). */
+    fun currentUserId(): String? = NetworkModule.sessionStore?.userId
+
+    private suspend fun tryRefresh(
+        store: SessionStore,
+        refreshToken: String,
+        skewSeconds: Long,
+    ): String? = refreshMutex.withLock {
+        // Outro caller pode ter renovado enquanto esperávamos o lock
+        val latest = store.accessToken
+        if (latest != null && skewSeconds > 0 && !isExpiredOrNear(latest, skewSeconds)) {
+            return@withLock latest
+        }
+        val rt = store.refreshToken ?: refreshToken
         try {
             val session = NetworkModule.supabaseAuthApi.refreshToken(
                 apiKey = NetworkModule.supabaseAnonKey,
-                body = RefreshTokenRequest(refreshToken),
+                body = RefreshTokenRequest(rt),
             )
             store.updateTokens(session.access_token, session.refresh_token)
             session.access_token
         } catch (_: Exception) {
             null
         }
+    }
 
     private fun isExpiredOrNear(jwt: String, skewSeconds: Long): Boolean {
         return try {
