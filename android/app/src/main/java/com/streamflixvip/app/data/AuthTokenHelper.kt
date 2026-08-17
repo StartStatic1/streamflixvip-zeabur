@@ -7,9 +7,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Garante access_token válido antes de favoritos / progresso / etc.
- * Mutex evita race de refresh (Supabase rotaciona refresh_token — 2 refreshes
- * paralelos invalidam um deles e o app "perde" a sessão até relogar).
+ * Garante access_token valido antes de favoritos / progresso / etc.
+ * Mutex evita race de refresh (Supabase rotaciona refresh_token).
  */
 object AuthTokenHelper {
 
@@ -30,7 +29,6 @@ object AuthTokenHelper {
         return tryRefresh(store, refresh, skewSeconds = 0)
     }
 
-    /** userId atual da sessão (sempre do store, nunca valor congelado). */
     fun currentUserId(): String? = NetworkModule.sessionStore?.userId
 
     private suspend fun tryRefresh(
@@ -38,7 +36,6 @@ object AuthTokenHelper {
         refreshToken: String,
         skewSeconds: Long,
     ): String? = refreshMutex.withLock {
-        // Outro caller pode ter renovado enquanto esperávamos o lock
         val latest = store.accessToken
         if (latest != null && skewSeconds > 0 && !isExpiredOrNear(latest, skewSeconds)) {
             return@withLock latest
@@ -64,8 +61,14 @@ object AuthTokenHelper {
             val pad = (4 - payload.length % 4) % 4
             if (pad > 0) payload += "=".repeat(pad)
             val json = String(Base64.decode(payload, Base64.URL_SAFE or Base64.NO_WRAP))
-            val exp = Regex("\"exp\"\\s*:\\s*(\\d+)")
-                .find(json)?.groupValues?.get(1)?.toLongOrNull() ?: return false
+            val expMark = "\"exp\":"
+            val idx = json.indexOf(expMark)
+            if (idx < 0) return false
+            var i = idx + expMark.length
+            while (i < json.length && json[i].isWhitespace()) i++
+            val start = i
+            while (i < json.length && json[i].isDigit()) i++
+            val exp = json.substring(start, i).toLongOrNull() ?: return false
             val now = System.currentTimeMillis() / 1000
             now >= (exp - skewSeconds)
         } catch (_: Exception) {
