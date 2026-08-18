@@ -132,7 +132,7 @@ private fun HeroBanner(
     LaunchedEffect(pagerState, items) {
         if (items.size <= 1) return@LaunchedEffect
         while (true) {
-            delay(6_000)
+            delay(5_000)
             if (!pagerState.isScrollInProgress) {
                 pagerState.animateScrollToPage((pagerState.currentPage + 1) % items.size)
             }
@@ -143,7 +143,7 @@ private fun HeroBanner(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 8.dp)
-            .height(400.dp)
+            .height(420.dp)
             .shadow(
                 elevation = 18.dp,
                 shape = RoundedCornerShape(22.dp),
@@ -196,17 +196,29 @@ private fun HeroBanner(
                         .padding(horizontal = 18.dp, vertical = 22.dp),
                     horizontalAlignment = Alignment.Start,
                 ) {
-                    Text(
-                        text = item.displayMediaLabel,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.White.copy(alpha = 0.14f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "EM ALTA",
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFFFF3D71))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = item.displayMediaLabel.uppercase(),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White.copy(alpha = 0.16f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
                     Text(
                         text = item.displayTitle,
                         color = Color.White,
@@ -328,9 +340,10 @@ private fun ContinueWatchingRow(
     Column {
         Text(
             text = "Continuar assistindo",
-            fontSize = 18.sp,
+            fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            letterSpacing = 0.15.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -443,8 +456,9 @@ private fun ContentRow(
         ) {
             Text(
                 text = row.title,
-                fontSize = 18.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
+                letterSpacing = 0.15.sp,
                 modifier = Modifier.weight(1f),
             )
             row.exploreLink?.let { link ->
@@ -536,6 +550,23 @@ private fun PosterCard(
                         Spacer(Modifier.width(2.dp))
                         Text(rating, fontSize = 10.sp, color = Color.White)
                     }
+                }
+
+                val yearNum = item.displayYear?.toIntOrNull()
+                val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+                if (yearNum != null && yearNum >= currentYear - 1) {
+                    Text(
+                        text = "NOVO",
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color(0xFFFF3D71))
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
             Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
