@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -212,7 +213,7 @@ fun PixPaymentSheet(
                 // Footer com garantia
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.then(androidx.compose.ui.draw.alpha(0.6f))
+                    modifier = Modifier.alpha(0.6f)
                 ) {
                     Icon(Icons.Default.Star, null, tint = Color(0xFFD4AF37), modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
