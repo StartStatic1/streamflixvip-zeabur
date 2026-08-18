@@ -47,14 +47,14 @@ fun VipSection(viewModel: VipViewModel) {
 
             if (state.isVip) {
                 Text(
-                    "👑 VIP ativo",
+                    "VIP ativo",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                 )
                 state.expiresAt?.let { expiresAt ->
                     Spacer(Modifier.height(4.dp))
-                    Text("Válido até ${formatVipExpiry(expiresAt)}", fontSize = 13.sp)
+                    Text("Valido ate ${formatVipExpiry(expiresAt)}", fontSize = 13.sp)
 
                     val daysLeft = daysUntilExpiry(expiresAt)
                     if (daysLeft != null && daysLeft in 0..5) {
@@ -66,9 +66,9 @@ fun VipSection(viewModel: VipViewModel) {
                         ) {
                             Text(
                                 text = if (daysLeft == 0L) {
-                                    "⚠️ Seu VIP expira hoje. Renove pra não perder o acesso."
+                                    "Seu VIP expira hoje. Renove pra nao perder o acesso."
                                 } else {
-                                    "⚠️ Seu VIP expira em $daysLeft ${if (daysLeft == 1L) "dia" else "dias"}. Renove pra não perder o acesso."
+                                    "Seu VIP expira em $daysLeft ${if (daysLeft == 1L) "dia" else "dias"}. Renove pra nao perder o acesso."
                                 },
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.error,
@@ -82,55 +82,85 @@ fun VipSection(viewModel: VipViewModel) {
                     Text(plan, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                Text("Assine o VIP", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
+                Text("Assine o VIP", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    "Tenha acesso a uma experiência sem anúncios e ajude a manter o app no ar.",
+                    "Filmes, series e TV ao vivo sem anuncios — suporte ao app e catalogo sempre no ar.",
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(12.dp))
+                listOf(
+                    "Sem anuncios na reproducao",
+                    "Catalogo de filmes e series",
+                    "Canais ao vivo e qualidade HD+",
+                ).forEach { benefit ->
+                    Text(
+                        "  ·  $benefit",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 1.dp),
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
 
                 VipPlanCard(
-                    title = "1 Mês",
-                    price = "R$ 19,90",
-                    priceSuffix = "/mês",
+                    title = "1 Mes",
+                    price = "R$ 9,90",
+                    priceSuffix = "",
                     badge = null,
                     highlighted = false,
-                    onClick = { viewModel.startPayment(19.90, "VIP 30 Dias", 720) },
+                    onClick = { viewModel.startPayment(9.90, "VIP 30 Dias", 720) },
                 )
                 Spacer(Modifier.height(10.dp))
 
                 VipPlanCard(
                     title = "3 Meses",
-                    price = "R$ 49,90",
-                    priceSuffix = "/3 meses",
-                    badge = "Economize R$ 9,80",
+                    price = "R$ 24,90",
+                    priceSuffix = "",
+                    badge = "Popular",
                     highlighted = true,
-                    onClick = { viewModel.startPayment(49.90, "VIP 90 Dias", 2160) },
+                    onClick = { viewModel.startPayment(24.90, "VIP 90 Dias", 2160) },
                 )
                 Spacer(Modifier.height(10.dp))
 
                 VipPlanCard(
-                    title = "Vitalício",
-                    price = "R$ 99,90",
-                    priceSuffix = "pagamento único",
+                    title = "6 Meses",
+                    price = "R$ 49,90",
+                    priceSuffix = "",
+                    badge = "Mais tempo",
+                    highlighted = false,
+                    onClick = { viewModel.startPayment(49.90, "VIP 180 Dias", 4320) },
+                )
+                Spacer(Modifier.height(10.dp))
+
+                VipPlanCard(
+                    title = "Vitalicio",
+                    price = "R$ 149,90",
+                    priceSuffix = "uma vez · para sempre",
                     badge = "Melhor valor",
                     highlighted = false,
                     accentOutline = true,
-                    onClick = { viewModel.startPayment(99.90, "VIP Vitalício", 876000) },
+                    onClick = { viewModel.startPayment(149.90, "VIP Vitalicio", 876000) },
+                )
+
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Pagamento seguro via PIX. Liberacao automatica apos a confirmacao.",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 Spacer(Modifier.height(24.dp))
                 Divider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
                 Spacer(Modifier.height(24.dp))
 
-                Text("Já tem um código?", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Ja tem um codigo?", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
                     value = state.redeemCode,
                     onValueChange = viewModel::onCodeChange,
-                    label = { Text("Código VIP") },
+                    label = { Text("Codigo VIP") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -143,7 +173,7 @@ fun VipSection(viewModel: VipViewModel) {
                     if (state.isRedeeming) {
                         CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
                     } else {
-                        Text("Ativar código")
+                        Text("Ativar codigo")
                     }
                 }
             }
@@ -213,12 +243,14 @@ private fun VipPlanCard(
                         }
                     }
                 }
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    priceSuffix,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (priceSuffix.isNotBlank()) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        priceSuffix,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             Text(
                 price,

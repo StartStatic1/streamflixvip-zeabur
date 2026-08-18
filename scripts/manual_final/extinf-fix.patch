@@ -1,0 +1,37 @@
+--- a/api/admin-vip.js
++++ b/api/admin-vip.js
+@@ -618,15 +618,30 @@
+       const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+       let ext = '', urlLine = '';
+       for (const line of lines) {
+-        if (line.startsWith('#EXTINF')) ext = line;
+-        else if (!line.startsWith('#') && /https?:\/\//i.test(line)) urlLine = line;
++        if (line.startsWith('#EXTINF')) {
++          ext = line;
++          // URL na mesma linha do EXTINF (formato comum em listas coladas)
++          const sameLineUrl = line.match(/https?:\/\/[^\s"']+/i);
++          if (sameLineUrl) urlLine = sameLineUrl[0];
++        } else if (!line.startsWith('#') && /https?:\/\//i.test(line)) {
++          urlLine = line.match(/https?:\/\/[^\s"']+/i)?.[0] || line;
++        } else if (!line.startsWith('#') && !urlLine && /\/\d+$/.test(line)) {
++          // path relativo raro — ignora
++        }
+       }
+-      if (urlLine) streamUrl = urlLine;
++      // URL solta em qualquer lugar do texto colado
++      if (!urlLine) {
++        const any = raw.match(/https?:\/\/[^\s"'<>]+/i);
++        if (any) urlLine = any[0];
++      }
++      if (urlLine) streamUrl = urlLine.replace(/[),;]+$/, '');
+       if (ext) {
+         const logoM = ext.match(/tvg-logo="([^"]*)"/i);
+         const nameM = ext.match(/tvg-name="([^"]*)"/i);
+         const groupM = ext.match(/group-title="([^"]*)"/i);
+-        const commaName = ext.includes(',') ? ext.slice(ext.lastIndexOf(',') + 1).trim() : '';
++        let commaName = ext.includes(',') ? ext.slice(ext.lastIndexOf(',') + 1).trim() : '';
++        // tira URL do nome se veio colada na mesma linha
++        commaName = commaName.replace(/https?:\/\/\S+/i, '').trim();
+         if (logoM && logoM[1] && !logo) logo = logoM[1];
+         if (nameM && nameM[1] && !name) name = nameM[1];
+         if (groupM && groupM[1]) groupTitle = groupM[1] || groupTitle;

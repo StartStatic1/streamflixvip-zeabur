@@ -8,11 +8,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** Filtros da aba Favoritos — mesma aproximação por idioma original usada na aba Gêneros. */
 enum class FavoritesFilter(val label: String) {
     ALL("Todos"),
     MOVIES("Filmes"),
-    SERIES("Séries"),
+    SERIES("Series"),
     ANIME("Animes"),
     DORAMA("Doramas"),
 }
@@ -24,7 +23,6 @@ sealed interface MyListUiState {
         val allFavorites: List<FavoriteEntry>,
         val filter: FavoritesFilter,
     ) : MyListUiState {
-        /** Lista já filtrada pelo filtro atual — a UI só precisa exibir isso, sem repetir a lógica de filtro. */
         val visibleFavorites: List<FavoriteEntry>
             get() = when (filter) {
                 FavoritesFilter.ALL -> allFavorites
@@ -58,13 +56,15 @@ class MyListViewModel(
     }
 
     fun load() {
-        val token = accessToken
-        val uid = userId
-        if (token == null || uid == null) {
-            _uiState.value = MyListUiState.LoggedOut
-            return
-        }
         viewModelScope.launch {
+            val token = com.streamflixvip.app.data.AuthTokenHelper.validAccessToken()
+                ?: accessToken
+            val uid = com.streamflixvip.app.data.AuthTokenHelper.currentUserId()
+                ?: userId
+            if (token.isNullOrBlank() || uid.isNullOrBlank()) {
+                _uiState.value = MyListUiState.LoggedOut
+                return@launch
+            }
             _uiState.value = MyListUiState.Loading
             val favorites = repository.getFavorites(token, uid)
             val currentFilter = (_uiState.value as? MyListUiState.Success)?.filter ?: FavoritesFilter.ALL
@@ -77,22 +77,19 @@ class MyListViewModel(
         _uiState.value = current.copy(filter = filter)
     }
 
-    /** Remove um item da lista — usado pelo "x"/coração no card. */
     fun removeFavorite(tmdbId: Int, mediaType: String) {
-        val token = accessToken ?: return
-        val uid = userId ?: return
         val current = _uiState.value as? MyListUiState.Success ?: return
-
-        // Otimista: some da tela na hora, sem esperar a resposta da rede.
         val updated = current.allFavorites.filterNot { it.tmdb_id == tmdbId && it.media_type == mediaType }
         _uiState.value = current.copy(allFavorites = updated)
 
         viewModelScope.launch {
-            val removed = repository.removeFavorite(token, uid, tmdbId, mediaType)
-            if (!removed) {
-                // Falhou de verdade (não só ausência de rede momentânea) — recarrega pra refletir o estado real.
-                load()
-            }
+            val removed = repository.removeFavorite(
+                accessToken = accessToken,
+                userId = userId,
+                tmdbId = tmdbId,
+                mediaType = mediaType,
+            )
+            if (!removed) load()
         }
     }
 }

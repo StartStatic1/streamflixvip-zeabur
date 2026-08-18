@@ -1,0 +1,24 @@
+name: Fix Update Screen width Import
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add width import
+        run: |
+          FILE=android/app/src/main/java/com/streamflixvip/app/ui/update/UpdateRequiredScreen.kt
+          if ! grep -q 'layout.width' "$FILE"; then
+            sed -i 's|import androidx.compose.foundation.layout.height|import androidx.compose.foundation.layout.height\nimport androidx.compose.foundation.layout.width|' "$FILE"
+          fi
+          grep -n 'layout.width\|Modifier.width' "$FILE" | head -5
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/src/main/java/com/streamflixvip/app/ui/update/UpdateRequiredScreen.kt
+          git commit -m "fix(mobile): import Modifier.width no UpdateRequiredScreen" || echo nothing
+          git push

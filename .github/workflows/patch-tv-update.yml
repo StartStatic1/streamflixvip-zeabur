@@ -1,0 +1,18 @@
+name: Wire TV Update Screen
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/patch_tv_update_main.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android-tv/app/src/main/java/com/streamflixvip/tv/MainTvActivity.kt
+          git commit -m "feat(tv): checagem de versao e tela de update" || echo nothing
+          git push

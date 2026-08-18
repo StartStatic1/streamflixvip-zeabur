@@ -1,0 +1,60 @@
+name: Fix TV Live Player Syntax
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix unbalanced braces in LivePlayer
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          p = Path("android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt")
+          t = p.read_text()
+          if "LiveAspect.entries.forEach" not in t and t.count("{") == t.count("}"):
+              print("already clean")
+              raise SystemExit(0)
+          marker = "LiveAspect.entries.forEach { mode ->"
+          i = t.find(marker)
+          if i < 0:
+              raise SystemExit("forEach marker missing")
+          start = t.rfind("                Spacer(Modifier.height(18.dp))\n", 0, i)
+          end_marker = (
+              "                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {\n"
+              "                    LiveTvChip(\n"
+              "                        Icons.Filled.AspectRatio,\n"
+              "                        aspect.label,"
+          )
+          j = t.find(end_marker, i)
+          if start < 0 or j < 0:
+              raise SystemExit(f"bounds missing start={start} j={j}")
+          new = (
+              "                Spacer(Modifier.height(18.dp))\n"
+              "                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {\n"
+              "                    LiveTvChip(\n"
+              "                        Icons.Filled.AspectRatio,\n"
+              "                        aspect.label,"
+          )
+          t = t[:start] + new + t[j + len(end_marker):]
+          t = t.replace(
+              "Modifier.focusRequester(aspectFocus),\n                        ) {",
+              "Modifier.focusRequester(aspectFocus),\n                    ) {",
+              1,
+          )
+          if t.count("{") != t.count("}"):
+              raise SystemExit(f"unbalanced {{ {t.count('{')} }} {t.count('}')}")
+          if "LiveAspect.entries.forEach" in t:
+              raise SystemExit("forEach still present")
+          p.write_text(t)
+          print("ok", len(t), "braces", t.count("{"))
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
+          git commit -m "fix(tv): sintaxe LivePlayer — remover bloco aspecto quebrado" || echo nothing
+          git push

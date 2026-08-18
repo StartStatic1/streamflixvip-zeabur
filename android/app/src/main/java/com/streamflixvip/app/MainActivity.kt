@@ -3,6 +3,7 @@ package com.streamflixvip.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.lifecycle.lifecycleScope
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,15 +11,19 @@ import androidx.compose.foundation.layout.padding
 
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -70,9 +75,12 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            StreamFlixTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AppRoot()
+            // Garante LocalLifecycleOwner p/ lifecycle-compose (release/minify)
+            CompositionLocalProvider(LocalLifecycleOwner provides this) {
+                StreamFlixTheme {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        AppRoot()
+                    }
                 }
             }
         }
@@ -94,6 +102,9 @@ private fun AppRoot() {
 
     var updateInfo by remember { mutableStateOf<com.streamflixvip.app.network.AppVersionResponse?>(null) }
     var isDownloadingUpdate by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(-1) }
+    var updateError by remember { mutableStateOf<String?>(null) }
+    val updateScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         try {
@@ -110,17 +121,47 @@ private fun AppRoot() {
             versionName = updateInfo!!.versionName,
             releaseNotes = updateInfo!!.releaseNotes ?: "",
             isDownloading = isDownloadingUpdate,
+            downloadProgress = downloadProgress,
+            errorMessage = updateError,
             onDownloadClick = {
+                val url = updateInfo!!.apkUrl
+                if (url.isBlank()) {
+                    updateError = "URL vazia"
+                    return@UpdateRequiredScreen
+                }
+                updateError = null
                 isDownloadingUpdate = true
-                try {
-                    val intent = android.content.Intent(
-                        android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse(updateInfo!!.apkUrl),
-                    )
-                    context.startActivity(intent)
-                } catch (_: Exception) {
-                } finally {
-                    isDownloadingUpdate = false
+                downloadProgress = 0
+                updateScope.launch {
+                    try {
+                        if (!com.streamflixvip.app.update.ApkInstaller.canInstallPackages(context)) {
+                            com.streamflixvip.app.update.ApkInstaller.openInstallPermissionSettings(context)
+                            updateError = "Ative permitir desta fonte e toque Baixar de novo"
+                            android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()
+                            return@launch
+                        }
+                        val file = com.streamflixvip.app.update.ApkInstaller.download(context, url) { pct ->
+                            downloadProgress = pct
+                        }
+                        downloadProgress = 100
+                        com.streamflixvip.app.update.ApkInstaller.install(context, file)
+                        android.widget.Toast.makeText(context, "Abrindo instalador...", android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        updateError = (e.message ?: "Falha") + " — abrindo navegador"
+                        android.widget.Toast.makeText(context, updateError, android.widget.Toast.LENGTH_LONG).show()
+                        try {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(url),
+                                )
+                            )
+                        } catch (_: Exception) {
+                        }
+                    } finally {
+                        isDownloadingUpdate = false
+                        downloadProgress = -1
+                    }
                 }
             },
         )
@@ -194,6 +235,7 @@ private fun MainAppScaffold(
                 HomeScreen(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
+                    onContinueWatchingDismiss = { entry -> viewModel.dismissContinueWatching(entry) },
                     onContinueWatchingClick = { entry ->
                         navController.navigate(
                             "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
@@ -360,6 +402,9 @@ private fun MainAppScaffold(
                 )
                 DetailScreen(
                     viewModel = viewModel,
+                    resumeSeconds = resumeSeconds,
+                    initialSeason = initialSeason,
+                    initialEpisode = initialEpisode,
                     onPlaySource = { source, season, episode, title, posterPath ->
                         val encodedUrl = URLEncoder.encode(
                             source.resolvedPlaybackUrl(BuildConfig.API_BASE_URL),
@@ -425,6 +470,7 @@ private fun MainAppScaffold(
                     PlayerScreen(
                         sourceUrl = url,
                         isDirectPlayable = isDirect,
+                        onBack = { navController.popBackStack() },
                         userId = userId,
                         accessToken = accessToken,
                         tmdbId = playerTmdbId,

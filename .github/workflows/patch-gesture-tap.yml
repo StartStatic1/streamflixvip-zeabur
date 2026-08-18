@@ -1,0 +1,18 @@
+name: Fix Gesture Tap
+on:
+  workflow_dispatch:
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/patch_gesture_tap.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          git commit -m "fix(player): toque nas laterais tambem mostra controles" || echo nothing
+          git push

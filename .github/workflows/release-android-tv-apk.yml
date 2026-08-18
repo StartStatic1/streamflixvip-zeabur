@@ -1,0 +1,92 @@
+name: Build Android TV APK - Release (Publicar)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Nome da versao TV (ex: 1.1.0)'
+        required: true
+        type: string
+      release_notes:
+        description: 'O que mudou (aparece na tela de update da TV)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Calcular novo versionCode
+        id: version
+        run: |
+          CURRENT=$(grep -oP 'versionCode\s*=\s*\K\d+' android-tv/app/build.gradle.kts)
+          NEW=$((CURRENT + 1))
+          echo "code=$NEW" >> "$GITHUB_OUTPUT"
+
+      - name: Atualizar versionCode/versionName
+        run: |
+          sed -i "s/versionCode = [0-9]*/versionCode = ${{ steps.version.outputs.code }}/" android-tv/app/build.gradle.kts
+          sed -i "s/versionName = \"[^\"]*\"/versionName = \"${{ inputs.version_name }}\"/" android-tv/app/build.gradle.kts
+
+      - name: Gradle wrapper
+        working-directory: android-tv
+        run: |
+          curl -sL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          /tmp/gradle-8.7/bin/gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
+
+      - name: Keystore (mesma do mobile)
+        working-directory: android-tv
+        run: echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > app/debug.keystore
+
+      - name: assembleRelease
+        working-directory: android-tv
+        env:
+          DEBUG_KEYSTORE_PATH: debug.keystore
+          DEBUG_KEYSTORE_PASSWORD: streamflixvip123
+          DEBUG_KEY_ALIAS: streamflixvip-debug
+          DEBUG_KEY_PASSWORD: streamflixvip123
+        run: ./gradlew assembleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: streamflixvip-tv-release-${{ inputs.version_name }}
+          path: android-tv/app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
+
+      - name: Publicar APK
+        run: |
+          mkdir -p Public/downloads
+          cp android-tv/app/build/outputs/apk/release/app-release.apk Public/downloads/tv-latest.apk
+
+      - name: tv-version.json
+        run: |
+          cat > tv-version.json << EOF
+          {
+            "versionCode": ${{ steps.version.outputs.code }},
+            "versionName": "${{ inputs.version_name }}",
+            "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
+            "forceUpdate": true,
+            "releaseNotes": "${{ inputs.release_notes }}"
+          }
+          EOF
+
+      - name: Commit + push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add android-tv/app/build.gradle.kts Public/downloads/tv-latest.apk tv-version.json
+          git commit -m "release(tv): v${{ inputs.version_name }} (versionCode ${{ steps.version.outputs.code }})" || echo nothing
+          git push

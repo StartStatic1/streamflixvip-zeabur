@@ -2,6 +2,7 @@ package com.streamflixvip.app.network
 
 import com.squareup.moshi.Moshi
 import com.streamflixvip.app.BuildConfig
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -20,6 +21,25 @@ object NetworkModule {
         } else {
             HttpLoggingInterceptor.Level.NONE
         }
+    }
+
+    /**
+     * Anexa Authorization + X-User-Id em toda request para o backend Express.
+     * Necessário pro gate VIP de /api/live-tv e /api/media-sources.
+     */
+    private val sessionAuthInterceptor = Interceptor { chain ->
+        val store = sessionStore
+        val original = chain.request()
+        val builder = original.newBuilder()
+        val token = store?.accessToken
+        if (!token.isNullOrBlank()) {
+            builder.header("Authorization", "Bearer $token")
+        }
+        val userId = store?.userId
+        if (!userId.isNullOrBlank()) {
+            builder.header("X-User-Id", userId)
+        }
+        chain.proceed(builder.build())
     }
 
     private val tokenAuthenticator = okhttp3.Authenticator { _, response ->
@@ -49,6 +69,7 @@ object NetworkModule {
     }
 
     private val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
         .authenticator(tokenAuthenticator)
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -56,7 +77,9 @@ object NetworkModule {
         .build()
 
     private val liveTvOkHttp = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
+        .authenticator(tokenAuthenticator)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
         .build()
@@ -93,6 +116,15 @@ object NetworkModule {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(LiveTvApi::class.java)
+    }
+
+    val mediaSourcesApi: MediaSourcesApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(MediaSourcesApi::class.java)
     }
 
     val supabaseApi: SupabaseApi by lazy {
@@ -138,6 +170,15 @@ object NetworkModule {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(AnnouncementsApi::class.java)
+    }
+
+    val subtitlesApi: SubtitlesApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(SubtitlesApi::class.java)
     }
 
     val favoritesApi: FavoritesApi by lazy {

@@ -1,0 +1,22 @@
+name: Fix Continue Watching Dismiss
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply patch
+        run: |
+          python3 scripts/fix_continue_watching_dismiss.py
+          # Garante nome viewModel no MainActivity
+          sed -i 's/homeViewModel.dismissContinueWatching/viewModel.dismissContinueWatching/g' android/app/src/main/java/com/streamflixvip/app/MainActivity.kt || true
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/
+          git commit -m "feat(mobile): X para remover item do Continuar assistindo" || echo nothing
+          git push

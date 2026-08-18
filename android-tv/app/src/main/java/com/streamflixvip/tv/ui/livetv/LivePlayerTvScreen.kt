@@ -105,7 +105,8 @@ fun LivePlayerTvScreen(
     }
     val activeChannel = channelList.getOrNull(currentIndex)
     val activeName = activeChannel?.name ?: channelName
-    val activeStreams = activeChannel?.streams?.takeIf { it.isNotEmpty() } ?: streams
+    val activeStreams = (activeChannel?.streams?.takeIf { it.isNotEmpty() } ?: streams)
+        .sortedBy { it.priority ?: 100 }
 
     var streamIndex by remember { mutableIntStateOf(0) }
     var isLoading by remember { mutableStateOf(true) }
@@ -113,6 +114,7 @@ fun LivePlayerTvScreen(
     var sourceLabel by remember { mutableStateOf("") }
     var controlsVisible by remember { mutableStateOf(true) }
     var channelListVisible by remember { mutableStateOf(false) }
+    var aspectMenuVisible by remember { mutableStateOf(false) }
     var aspect by remember { mutableStateOf(LiveAspect.FIT) }
     var hideToken by remember { mutableIntStateOf(0) }
 
@@ -120,21 +122,26 @@ fun LivePlayerTvScreen(
     val aspectFocus = remember { FocusRequester() }
 
     BackHandler {
-        if (channelListVisible) channelListVisible = false else onBack()
+        when {
+            channelListVisible -> channelListVisible = false
+            aspectMenuVisible -> aspectMenuVisible = false
+            else -> onBack()
+        }
     }
 
     // Auto-hide. Nao roubar foco do chip atual a cada interacao —
     // so foca Aspect na PRIMEIRA vez que os controles abrem.
     var didInitialChipFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(controlsVisible, hideToken, channelListVisible) {
-        if (controlsVisible && !channelListVisible) {
+    LaunchedEffect(controlsVisible, hideToken, channelListVisible, aspectMenuVisible) {
+        if (controlsVisible && !channelListVisible && !aspectMenuVisible) {
             if (!didInitialChipFocus) {
                 delay(40)
                 runCatching { aspectFocus.requestFocus() }
                 didInitialChipFocus = true
             }
-            delay(6000)
+            delay(10000)
             controlsVisible = false
+            aspectMenuVisible = false
             didInitialChipFocus = false
             runCatching { rootFocus.requestFocus() }
         }
@@ -185,6 +192,8 @@ fun LivePlayerTvScreen(
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
             .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(10000)
+            .setReadTimeoutMs(12000)
             .setDefaultRequestProperties(mapOf("Referer" to url, "Connection" to "keep-alive", "Icy-MetaData" to "1"))
         val mediaItem = MediaItem.fromUri(url)
         val source = if (url.contains(".m3u8") || url.contains("/live/")) {
@@ -193,6 +202,15 @@ fun LivePlayerTvScreen(
             ProgressiveMediaSource.Factory(httpFactory, DefaultExtractorsFactory()).createMediaSource(mediaItem)
         }
         exoPlayer.setMediaSource(source); exoPlayer.prepare(); exoPlayer.playWhenReady = true
+
+        // Timeout: se nao ficar READY em 14s, tenta proxima fonte
+        delay(14000)
+        if (isLoading && streamIndex < activeStreams.size - 1) {
+            streamIndex += 1
+        } else if (isLoading && streamIndex >= activeStreams.size - 1) {
+            isLoading = false
+            errorMessage = "Nao foi possivel abrir este canal em nenhuma fonte."
+        }
     }
 
     DisposableEffect(Unit) { onDispose { exoPlayer.release() } }
@@ -216,29 +234,41 @@ fun LivePlayerTvScreen(
                     return@onPreviewKeyEvent false
                 }
                 when (code) {
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                        if (!controlsVisible) showControls() else {
-                            controlsVisible = !controlsVisible
-                            if (!controlsVisible) runCatching { rootFocus.requestFocus() }
-                        }
-                        true
-                    }
-                    KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_DPAD_UP -> {
-                        if (!controlsVisible) { switchChannel(+1); true } else { showControls(); false }
-                    }
-                    KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        if (!controlsVisible) { switchChannel(-1); true } else { showControls(); false }
-                    }
-                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        if (!controlsVisible) { showControls(); true } else { showControls(); false }
-                    }
-                    KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_MENU -> {
-                        channelListVisible = !channelListVisible
-                        if (channelListVisible) controlsVisible = true
-                        true
-                    }
-                    else -> if (!controlsVisible) { showControls(); true } else false
-                }
+          KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+              if (!controlsVisible) {
+                  showControls()
+                  true
+              } else {
+                  false // deixa Surface/onClick do chip receber OK
+              }
+          }
+          KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+              if (!controlsVisible) showControls()
+              true
+          }
+          KeyEvent.KEYCODE_CHANNEL_UP -> {
+              switchChannel(+1); true
+          }
+          KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+              switchChannel(-1); true
+          }
+          KeyEvent.KEYCODE_DPAD_UP -> {
+              if (!controlsVisible) { switchChannel(+1); true } else false
+          }
+          KeyEvent.KEYCODE_DPAD_DOWN -> {
+              if (!controlsVisible) { switchChannel(-1); true } else false
+          }
+          KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+              if (!controlsVisible) { showControls(); true } else false
+          }
+          KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_MENU -> {
+              aspectMenuVisible = false
+              channelListVisible = !channelListVisible
+              if (channelListVisible) controlsVisible = false
+              true
+          }
+          else -> if (!controlsVisible) { showControls(); true } else false
+      }
             },
     ) {
         AndroidView(
@@ -288,23 +318,51 @@ fun LivePlayerTvScreen(
                     color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, maxLines = 2,
                 )
                 Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    LiveTvChip(Icons.Filled.AspectRatio, aspect.label, Modifier.focusRequester(aspectFocus)) {
-                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]; showControls()
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    LiveTvChip(
+                        Icons.Filled.AspectRatio,
+                        aspect.label,
+                        Modifier.focusRequester(aspectFocus),
+                    ) {
+                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
+                        aspectMenuVisible = false
+                        showControls()
                     }
-                    if (channelList.size > 1) {
-                        LiveTvChip(Icons.Filled.KeyboardArrowUp, "CH+") { switchChannel(+1) }
-                        LiveTvChip(Icons.Filled.KeyboardArrowDown, "CH-") { switchChannel(-1) }
-                        LiveTvChip(Icons.Filled.List, "Lista") { channelListVisible = true; showControls() }
+                    if (channelList.isNotEmpty()) {
+                        if (channelList.size > 1) {
+                            LiveTvChip(Icons.Filled.KeyboardArrowUp, "CH+") {
+                                aspectMenuVisible = false
+                                switchChannel(+1)
+                            }
+                            LiveTvChip(Icons.Filled.KeyboardArrowDown, "CH-") {
+                                aspectMenuVisible = false
+                                switchChannel(-1)
+                            }
+                        }
+                        LiveTvChip(Icons.Filled.List, "Lista") {
+                            aspectMenuVisible = false
+                            channelListVisible = true
+                            controlsVisible = false
+                        }
                     }
                     if (activeStreams.size > 1) {
-                        LiveTvChip(Icons.Filled.SwapHoriz, "Fonte ${streamIndex + 1}/${activeStreams.size}") {
-                            streamIndex = (streamIndex + 1) % activeStreams.size; isLoading = true; errorMessage = null; showControls()
+                        LiveTvChip(
+                            Icons.Filled.SwapHoriz,
+                            "Fonte " + (streamIndex + 1).toString() + "/" + activeStreams.size.toString(),
+                        ) {
+                            streamIndex = (streamIndex + 1) % activeStreams.size
+                            isLoading = true
+                            errorMessage = null
+                            showControls()
                         }
                     }
                     LiveTvChip(Icons.Filled.Refresh, "Reload") {
-                        val cur = streamIndex; streamIndex = -1; streamIndex = cur.coerceAtLeast(0)
-                        isLoading = true; errorMessage = null; showControls()
+                        val cur = streamIndex
+                        streamIndex = -1
+                        streamIndex = cur.coerceAtLeast(0)
+                        isLoading = true
+                        errorMessage = null
+                        showControls()
                     }
                 }
             }
@@ -318,9 +376,11 @@ fun LivePlayerTvScreen(
         ) {
             val listState = rememberLazyListState()
             val firstFocus = remember { FocusRequester() }
-            LaunchedEffect(currentIndex) {
-                runCatching { listState.scrollToItem(currentIndex.coerceIn(0, channelList.lastIndex)) }
-                delay(80); runCatching { firstFocus.requestFocus() }
+            LaunchedEffect(channelListVisible, currentIndex) {
+                if (!channelListVisible) return@LaunchedEffect
+                runCatching { listState.scrollToItem(currentIndex.coerceIn(0, channelList.lastIndex.coerceAtLeast(0))) }
+                delay(120)
+                runCatching { firstFocus.requestFocus() }
             }
             Column(
                 Modifier.fillMaxSize().background(Color(0xF00B0B14))
@@ -395,14 +455,15 @@ private fun LiveTvChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     modifier: Modifier = Modifier,
+    selected: Boolean = false,
     onClick: () -> Unit,
 ) {
     Surface(
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color.White.copy(alpha = 0.12f),
-            focusedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.35f),
+            containerColor = if (selected) Color(0xFF00E5FF).copy(alpha = 0.28f) else Color.White.copy(alpha = 0.12f),
+            focusedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.40f),
         ),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF00E5FF)), shape = RoundedCornerShape(24.dp)),

@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.explore
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -27,7 +29,6 @@ import com.streamflixvip.app.data.GenreCategory
 import com.streamflixvip.app.data.TMDB_GENRES
 import com.streamflixvip.app.network.TmdbItem
 
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
  * Explorar com filtros sempre visíveis:
@@ -213,7 +214,7 @@ private fun FilterChipPill(label: String, selected: Boolean, onClick: () -> Unit
 private fun ExploreCard(item: TmdbItem, onClick: () -> Unit) {
     Column(modifier = Modifier.clickable(onClick = onClick)) {
         AsyncImage(
-            model = item.poster_path?.let { TMDB_POSTER_BASE + it },
+            model = item.poster_path?.let { TmdbImages.poster(it) },
             contentDescription = item.displayTitle,
             contentScale = ContentScale.Crop,
             modifier = Modifier

@@ -1,0 +1,66 @@
+name: fix-movie-cta
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-movie-cta.yml'
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix placeholder
+        run: |
+          python3 << 'END'
+          from pathlib import Path
+          p = Path('android/app/src/main/java/com/streamflixvip/app/ui/detail/DetailScreen.kt')
+          t = p.read_text()
+          old = '''            } else if (state.movieSources.isEmpty()) {
+                item {
+                    Text(
+                        "__MOVIE_CTA__",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }'''
+          new = '''            } else if (state.movieSources.isEmpty()) {
+                item {
+                    MovieRequestCard()
+                }
+            }'''
+          if old in t:
+              t = t.replace(old, new, 1)
+              print('fixed placeholder')
+          elif 'MovieRequestCard()' in t and '__MOVIE_CTA__' not in t:
+              print('already correct')
+          else:
+              # try looser
+              if '__MOVIE_CTA__' in t:
+                  t = t.replace('__MOVIE_CTA__', 'USE_CARD')
+                  print('partial')
+              raise SystemExit('pattern missing')
+          # improve Portuguese text in card
+          t = t.replace(
+              'Este filme ainda nao esta no catalogo',
+              'Este filme ainda nao esta disponivel',
+          )
+          t = t.replace(
+              'Quer assistir? Peca no nosso canal e a equipe analisa a inclusao o mais rapido possivel.',
+              'Quer assistir? Peca no Telegram e a equipe analisa a inclusao o mais rapido possivel.',
+          )
+          p.write_text(t)
+          print('OK')
+          END
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/app/src/main/java/com/streamflixvip/app/ui/detail/DetailScreen.kt
+          git commit -m "fix(app): card Telegram no filme sem fonte" || echo nothing
+          git push

@@ -1,0 +1,228 @@
+name: apply-live-diagnose-v2
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/apply-live-diagnose-v2.yml'
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch admin-vip + admin.html
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('api/admin-vip.js')
+          t = p.read_text()
+          if len(t) < 10000 or t.strip() == 'PLACEHOLDER':
+              raise SystemExit('admin-vip.js is broken, abort')
+          if 'diagnose-live-tv-source' not in t:
+              marker = "  if (action === 'list-live-tv-manual') {"
+              if marker not in t:
+                  raise SystemExit('marker missing')
+              block = """
+  if (action === 'diagnose-live-tv-source') {
+    const { sourceId } = body;
+    if (!sourceId) { res.status(400).json({ error: 'Informe sourceId' }); return; }
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/live_tv_sources?id=eq.${encodeURIComponent(sourceId)}&select=id,name,xtream_host,xtream_user,xtream_pass,is_active&limit=1`,
+      { headers: svcHeaders },
+    );
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao ler fonte', detail: await r.text() }); return; }
+    const rows = await r.json();
+    const src = Array.isArray(rows) ? rows[0] : null;
+    if (!src) { res.status(404).json({ error: 'Fonte nao encontrada' }); return; }
+    const host = String(src.xtream_host || '').replace(/\/+$/, '');
+    const user = src.xtream_user || '';
+    const pass = src.xtream_pass || '';
+    if (!host || !user || !pass) {
+      res.status(200).json({ ok: false, name: src.name, error: 'Credenciais incompletas', ms: 0 });
+      return;
+    }
+    const started = Date.now();
+    try {
+      const apiUrl = new URL(host + '/player_api.php');
+      apiUrl.searchParams.set('username', user);
+      apiUrl.searchParams.set('password', pass);
+      apiUrl.searchParams.set('action', 'get_live_streams');
+      const controller = new AbortController();
+      const to = setTimeout(() => controller.abort(), 15000);
+      const xr = await fetch(apiUrl.toString(), {
+        signal: controller.signal,
+        headers: { 'User-Agent': 'IPTVSmarters/1.0', Accept: 'application/json, */*' },
+      });
+      clearTimeout(to);
+      const ms = Date.now() - started;
+      if (!xr.ok) {
+        res.status(200).json({ ok: false, name: src.name, error: 'HTTP ' + xr.status, ms });
+        return;
+      }
+      const data = await xr.json().catch(() => null);
+      if (!Array.isArray(data)) {
+        res.status(200).json({ ok: false, name: src.name, error: 'Resposta invalida', ms });
+        return;
+      }
+      res.status(200).json({ ok: true, name: src.name, channels: data.length, ms, is_active: !!src.is_active });
+    } catch (e) {
+      const ms = Date.now() - started;
+      const msg = e.name === 'AbortError' ? 'Timeout (15s)' : (e.message || String(e));
+      res.status(200).json({ ok: false, name: src.name, error: msg, ms });
+    }
+    return;
+  }
+
+  if (action === 'diagnose-live-tv-all') {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/live_tv_sources?select=id,name,xtream_host,xtream_user,xtream_pass,is_active,priority&order=priority.asc.nullslast`,
+      { headers: svcHeaders },
+    );
+    if (!r.ok) { res.status(502).json({ error: 'Erro listar', detail: await r.text() }); return; }
+    const sources = await r.json();
+    const results = [];
+    for (const src of (Array.isArray(sources) ? sources : [])) {
+      const host = String(src.xtream_host || '').replace(/\/+$/, '');
+      const user = src.xtream_user || '';
+      const pass = src.xtream_pass || '';
+      if (!host || !user || !pass) {
+        results.push({ id: src.id, name: src.name, ok: false, error: 'Credenciais incompletas', ms: 0, is_active: !!src.is_active });
+        continue;
+      }
+      const started = Date.now();
+      try {
+        const apiUrl = new URL(host + '/player_api.php');
+        apiUrl.searchParams.set('username', user);
+        apiUrl.searchParams.set('password', pass);
+        apiUrl.searchParams.set('action', 'get_live_streams');
+        const controller = new AbortController();
+        const to = setTimeout(() => controller.abort(), 15000);
+        const xr = await fetch(apiUrl.toString(), {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'IPTVSmarters/1.0', Accept: 'application/json, */*' },
+        });
+        clearTimeout(to);
+        const ms = Date.now() - started;
+        if (!xr.ok) {
+          results.push({ id: src.id, name: src.name, ok: false, error: 'HTTP ' + xr.status, ms, is_active: !!src.is_active });
+          continue;
+        }
+        const data = await xr.json().catch(() => null);
+        if (!Array.isArray(data)) {
+          results.push({ id: src.id, name: src.name, ok: false, error: 'Resposta invalida', ms, is_active: !!src.is_active });
+          continue;
+        }
+        results.push({ id: src.id, name: src.name, ok: true, channels: data.length, ms, is_active: !!src.is_active });
+      } catch (e) {
+        const ms = Date.now() - started;
+        results.push({ id: src.id, name: src.name, ok: false, error: e.name === 'AbortError' ? 'Timeout (15s)' : (e.message || String(e)), ms, is_active: !!src.is_active });
+      }
+    }
+    res.status(200).json({ results });
+    return;
+  }
+
+"""
+              t = t.replace(marker, block + marker, 1)
+              p.write_text(t)
+              print('admin-vip patched', len(t))
+          else:
+              print('admin-vip already has diagnose')
+
+          p = Path('Public/admin.html')
+          t = p.read_text()
+          if 'diagnoseAllLiveTvSources' not in t:
+              old = '''      <div class="card" style="margin-top:24px">
+        <div class="card-title">📋 Fontes de TV</div>
+        <div class="table-wrap" id="liveTvListWrap"></div>'''
+              new = '''      <div class="card" style="margin-top:24px">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <span>📋 Fontes de TV</span>
+          <button class="btn-secondary" style="width:auto;padding:8px 14px;font-size:0.8rem" onclick="diagnoseAllLiveTvSources()">🔍 Diagnosticar todas</button>
+        </div>
+        <p style="color:var(--muted);font-size:0.8rem;margin:-4px 0 12px">Testa login Xtream e conta canais (timeout 15s). Nao altera o banco.</p>
+        <div class="table-wrap" id="liveTvListWrap"></div>'''
+              if old not in t:
+                  raise SystemExit('title block missing in admin.html')
+              t = t.replace(old, new, 1)
+              m = re.search(r'  function renderLiveTvList\(\) \{.*?\n  \}\n  async function saveLiveTvSource', t, re.S)
+              if not m:
+                  raise SystemExit('renderLiveTvList missing')
+              nf = r'''  function renderLiveTvList() {
+    const wrap = document.getElementById('liveTvListWrap');
+    if (!_allLiveTvSources.length) {
+      wrap.innerHTML = '<p style="color:var(--muted);padding:20px;text-align:center">Nenhuma fonte de TV.</p>';
+      return;
+    }
+    wrap.innerHTML = `<table><thead><tr><th>Nome</th><th>Host</th><th>Pri</th><th>Status</th><th>Diagnostico</th><th></th></tr></thead><tbody>
+      ${_allLiveTvSources.map(s => {
+        const d = s._diag;
+        let diagHtml = '<span style="color:var(--muted);font-size:0.75rem">—</span>';
+        if (d) {
+          if (d.ok) diagHtml = `<span style="color:#34d399;font-size:0.78rem;font-weight:600">✅ ${d.channels} canais · ${d.ms}ms</span>`;
+          else diagHtml = `<span style="color:#f87171;font-size:0.78rem;font-weight:600">❌ ${escapeHtml(String(d.error||'falhou'))} · ${d.ms||0}ms</span>`;
+        }
+        return `<tr>
+        <td>${escapeHtml(s.name)}</td>
+        <td style="font-size:0.75rem;color:var(--muted);max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.xtream_host||'')}</td>
+        <td>${s.priority??'—'}</td>
+        <td><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Ativa':'Pausada'}</span></td>
+        <td id="liveDiag-${s.id}">${diagHtml}</td>
+        <td style="white-space:nowrap">
+          <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="diagnoseLiveTvSource('${s.id}')" title="Diagnosticar">🔍</button>
+          <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="editLiveTvSource('${s.id}')">✏️</button>
+          <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleLiveTvSource('${s.id}', ${!s.is_active})">${s.is_active?'⏸️':'▶️'}</button>
+          <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="deleteLiveTvSource('${s.id}', '${escapeHtml(s.name).replace(/'/g,"\\'")}')">🗑️</button>
+        </td></tr>`;
+      }).join('')}
+    </tbody></table>`;
+  }
+  async function diagnoseLiveTvSource(id) {
+    const cell = document.getElementById('liveDiag-' + id);
+    if (cell) cell.innerHTML = '<span style="color:var(--muted);font-size:0.75rem">⏳ testando...</span>';
+    const r = await api('diagnose-live-tv-source', { sourceId: id });
+    const s = _allLiveTvSources.find(x => x.id === id);
+    if (s) s._diag = (r && r.ok) ? r : { ok: false, error: (r && (r.error && (r.error.message || r.error))) || (r && r.error) || 'falhou', ms: (r && r.ms) || 0 };
+    renderLiveTvList();
+    if (r && r.ok) showToast('✅ ' + (r.name || '') + ': ' + r.channels + ' canais (' + r.ms + 'ms)');
+    else showToast('❌ ' + ((r && r.name) || '') + ': ' + ((r && r.error) || 'falhou'));
+  }
+  async function diagnoseAllLiveTvSources() {
+    showToast('🔍 Diagnosticando fontes...');
+    const r = await api('diagnose-live-tv-all', {});
+    if (r.error) { showToast('❌ ' + (r.error.message || r.error)); return; }
+    const map = {};
+    (r.results || []).forEach(x => { map[x.id] = x; });
+    _allLiveTvSources.forEach(s => { if (map[s.id]) s._diag = map[s.id]; });
+    renderLiveTvList();
+    const ok = (r.results || []).filter(x => x.ok).length;
+    showToast('Diagnostico: ' + ok + ' ok · ' + ((r.results || []).length - ok) + ' com problema');
+  }
+  async function saveLiveTvSource'''
+              t = t[:m.start()] + nf + t[m.end():]
+              p.write_text(t)
+              print('admin.html patched')
+          else:
+              print('admin.html already has diagnose')
+
+          # safety
+          av = Path('api/admin-vip.js').read_text()
+          if len(av) < 10000 or av.strip() == 'PLACEHOLDER':
+              raise SystemExit('REFUSING to commit broken admin-vip')
+          if 'diagnose-live-tv-source' not in av:
+              raise SystemExit('diagnose missing after patch')
+          print('safety ok', len(av))
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/admin-vip.js Public/admin.html
+          git status
+          git commit -m "feat(admin): diagnostico de fontes de TV ao vivo" || echo nothing
+          git push

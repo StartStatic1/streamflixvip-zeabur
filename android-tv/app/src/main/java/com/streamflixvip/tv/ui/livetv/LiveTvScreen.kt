@@ -94,13 +94,23 @@ class LiveTvViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true, error = null) }
             runCatching { NetworkModule.liveTvApi.getLiveTv() }
                 .onSuccess { res ->
+                    fun isAdultCat(id: String?, name: String?): Boolean {
+                        val n = (name ?: "").lowercase()
+                        if (id == "000" || id == "00") return true
+                        val keys = listOf("adult", "xxx", "porn", "erotic", "onlyfans", "+18", "18+", "adulto", "sexy")
+                        return keys.any { n.contains(it) }
+                    }
+                    val cats = res.categories
+                        .filter { !isAdultCat(it.id, it.name) }
+                        .ifEmpty { listOf(LiveCategory("all", "Todos")) }
+                    val chans = res.channels.filter { !isAdultCat(it.categoryId, it.name) }
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            categories = res.categories.ifEmpty { listOf(LiveCategory("all", "Todos")) },
-                            channels = res.channels,
+                            categories = cats,
+                            channels = chans,
                             sourcesUsed = res.sourcesUsed,
-                            error = if (res.channels.isEmpty()) "Nenhum canal disponivel." else null,
+                            error = if (chans.isEmpty()) "Nenhum canal disponivel." else null,
                         )
                     }
                 }

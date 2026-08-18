@@ -1,0 +1,45 @@
+diff --git a/android/app/src/main/java/com/streamflixvip/app/data/ProgressRepository.kt b/android/app/src/main/java/com/streamflixvip/app/data/ProgressRepository.kt
+index 4b5231f..320b314 100644
+--- a/android/app/src/main/java/com/streamflixvip/app/data/ProgressRepository.kt
++++ b/android/app/src/main/java/com/streamflixvip/app/data/ProgressRepository.kt
+@@ -38,11 +38,20 @@ class ProgressRepository {
+         positionSeconds: Int,
+         durationSeconds: Int,
+     ) {
+-        if (durationSeconds <= 0 || positionSeconds < 5) return
+-        val fraction = positionSeconds.toFloat() / durationSeconds
+-        if (fraction >= 0.95f) {
+-            removeProgress(accessToken, userId, tmdbId, mediaType, season, episode)
+-            return
++        // Pelo menos ~15s assistidos — evita lixo de "abriu e fechou"
++        if (positionSeconds < 15) return
++        // Duracao desconhecida (HLS/IPTV): ainda grava para Continuar assistindo
++        val effectiveDuration = if (durationSeconds > 0) {
++            durationSeconds
++        } else {
++            maxOf(positionSeconds + 120, positionSeconds * 2)
++        }
++        if (durationSeconds > 0) {
++            val fraction = positionSeconds.toFloat() / durationSeconds
++            if (fraction >= 0.95f) {
++                removeProgress(accessToken, userId, tmdbId, mediaType, season, episode)
++                return
++            }
+         }
+         try {
+             api.upsertProgress(
+@@ -57,11 +66,11 @@ class ProgressRepository {
+                     title = title,
+                     poster_path = posterPath,
+                     position_seconds = positionSeconds,
+-                    duration_seconds = durationSeconds,
++                    duration_seconds = effectiveDuration,
+                 ),
+             )
+-        } catch (_: Exception) {
+-            // Falha ao salvar progresso nunca deve travar/interromper a reproducao.
++        } catch (e: Exception) {
++            android.util.Log.w("ProgressRepo", "Falha ao salvar progresso tmdb=$tmdbId: ${e.message}")
+         }
+     }
+ 

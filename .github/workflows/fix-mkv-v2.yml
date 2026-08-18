@@ -1,0 +1,38 @@
+name: fix-mkv-v2
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/fix-mkv-v2.yml'
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch
+        run: |
+          python3 << 'END'
+          from pathlib import Path
+          p = Path('android/app/src/main/java/com/streamflixvip/app/network/SupabaseApi.kt')
+          t = p.read_text()
+          if 'path.endsWith(".mkv")' in t:
+              print('already')
+          else:
+              a = 'val lower = source_url.lowercase()\n            return lower.endsWith(".m3u8") ||\n                lower.endsWith(".mp4") ||\n                lower.contains("/stream-proxy")'
+              b = 'val path = source_url.lowercase().substringBefore("?").substringBefore("#")\n            val lower = source_url.lowercase()\n            return path.endsWith(".m3u8") ||\n                path.endsWith(".mp4") ||\n                path.endsWith(".mkv") ||\n                path.endsWith(".webm") ||\n                path.endsWith(".m4v") ||\n                path.endsWith(".mov") ||\n                path.endsWith(".ts") ||\n                path.endsWith(".m2ts") ||\n                lower.contains("/stream-proxy")'
+              if a not in t:
+                  raise SystemExit('needle missing')
+              p.write_text(t.replace(a, b, 1))
+              print('patched')
+          END
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/app/src/main/java/com/streamflixvip/app/network/SupabaseApi.kt
+          git commit -m "fix(player): MKV/webm/R2 no ExoPlayer nativo" || echo nothing
+          git push

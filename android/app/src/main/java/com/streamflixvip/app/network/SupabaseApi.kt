@@ -93,9 +93,16 @@ data class VipSource(
      */
     val isDirectPlayable: Boolean
         get() {
+            val path = source_url.lowercase().substringBefore("?").substringBefore("#")
             val lower = source_url.lowercase()
-            return lower.endsWith(".m3u8") ||
-                lower.endsWith(".mp4") ||
+            return path.endsWith(".m3u8") ||
+                path.endsWith(".mp4") ||
+                path.endsWith(".mkv") ||
+                path.endsWith(".webm") ||
+                path.endsWith(".m4v") ||
+                path.endsWith(".mov") ||
+                path.endsWith(".ts") ||
+                path.endsWith(".m2ts") ||
                 lower.contains("/stream-proxy") // já é o proxy do site, serve stream direto
         }
 
@@ -210,6 +217,15 @@ interface WatchProgressApi {
         @Query("media_type") mediaTypeFilter: String,
         @Query("season") seasonFilter: String,
         @Query("episode") episodeFilter: String,
+    )
+
+    @retrofit2.http.DELETE("rest/v1/watch_progress")
+    suspend fun deleteProgressByTitle(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
     )
 }
 

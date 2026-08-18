@@ -1,0 +1,19 @@
+name: Fix Admin Source Id
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply fix
+        run: python3 scripts/fix_admin_source_id.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add api/admin-vip.js
+          git commit -m "fix(api): aceitar sourceId/isActive no toggle e delete" || echo nothing
+          git push

@@ -2,11 +2,12 @@ package com.streamflixvip.tv
 
 import android.app.Application
 import com.streamflixvip.tv.data.SessionStore
+import com.streamflixvip.tv.data.TvActivationManager
 import com.streamflixvip.tv.network.NetworkModule
 
 /**
- * Classe Application — inicializa SessionStore e vincula ao NetworkModule
- * para que o authenticator de refresh token funcione corretamente.
+ * Classe Application — inicializa SessionStore + deviceId e vincula ao NetworkModule
+ * para gate VIP (live-tv) e refresh de token.
  */
 class StreamFlixTvApp : Application() {
 
@@ -17,5 +18,7 @@ class StreamFlixTvApp : Application() {
         super.onCreate()
         sessionStore = SessionStore(this)
         NetworkModule.sessionStore = sessionStore
+        // VIP na TV e por device_id (tv_activations), nao por e-mail JWT
+        NetworkModule.deviceId = TvActivationManager.resolveStableDeviceId(this)
     }
 }

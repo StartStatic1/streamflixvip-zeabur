@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -47,6 +48,8 @@ fun UpdateRequiredScreen(
     versionName: String,
     releaseNotes: String,
     isDownloading: Boolean,
+    downloadProgress: Int = -1,
+    errorMessage: String? = null,
     onDownloadClick: () -> Unit,
 ) {
     Box(
@@ -147,10 +150,15 @@ fun UpdateRequiredScreen(
                         color = Color(0xFF0A0A10),
                         strokeWidth = 2.dp,
                     )
-                    androidx.compose.foundation.layout.Spacer(Modifier.height(0.dp))
+                    androidx.compose.foundation.layout.Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = if (downloadProgress in 0..100) "Baixando $downloadProgress%" else "Baixando...",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 } else {
                     Text(
-                        text = "Baixar atualização",
+                        text = "Baixar atualizacao",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                     )
@@ -159,8 +167,18 @@ fun UpdateRequiredScreen(
 
             androidx.compose.foundation.layout.Spacer(Modifier.height(16.dp))
 
+            errorMessage?.let { err ->
+                androidx.compose.foundation.layout.Spacer(Modifier.height(12.dp))
+                Text(
+                    text = err,
+                    fontSize = 13.sp,
+                    color = Color(0xFFFF6B6B),
+                    textAlign = TextAlign.Center,
+                )
+            }
+
             Text(
-                text = "O download abre no seu navegador. Depois de instalar, abra o app de novo.",
+                text = "Download dentro do app. Se pedir permissao, ative e toque Baixar de novo.",
                 fontSize = 12.sp,
                 color = Color.White.copy(alpha = 0.45f),
                 textAlign = TextAlign.Center,

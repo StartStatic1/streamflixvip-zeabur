@@ -1,0 +1,19 @@
+name: Fix Live TV Dedupe
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch API + app
+        run: python3 scripts/fix_live_tv_dedupe.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add api/live-tv.js android/app/src/main/java/com/streamflixvip/app/ui/livetv/ || true
+          git commit -m "fix(live-tv): unificar canais, filtrar SD, atalhos marca" || echo nothing
+          git push

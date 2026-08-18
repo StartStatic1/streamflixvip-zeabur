@@ -1,0 +1,19 @@
+name: Fix Player Back Glass
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply onBack + glass arrow
+        run: python3 scripts/fix_player_back_glass.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/
+          git commit -m "fix(mobile): onBack real no player + seta vidro circular" || echo nothing
+          git push

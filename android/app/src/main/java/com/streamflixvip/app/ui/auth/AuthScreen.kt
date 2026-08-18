@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.auth
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -34,7 +36,6 @@ import com.streamflixvip.app.data.CatalogRepository
 
 private val OceanCyan = Color(0xFF00E5FF)
 private val DarkBg = Color(0xFF05050A)
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 
 @Composable
 fun AuthScreen(
@@ -252,7 +253,7 @@ private fun PosterRow(
     ) {
         repeatedPosters.forEach { path ->
             AsyncImage(
-                model = "$TMDB_POSTER_BASE$path",
+                model = TmdbImages.poster(path),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

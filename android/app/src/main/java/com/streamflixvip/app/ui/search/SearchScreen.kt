@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.search
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -53,7 +55,6 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.TmdbItem
 
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
  * Pesquisa geral para localizar títulos específicos. Esta tela não reutiliza
@@ -281,7 +282,7 @@ private fun SearchResultCard(item: TmdbItem, onClick: () -> Unit) {
         Column {
             Box {
                 AsyncImage(
-                    model = item.poster_path?.let { TMDB_POSTER_BASE + it },
+                    model = item.poster_path?.let { TmdbImages.poster(it) },
                     contentDescription = item.displayTitle,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

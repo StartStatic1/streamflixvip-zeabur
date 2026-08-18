@@ -1,0 +1,19 @@
+name: Patch TV Live Player Menu
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply menu UX patch
+        run: python3 scripts/patch_tv_player_menu.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
+          git commit -m "fix(tv): menu player — aspecto 3 opcoes + lista focavel" || echo nothing
+          git push

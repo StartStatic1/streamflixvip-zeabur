@@ -1,7 +1,7 @@
 {
-  "name": "streamflixvip-zeabur",
+  "name": "streamflixvip",
   "version": "1.0.0",
-  "description": "Espelho do StreamFlixVIP rodando em Zeabur (backend Express), em paralelo com a instância na Vercel.",
+  "description": "StreamFlixVIP — API e site no Hetzner VPS (Express + PM2).",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

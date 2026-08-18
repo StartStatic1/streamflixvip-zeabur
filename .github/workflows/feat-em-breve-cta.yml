@@ -1,0 +1,105 @@
+name: feat-em-breve-cta
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/feat-em-breve-cta.yml'
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch ViewModel and Screen
+        run: |
+          python3 -c "
+          from pathlib import Path
+          p = Path('android/app/src/main/java/com/streamflixvip/app/ui/detail/DetailViewModel.kt')
+          t = p.read_text()
+          if 'episodesWithSources' not in t:
+              if 'NetworkModule' not in t:
+                  t = t.replace('import com.streamflixvip.app.data.VipStatusHolder\n', 'import com.streamflixvip.app.data.VipStatusHolder\nimport com.streamflixvip.app.network.NetworkModule\n', 1)
+              t = t.replace('val isTogglingFavorite: Boolean = false,\n    ) : DetailUiState {', 'val isTogglingFavorite: Boolean = false,\n        val episodesWithSources: Set<Int>? = null,\n    ) : DetailUiState {', 1)
+              old = '            val episodes = repository.getSeasonEpisodes(tmdbId, season)\n            val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch\n            if (stillCurrent.expandedSeason == season) {\n                _uiState.value = stillCurrent.copy(episodesOfExpandedSeason = episodes, isLoadingEpisodes = false)\n            }'
+              new = '            val episodes = repository.getSeasonEpisodes(tmdbId, season)\n            var withSources: Set<Int>? = null\n            try {\n                val resp = NetworkModule.mediaSourcesApi.getSeasonEpisodesWithSources(tmdbId = tmdbId, season = season)\n                withSources = resp.episodesWithSources.toSet()\n            } catch (_: Exception) {\n                withSources = null\n            }\n            val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch\n            if (stillCurrent.expandedSeason == season) {\n                _uiState.value = stillCurrent.copy(\n                    episodesOfExpandedSeason = episodes,\n                    isLoadingEpisodes = false,\n                    episodesWithSources = withSources,\n                )\n            }'
+              assert old in t, 'vm block missing'
+              t = t.replace(old, new)
+              p.write_text(t)
+              print('vm ok')
+          else:
+              print('vm already')
+
+          p = Path('android/app/src/main/java/com/streamflixvip/app/ui/detail/DetailScreen.kt')
+          t = p.read_text()
+          if 'MovieRequestCard' not in t:
+              t = t.replace(
+                  '\"Nenhuma fonte dispon\u00edvel ainda para este t\u00edtulo.\",',
+                  '\"__MOVIE_CTA__\",',
+                  1,
+              )
+              # full movie block replace
+              import re
+              t2, n = re.subn(
+                  r'} else if \(state\.movieSources\.isEmpty\(\)\) \{\s*item \{\s*Text\(\s*\"Nenhuma fonte[^\"]*\",\s*fontSize = 13\.sp,\s*color = MaterialTheme\.colorScheme\.onSurfaceVariant,\s*modifier = Modifier\.padding\(16\.dp\),\s*\)\s*\}\s*}',
+                  '} else if (state.movieSources.isEmpty()) {\n                item {\n                    MovieRequestCard()\n                }\n            }',
+                  t,
+                  count=1,
+                  flags=re.S,
+              )
+              print('movie replace', n)
+              if n == 0:
+                  t2 = t
+              t = t2
+              # episode row call
+              if 'isAvailable =' not in t:
+                  t = t.replace(
+                      'isLocked = state.episodeIsLocked(ep.episode_number, isVip),\n                            onToggleExpand',
+                      'isLocked = state.episodeIsLocked(ep.episode_number, isVip),\n                            isAvailable = state.episodesWithSources?.contains(ep.episode_number) != false,\n                            onToggleExpand',
+                      1,
+                  )
+                  t = t.replace(
+                      'onPlay = { if (state.episodeIsLocked(ep.episode_number, isVip)) onUpgradeClick() else onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) },',
+                      'onPlay = { val hasSource = state.episodesWithSources?.contains(ep.episode_number) != false; when { state.episodeIsLocked(ep.episode_number, isVip) -> onUpgradeClick(); !hasSource -> {}; else -> onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) } },',
+                      1,
+                  )
+              if 'isAvailable: Boolean' not in t:
+                  t = t.replace(
+                      'isLocked: Boolean,\n    onToggleExpand: () -> Unit,\n    onPlay: () -> Unit,\n) {',
+                      'isLocked: Boolean,\n    isAvailable: Boolean = true,\n    onToggleExpand: () -> Unit,\n    onPlay: () -> Unit,\n) {',
+                      1,
+                  )
+              if '!isAvailable -> Text' not in t:
+                  t = t.replace(
+                      '.clickable(onClick = onPlay),',
+                      '.clickable(enabled = isLocked || isAvailable, onClick = onPlay),',
+                      1,
+                  )
+                  t = t.replace(
+                      'isLocked -> Text(\"\U0001F512\", fontSize = 14.sp)\n                    isLoading',
+                      'isLocked -> Text(\"\U0001F512\", fontSize = 14.sp)\n                    !isAvailable -> Text(\"\u23F3\", fontSize = 14.sp)\n                    isLoading',
+                      1,
+                  )
+              if 'Em breve' not in t:
+                  t = t.replace(
+                      'color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,\n                    maxLines = 1,\n                    overflow = TextOverflow.Ellipsis,\n                )\n                episode.displayRuntime',
+                      'color = when { !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f); isSelected -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.onSurface },\n                    maxLines = 1,\n                    overflow = TextOverflow.Ellipsis,\n                )\n                if (!isAvailable) { Text(\"Em breve\", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }\n                episode.displayRuntime',
+                      1,
+                  )
+              card = '''\n\n@Composable\nprivate fun MovieRequestCard() {\n    val context = androidx.compose.ui.platform.LocalContext.current\n    val telegramUrl = \"https://t.me/streamflixofc/7335\"\n    Surface(\n        shape = RoundedCornerShape(14.dp),\n        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),\n        modifier = Modifier.fillMaxWidth().padding(16.dp),\n    ) {\n        Column(Modifier.padding(16.dp)) {\n            Text(\"Este filme ainda nao esta no catalogo\", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)\n            Spacer(Modifier.height(6.dp))\n            Text(\"Quer assistir? Peca no nosso canal e a equipe analisa a inclusao o mais rapido possivel.\", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)\n            Spacer(Modifier.height(14.dp))\n            Button(onClick = { try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(telegramUrl))) } catch (_: Exception) { } }, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {\n                Text(\"Pedir este filme no Telegram\", fontWeight = FontWeight.SemiBold)\n            }\n        }\n    }\n}\n'''
+              t = t.rstrip() + card
+              p.write_text(t)
+              print('screen ok')
+          else:
+              print('screen already')
+          print('DONE')
+          "
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android/
+          git commit -m "feat(app): Em breve nos EPs + CTA Telegram filme sem fonte" || echo nothing
+          git push

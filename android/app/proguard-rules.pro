@@ -1,21 +1,20 @@
-# ============================================================
-# Regras de ofuscação/minificação pro build de release.
-# ============================================================
+# StreamFlixVIP — ProGuard / R8 (release)
+# Objetivo: ofuscar logica do app sem quebrar Retrofit/Moshi/Compose/ExoPlayer.
+# A protecao real de VIP continua no servidor (REQUIRE_AUTH_MEDIA / REQUIRE_VIP_LIVE_TV).
 
-# ─── Media3/ExoPlayer ──────────────────────────────────────
--keep class androidx.media3.** { *; }
--keep interface androidx.media3.** { *; }
--dontwarn androidx.media3.**
+-keepattributes *Annotation*
+-keepattributes Signature
+-keepattributes InnerClasses
+-keepattributes EnclosingMethod
+-keepattributes RuntimeVisibleAnnotations
+-keepattributes RuntimeInvisibleAnnotations
+-keepattributes AnnotationDefault
 
-# ─── Lifecycle / Navigation / ViewModel ────────────────────
--keep class androidx.lifecycle.** { *; }
--keep class androidx.navigation.** { *; }
--keep class androidx.compose.** { *; }
--dontwarn androidx.lifecycle.**
--dontwarn androidx.navigation.**
--dontwarn androidx.compose.**
+# Entrypoints
+-keep class com.streamflixvip.app.StreamFlixApp { *; }
+-keep class com.streamflixvip.app.MainActivity { *; }
 
-# ─── Moshi (com codegen KSP) ───────────────────────────────
+# Moshi codegen
 -keep @com.squareup.moshi.JsonClass class * { *; }
 -keep class * extends com.squareup.moshi.JsonAdapter { *; }
 -keepclassmembers class * {
@@ -24,56 +23,70 @@
 -dontwarn com.squareup.moshi.**
 -dontwarn kotlin.reflect.**
 
-# ─── Retrofit ──────────────────────────────────────────────
--keep class retrofit2.** { *; }
+# Retrofit
+-keep,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
 -keepclasseswithmembers class * {
     @retrofit2.http.* <methods>;
 }
--keepclassmembers interface * {
-    @retrofit2.http.* <methods>;
-}
+-keep class retrofit2.** { *; }
 -keep,allowobfuscation,allowshrinking interface retrofit2.Call
 -keep,allowobfuscation,allowshrinking class retrofit2.Response
 -dontwarn retrofit2.**
 
-# ─── OkHttp ────────────────────────────────────────────────
+# OkHttp
 -keep class okhttp3.** { *; }
 -keep interface okhttp3.** { *; }
 -dontwarn okhttp3.**
 -dontwarn okio.**
 
-# ─── kotlinx.coroutines ────────────────────────────────────
+# Media3
+-keep class androidx.media3.** { *; }
+-dontwarn androidx.media3.**
+
+# Compose / Lifecycle
+-dontwarn androidx.compose.**
+-dontwarn androidx.lifecycle.**
+-dontwarn androidx.navigation.**
+-keep class androidx.lifecycle.ViewModel { *; }
+-keep class * extends androidx.lifecycle.ViewModel { <init>(...); }
+
+# Coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 -keepnames class kotlinx.coroutines.CoroutineDispatcher {}
 -keep class kotlinx.coroutines.internal.DispatchedTask { *; }
 -dontwarn kotlinx.coroutines.**
 
-# ─── Kotlin ────────────────────────────────────────────────
--keep class kotlin.** { *; }
--keep class kotlin.collections.** { *; }
--keep class kotlin.coroutines.** { *; }
--keep class kotlin.reflect.** { *; }
--dontwarn kotlin.**
-
-# ─── Coil ──────────────────────────────────────────────────
+# Coil / WebView / Material
 -keep class coil.** { *; }
 -dontwarn coil.**
-
-# ─── WebView ───────────────────────────────────────────────
 -keep class androidx.webkit.** { *; }
 -dontwarn androidx.webkit.**
-
-# ─── Material Components ───────────────────────────────────
 -keep class com.google.android.material.** { *; }
 -dontwarn com.google.android.material.**
-
-# ─── Splash Screen ─────────────────────────────────────────
 -keep class androidx.core.splashscreen.** { *; }
 
-# ─── Desugar JDK libs (java.time) ──────────────────────────
+# Desugar
 -keep class j$.time.** { *; }
 -keep class j$.util.** { *; }
 
-# ─── Pacotes do app (garante que nada do app seja removido) ──
--keep class com.streamflixvip.app.** { *; }
+-dontwarn kotlin.**
+-dontwarn kotlin.reflect.**
+
+# Strip Log.* em release
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+    public static int w(...);
+    public static int e(...);
+}
+
+# NAO manter -keep class com.streamflixvip.app.** { *; }
+# Isso impedia ofuscar a logica do app.
+
+# AdMob / GMS
+-keep class com.google.android.gms.ads.** { *; }
+-dontwarn com.google.android.gms.ads.**

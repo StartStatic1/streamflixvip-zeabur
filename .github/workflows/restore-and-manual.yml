@@ -1,0 +1,324 @@
+name: restore-and-manual
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore APIs from good commit
+        run: |
+          git show 3efed639cd596af502e3a6b0af673e4865e0bfdd:api/live-tv.js > api/live-tv.js
+          git show 3efed639cd596af502e3a6b0af673e4865e0bfdd:api/admin-vip.js > api/admin-vip.js
+          wc -c api/live-tv.js api/admin-vip.js
+          head -5 api/live-tv.js
+
+      - name: Apply manual channels patches (inline)
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+
+          # --- live-tv ---
+          t = Path('api/live-tv.js').read_text()
+          if 'loadManualChannels' not in t:
+              marker = 'async function loadSourceRows'
+              idx = t.find(marker)
+              helper = '''
+async function loadManualChannels(serviceKey) {
+  try {
+    const rows = await sbSelect(
+      serviceKey,
+      'live_tv_manual_channels',
+      'is_active=eq.true&select=id,name,logo,group_title,stream_url,priority&order=priority.asc.nullslast&limit=500',
+    );
+    return Array.isArray(rows) ? rows : [];
+  } catch (e) {
+    console.warn('[live-tv] manual channels:', e.message);
+    return [];
+  }
+}
+
+'''
+              t = t[:idx] + helper + t[idx:]
+              old = '''    if (!withCreds.length) {
+      res.status(200).json({
+        categories: [],
+        channels: [],
+        sourcesUsed: 0,
+        diagnostic: {
+          origin,
+          sourcesInDb: sources.length,
+          withCredentials: 0,
+          hint: origin === 'live_tv_sources'
+            ? 'Nenhuma fonte em live_tv_sources com host/user/pass. Cadastre na aba TV ao vivo do admin.'
+            : 'Nenhuma fonte IPTV com credenciais. Cadastre live_tv_sources (recomendado) ou ative iptv_sources.',
+        },
+      });
+      return;
+    }
+
+    const results = await Promise.all(
+      withCreds.map((s) =>
+        loadFromSource(s).catch((err) => {
+          console.error('[live-tv] fonte falhou', s.name, err.message);
+          return {
+            sourceName: s.name,
+            priority: s.priority,
+            categories: [],
+            streams: [],
+            skipReason: err.message,
+          };
+        }),
+      ),
+    );'''
+              new = '''    const results = withCreds.length
+      ? await Promise.all(
+          withCreds.map((s) =>
+            loadFromSource(s).catch((err) => {
+              console.error('[live-tv] fonte falhou', s.name, err.message);
+              return {
+                sourceName: s.name,
+                priority: s.priority,
+                categories: [],
+                streams: [],
+                skipReason: err.message,
+              };
+            }),
+          ),
+        )
+      : [];
+
+    const manuals = await loadManualChannels(serviceKey);
+    if (!withCreds.length && !manuals.length) {
+      res.status(200).json({
+        categories: [],
+        channels: [],
+        sourcesUsed: 0,
+        diagnostic: {
+          origin,
+          sourcesInDb: sources.length,
+          withCredentials: 0,
+          manuals: 0,
+          hint: 'Nenhuma fonte Xtream nem canal manual.',
+        },
+      });
+      return;
+    }'''
+              if old not in t:
+                  raise SystemExit('old empty not found')
+              t = t.replace(old, new)
+              inject = t.find('    let channels = Array.from(channelMap.values()).map((ch) => {')
+              merge = '''
+    for (const m of manuals) {
+      const url = String(m.stream_url || '').trim();
+      const name = String(m.name || '').trim() || 'Canal manual';
+      if (!url) continue;
+      const key = channelMergeKey(name) || ('manual-' + (m.id || url).toString().slice(0, 24));
+      const groupRaw = String(m.group_title || 'Manuais').trim() || 'Manuais';
+      const catKey = normalizeName(groupRaw) || 'manuais';
+      if (!categoryMap.has(catKey)) categoryMap.set(catKey, { id: catKey, name: groupRaw });
+      let ch = channelMap.get(key);
+      if (!ch) {
+        ch = { id: key, name, logo: m.logo || '', categoryId: catKey, streams: [] };
+        channelMap.set(key, ch);
+      } else if (!ch.logo && m.logo) ch.logo = m.logo;
+      if (!ch.streams.some((x) => x.url === url)) {
+        ch.streams.push({ url, label: 'Manual', priority: Number.isFinite(Number(m.priority)) ? Number(m.priority) : 1, quality: 40 });
+      }
+    }
+    console.log(`[live-tv] manuais: ${manuals.length} cadastrados`);
+
+'''
+              t = t[:inject] + merge + t[inject:]
+              Path('api/live-tv.js').write_text(t)
+              print('live-tv patched')
+          else:
+              print('live-tv already ok')
+
+          # --- admin-vip minimal CRUD ---
+          s = Path('api/admin-vip.js').read_text()
+          if 'list-live-tv-manual' not in s:
+              ins = s.find("  if (action === 'list-ads')")
+              block = r'''
+  if (action === 'list-live-tv-manual') {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels?select=id,name,logo,group_title,stream_url,priority,is_active,created_at&order=priority.asc.nullslast,name.asc`, { headers: svcHeaders });
+    if (!r.ok) { res.status(502).json({ error: 'Tabela live_tv_manual_channels ausente. Rode scripts/live_tv_manual_channels.sql no Supabase.', detail: await r.text() }); return; }
+    res.status(200).json({ channels: await r.json() }); return;
+  }
+  if (action === 'create-live-tv-manual') {
+    let name = body.name != null ? String(body.name).trim() : '';
+    let logo = body.logo != null ? String(body.logo).trim() : '';
+    let groupTitle = String(body.groupTitle || body.group_title || 'Manuais').trim() || 'Manuais';
+    let streamUrl = String(body.streamUrl || body.stream_url || '').trim();
+    const priority = body.priority != null ? Number(body.priority) : 1;
+    const raw = body.raw != null ? String(body.raw).trim() : '';
+    if (raw) {
+      const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      let ext = '', urlLine = '';
+      for (const line of lines) { if (line.startsWith('#EXTINF')) ext = line; else if (!line.startsWith('#') && /https?:\/\//i.test(line)) urlLine = line; }
+      if (urlLine) streamUrl = urlLine;
+      if (ext) {
+        const logoM = ext.match(/tvg-logo="([^"]*)"/i); const nameM = ext.match(/tvg-name="([^"]*)"/i); const groupM = ext.match(/group-title="([^"]*)"/i);
+        const commaName = ext.includes(',') ? ext.slice(ext.lastIndexOf(',')+1).trim() : '';
+        if (logoM && logoM[1] && !logo) logo = logoM[1]; if (nameM && nameM[1] && !name) name = nameM[1]; if (groupM && groupM[1]) groupTitle = groupM[1] || groupTitle; if (!name && commaName) name = commaName;
+      }
+    }
+    if (!streamUrl || !/^https?:\/\//i.test(streamUrl)) { res.status(400).json({ error: 'URL de stream invalida' }); return; }
+    if (!name) { try { name = decodeURIComponent(new URL(streamUrl).pathname.split('/').filter(Boolean).pop() || 'Canal manual'); } catch(_) { name = 'Canal manual'; } }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels`, { method: 'POST', headers: { ...svcHeaders, Prefer: 'return=representation' }, body: JSON.stringify({ name, logo: logo || null, group_title: groupTitle, stream_url: streamUrl, priority: Number.isFinite(priority) ? priority : 1, is_active: true }) });
+    const txt = await r.text(); if (!r.ok) { res.status(502).json({ error: 'Erro criar canal. Tabela existe? ' + txt.slice(0,180) }); return; }
+    let json; try { json = JSON.parse(txt); } catch(_) { json = []; }
+    res.status(200).json({ success: true, channel: Array.isArray(json) ? json[0] : json }); return;
+  }
+  if (action === 'update-live-tv-manual') {
+    const { channelId } = body; if (!channelId) { res.status(400).json({ error: 'channelId' }); return; }
+    const patch = {};
+    if (body.name != null && String(body.name).trim()) patch.name = String(body.name).trim();
+    if (body.logo != null) patch.logo = String(body.logo).trim() || null;
+    if (body.groupTitle != null || body.group_title != null) patch.group_title = String(body.groupTitle || body.group_title || 'Manuais').trim() || 'Manuais';
+    if (body.streamUrl != null || body.stream_url != null) { const u = String(body.streamUrl || body.stream_url || '').trim(); if (u && /^https?:\/\//i.test(u)) patch.stream_url = u; }
+    if (body.priority != null) patch.priority = Number(body.priority) || 1;
+    if (!Object.keys(patch).length) { res.status(400).json({ error: 'Nada para atualizar' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels?id=eq.${encodeURIComponent(channelId)}`, { method: 'PATCH', headers: svcHeaders, body: JSON.stringify(patch) });
+    if (!r.ok) { res.status(502).json({ error: await r.text() }); return; }
+    res.status(200).json({ success: true }); return;
+  }
+  if (action === 'toggle-live-tv-manual') {
+    const { channelId, isActive } = body; if (!channelId) { res.status(400).json({ error: 'channelId' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels?id=eq.${encodeURIComponent(channelId)}`, { method: 'PATCH', headers: svcHeaders, body: JSON.stringify({ is_active: !!isActive }) });
+    if (!r.ok) { res.status(502).json({ error: await r.text() }); return; }
+    res.status(200).json({ success: true }); return;
+  }
+  if (action === 'delete-live-tv-manual') {
+    const { channelId } = body; if (!channelId) { res.status(400).json({ error: 'channelId' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels?id=eq.${encodeURIComponent(channelId)}`, { method: 'DELETE', headers: svcHeaders });
+    if (!r.ok) { res.status(502).json({ error: await r.text() }); return; }
+    res.status(200).json({ success: true }); return;
+  }
+
+'''
+              Path('api/admin-vip.js').write_text(s[:ins] + block + s[ins:])
+              print('admin-vip patched')
+          else:
+              print('admin-vip already ok')
+
+          assert 'loadManualChannels' in Path('api/live-tv.js').read_text()
+          assert 'list-live-tv-manual' in Path('api/admin-vip.js').read_text()
+          print('API SANITY OK')
+          PY
+
+      - name: Patch admin.html UI
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+          t = Path('Public/admin.html').read_text()
+          if 'loadLiveTvManuals' in t:
+              print('admin already has manuals'); raise SystemExit(0)
+          old = '''      <div class="card" style="margin-top:24px">
+        <div class="card-title">📋 Fontes de TV</div>
+        <div class="table-wrap" id="liveTvListWrap"></div>
+      </div>
+    </section>'''
+          new = '''      <div class="card" style="margin-top:24px">
+        <div class="card-title">📋 Fontes de TV</div>
+        <div class="table-wrap" id="liveTvListWrap"></div>
+      </div>
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">➕ Canal manual (.ts / URL)</div>
+        <p style="color:var(--muted);font-size:0.82rem;margin:-4px 0 16px">Cole URL .ts/.m3u8 ou bloco M3U (#EXTINF + link).</p>
+        <label>Colar M3U (opcional)</label>
+        <textarea id="manualRawInput" rows="3" style="width:100%;font-family:monospace;font-size:0.8rem"></textarea>
+        <label style="margin-top:14px">Nome</label>
+        <input type="text" id="manualNameInput" placeholder="ex: BAND TOCANTINS"/>
+        <label style="margin-top:14px">URL do stream</label>
+        <input type="text" id="manualUrlInput" placeholder="http://.../.ts"/>
+        <div style="display:flex;gap:10px;margin-top:14px">
+          <div style="flex:1"><label>Logo</label><input type="text" id="manualLogoInput"/></div>
+          <div style="flex:1"><label>Grupo</label><input type="text" id="manualGroupInput" value="Manuais"/></div>
+        </div>
+        <label style="margin-top:14px">Prioridade</label>
+        <input type="number" id="manualPriorityInput" value="1"/>
+        <button class="btn-primary" style="margin-top:16px" id="saveManualBtn" onclick="saveManualChannel()">Salvar canal manual</button>
+      </div>
+      <div class="card" style="margin-top:24px">
+        <div class="card-title">📋 Canais manuais</div>
+        <div class="table-wrap" id="manualListWrap"></div>
+      </div>
+    </section>'''
+          if old not in t: raise SystemExit('section not found')
+          t = t.replace(old, new, 1)
+          t = t.replace("if (tab === 'livetv') loadLiveTvSources();", "if (tab === 'livetv') { loadLiveTvSources(); loadLiveTvManuals(); }")
+          js = r'''
+  let _allManualChannels = [];
+  async function loadLiveTvManuals() {
+    const data = await api('list-live-tv-manual');
+    if (data.error) {
+      const wrap = document.getElementById('manualListWrap');
+      if (wrap) wrap.innerHTML = `<p style="color:#f59e0b;padding:16px">⚠️ ${escapeHtml(String(data.error.message||data.error))}<br/><span style="color:var(--muted)">Rode scripts/live_tv_manual_channels.sql no Supabase.</span></p>`;
+      return;
+    }
+    _allManualChannels = data.channels || [];
+    const wrap = document.getElementById('manualListWrap');
+    if (!_allManualChannels.length) { wrap.innerHTML = '<p style="color:var(--muted);padding:20px;text-align:center">Nenhum canal manual.</p>'; return; }
+    wrap.innerHTML = `<table><thead><tr><th>Nome</th><th>Grupo</th><th>URL</th><th>Pri</th><th></th></tr></thead><tbody>${_allManualChannels.map(c=>`<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.group_title||'')}</td><td style="font-size:0.7rem;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.stream_url||'')}</td><td>${c.priority??'—'}</td><td><button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="editManualChannel('${c.id}')">✏️</button> <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="toggleManualChannel('${c.id}',${!c.is_active})">${c.is_active?'⏸️':'▶️'}</button> <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="deleteManualChannel('${c.id}','${escapeHtml(c.name).replace(/'/g,"\\'")}')">🗑️</button></td></tr>`).join('')}</tbody></table>`;
+  }
+  async function saveManualChannel() {
+    const name = document.getElementById('manualNameInput').value.trim();
+    const streamUrl = document.getElementById('manualUrlInput').value.trim();
+    const logo = document.getElementById('manualLogoInput').value.trim();
+    const groupTitle = document.getElementById('manualGroupInput').value.trim() || 'Manuais';
+    const priority = parseInt(document.getElementById('manualPriorityInput').value,10)||1;
+    const raw = document.getElementById('manualRawInput').value.trim();
+    const btn = document.getElementById('saveManualBtn');
+    const editingId = btn.dataset.editingId || '';
+    if (!editingId && !streamUrl && !raw) { showToast('Informe URL ou M3U'); return; }
+    btn.disabled = true;
+    const result = editingId
+      ? await api('update-live-tv-manual', { channelId: editingId, name, streamUrl, logo, groupTitle, priority })
+      : await api('create-live-tv-manual', { name, streamUrl, logo, groupTitle, priority, raw });
+    btn.disabled = false; delete btn.dataset.editingId; btn.textContent = 'Salvar canal manual';
+    if (result.error) { showToast('❌ '+(result.error.message||result.error)); return; }
+    showToast('✅ Canal salvo'); ['manualNameInput','manualUrlInput','manualLogoInput','manualRawInput'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('manualGroupInput').value='Manuais'; loadLiveTvManuals();
+  }
+  function editManualChannel(id) {
+    const c = _allManualChannels.find(x=>x.id===id); if(!c) return;
+    document.getElementById('manualNameInput').value=c.name||'';
+    document.getElementById('manualUrlInput').value=c.stream_url||'';
+    document.getElementById('manualLogoInput').value=c.logo||'';
+    document.getElementById('manualGroupInput').value=c.group_title||'Manuais';
+    document.getElementById('manualPriorityInput').value=c.priority??1;
+    const btn=document.getElementById('saveManualBtn'); btn.dataset.editingId=id; btn.textContent='Salvar alterações';
+  }
+  async function toggleManualChannel(id,st) {
+    const r=await api('toggle-live-tv-manual',{channelId:id,isActive:st});
+    if(r.error){showToast('❌ '+r.error);return;} showToast(st?'▶️':'⏸️'); loadLiveTvManuals();
+  }
+  async function deleteManualChannel(id,name) {
+    if(!confirm('Excluir "'+name+'"?'))return;
+    const r=await api('delete-live-tv-manual',{channelId:id});
+    if(r.error){showToast('❌ '+r.error);return;} showToast('🗑️'); loadLiveTvManuals();
+  }
+
+'''
+          t = t.replace('  let _allLiveTvSources = [];', js + '  let _allLiveTvSources = [];', 1)
+          Path('Public/admin.html').write_text(t)
+          assert 'loadLiveTvManuals' in Path('Public/admin.html').read_text()
+          print('admin.html OK')
+          PY
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/admin-vip.js api/live-tv.js Public/admin.html scripts/live_tv_manual_channels.sql
+          git status
+          git commit -m "feat: canais manuais TV (.ts/M3U) + restore live-tv" || echo nothing
+          git push

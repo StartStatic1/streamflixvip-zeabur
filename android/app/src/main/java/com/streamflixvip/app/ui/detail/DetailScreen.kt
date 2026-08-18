@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.detail
 
+import com.streamflixvip.app.network.TmdbImages
+
 import android.view.ViewGroup
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -22,10 +24,12 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,9 +52,6 @@ import com.streamflixvip.app.network.TmdbSeason
 import com.streamflixvip.app.network.VipSource
 import com.streamflixvip.app.ads.AdsHelper
 
-private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
-private const val TMDB_STILL_BASE = "https://image.tmdb.org/t/p/w300"
-private const val TMDB_POSTER_SMALL_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
  * Tela de Detalhes: backdrop, sinopse, gêneros — e a lista de fontes
@@ -63,6 +64,9 @@ private const val TMDB_POSTER_SMALL_BASE = "https://image.tmdb.org/t/p/w342"
 @Composable
 fun DetailScreen(
     viewModel: DetailViewModel,
+    resumeSeconds: Int = 0,
+    initialSeason: Int = -1,
+    initialEpisode: Int = -1,
     onPlaySource: (source: VipSource, season: Int, episode: Int, title: String, posterPath: String?) -> Unit,
     onBack: () -> Unit,
     onUpgradeClick: () -> Unit,
@@ -90,6 +94,25 @@ fun DetailScreen(
     // simples porque filme não depende de buscar fontes sob demanda — a
     // lista já veio pronta no carregamento inicial da tela.
     var showMovieServerPicker by remember { mutableStateOf(false) }
+    var autoResumedContinue by rememberSaveable { mutableStateOf(false) }
+    val successForResume = state as? DetailUiState.Success
+    LaunchedEffect(successForResume, resumeSeconds) {
+        if (autoResumedContinue || resumeSeconds <= 0) return@LaunchedEffect
+        val s = successForResume ?: return@LaunchedEffect
+        autoResumedContinue = true
+        val title = s.details.title ?: s.details.name ?: "Sem titulo"
+        val posterPath = s.details.poster_path
+        if (s.movieSources.isNotEmpty() && initialSeason <= 0) {
+            onPlaySource(s.movieSources.first(), 0, 0, title, posterPath)
+            return@LaunchedEffect
+        }
+        if (initialSeason > 0) {
+            val ep = initialEpisode.coerceAtLeast(1)
+            viewModel.loadEpisodeSources(initialSeason, ep, forceAutoPlay = true) { src ->
+                onPlaySource(src, initialSeason, ep, title, posterPath)
+            }
+        }
+    }
 
     when (val s = state) {
         is DetailUiState.Loading -> {
@@ -227,8 +250,8 @@ private fun DetailContent(
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
     val posterPath = details.poster_path
-    val backdropUrl = details.backdrop_path?.let { TMDB_BACKDROP_BASE + it }
-    val posterUrl = posterPath?.let { "https://image.tmdb.org/t/p/w500$it" }
+    val backdropUrl = details.backdrop_path?.let { TmdbImages.backdrop(it) }
+    val posterUrl = posterPath?.let { TmdbImages.poster(it, "w500") }
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -315,12 +338,7 @@ private fun DetailContent(
                 }
             } else if (state.movieSources.isEmpty()) {
                 item {
-                    Text(
-                        "Nenhuma fonte disponível ainda para este título.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
+                    MovieRequestCard()
                 }
             }
             item {
@@ -382,8 +400,9 @@ private fun DetailContent(
                             isSelected = state.selectedSeason == state.expandedSeason && state.selectedEpisode == ep.episode_number,
                             isLoading = state.isLoadingEpisodeSources && state.selectedSeason == state.expandedSeason && state.selectedEpisode == ep.episode_number,
                             isLocked = state.episodeIsLocked(ep.episode_number, isVip),
+                            isAvailable = state.episodesWithSources?.contains(ep.episode_number) != false,
                             onToggleExpand = { onToggleEpisodeExpanded(ep.episode_number) },
-                            onPlay = { onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) },
+                            onPlay = { val hasSource = state.episodesWithSources?.contains(ep.episode_number) != false; when { state.episodeIsLocked(ep.episode_number, isVip) -> onUpgradeClick(); !hasSource -> {}; else -> onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) } },
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -399,7 +418,7 @@ private fun DetailContent(
                                 isSelected = state.selectedSeason == state.expandedSeason && state.selectedEpisode == epNum,
                                 isLoading = state.isLoadingEpisodeSources && state.selectedSeason == state.expandedSeason && state.selectedEpisode == epNum,
                                 isLocked = state.episodeIsLocked(epNum, isVip),
-                                onClick = { onSelectEpisode(state.expandedSeason ?: 1, epNum, title, posterPath) },
+                                onClick = { if (state.episodeIsLocked(epNum, isVip)) onUpgradeClick() else onSelectEpisode(state.expandedSeason ?: 1, epNum, title, posterPath) },
                             )
                         }
                     }
@@ -630,6 +649,7 @@ private fun CineverseEpisodeRow(
     isSelected: Boolean,
     isLoading: Boolean,
     isLocked: Boolean,
+    isAvailable: Boolean = true,
     onToggleExpand: () -> Unit,
     onPlay: () -> Unit,
 ) {
@@ -650,11 +670,12 @@ private fun CineverseEpisodeRow(
                     .size(38.dp)
                     .clip(androidx.compose.foundation.shape.CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .clickable(onClick = onPlay),
+                    .clickable(enabled = isLocked || isAvailable, onClick = onPlay),
                 contentAlignment = Alignment.Center,
             ) {
                 when {
                     isLocked -> Text("🔒", fontSize = 14.sp)
+                    !isAvailable -> Text("⏳", fontSize = 14.sp)
                     isLoading -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     else -> Icon(
                         Icons.Filled.PlayArrow,
@@ -670,10 +691,11 @@ private fun CineverseEpisodeRow(
                     "${episode.episode_number}. ${episode.displayName}",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    color = when { !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f); isSelected -> MaterialTheme.colorScheme.primary; else -> MaterialTheme.colorScheme.onSurface },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (!isAvailable) { Text("Em breve", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary) }
                 episode.displayRuntime?.let {
                     Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -715,7 +737,7 @@ private fun CineverseEpisodeRow(
                 ) {
                     if (episode.still_path != null) {
                         AsyncImage(
-                            model = "$TMDB_STILL_BASE${episode.still_path}",
+                            model = TmdbImages.still(episode.still_path),
                             contentDescription = episode.displayName,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
@@ -1443,7 +1465,7 @@ private fun TrailerModal(
 
 @Composable
 private fun SimilarTitleCard(item: TmdbItem, onClick: () -> Unit) {
-    val posterUrl = item.poster_path?.let { TMDB_POSTER_SMALL_BASE + it }
+    val posterUrl = item.poster_path?.let { TmdbImages.poster(it) }
 
     Column(
         modifier = Modifier
@@ -1777,6 +1799,27 @@ private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MovieRequestCard() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val telegramUrl = "https://t.me/streamflixofc/7335"
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Este filme ainda não está no catálogo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            Text("Quer assistir? Peça no nosso canal e a equipe analisa a inclusão o mais rápido possível.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
+            Spacer(Modifier.height(14.dp))
+            Button(onClick = { try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(telegramUrl))) } catch (_: Exception) { } }, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Text("Pedir este filme no Telegram", fontWeight = FontWeight.SemiBold)
             }
         }
     }

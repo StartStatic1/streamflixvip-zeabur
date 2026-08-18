@@ -38,6 +38,11 @@ import com.streamflixvip.tv.ui.theme.StreamFlixTvTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.platform.LocalContext
+import com.streamflixvip.tv.BuildConfig
+import com.streamflixvip.tv.network.AppVersionResponse
+import com.streamflixvip.tv.ui.update.UpdateRequiredTvScreen
+import com.streamflixvip.tv.update.ApkInstaller
 
 class MainTvActivity : ComponentActivity() {
 
@@ -49,6 +54,70 @@ class MainTvActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val activationManager = remember { TvActivationManager(applicationContext) }
                 val scope = rememberCoroutineScope()
+                val context = LocalContext.current
+
+                var updateInfo by remember { mutableStateOf<AppVersionResponse?>(null) }
+                var isDownloadingUpdate by remember { mutableStateOf(false) }
+                var downloadProgress by remember { mutableIntStateOf(0) }
+                var updateStatusMessage by remember { mutableStateOf<String?>(null) }
+
+                LaunchedEffect(Unit) {
+                    try {
+                        val response = NetworkModule.appVersionApi.getVersion()
+                        if (response.forceUpdate && response.versionCode > BuildConfig.VERSION_CODE) {
+                            updateInfo = response
+                        }
+                    } catch (_: Exception) {
+                    }
+                }
+
+                if (updateInfo != null) {
+                    UpdateRequiredTvScreen(
+                        versionName = updateInfo!!.versionName,
+                        releaseNotes = updateInfo!!.releaseNotes ?: "",
+                        isDownloading = isDownloadingUpdate,
+                        downloadProgress = downloadProgress,
+                        statusMessage = updateStatusMessage,
+                        onDownloadClick = {
+                            val url = updateInfo!!.apkUrl
+                            if (url.isNullOrBlank()) {
+                                updateStatusMessage = "URL do APK nao configurada no servidor."
+                                return@UpdateRequiredTvScreen
+                            }
+                            isDownloadingUpdate = true
+                            downloadProgress = 0
+                            updateStatusMessage = null
+                            scope.launch {
+                                try {
+                                    // Em Android 8+: se ainda nao pode instalar, abre a permissao
+                                    if (!ApkInstaller.canInstallPackages(context)) {
+                                        updateStatusMessage =
+                                            "Permita instalar apps deste app nas configuracoes e toque de novo em Baixar."
+                                        ApkInstaller.openInstallPermissionSettings(context)
+                                        isDownloadingUpdate = false
+                                        return@launch
+                                    }
+                                    val file = ApkInstaller.download(context, url) { pct ->
+                                        downloadProgress = pct
+                                    }
+                                    downloadProgress = 100
+                                    ApkInstaller.install(context, file)
+                                } catch (e: Exception) {
+                                    updateStatusMessage =
+                                        "Falha no download: ${e.message ?: "erro desconhecido"}"
+                                    Toast.makeText(
+                                        this@MainTvActivity,
+                                        "Erro ao baixar atualizacao",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                } finally {
+                                    isDownloadingUpdate = false
+                                }
+                            }
+                        },
+                    )
+                    return@StreamFlixTvTheme
+                }
 
                 var pendingSource by remember { mutableStateOf<VipSource?>(null) }
                 var pendingSources by remember { mutableStateOf<List<VipSource>>(emptyList()) }
@@ -211,9 +280,6 @@ class MainTvActivity : ComponentActivity() {
                                     if (idx >= 0) pendingLiveIndex = idx
                                 },
                                 onBack = {
-                                    // Nao zerar pendingLiveChannel antes do pop: se zerar, o
-                                    // composable cai no else e o LaunchedEffect faz segundo pop
-                                    // (pula live e vai pra Home no Firestick).
                                     val landed = navController.popBackStack("live", inclusive = false)
                                     if (!landed) {
                                         navController.navigate("live") {

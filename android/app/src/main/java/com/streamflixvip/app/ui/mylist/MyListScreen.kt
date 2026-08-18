@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.mylist
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -15,7 +17,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
+import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -23,16 +27,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.FavoriteEntry
 
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
 
 /**
  * Tela Favoritos: pills de filtro por tipo (com contagem), e grade de
@@ -47,13 +51,19 @@ fun MyListScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    // Recarrega a lista sempre que a tela volta a ficar visível — sem
-    // isso, favoritar um título na tela de Detalhe e voltar pra cá não
-    // atualizava a grade, porque o ViewModel desta aba é reaproveitado
-    // (não recriado) ao trocar de aba pela bottom bar, então o load()
-    // do init{} só rodava uma vez na vida do app.
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        viewModel.load()
+    // Recarrega a lista ao voltar pra tela.
+    // Usa Lifecycle do Activity direto — evita crash
+    // "LocalLifecycleOwner not present" em release/minify.
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        val owner = context as ComponentActivity
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.load()
+            }
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
     }
 
     when (val s = state) {
@@ -206,7 +216,7 @@ private fun FavoriteCard(
     onClick: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    val posterUrl = favorite.poster_path?.let { TMDB_POSTER_BASE + it }
+    val posterUrl = favorite.poster_path?.let { TmdbImages.poster(it) }
 
     Column(modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)) {
         Box(

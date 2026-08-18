@@ -1,0 +1,108 @@
+name: Fix TV Live Player D-pad
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply D-pad fix with Python file on runner
+        run: |
+          set -e
+          FILE=android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
+          python3 -c "
+          from pathlib import Path
+          p=Path('$FILE')
+          t=p.read_text()
+          if 'deixa Surface/onClick do chip receber OK' in t:
+              print('already'); raise SystemExit(0)
+          # 1) OK nao consome chips
+          a='KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {'
+          if a not in t: raise SystemExit('anchor1 missing')
+          # Replace whole when-block by locating markers
+          start=t.find('                when (code) {')
+          end=t.find('            },', start)
+          if start<0 or end<0: raise SystemExit('when block missing')
+          # find closing of onPreviewKeyEvent lambda after when
+          # Use the block that ends before '    ) {' of Box content - safer: unique end marker
+          end2=t.find('                    else -> if (!controlsVisible) { showControls(); true } else false\n                }', start)
+          if end2<0: raise SystemExit('end marker missing')
+          end2=end2+len('                    else -> if (!controlsVisible) { showControls(); true } else false\n                }')
+          new='''                when (code) {
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                        if (!controlsVisible) {
+                            showControls()
+                            true
+                        } else {
+                            false // deixa Surface/onClick do chip receber OK
+                        }
+                    }
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                        if (!controlsVisible) showControls()
+                        true
+                    }
+                    KeyEvent.KEYCODE_CHANNEL_UP -> {
+                        switchChannel(+1); true
+                    }
+                    KeyEvent.KEYCODE_CHANNEL_DOWN -> {
+                        switchChannel(-1); true
+                    }
+                    KeyEvent.KEYCODE_DPAD_UP -> {
+                        if (!controlsVisible) { switchChannel(+1); true } else false
+                    }
+                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (!controlsVisible) { switchChannel(-1); true } else false
+                    }
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (!controlsVisible) { showControls(); true } else false
+                    }
+                    KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_MENU -> {
+                        aspectMenuVisible = false
+                        channelListVisible = !channelListVisible
+                        if (channelListVisible) controlsVisible = false
+                        true
+                    }
+                    else -> if (!controlsVisible) { showControls(); true } else false
+                }'''
+          t=t[:start]+new+t[end2:]
+          # 2) Lista esconde controles
+          t=t.replace(
+              'channelListVisible = true\n                            showControls()',
+              'channelListVisible = true\n                            controlsVisible = false',
+              1)
+          # 3) Aspecto ciclo simples - remove submenu if present
+          marker='if (aspectMenuVisible) {'
+          if marker in t and 'LiveAspect.entries.forEach' in t:
+              i=t.find('                if (aspectMenuVisible) {')
+              j=t.find('                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {\n                    LiveTvChip(\n                        Icons.Filled.AspectRatio,\n                        if (aspectMenuVisible)')
+              if i>0 and j>i:
+                  # skip submenu, replace aspect chip start
+                  k=t.find('aspectMenuVisible = !aspectMenuVisible', j)
+                  # simpler: replace the toggle body with cycle
+                  t=t.replace(
+                      'if (aspectMenuVisible) \"Fechar\" else aspect.label',
+                      'aspect.label',
+                      1)
+                  t=t.replace(
+                      'selected = aspectMenuVisible,\n                    ) {\n                        aspectMenuVisible = !aspectMenuVisible\n                        showControls()\n                    }',
+                      ') {\n                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]\n                        aspectMenuVisible = false\n                        showControls()\n                    }',
+                      1)
+                  # remove submenu block lines roughly
+                  i2=t.find('                if (aspectMenuVisible) {')
+                  if i2>0:
+                      j2=t.find('                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {', i2)
+                      if j2>i2:
+                          t=t[:i2]+t[j2:]
+          p.write_text(t)
+          assert 'deixa Surface/onClick do chip receber OK' in t
+          print('ok', len(t))
+          "
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android-tv/app/src/main/java/com/streamflixvip/tv/ui/livetv/LivePlayerTvScreen.kt
+          git commit -m "fix(tv): D-pad OK nos chips + lista + aspecto" || echo nothing
+          git push

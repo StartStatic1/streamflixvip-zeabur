@@ -2,8 +2,10 @@ package com.streamflixvip.app.ui.detail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.streamflixvip.app.data.AuthTokenHelper
 import com.streamflixvip.app.data.CatalogRepository
 import com.streamflixvip.app.data.VipStatusHolder
+import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.TmdbEpisode
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.TmdbResponse
@@ -41,6 +43,7 @@ sealed interface DetailUiState {
         val canPostComments: Boolean = false,
         val isFavorite: Boolean = false,
         val isTogglingFavorite: Boolean = false,
+        val episodesWithSources: Set<Int>? = null,
     ) : DetailUiState {
         val trailerKey: String? get() = details.trailerKey
         fun movieIsLocked(isVip: Boolean): Boolean = !isVip && requiresVip(vipConfig, episodeNumber = null)
@@ -133,9 +136,20 @@ class DetailViewModel(
         _uiState.value = current.copy(expandedSeason = season, episodesOfExpandedSeason = emptyList(), isLoadingEpisodes = true)
         viewModelScope.launch {
             val episodes = repository.getSeasonEpisodes(tmdbId, season)
+            var withSources: Set<Int>? = null
+            try {
+                val resp = NetworkModule.mediaSourcesApi.getSeasonEpisodesWithSources(tmdbId = tmdbId, season = season)
+                withSources = resp.episodesWithSources.toSet()
+            } catch (_: Exception) {
+                withSources = null
+            }
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             if (stillCurrent.expandedSeason == season) {
-                _uiState.value = stillCurrent.copy(episodesOfExpandedSeason = episodes, isLoadingEpisodes = false)
+                _uiState.value = stillCurrent.copy(
+                    episodesOfExpandedSeason = episodes,
+                    isLoadingEpisodes = false,
+                    episodesWithSources = withSources,
+                )
             }
         }
     }
@@ -162,7 +176,7 @@ class DetailViewModel(
         }
     }
 
-    fun loadEpisodeSources(season: Int, episode: Int, onAutoPlay: (VipSource) -> Unit) {
+    fun loadEpisodeSources(season: Int, episode: Int, forceAutoPlay: Boolean = false, onAutoPlay: (VipSource) -> Unit) {
         val current = _uiState.value as? DetailUiState.Success ?: return
         val isVipNow = VipStatusHolder.isVipNow()
 
@@ -201,11 +215,20 @@ class DetailViewModel(
                     onAutoPlay(sources.first())
                 }
                 sources.size > 1 -> {
-                    _uiState.value = stillCurrent.copy(
-                        episodeSources = sources,
-                        isLoadingEpisodeSources = false,
-                        showServerPickerForEpisode = episode,
-                    )
+                    if (forceAutoPlay) {
+                        _uiState.value = stillCurrent.copy(
+                            episodeSources = sources,
+                            isLoadingEpisodeSources = false,
+                            showServerPickerForEpisode = null,
+                        )
+                        onAutoPlay(sources.first())
+                    } else {
+                        _uiState.value = stillCurrent.copy(
+                            episodeSources = sources,
+                            isLoadingEpisodeSources = false,
+                            showServerPickerForEpisode = episode,
+                        )
+                    }
                 }
                 else -> {
                     _uiState.value = stillCurrent.copy(
@@ -243,9 +266,20 @@ class DetailViewModel(
         )
         viewModelScope.launch {
             val episodes = repository.getSeasonEpisodes(tmdbId, season)
+            var withSources: Set<Int>? = null
+            try {
+                val resp = NetworkModule.mediaSourcesApi.getSeasonEpisodesWithSources(tmdbId = tmdbId, season = season)
+                withSources = resp.episodesWithSources.toSet()
+            } catch (_: Exception) {
+                withSources = null
+            }
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             if (stillCurrent.expandedSeason == season) {
-                _uiState.value = stillCurrent.copy(episodesOfExpandedSeason = episodes, isLoadingEpisodes = false)
+                _uiState.value = stillCurrent.copy(
+                    episodesOfExpandedSeason = episodes,
+                    isLoadingEpisodes = false,
+                    episodesWithSources = withSources,
+                )
             }
         }
     }
@@ -305,9 +339,11 @@ class DetailViewModel(
 
     fun toggleFavorite() {
         val current = _uiState.value as? DetailUiState.Success ?: return
-        val uid = userId ?: return
-        val token = accessToken ?: return
         if (current.isTogglingFavorite) return
+
+        val store = NetworkModule.sessionStore
+        val uid = store?.userId ?: userId
+        if (uid.isNullOrBlank()) return
 
         val wasFavorite = current.isFavorite
         val title = current.details.title ?: current.details.name
@@ -317,19 +353,39 @@ class DetailViewModel(
         _uiState.value = current.copy(isFavorite = !wasFavorite, isTogglingFavorite = true)
 
         viewModelScope.launch {
-            val success = if (wasFavorite) {
-                favoritesRepository.removeFavorite(token, uid, tmdbId, mediaType)
-            } else {
-                favoritesRepository.addFavorite(
-                    accessToken = token,
-                    userId = uid,
-                    tmdbId = tmdbId,
-                    mediaType = mediaType,
-                    title = title,
-                    posterPath = posterPath,
-                    originalLanguage = originalLanguage,
-                )
+            var token = AuthTokenHelper.validAccessToken()
+            if (token.isNullOrBlank()) {
+                val still = _uiState.value as? DetailUiState.Success ?: return@launch
+                _uiState.value = still.copy(isFavorite = wasFavorite, isTogglingFavorite = false)
+                return@launch
             }
+
+            suspend fun attempt(): Boolean {
+                val t = token ?: return false
+                return if (wasFavorite) {
+                    favoritesRepository.removeFavorite(t, uid, tmdbId, mediaType)
+                } else {
+                    favoritesRepository.addFavorite(
+                        accessToken = t,
+                        userId = uid,
+                        tmdbId = tmdbId,
+                        mediaType = mediaType,
+                        title = title,
+                        posterPath = posterPath,
+                        originalLanguage = originalLanguage,
+                    )
+                }
+            }
+
+            var success = attempt()
+            if (!success) {
+                val refreshed = AuthTokenHelper.forceRefresh()
+                if (!refreshed.isNullOrBlank()) {
+                    token = refreshed
+                    success = attempt()
+                }
+            }
+
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             _uiState.value = if (success) {
                 stillCurrent.copy(isTogglingFavorite = false)

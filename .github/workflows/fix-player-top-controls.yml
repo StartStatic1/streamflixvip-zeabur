@@ -1,0 +1,19 @@
+name: Fix Player Top Controls
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rewrite top controls
+        run: python3 scripts/fix_player_top_controls.py
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          git commit -m "fix(mobile): top controls player (seta vidro limpa)" || echo nothing
+          git push

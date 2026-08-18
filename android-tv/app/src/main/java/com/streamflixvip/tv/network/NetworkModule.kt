@@ -14,12 +14,38 @@ object NetworkModule {
 
     var sessionStore: com.streamflixvip.tv.data.SessionStore? = null
 
+    /** Device ID estavel (Widevine) — VIP da TV e por ativacao de aparelho, nao JWT. */
+    var deviceId: String? = null
+
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = if (BuildConfig.DEBUG) {
             HttpLoggingInterceptor.Level.BODY
         } else {
             HttpLoggingInterceptor.Level.NONE
         }
+    }
+
+    /**
+     * Anexa Authorization + X-User-Id + X-Device-Id.
+     * Live TV no servidor valida VIP por JWT, userId OU deviceId (tv_activations).
+     */
+    private val sessionAuthInterceptor = okhttp3.Interceptor { chain ->
+        val store = sessionStore
+        val original = chain.request()
+        val builder = original.newBuilder()
+        val token = store?.accessToken
+        if (!token.isNullOrBlank()) {
+            builder.header("Authorization", "Bearer $token")
+        }
+        val userId = store?.userId
+        if (!userId.isNullOrBlank()) {
+            builder.header("X-User-Id", userId)
+        }
+        val dev = deviceId
+        if (!dev.isNullOrBlank()) {
+            builder.header("X-Device-Id", dev)
+        }
+        chain.proceed(builder.build())
     }
 
     private val tokenAuthenticator = okhttp3.Authenticator { _, response ->
@@ -49,15 +75,18 @@ object NetworkModule {
     }
 
     private val okHttpClient = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
         .authenticator(tokenAuthenticator)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    /** Live TV agrega várias fontes Xtream — timeout maior. */
+    /** Live TV agrega varias fontes Xtream — timeout maior. */
     private val liveTvOkHttp = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
+        .authenticator(tokenAuthenticator)
         .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
         .build()

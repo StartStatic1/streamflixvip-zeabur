@@ -1,0 +1,75 @@
+name: feat-live-quality-picker
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch live-tv.js + Android
+        run: |
+          python3 << 'PY'
+          from pathlib import Path
+
+          # --- live-tv.js ---
+          p = Path('api/live-tv.js')
+          t = p.read_text()
+          old = '''function channelMergeKey(name) {\n  let n = normalizeName(name);\n  if (!n) return '';\n  n = n.replace(/^\\d+\\s+/, '');\n  n = n.replace(/\\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\\s*hd)\\b/g, ' ');\n  n = n.replace(/\\b(canais?|legenda|legendado|dublado|multi|audio|server|opcao|opt|option|backup|alt)\\b/g, ' ');\n  n = n.replace(/\\s+/g, ' ').trim();\n  return n;\n}'''
+          new = '''function channelMergeKey(name) {\n  let n = normalizeName(name);\n  if (!n) return '';\n  n = n.replace(/^\\d+\\s+/, '');\n  n = n.replace(/\\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\\s*hd|vip|premium|raw|aac|ac3)\\b/g, ' ');\n  n = n.replace(/\\b(canais?|legenda|legendado|dublado|multi|audio|server|opcao|opt|option|backup|alt)\\b/g, ' ');\n  n = n.replace(/\\s+/g, ' ').trim();\n  return n;\n}\n\nfunction displayBaseName(name) {\n  let s = String(name || '').replace(/\\s*\\([^)]*\\)\\s*/g, ' ');\n  s = s.replace(/\\b(SD|HD|FHD|UHD|4K|8K|H264|H265|HEVC|HDR|FULL\\s*HD|VIP)\\b/gi, ' ');\n  s = s.replace(/\\s+/g, ' ').trim();\n  return s || String(name || '').trim();\n}\n\nfunction qualityLabelFromScore(q) {\n  if (q >= 50) return '4K';\n  if (q >= 40) return 'FHD';\n  if (q >= 30) return 'HD';\n  if (q <= 5) return 'SD';\n  return 'STD';\n}'''
+          if old not in t:
+              raise SystemExit('channelMergeKey missing')
+          t = t.replace(old, new, 1)
+          old = '''    let channels = Array.from(channelMap.values()).map((ch) => {\n      let streams = ch.streams.slice().sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));\n      const hasGood = streams.some((s) => (s.quality ?? 20) >= 30);\n      if (hasGood) {\n        streams = streams.filter((s) => (s.quality ?? 20) >= 20);\n      }\n      const cleanName = String(ch.name || '')\n        .replace(/\\s*\\([^)]*\\)\\s*/g, ' ')\n        .replace(/\\s+/g, ' ')\n        .trim();\n      return {\n        ...ch,\n        name: cleanName || ch.name,\n        streams: streams.map(({ url, label, priority }) => ({ url, label, priority })),\n      };\n    });'''
+          new = '''    let channels = Array.from(channelMap.values()).map((ch) => {\n      let streams = ch.streams.slice().sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));\n      const hasGood = streams.some((s) => (s.quality ?? 20) >= 30);\n      if (hasGood) {\n        streams = streams.filter((s) => (s.quality ?? 20) >= 20);\n      }\n      const baseName = displayBaseName(ch.name) || ch.name;\n      return {\n        ...ch,\n        name: baseName,\n        streams: streams.map(({ url, label, priority, quality }) => ({\n          url,\n          label,\n          priority,\n          quality: qualityLabelFromScore(quality ?? 20),\n        })),\n      };\n    });'''
+          if old not in t:
+              raise SystemExit('channels map missing')
+          p.write_text(t.replace(old, new, 1))
+          print('live-tv.js ok')
+
+          # --- LiveTvApi.kt ---
+          p = Path('android/app/src/main/java/com/streamflixvip/app/network/LiveTvApi.kt')
+          t = p.read_text()
+          if 'val quality' not in t:
+              t = t.replace(
+                  '''data class LiveStreamOption(\n    val url: String,\n    val label: String? = null,\n    val priority: Int? = null,\n)''',
+                  '''data class LiveStreamOption(\n    val url: String,\n    val label: String? = null,\n    val priority: Int? = null,\n    val quality: String? = null,\n)''',
+              )
+              p.write_text(t)
+          print('LiveTvApi ok')
+
+          # --- LivePlayerScreen.kt ---
+          p = Path('android/app/src/main/java/com/streamflixvip/app/ui/livetv/LivePlayerScreen.kt')
+          t = p.read_text()
+          if 'qualityOrder' not in t:
+              old = '''    var streamIndex by remember { mutableIntStateOf(0) }\n    var isLoading by remember { mutableStateOf(true) }\n    var errorMessage by remember { mutableStateOf<String?>(null) }\n    var sourceLabel by remember { mutableStateOf("") }\n    var controlsVisible by remember { mutableStateOf(true) }\n    var aspect by remember { mutableStateOf(LiveAspect.FIT) }\n'''
+              new = '''    val qualityOrder = listOf("4K", "FHD", "HD", "STD", "SD")\n    val orderedStreams = remember(streams) {\n        streams.sortedBy { s ->\n            val i = qualityOrder.indexOf(s.quality ?: "STD")\n            if (i < 0) 50 else i\n        }\n    }\n    var streamIndex by remember(orderedStreams) { mutableIntStateOf(0) }\n    var selectedQuality by remember(orderedStreams) {\n        mutableStateOf(orderedStreams.firstOrNull()?.quality)\n    }\n    var isLoading by remember { mutableStateOf(true) }\n    var errorMessage by remember { mutableStateOf<String?>(null) }\n    var sourceLabel by remember { mutableStateOf("") }\n    var controlsVisible by remember { mutableStateOf(true) }\n    var aspect by remember { mutableStateOf(LiveAspect.FIT) }\n'''
+              if old not in t:
+                  raise SystemExit('player state missing')
+              t = t.replace(old, new, 1)
+              t = t.replace('streams.isEmpty()', 'orderedStreams.isEmpty()')
+              t = t.replace('streams.isNotEmpty()', 'orderedStreams.isNotEmpty()')
+              t = t.replace('streams.size', 'orderedStreams.size')
+              t = t.replace('streams.getOrNull(streamIndex)', 'orderedStreams.getOrNull(streamIndex)')
+              t = t.replace(
+                  'sourceLabel = option.label?.takeIf { it.isNotBlank() } ?: "Fonte ${streamIndex + 1}"',
+                  '''sourceLabel = buildString {\n            val q = option.quality?.takeIf { it.isNotBlank() }\n            val lab = option.label?.takeIf { it.isNotBlank() }\n            if (q != null) append(q)\n            if (q != null && lab != null) append(" · ")\n            append(lab ?: "Fonte ${streamIndex + 1}")\n        }\n        selectedQuality = option.quality ?: selectedQuality''',
+              )
+              marker = '''                    Column(Modifier.weight(1f)) {\n                        Text(\n                            channelName,\n                            color = Color.White,\n                            fontSize = 16.sp,\n                            fontWeight = FontWeight.SemiBold,\n                            maxLines = 1,\n                            overflow = TextOverflow.Ellipsis,\n                        )\n                        Spacer(Modifier.height(3.dp))\n'''
+              inject = '''                    Column(Modifier.weight(1f)) {\n                        Text(\n                            channelName,\n                            color = Color.White,\n                            fontSize = 16.sp,\n                            fontWeight = FontWeight.SemiBold,\n                            maxLines = 1,\n                            overflow = TextOverflow.Ellipsis,\n                        )\n                        val qualities = remember(orderedStreams) {\n                            qualityOrder.filter { q -> orderedStreams.any { it.quality == q } }\n                        }\n                        if (qualities.size > 1) {\n                            Spacer(Modifier.height(6.dp))\n                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {\n                                qualities.forEach { q ->\n                                    val selected = selectedQuality == q\n                                    Text(\n                                        text = q,\n                                        color = if (selected) Color.Black else Color.White,\n                                        fontSize = 11.sp,\n                                        fontWeight = FontWeight.Bold,\n                                        modifier = Modifier\n                                            .clip(RoundedCornerShape(6.dp))\n                                            .background(\n                                                if (selected) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.15f),\n                                            )\n                                            .clickable {\n                                                selectedQuality = q\n                                                val idx = orderedStreams.indexOfFirst { it.quality == q }\n                                                if (idx >= 0) {\n                                                    streamIndex = idx\n                                                    retryOnSame = 0\n                                                    isLoading = true\n                                                    errorMessage = null\n                                                    controlsVisible = true\n                                                }\n                                            }\n                                            .padding(horizontal = 8.dp, vertical = 4.dp),\n                                    )\n                                }\n                            }\n                        }\n                        Spacer(Modifier.height(3.dp))\n'''
+              if marker not in t:
+                  raise SystemExit('player UI marker missing')
+              t = t.replace(marker, inject, 1)
+              p.write_text(t)
+          print('LivePlayerScreen ok')
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add api/live-tv.js android/
+          git commit -m "feat(tv): lista enxuta + escolha de qualidade no player" || echo nothing
+          git push

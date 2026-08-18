@@ -73,6 +73,7 @@ fun SearchTvScreen(
     var selectedYear by remember { mutableIntStateOf(0) }
     var results by remember { mutableStateOf<List<TmdbItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val searchBarFocus = remember { FocusRequester() }
 
@@ -80,13 +81,42 @@ fun SearchTvScreen(
         searchBarFocus.requestFocus()
     }
 
+    // Busca automatica ao digitar / mudar filtro (debounce 450ms)
+    LaunchedEffect(query, selectedType, selectedGenre, selectedYear) {
+        val q = query.trim()
+        if (q.isBlank() && selectedGenre == 0 && selectedYear == 0) {
+            results = emptyList()
+            searchError = null
+            isLoading = false
+            return@LaunchedEffect
+        }
+        isLoading = true
+        searchError = null
+        delay(450)
+        try {
+            results = performSearch(query, selectedType, selectedGenre, selectedYear)
+        } catch (e: Exception) {
+            results = emptyList()
+            searchError = e.message ?: "Erro na busca"
+        } finally {
+            isLoading = false
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A10))) {
         Column(modifier = Modifier.fillMaxSize()) {
             fun triggerSearch() {
                 coroutineScope.launch {
                     isLoading = true
-                    results = performSearch(query, selectedType, selectedGenre, selectedYear)
-                    isLoading = false
+                    searchError = null
+                    try {
+                        results = performSearch(query, selectedType, selectedGenre, selectedYear)
+                    } catch (e: Exception) {
+                        results = emptyList()
+                        searchError = e.message ?: "Erro na busca"
+                    } finally {
+                        isLoading = false
+                    }
                 }
             }
 
@@ -107,49 +137,14 @@ fun SearchTvScreen(
                 onYearSelected = { selectedYear = it },
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            SearchButton(onClick = { triggerSearch() })
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             SearchResultsArea(
                 isLoading = isLoading,
                 results = results,
                 query = query,
-                onItemClick = onItemClick
+                onItemClick = onItemClick,
             )
-        }
-    }
-}
-
-@Composable
-private fun SearchButton(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 48.dp),
-        horizontalArrangement = Arrangement.End,
-    ) {
-        var isSearchBtnFocused by remember { mutableStateOf(false) }
-        Card(
-            onClick = onClick,
-            modifier = Modifier
-                .height(42.dp)
-                .scale(if (isSearchBtnFocused) 1.05f else 1f)
-                .onFocusChanged { isSearchBtnFocused = it.isFocused },
-            colors = CardDefaults.colors(
-                containerColor = Color(0xFFD4AF37),
-                focusedContainerColor = Color(0xFFFFD700)
-            ),
-            shape = CardDefaults.shape(RoundedCornerShape(21.dp)),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(Icons.Filled.Search, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                Text("Pesquisar", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            }
         }
     }
 }
@@ -159,12 +154,12 @@ private fun SearchResultsArea(
     isLoading: Boolean,
     results: List<TmdbItem>,
     query: String,
-    onItemClick: (Int, String) -> Unit
+    onItemClick: (Int, String) -> Unit,
 ) {
     Box(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
         if (isLoading) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color(0xFFD4AF37))
+                CircularProgressIndicator(color = Color(0xFF6366F1))
             }
         } else if (results.isEmpty() && query.isNotBlank()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -190,7 +185,7 @@ private fun SearchResultsArea(
                     Text("Busca e Filtros", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Use a barra de pesquisa e os filtros acima.\nMarque Tipo, Gênero e Ano para refinar resultados.",
+                        "Digite na barra — resultados aparecem sozinhos.\nFiltros de Tipo, Genero e Ano refinam na hora.",
                         color = Color.White.copy(alpha = 0.5f),
                         fontSize = 14.sp,
                         lineHeight = 20.sp,
@@ -232,10 +227,10 @@ private fun SearchTopBar(
                     .weight(1f)
                     .focusRequester(focusRequester),
                 placeholder = {
-                    Text("Pesquisar filmes, séries...", color = Color.White.copy(alpha = 0.4f), fontSize = 14.sp)
+                    Text("Pesquisar filmes, series...", color = Color.White.copy(alpha = 0.4f), fontSize = 14.sp)
                 },
                 leadingIcon = {
-                    Icon(Icons.Filled.Search, contentDescription = null, tint = Color(0xFFD4AF37))
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = Color(0xFF6366F1))
                 },
                 trailingIcon = {
                     if (query.isNotBlank()) {
@@ -245,11 +240,11 @@ private fun SearchTopBar(
                     }
                 },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFFD4AF37),
+                    focusedBorderColor = Color(0xFF6366F1),
                     unfocusedBorderColor = Color(0xFF333344),
                     focusedTextColor = Color.White,
                     unfocusedTextColor = Color.White,
-                    cursorColor = Color(0xFFD4AF37),
+                    cursorColor = Color(0xFF6366F1),
                     focusedContainerColor = Color(0xFF1E1E2E),
                     unfocusedContainerColor = Color(0xFF1E1E2E),
                 ),
@@ -280,7 +275,7 @@ private fun FilterBar(
             "Tipo",
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color(0xFFD4AF37),
+            color = Color(0xFF6366F1),
             modifier = Modifier.padding(horizontal = 48.dp, vertical = 8.dp),
         )
         LazyRow(
@@ -299,10 +294,10 @@ private fun FilterBar(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            "Gênero",
+            "Genero",
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color(0xFFD4AF37),
+            color = Color(0xFF6366F1),
             modifier = Modifier.padding(horizontal = 48.dp),
         )
         LazyRow(
@@ -324,7 +319,7 @@ private fun FilterBar(
             "Ano",
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Color(0xFFD4AF37),
+            color = Color(0xFF6366F1),
             modifier = Modifier.padding(horizontal = 48.dp),
         )
         LazyRow(
@@ -358,15 +353,15 @@ private fun FilterChip(
             .scale(scale)
             .onFocusChanged { isFocused = it.isFocused },
         colors = CardDefaults.colors(
-            containerColor = if (selected) Color(0xFFD4AF37) else Color(0xFF1E1E2E),
-            focusedContainerColor = Color(0xFFFFD700),
+            containerColor = if (selected) Color(0xFF6366F1) else Color(0xFF1E1E2E),
+            focusedContainerColor = Color(0xFF818CF8),
         ),
         shape = CardDefaults.shape(RoundedCornerShape(18.dp)),
     ) {
         Text(
             text,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            color = if (selected) Color.Black else Color.White,
+            color = if (selected) Color.White else Color.White,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             fontSize = 13.sp,
         )
@@ -420,7 +415,7 @@ private fun SearchResultCard(item: TmdbItem, onClick: () -> Unit) {
             Icon(
                 Icons.Filled.PlayCircleFilled,
                 contentDescription = null,
-                tint = if (isFocused) Color(0xFFD4AF37) else Color.White.copy(alpha = 0.3f),
+                tint = if (isFocused) Color(0xFF6366F1) else Color.White.copy(alpha = 0.3f),
                 modifier = Modifier.size(32.dp),
             )
         }
@@ -436,10 +431,10 @@ private fun MetaPillSmall(text: String) {
 
 @Composable
 private fun RatingPillSmall(rating: String) {
-    Box(modifier = Modifier.background(Color(0xFFFFC107), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+    Box(modifier = Modifier.background(Color(0xFF6366F1), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Star, contentDescription = null, tint = Color.Black, modifier = Modifier.size(11.dp))
-            Text(" $rating", fontSize = 11.sp, color = Color.Black, fontWeight = FontWeight.Bold)
+            Icon(Icons.Filled.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
+            Text(" $rating", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -456,24 +451,17 @@ private suspend fun performSearch(
         "Séries" -> "/search/tv"
         "Animes" -> "/search/tv"
         else -> "/search/multi"
-        // Nota: o endpoint /search/multi do TMDB não aceita filtro de ano.
-        // Se o usuário digitar uma busca com Tipo = "Todos" e selecionar um Ano,
-        // o ano é ignorado pela API do TMDB nesse caso específico (limitação da API,
-        // não é um bug do app). Selecionar "Filmes", "Séries" ou "Animes" resolve.
     }
 
-    runCatching {
-        NetworkModule.tmdbApi.request(
-            path = searchPath,
-            query = query.takeIf { it.isNotBlank() },
-            withGenres = if (genre > 0) genre.toString() else null,
-            primaryReleaseYear = if (type != "Séries" && type != "Animes" && year > 0) year else null,
-            firstAirDateYear = if ((type == "Séries" || type == "Animes") && year > 0) year else null,
-            withOriginalLanguage = if (type == "Animes") "ja" else null,
-        )
-    }.onSuccess { response ->
-        results.addAll(response.results.orEmpty())
-    }
+    val response = NetworkModule.tmdbApi.request(
+        path = searchPath,
+        query = query.takeIf { it.isNotBlank() },
+        withGenres = if (genre > 0) genre.toString() else null,
+        primaryReleaseYear = if (type != "Séries" && type != "Animes" && year > 0) year else null,
+        firstAirDateYear = if ((type == "Séries" || type == "Animes") && year > 0) year else null,
+        withOriginalLanguage = if (type == "Animes") "ja" else null,
+    )
+    results.addAll(response.results.orEmpty())
 
     if (query.isBlank() && (genre > 0 || year > 0)) {
         val discoverPath = when (type) {
@@ -482,17 +470,14 @@ private suspend fun performSearch(
             "Animes" -> "/discover/tv"
             else -> "/discover/movie"
         }
-        runCatching {
-            NetworkModule.tmdbApi.request(
-                path = discoverPath,
-                withGenres = if (genre > 0) genre.toString() else null,
-                primaryReleaseYear = if (type != "Séries" && type != "Animes" && year > 0) year else null,
-                firstAirDateYear = if ((type == "Séries" || type == "Animes") && year > 0) year else null,
-                withOriginalLanguage = if (type == "Animes") "ja" else null,
-            )
-        }.onSuccess { response ->
-            results.addAll(response.results.orEmpty())
-        }
+        val discover = NetworkModule.tmdbApi.request(
+            path = discoverPath,
+            withGenres = if (genre > 0) genre.toString() else null,
+            primaryReleaseYear = if (type != "Séries" && type != "Animes" && year > 0) year else null,
+            firstAirDateYear = if ((type == "Séries" || type == "Animes") && year > 0) year else null,
+            withOriginalLanguage = if (type == "Animes") "ja" else null,
+        )
+        results.addAll(discover.results.orEmpty())
     }
 
     return results

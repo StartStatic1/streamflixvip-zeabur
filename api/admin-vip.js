@@ -305,7 +305,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'update-source') {
-    const { id, source_url, source_label, priority, season, episode, title } = body;
+    const id = body.id || body.sourceId;
+    const { source_url, source_label, priority, season, episode, title } = body;
     if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
     const patch = {};
     if (source_url !== undefined) patch.source_url = source_url;
@@ -326,7 +327,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'toggle-source') {
-    const { id, is_active } = body;
+    const id = body.id || body.sourceId;
+    const is_active = body.is_active !== undefined ? body.is_active : body.isActive;
     if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(id)}`, {
       method: 'PATCH',
@@ -339,7 +341,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (action === 'delete-source') {
-    const { id } = body;
+    const id = body.id || body.sourceId;
     if (!id) { res.status(400).json({ error: 'Informe id' }); return; }
     const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_sources?id=eq.${encodeURIComponent(id)}`, {
       method: 'DELETE',
@@ -570,6 +572,114 @@ module.exports = async function handler(req, res) {
     if (!r.ok) { res.status(502).json({ error: 'Erro excluir live TV', detail: await r.text() }); return; }
     res.status(200).json({ success: true });
     return;
+  }
+
+  if (action === 'update-live-tv-source') {
+    const { sourceId } = body;
+    if (!sourceId) { res.status(400).json({ error: 'Informe sourceId' }); return; }
+    const patch = {};
+    if (body.name != null && String(body.name).trim()) patch.name = String(body.name).trim();
+    if (body.xtreamHost != null || body.xtream_host != null) {
+      const h = String(body.xtreamHost || body.xtream_host || '').trim().replace(/\/+$/, '');
+      if (h) patch.xtream_host = h;
+    }
+    if (body.xtreamUser != null || body.xtream_user != null) {
+      const u = String(body.xtreamUser || body.xtream_user || '').trim();
+      if (u) patch.xtream_user = u;
+    }
+    if (body.xtreamPass != null || body.xtream_pass != null) {
+      const p = String(body.xtreamPass || body.xtream_pass || '').trim();
+      if (p) patch.xtream_pass = p;
+    }
+    if (body.priority != null) patch.priority = Number(body.priority) || 10;
+    if (!Object.keys(patch).length) { res.status(400).json({ error: 'Nada para atualizar' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_sources?id=eq.${encodeURIComponent(sourceId)}`, {
+      method: 'PATCH', headers: svcHeaders, body: JSON.stringify(patch),
+    });
+    if (!r.ok) { res.status(502).json({ error: 'Erro atualizar live TV', detail: await r.text() }); return; }
+    res.status(200).json({ success: true });
+    return;
+  }
+
+
+  if (action === 'list-live-tv-manual') {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels?select=id,name,logo,group_title,stream_url,priority,is_active,created_at&order=priority.asc.nullslast,name.asc`, { headers: svcHeaders });
+    if (!r.ok) { res.status(502).json({ error: 'Tabela live_tv_manual_channels ausente. Rode o SQL no Supabase.', detail: await r.text() }); return; }
+    res.status(200).json({ channels: await r.json() }); return;
+  }
+  if (action === 'create-live-tv-manual') {
+    let name = body.name != null ? String(body.name).trim() : '';
+    let logo = body.logo != null ? String(body.logo).trim() : '';
+    let groupTitle = String(body.groupTitle || body.group_title || 'Manuais').trim() || 'Manuais';
+    let streamUrl = String(body.streamUrl || body.stream_url || '').trim();
+    const priority = body.priority != null ? Number(body.priority) : 1;
+    const raw = body.raw != null ? String(body.raw).trim() : '';
+    if (raw) {
+      const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      let ext = '', urlLine = '';
+      for (const line of lines) {
+        if (line.startsWith('#EXTINF')) {
+          ext = line;
+          // URL na mesma linha do EXTINF (formato comum em listas coladas)
+          const sameLineUrl = line.match(/https?:\/\/[^\s"']+/i);
+          if (sameLineUrl) urlLine = sameLineUrl[0];
+        } else if (!line.startsWith('#') && /https?:\/\//i.test(line)) {
+          urlLine = line.match(/https?:\/\/[^\s"']+/i)?.[0] || line;
+        } else if (!line.startsWith('#') && !urlLine && /\/\d+$/.test(line)) {
+          // path relativo raro — ignora
+        }
+      }
+      // URL solta em qualquer lugar do texto colado
+      if (!urlLine) {
+        const any = raw.match(/https?:\/\/[^\s"'<>]+/i);
+        if (any) urlLine = any[0];
+      }
+      if (urlLine) streamUrl = urlLine.replace(/[),;]+$/, '');
+      if (ext) {
+        const logoM = ext.match(/tvg-logo="([^"]*)"/i);
+        const nameM = ext.match(/tvg-name="([^"]*)"/i);
+        const groupM = ext.match(/group-title="([^"]*)"/i);
+        let commaName = ext.includes(',') ? ext.slice(ext.lastIndexOf(',') + 1).trim() : '';
+        // tira URL do nome se veio colada na mesma linha
+        commaName = commaName.replace(/https?:\/\/\S+/i, '').trim();
+        if (logoM && logoM[1] && !logo) logo = logoM[1];
+        if (nameM && nameM[1] && !name) name = nameM[1];
+        if (groupM && groupM[1]) groupTitle = groupM[1] || groupTitle;
+        if (!name && commaName) name = commaName;
+      }
+    }
+    if (!streamUrl || !/^https?:\/\//i.test(streamUrl)) { res.status(400).json({ error: 'URL de stream invalida' }); return; }
+    if (!name) { try { name = decodeURIComponent(new URL(streamUrl).pathname.split('/').filter(Boolean).pop() || 'Canal manual'); } catch (_) { name = 'Canal manual'; } }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels`, { method: 'POST', headers: { ...svcHeaders, Prefer: 'return=representation' }, body: JSON.stringify({ name, logo: logo || null, group_title: groupTitle, stream_url: streamUrl, priority: Number.isFinite(priority) ? priority : 1, is_active: true }) });
+    const txt = await r.text();
+    if (!r.ok) { res.status(502).json({ error: 'Erro criar canal: ' + txt.slice(0, 180) }); return; }
+    let json; try { json = JSON.parse(txt); } catch (_) { json = []; }
+    res.status(200).json({ success: true, channel: Array.isArray(json) ? json[0] : json }); return;
+  }
+  if (action === 'update-live-tv-manual') {
+    const { channelId } = body; if (!channelId) { res.status(400).json({ error: 'channelId' }); return; }
+    const patch = {};
+    if (body.name != null && String(body.name).trim()) patch.name = String(body.name).trim();
+    if (body.logo != null) patch.logo = String(body.logo).trim() || null;
+    if (body.groupTitle != null || body.group_title != null) patch.group_title = String(body.groupTitle || body.group_title || 'Manuais').trim() || 'Manuais';
+    if (body.streamUrl != null || body.stream_url != null) { const u = String(body.streamUrl || body.stream_url || '').trim(); if (u && /^https?:\/\//i.test(u)) patch.stream_url = u; }
+    if (body.priority != null) patch.priority = Number(body.priority) || 1;
+    if (!Object.keys(patch).length) { res.status(400).json({ error: 'Nada para atualizar' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels?id=eq.${encodeURIComponent(channelId)}`, { method: 'PATCH', headers: svcHeaders, body: JSON.stringify(patch) });
+    if (!r.ok) { res.status(502).json({ error: await r.text() }); return; }
+    res.status(200).json({ success: true }); return;
+  }
+  if (action === 'toggle-live-tv-manual') {
+    const { channelId, isActive } = body; if (!channelId) { res.status(400).json({ error: 'channelId' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels?id=eq.${encodeURIComponent(channelId)}`, { method: 'PATCH', headers: svcHeaders, body: JSON.stringify({ is_active: !!isActive }) });
+    if (!r.ok) { res.status(502).json({ error: await r.text() }); return; }
+    res.status(200).json({ success: true }); return;
+  }
+  if (action === 'delete-live-tv-manual') {
+    const { channelId } = body; if (!channelId) { res.status(400).json({ error: 'channelId' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_manual_channels?id=eq.${encodeURIComponent(channelId)}`, { method: 'DELETE', headers: svcHeaders });
+    if (!r.ok) { res.status(502).json({ error: await r.text() }); return; }
+    res.status(200).json({ success: true }); return;
   }
 
   if (action === 'list-ads') {

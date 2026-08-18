@@ -1,0 +1,21 @@
+name: Fix Sync Max Sources
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch series sync
+        run: python3 scripts/fix_sync_max_sources.py
+      - name: Syntax check
+        run: node --check sync-series-standalone.js
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add sync-series-standalone.js
+          git commit -m "fix(sync-series): max 2 fontes por episodio (nao reinsere)" || echo nothing
+          git push

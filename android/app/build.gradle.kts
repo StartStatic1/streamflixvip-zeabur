@@ -28,8 +28,8 @@ android {
         applicationId = "com.streamflixvip.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 33
-        versionName = "7.5.1"
+        versionCode = 83
+        versionName = "9.9.6"
 
         // URL base do backend Express — o MESMO domínio que o site usa
         // hoje (Koyeb). Trocar aqui se o domínio mudar de novo no futuro,
@@ -57,6 +57,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Mesma keystore fixa do debug (ver signingConfigs.debug acima)
             // — reaproveitada aqui só porque é a que você já tem gerada e
@@ -97,21 +98,22 @@ android {
 }
 
 dependencies {
-    // Splash screen nativa — cobre o instante entre tocar no ícone e o
-    // Compose terminar de montar (janela branca/preta crua do sistema).
-    // A SplashScreen.kt (Compose, com animações) continua rodando DEPOIS
-    // dessa, como a primeira tela do próprio app — as duas se
-    // complementam, não competem.
+    // Splash Screen API (Android 12+) — themes.xml referencia
+    // windowSplashScreen* attrs desta lib; sem ela o merge de resources falha.
     implementation("androidx.core:core-splashscreen:1.0.1")
+
+    // Start.io (ex-StartApp) — ads SDK
     implementation("com.startapp:inapp-sdk:5.1.0")
-    // Compose
+
+    // Google AdMob
+    implementation("com.google.android.gms:play-services-ads:23.3.0")
+
+    // Compose BOM — alinha as versões de todos os artefatos Compose
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
-    // Explícitas (não só transitivas via material3) porque usamos
-    // HorizontalPager (foundation) e animateFloatAsState (animation) no
-    // banner rotativo da Home — melhor garantir a versão certa do BOM
-    // do que depender de resolução transitiva.
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")

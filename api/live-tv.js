@@ -5,9 +5,17 @@
 //   2) fallback: iptv_sources (comportamento antigo)
 // Até 3 fontes, URLs agrupadas por nome para fallback no player.
 // Adulto / XXX: consolidado na categoria "000" e colocado no FINAL da lista.
+//
+// SEGURANÇA VIP (lib/vip-gate.js):
+//   Por padrão NÃO bloqueia (app mobile/TV ainda não mandam JWT).
+//   Com REQUIRE_VIP_LIVE_TV=1 no ambiente: só responde canais se houver
+//   VIP válido (JWT Supabase, userId com vip_status ativo, ou deviceId TV).
+//   Ative o hard gate DEPOIS de publicar app que envia Authorization.
+
+const { enforceVipOrReject } = require('../lib/vip-gate');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
-const MAX_SOURCES = 3;
+const MAX_SOURCES = 5;
 const ADULT_CATEGORY_ID = '000';
 const ADULT_CATEGORY_NAME = '000';
 
@@ -60,6 +68,53 @@ async function xtreamFetch(baseUrl, username, password, action, params = {}) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+
+function channelMergeKey(name) {
+  let n = normalizeName(name);
+  if (!n) return '';
+  n = n.replace(/^\d+\s+/, '');
+  n = n.replace(/^(br|pt|us|uk|ar|mx|lat|latam|sp|es|fr|de|it|cl|pe|co|uy|py)\s+/, '');
+  n = n.replace(/\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\s*hd|vip|premium|raw|aac|ac3)\b/g, ' ');
+  n = n.replace(/\b(canais?|leg|legenda|legendado|legendada|legend|sub|subs|subtitle|legendas|dublado|dublada|multi|audio|server|opcao|opt|option|backup|alt)\b/g, ' ');
+  n = n.replace(/\s+/g, ' ').trim();
+  return n;
+}
+
+function displayBaseName(name) {
+  let s = String(name || '').replace(/\s*\([^)]*\)\s*/g, ' ');
+  s = s.replace(/\b(SD|HD|FHD|UHD|4K|8K|H264|H265|HEVC|HDR|FULL\s*HD|VIP)\b/gi, ' ');
+  s = s.replace(/\b(LEG|LEGENDADO|LEGENDADA|SUB|DUB|DUBLADO)\b/gi, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s || String(name || '').trim();
+}
+
+function qualityLabelFromScore(q) {
+  if (q >= 50) return '4K';
+  if (q >= 40) return 'FHD';
+  if (q >= 30) return 'HD';
+  if (q <= 5) return 'SD';
+  return 'Padrao';
+}
+
+function isLegendadoName(name) {
+  const n = normalizeName(name);
+  return /\b(leg|legenda|legendado|legendada|legend|sub|subs|subtitle|legendas)\b/.test(n);
+}
+
+function qualityScore(name) {
+  const n = normalizeName(name);
+  if (/\b(4k|uhd)\b/.test(n)) return 50;
+  if (/\bfhd\b/.test(n) || /full\s*hd/.test(n)) return 40;
+  if (/\bhd\b/.test(n) && !/\bsd\b/.test(n)) return 30;
+  if (/\bsd\b/.test(n)) return 5;
+  return 20;
+}
+
+function isSdOnlyName(name) {
+  const n = normalizeName(name);
+  return /\bsd\b/.test(n) && !/\b(hd|fhd|uhd|4k|full\s*hd)\b/.test(n);
 }
 
 function normalizeName(name) {
@@ -131,6 +186,21 @@ async function loadFromSource(source) {
   };
 }
 
+
+async function loadManualChannels(serviceKey) {
+  try {
+    const rows = await sbSelect(
+      serviceKey,
+      'live_tv_manual_channels',
+      'is_active=eq.true&select=id,name,logo,group_title,stream_url,priority&order=priority.asc.nullslast&limit=500',
+    );
+    return Array.isArray(rows) ? rows : [];
+  } catch (e) {
+    console.warn('[live-tv] manual channels:', e.message);
+    return [];
+  }
+}
+
 async function loadSourceRows(serviceKey) {
   try {
     let rows = await sbSelect(
@@ -180,11 +250,35 @@ async function handler(req, res) {
     return;
   }
 
+  // Gate VIP (soft por padrão — não quebra app sem token).
+  // Com REQUIRE_VIP_LIVE_TV=1: bloqueia se não houver VIP no banco.
+  if (await enforceVipOrReject(req, res, serviceKey, { feature: 'live-tv' })) {
+    return;
+  }
+
   try {
     const { rows: sources, origin } = await loadSourceRows(serviceKey);
     const withCreds = sources.filter(hasXtreamCreds).slice(0, MAX_SOURCES);
 
-    if (!withCreds.length) {
+    const results = withCreds.length
+      ? await Promise.all(
+          withCreds.map((s) =>
+            loadFromSource(s).catch((err) => {
+              console.error('[live-tv] fonte falhou', s.name, err.message);
+              return {
+                sourceName: s.name,
+                priority: s.priority,
+                categories: [],
+                streams: [],
+                skipReason: err.message,
+              };
+            }),
+          ),
+        )
+      : [];
+
+    const manuals = await loadManualChannels(serviceKey);
+    if (!withCreds.length && !manuals.length) {
       res.status(200).json({
         categories: [],
         channels: [],
@@ -193,28 +287,14 @@ async function handler(req, res) {
           origin,
           sourcesInDb: sources.length,
           withCredentials: 0,
+          manuals: 0,
           hint: origin === 'live_tv_sources'
-            ? 'Nenhuma fonte em live_tv_sources com host/user/pass. Cadastre na aba TV ao vivo do admin.'
-            : 'Nenhuma fonte IPTV com credenciais. Cadastre live_tv_sources (recomendado) ou ative iptv_sources.',
+            ? 'Nenhuma fonte Xtream nem canal manual. Cadastre na aba TV ao vivo.'
+            : 'Nenhuma fonte IPTV com credenciais nem canal manual.',
         },
       });
       return;
     }
-
-    const results = await Promise.all(
-      withCreds.map((s) =>
-        loadFromSource(s).catch((err) => {
-          console.error('[live-tv] fonte falhou', s.name, err.message);
-          return {
-            sourceName: s.name,
-            priority: s.priority,
-            categories: [],
-            streams: [],
-            skipReason: err.message,
-          };
-        }),
-      ),
-    );
 
     // Mapa categoryId original -> se é adulto
     const adultCatIds = new Set();
@@ -244,8 +324,8 @@ async function handler(req, res) {
     const channelMap = new Map();
     for (const r of results) {
       for (const s of r.streams) {
-        const key = normalizeName(s.name);
-        if (!key) continue;
+        const key = channelMergeKey(s.name);
+        if (!key || key.length < 2) continue;
 
         const rawCatName =
           r.categories.find((c) => c.id === s.categoryId)?.name || 'Outros';
@@ -275,20 +355,98 @@ async function handler(req, res) {
           ch.categoryId = ADULT_CATEGORY_ID;
         }
         if (!ch.logo && s.logo) ch.logo = s.logo;
+        const sLeg = isLegendadoName(s.name);
+        const chLeg = isLegendadoName(ch.name);
+        if ((!sLeg && chLeg) || (sLeg === chLeg && qualityScore(s.name) > qualityScore(ch.name))) {
+          ch.name = String(s.name || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || s.name;
+        }
         if (!ch.streams.some((x) => x.url === s.url)) {
+          const basePri = r.priority ?? 100;
+          const q = qualityScore(s.name);
           ch.streams.push({
             url: s.url,
             label: s.sourceLabel,
-            priority: r.priority ?? 100,
+            priority: basePri + (q >= 30 ? 0 : q <= 5 ? 400 : 80),
+            quality: q,
+            leg: sLeg,
           });
         }
       }
     }
 
-    const channels = Array.from(channelMap.values()).map((ch) => ({
-      ...ch,
-      streams: ch.streams.sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)),
-    }));
+
+    for (const m of manuals) {
+      const url = String(m.stream_url || '').trim();
+      const name = String(m.name || '').trim() || 'Canal manual';
+      if (!url) continue;
+      const key = channelMergeKey(name) || ('manual-' + (m.id || url).toString().slice(0, 24));
+      const groupRaw = String(m.group_title || 'Manuais').trim() || 'Manuais';
+      const catKey = normalizeName(groupRaw) || 'manuais';
+      if (!categoryMap.has(catKey)) {
+        categoryMap.set(catKey, { id: catKey, name: groupRaw });
+      }
+      let ch = channelMap.get(key);
+      if (!ch) {
+        ch = { id: key, name, logo: m.logo || '', categoryId: catKey, streams: [] };
+        channelMap.set(key, ch);
+      } else if (!ch.logo && m.logo) {
+        ch.logo = m.logo;
+      }
+      if (!ch.streams.some((x) => x.url === url)) {
+        ch.streams.push({
+          url,
+          label: 'Manual',
+          priority: Number.isFinite(Number(m.priority)) ? Number(m.priority) : 1,
+          quality: 40,
+          leg: isLegendadoName(name),
+        });
+      }
+    }
+    console.log(`[live-tv] manuais: ${manuals.length} cadastrados`);
+
+    let channels = Array.from(channelMap.values()).map((ch) => {
+      let streams = ch.streams.slice().sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
+      const hasGood = streams.some((s) => (s.quality ?? 20) >= 30);
+      if (hasGood) {
+        streams = streams.filter((s) => (s.quality ?? 20) >= 20);
+      }
+      const baseName = displayBaseName(ch.name) || ch.name;
+      return {
+        ...ch,
+        name: baseName,
+        streams: streams.map(({ url, label, priority, quality, leg }) => ({
+          url,
+          label,
+          priority,
+          quality: qualityLabelFromScore(quality ?? 20),
+          leg: !!leg,
+        })),
+      };
+    });
+    channels = channels.filter((c) => c.categoryId !== ADULT_CATEGORY_ID);
+
+    // Junta canais com o mesmo nome na tela (BR HBO + HBO -> um item)
+    {
+      const byDisplay = new Map();
+      for (const ch of channels) {
+        const dn = normalizeName(ch.name);
+        if (!dn) continue;
+        const prev = byDisplay.get(dn);
+        if (!prev) { byDisplay.set(dn, ch); continue; }
+        const seen = new Set(prev.streams.map((s) => s.url));
+        for (const s of ch.streams) {
+          if (!seen.has(s.url)) { prev.streams.push(s); seen.add(s.url); }
+        }
+        if (!prev.logo && ch.logo) prev.logo = ch.logo;
+        if ((ch.name || '').length < (prev.name || '').length) prev.name = ch.name;
+        if (ch.streams.length > prev.streams.length) prev.id = ch.id;
+      }
+      channels = Array.from(byDisplay.values()).map((ch) => ({
+        ...ch,
+        streams: ch.streams.slice().sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100)),
+      }));
+    }
+
     channels.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
     const categories = Array.from(categoryMap.values()).sort((a, b) =>
@@ -297,11 +455,8 @@ async function handler(req, res) {
     const usedCats = new Set(channels.map((c) => c.categoryId));
     let filteredCategories = categories.filter((c) => usedCats.has(c.id));
 
-    // Adulto sempre no FINAL, com id/nome "000" (não no início)
-    if (hasAdult && usedCats.has(ADULT_CATEGORY_ID)) {
-      filteredCategories = filteredCategories.filter((c) => c.id !== ADULT_CATEGORY_ID);
-      filteredCategories.push({ id: ADULT_CATEGORY_ID, name: ADULT_CATEGORY_NAME });
-    }
+    // Adulto nao entra na lista publica
+    filteredCategories = filteredCategories.filter((c) => c.id !== ADULT_CATEGORY_ID);
 
     const sourcesUsed = results.filter((r) => r.streams.length > 0).length;
 
