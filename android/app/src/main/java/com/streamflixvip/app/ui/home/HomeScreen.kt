@@ -338,13 +338,40 @@ private fun ContinueWatchingRow(
     onItemDismiss: (WatchProgressEntry) -> Unit = {},
 ) {
     Column {
-        Text(
-            text = "Continuar assistindo",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 0.15.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(28.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(MaterialTheme.colorScheme.primary),
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Continuar assistindo",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.15.sp,
+                )
+                Text(
+                    text = "Retome de onde parou",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                text = "${entries.size}",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -367,12 +394,13 @@ private fun ContinueWatchingCard(
     onDismiss: () -> Unit = {},
 ) {
     val posterUrl = entry.poster_path?.let { TmdbImages.poster(it) }
+    val pct = (entry.progressFraction * 100f).toInt().coerceIn(0, 100)
 
     Column(
         modifier = Modifier
-            .width(124.dp)
+            .width(132.dp)
             .shadow(
-                elevation = 10.dp,
+                elevation = 12.dp,
                 shape = RoundedCornerShape(14.dp),
                 ambientColor = Color.Black.copy(alpha = 0.4f),
                 spotColor = Color.Black.copy(alpha = 0.55f),
@@ -384,7 +412,7 @@ private fun ContinueWatchingCard(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(180.dp)
+                .height(188.dp)
                 .clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
@@ -394,7 +422,32 @@ private fun ContinueWatchingCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
-            // X para tirar da lista Continuar assistindo
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)),
+                        ),
+                    ),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "Continuar",
+                    tint = Color.Black,
+                    modifier = Modifier.size(28.dp),
+                )
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -405,18 +458,27 @@ private fun ContinueWatchingCard(
                     .clickable { onDismiss() },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("✕", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("X", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
+            Text(
+                text = "$pct%",
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 8.dp, bottom = 10.dp),
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+            )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .height(4.dp)
-                    .background(Color.Black.copy(alpha = 0.45f)),
+                    .height(5.dp)
+                    .background(Color.White.copy(alpha = 0.25f)),
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(entry.progressFraction)
+                        .fillMaxWidth(entry.progressFraction.coerceIn(0f, 1f))
                         .fillMaxHeight()
                         .background(MaterialTheme.colorScheme.primary),
                 )
@@ -426,13 +488,22 @@ private fun ContinueWatchingCard(
             Text(
                 text = entry.displayTitle,
                 fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             if (entry.media_type == "tv" && entry.season > 0) {
                 Text(
-                    text = "T${entry.season}:E${entry.episode}",
-                    fontSize = 10.sp,
+                    text = "T\( {entry.season}:E \){entry.episode}",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+            } else {
+                Text(
+                    text = "Continuar",
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
