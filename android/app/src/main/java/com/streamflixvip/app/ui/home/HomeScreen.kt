@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.home
 
+import com.streamflixvip.app.network.TmdbImages
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -18,6 +20,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,17 +42,28 @@ import com.streamflixvip.app.data.VipStatusHolder
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 
-private const val TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w342"
-private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
     onContinueWatchingClick: (WatchProgressEntry) -> Unit,
+    onContinueWatchingDismiss: (WatchProgressEntry) -> Unit = {},
     onSeeAllClick: (HomeRowExploreLink) -> Unit,
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshContinueWatching()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
 
     when (val s = state) {
         is HomeUiState.Loading -> {
@@ -86,7 +102,7 @@ fun HomeScreen(
                 if (s.continueWatching.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(28.dp))
-                        ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick)
+                        ContinueWatchingRow(entries = s.continueWatching, onItemClick = onContinueWatchingClick, onItemDismiss = onContinueWatchingDismiss)
                         Spacer(Modifier.height(12.dp))
                     }
                 }
@@ -143,8 +159,8 @@ private fun HeroBanner(
             pageSpacing = 0.dp,
         ) { page ->
             val item = items[page]
-            val heroImage = item.backdrop_path?.let { TMDB_BACKDROP_BASE + it }
-                ?: item.poster_path?.let { TMDB_POSTER_BASE + it }
+            val heroImage = item.backdrop_path?.let { TmdbImages.backdrop(it) }
+                ?: item.poster_path?.let { TmdbImages.poster(it) }
             val overview = item.overview?.takeIf { it.isNotBlank() }
                 ?: "Confira detalhes, nota e opções para assistir."
 
@@ -307,6 +323,7 @@ private fun StartIoBanner() {
 private fun ContinueWatchingRow(
     entries: List<WatchProgressEntry>,
     onItemClick: (WatchProgressEntry) -> Unit,
+    onItemDismiss: (WatchProgressEntry) -> Unit = {},
 ) {
     Column {
         Text(
@@ -323,6 +340,7 @@ private fun ContinueWatchingRow(
                 ContinueWatchingCard(
                     entry = entry,
                     onClick = { onItemClick(entry) },
+                    onDismiss = { onItemDismiss(entry) },
                 )
             }
         }
@@ -333,8 +351,9 @@ private fun ContinueWatchingRow(
 private fun ContinueWatchingCard(
     entry: WatchProgressEntry,
     onClick: () -> Unit,
+    onDismiss: () -> Unit = {},
 ) {
-    val posterUrl = entry.poster_path?.let { TMDB_POSTER_BASE + it }
+    val posterUrl = entry.poster_path?.let { TmdbImages.poster(it) }
 
     Column(
         modifier = Modifier
@@ -362,6 +381,19 @@ private fun ContinueWatchingCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
             )
+            // X para tirar da lista Continuar assistindo
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(28.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .clickable { onDismiss() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("✕", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -450,7 +482,7 @@ private fun PosterCard(
     onClick: () -> Unit,
     rank: Int? = null,
 ) {
-    val posterUrl = item.poster_path?.let { TMDB_POSTER_BASE + it }
+    val posterUrl = item.poster_path?.let { TmdbImages.poster(it) }
     // Números do ranking com accent suave (não gritante)
     val rankColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
 
