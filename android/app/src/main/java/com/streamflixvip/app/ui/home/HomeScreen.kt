@@ -494,7 +494,7 @@ private fun ContinueWatchingCard(
             )
             if (entry.media_type == "tv" && entry.season > 0) {
                 Text(
-                    text = "T\( {entry.season}:E \){entry.episode}",
+                    text = "T${entry.season}:E${entry.episode}",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium,
