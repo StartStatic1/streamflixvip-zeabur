@@ -24,6 +24,9 @@ interface VipApi {
 
     @POST("api/mercadopago/create-pix")
     suspend fun createPix(@Body body: PixRequest): PixResponse
+
+    @POST("api/infinitepay/create-link")
+    suspend fun createInfinitePayLink(@Body body: PixRequest): InfinitePayResponse
 }
 
 @JsonClass(generateAdapter = true)
@@ -40,6 +43,14 @@ data class PixResponse(
     val qrCode: String,
     val qrCodeBase64: String,
     val status: String
+)
+
+@JsonClass(generateAdapter = true)
+data class InfinitePayResponse(
+    val url: String,
+    val order_nsu: String,
+    val amount_cents: Int,
+    val handle: String
 )
 
 @JsonClass(generateAdapter = true)
