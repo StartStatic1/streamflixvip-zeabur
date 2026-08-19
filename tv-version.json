@@ -1,7 +1,7 @@
 {
-  "versionCode": 11,
-  "versionName": "1.8.0",
+  "versionCode": 12,
+  "versionName": "1.9.0",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Fix"
+  "releaseNotes": "Resolvido bugs conhecidos"
 }
