@@ -1,7 +1,7 @@
 {
-  "versionCode": 9,
-  "versionName": "1.6.0",
+  "versionCode": 10,
+  "versionName": "1.7.0",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias, Sistema favoritos, player melhorado"
+  "releaseNotes": "Melhorias canais, player"
 }
