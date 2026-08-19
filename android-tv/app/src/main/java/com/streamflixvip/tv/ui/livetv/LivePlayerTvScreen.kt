@@ -400,11 +400,14 @@ fun LivePlayerTvScreen(
                     }
                     LiveTvChip(
                         if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                        if (isFavorite) "Favorito" else "Favoritar",
+                        "Favorito",
+                        selected = isFavorite,
                     ) {
                         val id = activeChannel?.id
                         if (id != null) {
                             isFavorite = LiveTvFavoritesStore.toggle(context, id)
+                        } else {
+                            // fallback: abre pela lista filtrada vazia — nao deve acontecer
                         }
                         showControls()
                     }
@@ -523,9 +526,19 @@ private fun LiveTvChip(
         modifier = modifier,
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Icon(
+                icon,
+                null,
+                tint = if (selected) Color(0xFF00E5FF) else Color.White,
+                modifier = Modifier.size(18.dp),
+            )
             Spacer(Modifier.width(8.dp))
-            Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(
+                label,
+                color = if (selected) Color(0xFF00E5FF) else Color.White,
+                fontSize = 14.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            )
         }
     }
 }
