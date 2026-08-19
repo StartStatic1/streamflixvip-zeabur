@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -126,6 +128,12 @@ fun LivePlayerTvScreen(
     var aspectMenuVisible by remember { mutableStateOf(false) }
     var aspect by remember { mutableStateOf(LiveAspect.FIT) }
     var hideToken by remember { mutableIntStateOf(0) }
+    var isFavorite by remember { mutableStateOf(false) }
+
+    LaunchedEffect(activeChannel?.id) {
+        val id = activeChannel?.id
+        isFavorite = if (id != null) LiveTvFavoritesStore.isFavorite(context, id) else false
+    }
 
     val rootFocus = remember { FocusRequester() }
     val aspectFocus = remember { FocusRequester() }
@@ -389,6 +397,16 @@ fun LivePlayerTvScreen(
                             errorMessage = null
                             showControls()
                         }
+                    }
+                    LiveTvChip(
+                        if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                        if (isFavorite) "Favorito" else "Favoritar",
+                    ) {
+                        val id = activeChannel?.id
+                        if (id != null) {
+                            isFavorite = LiveTvFavoritesStore.toggle(context, id)
+                        }
+                        showControls()
                     }
                     LiveTvChip(Icons.Filled.Refresh, "Reload") {
                         val cur = streamIndex

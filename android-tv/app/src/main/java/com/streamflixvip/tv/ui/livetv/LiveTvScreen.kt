@@ -383,7 +383,7 @@ fun LiveTvScreen(
                                 isFavorite = state.favoriteIds.contains(ch.id),
                                 modifier = if (index == 0) Modifier.focusRequester(firstChannelFocus) else Modifier,
                                 onClick = { onChannelClick(ch, list, index) },
-                                onToggleFavorite = {
+                                onLongClick = {
                                     LiveTvFavoritesStore.toggle(context, ch.id)
                                     viewModel.setFavoriteIds(LiveTvFavoritesStore.getIds(context))
                                 },
@@ -460,10 +460,11 @@ private fun ChannelRow(
     isFavorite: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
-    onToggleFavorite: () -> Unit = {},
+    onLongClick: () -> Unit = {},
 ) {
     Card(
         onClick = onClick,
+        onLongClick = onLongClick,
         modifier = modifier.fillMaxWidth().height(72.dp),
         shape = CardDefaults.shape(shape = RoundedCornerShape(14.dp)),
         scale = CardDefaults.scale(focusedScale = 1.02f),
@@ -512,24 +513,16 @@ private fun ChannelRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val n = channel.streams.size
                 Text(
-                    if (n > 1) "$n fontes · fallback automatico" else "Ao vivo",
-                    color = TextMuted,
+                    if (isFavorite) "Favorito · segure OK para tirar" else "Segure OK para favoritar",
+                    color = if (isFavorite) Accent else TextMuted,
                     fontSize = 12.sp,
                 )
             }
-            Surface(
-                onClick = onToggleFavorite,
-                shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(10.dp)),
-                colors = ClickableSurfaceDefaults.colors(containerColor = Color.Transparent, focusedContainerColor = Accent.copy(alpha = 0.2f)),
-                modifier = Modifier.size(40.dp),
-            ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder, "Favorito", tint = if (isFavorite) Accent else Color.White.copy(alpha = 0.7f), modifier = Modifier.size(22.dp))
-                }
+            if (isFavorite) {
+                Icon(Icons.Filled.Star, null, tint = Accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
             }
-            Spacer(Modifier.width(6.dp))
             Icon(Icons.Filled.PlayArrow, null, tint = Accent, modifier = Modifier.size(28.dp))
         }
     }
