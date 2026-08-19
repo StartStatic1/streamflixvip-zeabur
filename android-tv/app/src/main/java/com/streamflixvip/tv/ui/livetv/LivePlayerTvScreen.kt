@@ -105,10 +105,19 @@ fun LivePlayerTvScreen(
     }
     val activeChannel = channelList.getOrNull(currentIndex)
     val activeName = activeChannel?.name ?: channelName
-    val activeStreams = (activeChannel?.streams?.takeIf { it.isNotEmpty() } ?: streams)
-        .sortedBy { it.priority ?: 100 }
+    val qualityRank = mapOf(
+        "4K" to 0, "UHD" to 0, "FHD" to 1, "FULLHD" to 1, "HD" to 2, "SD" to 3, "STD" to 3,
+    )
+    val orderedStreams = (activeChannel?.streams?.takeIf { it.isNotEmpty() } ?: streams)
+        .sortedWith(
+            compareBy<com.streamflixvip.tv.network.LiveStreamOption> {
+                qualityRank[(it.quality ?: "").uppercase().replace(" ", "")] ?: 5
+            }.thenBy { it.priority ?: 100 }
+        )
+    val activeStreams = orderedStreams
 
     var streamIndex by remember { mutableIntStateOf(0) }
+    var selectedQuality by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var sourceLabel by remember { mutableStateOf("") }
@@ -187,7 +196,14 @@ fun LivePlayerTvScreen(
         }
         val option = activeStreams.getOrNull(streamIndex) ?: return@LaunchedEffect
         isLoading = true; errorMessage = null
-        sourceLabel = option.label?.takeIf { it.isNotBlank() } ?: "Fonte ${streamIndex + 1}"
+        sourceLabel = buildString {
+            val q = option.quality?.takeIf { it.isNotBlank() }
+            val lab = option.label?.takeIf { it.isNotBlank() }
+            if (q != null) append(q)
+            if (q != null && lab != null) append(" · ")
+            append(lab ?: "Fonte ${streamIndex + 1}")
+        }
+        selectedQuality = option.quality ?: selectedQuality
         val url = option.url
         val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
@@ -317,6 +333,24 @@ fun LivePlayerTvScreen(
                     },
                     color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, maxLines = 2,
                 )
+                val qualities = remember(orderedStreams) {
+                    listOf("4K", "FHD", "HD", "SD").filter { q ->
+                        orderedStreams.any { (it.quality ?: "").uppercase() == q }
+                    }
+                }
+                if (qualities.size > 1) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        qualities.forEach { q ->
+                            LiveTvChip(Icons.Filled.LiveTv, q) {
+                                selectedQuality = q
+                                val idx = orderedStreams.indexOfFirst { (it.quality ?: "").uppercase() == q }
+                                if (idx >= 0) { streamIndex = idx; isLoading = true; errorMessage = null }
+                                showControls()
+                            }
+                        }
+                    }
+                }
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     LiveTvChip(
