@@ -8,6 +8,10 @@ data class LiveStreamOption(
     val url: String,
     val label: String? = null,
     val priority: Int? = null,
+    /** SD | HD | FHD | 4K — vindo da API live-tv */
+    val quality: String? = null,
+    /** true = versão legendada */
+    val leg: Boolean? = null,
 )
 
 @JsonClass(generateAdapter = true)
