@@ -2,6 +2,8 @@ package com.streamflixvip.tv.network
 
 import com.squareup.moshi.JsonClass
 import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.Query
 import retrofit2.http.Headers
 import retrofit2.http.POST
 
@@ -36,7 +38,24 @@ interface VipApi {
     suspend fun getTvStatus(
         @Body body: TvStatusRequest,
     ): TvStatusResponse
+
+    @GET("api/media-sources")
+    suspend fun getMediaSources(
+        @Query("tmdb_id") tmdbId: Int,
+        @Query("type") type: String,
+        @Query("season") season: Int? = null,
+        @Query("episode") episode: Int? = null,
+    ): MediaSourcesResponse
 }
+
+@JsonClass(generateAdapter = true)
+data class MediaSourcesResponse(
+    val sources: List<VipSource> = emptyList(),
+    val error: String? = null,
+    val code: String? = null,
+    val requiresVip: Boolean? = null,
+    val isVip: Boolean? = null,
+)
 
 @JsonClass(generateAdapter = true)
 data class VipStatusRequest(val userId: String)

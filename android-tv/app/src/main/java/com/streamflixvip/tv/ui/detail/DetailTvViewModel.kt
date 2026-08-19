@@ -3,7 +3,6 @@ package com.streamflixvip.tv.ui.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.streamflixvip.tv.network.NetworkModule
-import com.streamflixvip.tv.network.PostgrestFilter
 import com.streamflixvip.tv.network.TmdbEpisode
 import com.streamflixvip.tv.network.TmdbItem
 import com.streamflixvip.tv.network.TmdbResponse
@@ -112,17 +111,33 @@ class DetailTvViewModel(
     }
 
     /** Sempre devolve a lista completa de fontes (0, 1 ou N). */
+    private fun messageForSources(error: String?, code: String?, empty: Boolean): String? {
+        return when {
+            code == "VIP_REQUIRED" -> error ?: "VIP necessário para este título."
+            code == "AUTH_REQUIRED" -> error ?: "Ative o aparelho ou faça login VIP."
+            !error.isNullOrBlank() -> error
+            empty -> "Nenhuma fonte disponível"
+            else -> null
+        }
+    }
+
     fun loadEpisodeSources(season: Int, episode: Int, onResult: (List<VipSource>) -> Unit) {
         viewModelScope.launch {
             runCatching {
-                NetworkModule.supabaseApi.getSourcesForEpisode(
-                    apiKey = NetworkModule.supabaseAnonKey,
-                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
-                    seasonFilter = PostgrestFilter.eq(season),
-                    episodeFilter = PostgrestFilter.eq(episode),
+                NetworkModule.vipApi.getMediaSources(
+                    tmdbId = tmdbId,
+                    type = "tv",
+                    season = season,
+                    episode = episode,
                 )
-            }.onSuccess { sources ->
-                _uiState.update { it.copy(sources = sources, showError = if (sources.isEmpty()) "Nenhuma fonte disponível" else null) }
+            }.onSuccess { res ->
+                val sources = res.sources
+                _uiState.update {
+                    it.copy(
+                        sources = sources,
+                        showError = messageForSources(res.error, res.code, sources.isEmpty()),
+                    )
+                }
                 onResult(sources)
             }.onFailure {
                 _uiState.update { it.copy(showError = "Erro ao carregar fontes") }
@@ -134,13 +149,18 @@ class DetailTvViewModel(
     fun loadMovieSources(onResult: (List<VipSource>) -> Unit) {
         viewModelScope.launch {
             runCatching {
-                NetworkModule.supabaseApi.getSourcesForMovie(
-                    apiKey = NetworkModule.supabaseAnonKey,
-                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
-                    mediaTypeFilter = PostgrestFilter.eq(mediaType),
+                NetworkModule.vipApi.getMediaSources(
+                    tmdbId = tmdbId,
+                    type = if (mediaType == "tv") "tv" else "movie",
                 )
-            }.onSuccess { sources ->
-                _uiState.update { it.copy(sources = sources, showError = if (sources.isEmpty()) "Nenhuma fonte disponível" else null) }
+            }.onSuccess { res ->
+                val sources = res.sources
+                _uiState.update {
+                    it.copy(
+                        sources = sources,
+                        showError = messageForSources(res.error, res.code, sources.isEmpty()),
+                    )
+                }
                 onResult(sources)
             }.onFailure {
                 _uiState.update { it.copy(showError = "Erro ao carregar fontes") }

@@ -21,7 +21,6 @@ import com.streamflixvip.tv.data.LocalWatchProgress
 import com.streamflixvip.tv.data.TvActivationManager
 import com.streamflixvip.tv.network.LiveChannel
 import com.streamflixvip.tv.network.NetworkModule
-import com.streamflixvip.tv.network.PostgrestFilter
 import com.streamflixvip.tv.network.VipSource
 import com.streamflixvip.tv.ui.account.AccountTvScreen
 import com.streamflixvip.tv.ui.account.MyListTvScreen
@@ -177,18 +176,17 @@ class MainTvActivity : ComponentActivity() {
                         val sources = withContext(Dispatchers.IO) {
                             runCatching {
                                 if (entry.mediaType == "tv") {
-                                    NetworkModule.supabaseApi.getSourcesForEpisode(
-                                        apiKey = NetworkModule.supabaseAnonKey,
-                                        tmdbIdFilter = PostgrestFilter.eq(entry.tmdbId),
-                                        seasonFilter = PostgrestFilter.eq(entry.season),
-                                        episodeFilter = PostgrestFilter.eq(entry.episode),
-                                    )
+                                    NetworkModule.vipApi.getMediaSources(
+                                        tmdbId = entry.tmdbId,
+                                        type = "tv",
+                                        season = entry.season,
+                                        episode = entry.episode,
+                                    ).sources
                                 } else {
-                                    NetworkModule.supabaseApi.getSourcesForMovie(
-                                        apiKey = NetworkModule.supabaseAnonKey,
-                                        tmdbIdFilter = PostgrestFilter.eq(entry.tmdbId),
-                                        mediaTypeFilter = PostgrestFilter.eq(entry.mediaType),
-                                    )
+                                    NetworkModule.vipApi.getMediaSources(
+                                        tmdbId = entry.tmdbId,
+                                        type = "movie",
+                                    ).sources
                                 }
                             }.getOrDefault(emptyList())
                         }
@@ -210,12 +208,12 @@ class MainTvActivity : ComponentActivity() {
                     scope.launch {
                         val sources = withContext(Dispatchers.IO) {
                             runCatching {
-                                NetworkModule.supabaseApi.getSourcesForEpisode(
-                                    apiKey = NetworkModule.supabaseAnonKey,
-                                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
-                                    seasonFilter = PostgrestFilter.eq(season),
-                                    episodeFilter = PostgrestFilter.eq(nextEp),
-                                )
+                                NetworkModule.vipApi.getMediaSources(
+                                    tmdbId = tmdbId,
+                                    type = "tv",
+                                    season = season,
+                                    episode = nextEp,
+                                ).sources
                             }.getOrDefault(emptyList())
                         }
                         if (sources.isEmpty()) {
