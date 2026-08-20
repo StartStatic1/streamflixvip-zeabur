@@ -1620,7 +1620,7 @@ private fun qualityBadge(label: String?): String? {
  * que aparece de graça, e mudar quem é grátis é só reordenar prioridade
  * no painel — não editar cada fonte uma a uma.
  */
-private const val FREE_SERVER_SLOTS = 0
+private const val FREE_SERVER_SLOTS = 1
 
 @Composable
 private fun SourceRow(
