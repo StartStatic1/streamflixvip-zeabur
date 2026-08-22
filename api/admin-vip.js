@@ -127,13 +127,32 @@ module.exports = async function handler(req, res) {
     const activations = (Array.isArray(statusRows) ? statusRows : []).map((u) => {
       let origem = 'Desconhecida';
       let codigoRelacionado = null;
-      if (u.last_code_used && String(u.last_code_used).startsWith('PIX-MP-')) origem = 'Pagamento PIX automatico';
-      else if (u.last_code_used) { origem = 'Codigo: ' + u.last_code_used; codigoRelacionado = u.last_code_used; }
-      else if (codesByUser.has(u.user_id)) {
+      let paymentProvider = null;
+      const codeUsed = u.last_code_used ? String(u.last_code_used) : '';
+      if (codeUsed.startsWith('PIX-IP-')) {
+        origem = 'Pagamento InfinitePay';
+        paymentProvider = 'infinitepay';
+        codigoRelacionado = codeUsed;
+      } else if (codeUsed.startsWith('PIX-MP-')) {
+        origem = 'Pagamento Mercado Pago';
+        paymentProvider = 'mercadopago';
+        codigoRelacionado = codeUsed;
+      } else if (codeUsed) {
+        origem = 'Codigo: ' + codeUsed;
+        codigoRelacionado = codeUsed;
+      } else if (codesByUser.has(u.user_id)) {
         codigoRelacionado = codesByUser.get(u.user_id);
         origem = 'Codigo: ' + codigoRelacionado;
       }
-      const tvs = codigoRelacionado ? (tvByCode.get(codigoRelacionado) || []) : [];
+      const plan = String(u.plan_label || '');
+      let amountEstimate = null;
+      if (/30\s*Dias|1\s*Mes/i.test(plan)) amountEstimate = 9.9;
+      else if (/90\s*Dias|3\s*Mes/i.test(plan)) amountEstimate = 24.9;
+      else if (/180\s*Dias|6\s*Mes/i.test(plan)) amountEstimate = 49.9;
+      else if (/Vital/i.test(plan)) amountEstimate = 149.9;
+      const tvs = codigoRelacionado && !String(codigoRelacionado).startsWith('PIX-')
+        ? (tvByCode.get(codigoRelacionado) || [])
+        : [];
       return {
         email: u.email || '(sem e-mail)',
         userId: u.user_id,
@@ -141,6 +160,8 @@ module.exports = async function handler(req, res) {
         expiresAt: u.expires_at,
         planLabel: u.plan_label,
         origem,
+        paymentProvider,
+        amountEstimate,
         codigoRelacionado,
         tvsAtivas: tvs.length,
         tvs,
@@ -363,6 +384,32 @@ module.exports = async function handler(req, res) {
       return isNaN(total) ? 0 : total;
     }
     try {
+      const nowIso = new Date().toISOString();
+      const vipRes = await fetch(
+        `\( {SUPABASE_URL}/rest/v1/vip_status?select=user_id,expires_at,plan_label,last_code_used&expires_at=gt. \){encodeURIComponent(nowIso)}&limit=2000`,
+        { headers: svcHeaders },
+      );
+      const vipRows = vipRes.ok ? await vipRes.json() : [];
+      let activeVipUsers = 0;
+      let paidInfinite = 0;
+      let paidMercado = 0;
+      let revenueEstimate = 0;
+      const planPrice = (plan) => {
+        const p = String(plan || '');
+        if (/30\s*Dias|1\s*Mes/i.test(p)) return 9.9;
+        if (/90\s*Dias|3\s*Mes/i.test(p)) return 24.9;
+        if (/180\s*Dias|6\s*Mes/i.test(p)) return 49.9;
+        if (/Vital/i.test(p)) return 149.9;
+        return 0;
+      };
+      if (Array.isArray(vipRows)) {
+        for (const u of vipRows) {
+          activeVipUsers += 1;
+          const c = String(u.last_code_used || '');
+          if (c.startsWith('PIX-IP-')) { paidInfinite += 1; revenueEstimate += planPrice(u.plan_label); }
+          else if (c.startsWith('PIX-MP-')) { paidMercado += 1; revenueEstimate += planPrice(u.plan_label); }
+        }
+      }
       res.status(200).json({
         totalVipSources: await countRows('vip_sources'),
         totalIptvSources: await countRows('iptv_sources', '&is_active=eq.true'),
@@ -373,6 +420,10 @@ module.exports = async function handler(req, res) {
         activeTvActivations: await countRows('tv_activations', '&is_active=eq.true'),
         totalMovies: await countRows('vip_sources', '&media_type=eq.movie'),
         totalSeries: await countRows('vip_sources', '&media_type=eq.tv'),
+        activeVipUsers,
+        paidInfinitePay: paidInfinite,
+        paidMercadoPago: paidMercado,
+        revenueEstimate,
         topSources: [],
       });
     } catch (err) {
