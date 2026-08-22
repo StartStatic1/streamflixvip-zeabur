@@ -134,16 +134,41 @@ async function handleWebhook(req, res) {
     const newExpiry = new Date(base.getTime() + durationHours * 60 * 60 * 1000);
     const tx = body.transaction_nsu || body.invoice_slug || 'ip';
 
+    // Puxa e-mail/nome do Auth (app mobile nao chama track-login)
+    let email = current?.email || null;
+    let name = current?.name || null;
+    if (!email) {
+      try {
+        const authRes = await fetch(
+          `\( {SUPABASE_URL}/auth/v1/admin/users/ \){encodeURIComponent(userId)}`,
+          { headers: { ...headers, apikey: serviceKey } },
+        );
+        if (authRes.ok) {
+          const authUser = await authRes.json();
+          email = authUser?.email || authUser?.user?.email || null;
+          const meta = authUser?.user_metadata || authUser?.user?.user_metadata || {};
+          name = name || meta.full_name || meta.name || meta.display_name || null;
+        }
+      } catch (e) {
+        console.error('[infinitepay] auth lookup', e.message || e);
+      }
+    }
+
+    const upsertBody = {
+      user_id: userId,
+      expires_at: newExpiry.toISOString(),
+      plan_label: planLabel,
+      last_code_used: `PIX-IP-${tx}`.slice(0, 80),
+      updated_at: now.toISOString(),
+    };
+    if (email) upsertBody.email = email;
+    if (name) upsertBody.name = name;
+    if (!current?.first_login_at) upsertBody.first_login_at = now.toISOString();
+
     await fetch(`${SUPABASE_URL}/rest/v1/vip_status`, {
       method: 'POST',
       headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
-      body: JSON.stringify({
-        user_id: userId,
-        expires_at: newExpiry.toISOString(),
-        plan_label: planLabel,
-        last_code_used: `PIX-IP-${tx}`.slice(0, 80),
-        updated_at: now.toISOString(),
-      }),
+      body: JSON.stringify(upsertBody),
     });
 
     console.log(`[infinitepay] VIP ok user=${userId} until=${newExpiry.toISOString()}`);

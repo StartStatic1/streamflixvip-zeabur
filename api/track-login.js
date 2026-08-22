@@ -49,11 +49,11 @@ module.exports = async function handler(req, res) {
 
     const payload = {
       user_id: userId,
-      email,
-      name,
       last_login_at: now,
       first_login_at: existing?.first_login_at || now,
     };
+    if (email) payload.email = email;
+    if (name) payload.name = name;
 
     const upsertRes = await fetch(`${SUPABASE_URL}/rest/v1/vip_status`, {
       method: 'POST',
