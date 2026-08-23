@@ -154,7 +154,7 @@ fun VipSection(viewModel: VipViewModel) {
 
                 Spacer(Modifier.height(24.dp))
                 Divider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
-                Spacer(modifier.height(24.dp))
+                Spacer(Modifier.height(24.dp))
 
                 Text("Ja tem um codigo?", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(12.dp))
