@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>API Parceiros — StreamFlixVIP</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#08080f; --surface:#111119; --surface2:#1a1a26; --border:rgba(255,255,255,.08);
+      --text:#f0f0f8; --muted:#8888aa; --gold:#f5c518; --green:#22c55e; --red:#ef4444; --accent:#7c3aed;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Outfit,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+    #login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;width:100%;max-width:400px}
+    .card h1{font-size:1.25rem;margin-bottom:8px}
+    .card p{color:var(--muted);font-size:.85rem;margin-bottom:16px}
+    input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 14px;font:inherit;margin-bottom:10px}
+    button{font:inherit;cursor:pointer;border:none;border-radius:12px;padding:12px 18px;font-weight:700}
+    .btn-gold{background:linear-gradient(135deg,var(--gold),#e6a800);color:#000;width:100%}
+    .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+    .msg{font-size:.85rem;min-height:20px;margin-top:8px}
+    .msg.err{color:var(--red)}.msg.ok{color:var(--green)}
+    #app{display:none}
+    header{position:sticky;top:0;background:rgba(8,8,15,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+    header a{color:var(--muted);font-size:.85rem;text-decoration:none}
+    main{max-width:900px;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:20px}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px}
+    .panel h2{font-size:1rem;margin-bottom:14px}
+    .hint{font-size:.8rem;color:var(--muted);margin-bottom:12px;line-height:1.45}
+    table{width:100%;border-collapse:collapse;font-size:.82rem}
+    th{text-align:left;color:var(--muted);font-size:.7rem;text-transform:uppercase;padding:8px;border-bottom:1px solid var(--border)}
+    td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+    .pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.7rem;font-weight:700}
+    .pill.on{background:rgba(34,197,94,.15);color:var(--green)}
+    .pill.off{background:rgba(136,136,170,.12);color:var(--muted)}
+    .row-btns{display:flex;gap:6px;flex-wrap:wrap}
+    .row-btns button{padding:6px 10px;font-size:.72rem}
+    .key-box{background:#0a1f14;border:1px solid var(--green);border-radius:12px;padding:14px;margin-top:12px;display:none}
+    .key-box code{display:block;word-break:break-all;font-size:.85rem;color:var(--green);margin:8px 0}
+    .scopes{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+    .scopes label{font-size:.85rem;display:flex;align-items:center;gap:6px;cursor:pointer}
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;font-size:.85rem;opacity:0;transition:.25s;z-index:99}
+    #toast.show{opacity:1}
+  </style>
+</head>
+<body>
+<div id="login">
+  <div class="card">
+    <h1>🔑 API de Parceiros</h1>
+    <p>Mesmo login do painel admin. Crie e gerencie tokens para outros apps.</p>
+    <input type="email" id="email" placeholder="E-mail admin" autocomplete="email"/>
+    <input type="password" id="pass" placeholder="Senha" autocomplete="current-password"/>
+    <button class="btn-gold" id="btnLogin" onclick="doLogin()">Entrar</button>
+    <div class="msg" id="loginMsg"></div>
+    <p style="margin-top:16px;font-size:.8rem"><a href="/admin.html" style="color:var(--gold)">← Voltar ao painel</a></p>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <div><strong>Stream<em style="color:var(--gold);font-style:italic">Flix</em>VIP</strong> · API Parceiros</div>
+    <div style="display:flex;gap:14px;align-items:center">
+      <a href="/admin.html">Painel principal</a>
+      <button class="btn-sec" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">Sair</button>
+    </div>
+  </header>
+  <main>
+    <div class="panel">
+      <h2>➕ Novo parceiro</h2>
+      <p class="hint">A chave completa só aparece <b>uma vez</b> ao criar ou rotacionar. Guarde com o dono do outro app.</p>
+      <input type="text" id="pName" placeholder="Nome do app / parceiro"/>
+      <input type="email" id="pEmail" placeholder="E-mail de contato (opcional)"/>
+      <div class="scopes">
+        <label><input type="checkbox" id="scSources" checked/> sources (filmes/séries)</label>
+        <label><input type="checkbox" id="scCatalog" checked/> catalog</label>
+        <label><input type="checkbox" id="scLivetv"/> livetv</label>
+      </div>
+      <input type="number" id="pRate" value="60" min="10" max="1000" placeholder="Req/min"/>
+      <textarea id="pNotes" rows="2" placeholder="Notas internas (opcional)"></textarea>
+      <button class="btn-gold" id="btnCreate" onclick="createPartner()">Gerar token</button>
+      <div class="key-box" id="keyBox">
+        <div style="font-weight:700;color:var(--green)">✅ Copie agora — não será mostrada de novo</div>
+        <code id="keyValue"></code>
+        <button class="btn-sec" onclick="copyKey()">📋 Copiar chave</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>📋 Parceiros <button class="btn-sec" style="padding:4px 10px;font-size:.75rem;margin-left:8px" onclick="loadPartners()">Atualizar</button></h2>
+      <div id="listWrap"><p style="color:var(--muted)">Carregando…</p></div>
+    </div>
+
+    <div class="panel">
+      <h2>📖 Como o parceiro usa</h2>
+      <p class="hint">Base: <code id="baseUrl"></code></p>
+      <pre style="background:var(--surface2);padding:14px;border-radius:10px;font-size:.75rem;overflow:auto;line-height:1.5">Authorization: Bearer sf_live_...
+
+GET /api/partner?action=ping
+GET /api/partner?action=sources&tmdb_id=550&type=movie
+GET /api/partner?action=sources&tmdb_id=1396&type=tv&season=1&episode=1
+GET /api/partner?action=catalog&type=movie&limit=50
+GET /api/partner?action=livetv</pre>
+    </div>
+  </main>
+</div>
+<div id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'sfv-admin-auth-token' },
+});
+let _session = null;
+let _lastKey = '';
+
+document.getElementById('baseUrl').textContent = location.origin;
+
+async function checkSession() {
+  const { data } = await db.auth.getSession();
+  if (data?.session) {
+    const ok = await ensureAdmin(data.session);
+    if (ok) showApp(data.session);
+  }
+}
+async function ensureAdmin(session) {
+  const { data } = await db.from('vip_panel_admins').select('id').eq('id', session.user.id).maybeSingle();
+  return !!data;
+}
+async function doLogin() {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('pass').value;
+  const msg = document.getElementById('loginMsg');
+  const btn = document.getElementById('btnLogin');
+  btn.disabled = true;
+  try {
+    const { data, error } = await db.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (!(await ensureAdmin(data.session))) {
+      await db.auth.signOut();
+      throw new Error('Conta sem permissão de admin');
+    }
+    showApp(data.session);
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = e.message || 'Erro no login';
+  } finally {
+    btn.disabled = false;
+  }
+}
+function showApp(session) {
+  _session = session;
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadPartners();
+}
+async function doLogout() {
+  await db.auth.signOut();
+  location.reload();
+}
+async function api(action, extra = {}) {
+  const res = await fetch('/api/admin-partners', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + _session.access_token,
+    },
+    body: JSON.stringify({ action, ...extra }),
+  });
+  return res.json();
+}
+function toast(t) {
+  const el = document.getElementById('toast');
+  el.textContent = t;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+function scopesFromForm() {
+  const s = [];
+  if (document.getElementById('scSources').checked) s.push('sources');
+  if (document.getElementById('scCatalog').checked) s.push('catalog');
+  if (document.getElementById('scLivetv').checked) s.push('livetv');
+  return s.length ? s : ['sources'];
+}
+async function createPartner() {
+  const name = document.getElementById('pName').value.trim();
+  if (!name) { toast('Informe o nome'); return; }
+  const btn = document.getElementById('btnCreate');
+  btn.disabled = true;
+  const data = await api('create-partner', {
+    name,
+    contact_email: document.getElementById('pEmail').value.trim(),
+    notes: document.getElementById('pNotes').value.trim(),
+    scopes: scopesFromForm(),
+    rate_limit_per_min: parseInt(document.getElementById('pRate').value, 10) || 60,
+  });
+  btn.disabled = false;
+  if (data.error) { toast('❌ ' + (data.error.message || data.error)); return; }
+  _lastKey = data.api_key;
+  document.getElementById('keyValue').textContent = data.api_key;
+  document.getElementById('keyBox').style.display = 'block';
+  document.getElementById('pName').value = '';
+  document.getElementById('pEmail').value = '';
+  document.getElementById('pNotes').value = '';
+  toast('Token criado — copie agora');
+  loadPartners();
+}
+function copyKey() {
+  if (!_lastKey) return;
+  navigator.clipboard.writeText(_lastKey).then(() => toast('📋 Chave copiada'));
+}
+async function loadPartners() {
+  const wrap = document.getElementById('listWrap');
+  const data = await api('list-partners');
+  if (data.error) {
+    wrap.innerHTML = '<p style="color:var(--red)">' + (data.error.message || data.error) +
+      '<br><span style="color:var(--muted);font-size:.8rem">Se a tabela não existe, rode sql/api_partners.sql no Supabase.</span></p>';
+    return;
+  }
+  const rows = data.partners || [];
+  if (!rows.length) {
+    wrap.innerHTML = '<p style="color:var(--muted)">Nenhum parceiro ainda.</p>';
+    return;
+  }
+  wrap.innerHTML = '<table><thead><tr><th>Nome</th><th>Prefixo</th><th>Escopos</th><th>Req</th><th>Limite/min</th><th>Status</th><th></th></tr></thead><tbody>' +
+    rows.map(p => `<tr>
+      <td><b>${esc(p.name)}</b>${p.contact_email ? '<div style="font-size:.72rem;color:var(--muted)">' + esc(p.contact_email) + '</div>' : ''}</td>
+      <td><code style="font-size:.72rem">${esc(p.key_prefix)}…</code></td>
+      <td style="font-size:.72rem">${(p.scopes || []).join(', ')}</td>
+      <td>${p.request_count || 0}</td>
+      <td>${p.rate_limit_per_min || 60}</td>
+      <td><span class="pill ${p.is_active ? 'on' : 'off'}">${p.is_active ? 'Ativo' : 'Off'}</span></td>
+      <td class="row-btns">
+        <button class="btn-sec" onclick="toggleP('${p.id}', ${!p.is_active})">${p.is_active ? 'Pausar' : 'Ativar'}</button>
+        <button class="btn-sec" onclick="rotateP('${p.id}')">Nova chave</button>
+        <button class="btn-sec" onclick="delP('${p.id}', '${esc(p.name).replace(/'/g, "\\'")}')">Excluir</button>
+      </td>
+    </tr>`).join('') + '</tbody></table>';
+}
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' }[c]));
+}
+async function toggleP(id, isActive) {
+  const d = await api('toggle-partner', { id, is_active: isActive });
+  if (d.error) toast('❌ ' + d.error); else { toast(isActive ? 'Ativo' : 'Pausado'); loadPartners(); }
+}
+async function rotateP(id) {
+  if (!confirm('Gerar nova chave? A anterior para de funcionar na hora.')) return;
+  const d = await api('rotate-partner-key', { id });
+  if (d.error) { toast('❌ ' + d.error); return; }
+  _lastKey = d.api_key;
+  document.getElementById('keyValue').textContent = d.api_key;
+  document.getElementById('keyBox').style.display = 'block';
+  toast('Nova chave — copie agora');
+  loadPartners();
+}
+async function delP(id, name) {
+  if (!confirm('Excluir parceiro "' + name + '"?')) return;
+  const d = await api('delete-partner', { id });
+  if (d.error) toast('❌ ' + d.error); else { toast('Excluído'); loadPartners(); }
+}
+checkSession();
+</script>
+</body>
+</html>
