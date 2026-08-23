@@ -19,12 +19,14 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 function resolveStaticDir() {
-  const candidates = ['public', 'Public', 'PUBLIC'];
+  // Preferir Public/ (pasta oficial do site + APK do Actions).
+  // Nunca deixar public/ minúscula “roubar” o static se as duas existirem.
+  const candidates = ['Public', 'PUBLIC', 'public'];
   for (const name of candidates) {
     const fullPath = path.join(__dirname, name);
     if (fs.existsSync(fullPath)) return fullPath;
   }
-  return path.join(__dirname, 'public');
+  return path.join(__dirname, 'Public');
 }
 const STATIC_DIR = resolveStaticDir();
 console.log('Servindo arquivos estaticos de:', STATIC_DIR);
