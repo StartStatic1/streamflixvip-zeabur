@@ -146,14 +146,15 @@ fun VipSection(viewModel: VipViewModel) {
 
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "Pagamento seguro via PIX. Liberacao automatica apos a confirmacao.",
+                    "Ao escolher o plano: InfinitePay (automatico) ou Pix direto na chave." +
+                        " No Pix direto, envie o comprovante no Telegram e ative com o codigo.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 Spacer(Modifier.height(24.dp))
                 Divider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
-                Spacer(Modifier.height(24.dp))
+                Spacer(modifier.height(24.dp))
 
                 Text("Ja tem um codigo?", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(12.dp))
@@ -219,7 +220,7 @@ private fun VipPlanCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
+            Column(modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         title,
