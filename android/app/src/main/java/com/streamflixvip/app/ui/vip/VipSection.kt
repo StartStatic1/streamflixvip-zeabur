@@ -39,7 +39,7 @@ fun VipSection(viewModel: VipViewModel) {
         color = MaterialTheme.colorScheme.surfaceVariant,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier = Modifier.padding(16.dp)) {
             if (state.isLoadingStatus) {
                 CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp)
                 return@Column
@@ -220,7 +220,7 @@ private fun VipPlanCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         title,
