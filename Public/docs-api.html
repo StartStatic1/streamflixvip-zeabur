@@ -6,25 +6,30 @@
 <title>StreamFlixVIP · Partner API Docs</title>
 <style>
   :root {
-    --bg: #0b0f14;
-    --surface: #121820;
-    --surface2: #1a222d;
-    --border: #2a3544;
-    --text: #e8eef6;
-    --muted: #8b9bb0;
-    --accent: #00d4ff;
-    --accent2: #00b4d8;
-    --ok: #22c55e;
-    --warn: #f59e0b;
-    --err: #ef4444;
-    --code-bg: #0d1117;
+    --bg: #070b12;
+    --surface: #101820;
+    --surface2: #162030;
+    --border: #2a3a4f;
+    --text: #eef4fc;
+    --muted: #8fa3bc;
+    --accent: #00e5ff;
+    --accent2: #00b8d4;
+    --pink: #ff4d9e;
+    --purple: #a78bfa;
+    --ok: #34d399;
+    --warn: #fbbf24;
+    --err: #f87171;
+    --code-bg: #0a0e16;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-    background: var(--bg);
+    background:
+      radial-gradient(ellipse 80% 50% at 20% -10%, rgba(0,229,255,.12), transparent),
+      radial-gradient(ellipse 60% 40% at 90% 10%, rgba(167,139,250,.1), transparent),
+      var(--bg);
     color: var(--text);
-    line-height: 1.6;
+    line-height: 1.65;
     min-height: 100vh;
   }
   a { color: var(--accent); text-decoration: none; }
@@ -32,29 +37,78 @@
 
   .topbar {
     position: sticky; top: 0; z-index: 50;
-    background: rgba(11,15,20,.92);
-    backdrop-filter: blur(12px);
+    background: rgba(7,11,18,.88);
+    backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border);
     padding: 14px 20px;
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
-  .brand { font-weight: 700; font-size: 1.05rem; letter-spacing: .02em; }
-  .brand span { color: var(--accent); }
-  .topbar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: .88rem; }
+  .brand { font-weight: 800; font-size: 1.08rem; letter-spacing: .02em; }
+  .brand span {
+    background: linear-gradient(90deg, var(--accent), var(--purple));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .topbar nav { display: flex; gap: 14px; flex-wrap: wrap; font-size: .86rem; align-items: center; }
   .topbar nav a { color: var(--muted); }
   .topbar nav a:hover { color: var(--accent); text-decoration: none; }
+  .nav-cta {
+    background: linear-gradient(135deg, var(--accent), #00c4cc);
+    color: #001018 !important;
+    font-weight: 700;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: .8rem !important;
+  }
+  .nav-cta:hover { filter: brightness(1.08); text-decoration: none !important; }
 
-  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 20px 80px; }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 28px 18px 90px; }
 
-  h1 { font-size: 1.85rem; margin-bottom: 8px; }
+  h1 {
+    font-size: 1.9rem; margin-bottom: 8px;
+    background: linear-gradient(90deg, #fff 40%, var(--accent));
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
   h2 {
-    font-size: 1.25rem; margin: 40px 0 14px;
-    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    font-size: 1.22rem; margin: 42px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
     color: var(--accent);
   }
-  h3 { font-size: 1.05rem; margin: 24px 0 10px; color: #c5d4e8; }
-  p, li { color: #c8d4e4; }
-  .lead { color: var(--muted); font-size: 1.05rem; margin-bottom: 28px; }
+  h3 { font-size: 1.05rem; margin: 24px 0 10px; color: #d0dcea; }
+  p, li { color: #c5d3e6; }
+  .lead { color: var(--muted); font-size: 1.05rem; margin-bottom: 22px; }
+
+  /* CTA Tester — bem destacado */
+  .tester-cta {
+    margin: 0 0 28px;
+    padding: 20px 22px;
+    border-radius: 16px;
+    background:
+      linear-gradient(135deg, rgba(0,229,255,.14), rgba(167,139,250,.12));
+    border: 1px solid rgba(0,229,255,.35);
+    box-shadow: 0 0 40px rgba(0,229,255,.08);
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px;
+  }
+  .tester-cta h3 {
+    margin: 0 0 4px; color: #fff; font-size: 1.1rem;
+  }
+  .tester-cta p { margin: 0; font-size: .9rem; color: var(--muted); }
+  .tester-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, #ffe566, #ffc107);
+    color: #1a1400;
+    font-weight: 800;
+    font-size: .95rem;
+    padding: 12px 22px;
+    border-radius: 12px;
+    border: none;
+    text-decoration: none !important;
+    box-shadow: 0 6px 20px rgba(255,193,7,.35);
+    transition: transform .15s, filter .15s;
+  }
+  .tester-btn:hover { transform: translateY(-2px); filter: brightness(1.05); }
 
   .card {
     background: var(--surface);
@@ -63,15 +117,22 @@
     padding: 18px 20px;
     margin: 16px 0;
   }
-  .card.ok { border-color: rgba(34,197,94,.35); }
-  .card.warn { border-color: rgba(245,158,11,.4); }
+  .card.ok {
+    border-color: rgba(52,211,153,.4);
+    background: linear-gradient(180deg, rgba(52,211,153,.06), var(--surface));
+  }
+  .card.warn {
+    border-color: rgba(251,191,36,.4);
+    background: linear-gradient(180deg, rgba(251,191,36,.06), var(--surface));
+  }
 
   .badge {
-    display: inline-block; font-size: .72rem; font-weight: 600;
-    padding: 3px 8px; border-radius: 6px; letter-spacing: .04em;
+    display: inline-block; font-size: .72rem; font-weight: 700;
+    padding: 3px 9px; border-radius: 6px; letter-spacing: .04em;
   }
-  .badge.get { background: rgba(0,212,255,.15); color: var(--accent); }
-  .badge.auth { background: rgba(34,197,94,.15); color: var(--ok); }
+  .badge.get {
+    background: rgba(0,229,255,.18); color: var(--accent);
+  }
 
   code, .mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -80,7 +141,7 @@
   pre {
     background: var(--code-bg);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 12px;
     padding: 14px 16px;
     overflow-x: auto;
     margin: 12px 0;
@@ -88,17 +149,6 @@
     line-height: 1.5;
   }
   pre code { color: #e6edf3; }
-  .copy-row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
-  .btn {
-    background: var(--accent); color: #001018; border: none;
-    font-weight: 600; font-size: .8rem; padding: 8px 14px;
-    border-radius: 8px; cursor: pointer;
-  }
-  .btn:hover { background: var(--accent2); }
-  .btn.ghost {
-    background: transparent; color: var(--muted);
-    border: 1px solid var(--border);
-  }
 
   table {
     width: 100%; border-collapse: collapse; margin: 12px 0;
@@ -108,7 +158,10 @@
     text-align: left; padding: 10px 12px;
     border-bottom: 1px solid var(--border);
   }
-  th { color: var(--muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+  th {
+    color: var(--muted); font-weight: 600;
+    font-size: .75rem; text-transform: uppercase; letter-spacing: .05em;
+  }
   td code { color: var(--accent); }
 
   .endpoint {
@@ -128,12 +181,13 @@
   .toc {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 16px 20px;
-    margin-bottom: 28px;
+    margin-bottom: 8px;
   }
   .toc ol { padding-left: 1.2rem; }
   .toc a { color: #b8c9dc; }
+  .toc a:hover { color: var(--accent); }
 
   footer {
     margin-top: 48px; padding-top: 20px;
@@ -141,9 +195,23 @@
     color: var(--muted); font-size: .85rem;
   }
 
+  /* botão flutuante mobile */
+  .fab {
+    position: fixed; bottom: 20px; right: 16px; z-index: 60;
+    background: linear-gradient(135deg, #ffe566, #ffc107);
+    color: #1a1400;
+    font-weight: 800;
+    font-size: .85rem;
+    padding: 14px 18px;
+    border-radius: 999px;
+    box-shadow: 0 8px 28px rgba(255,193,7,.45);
+    text-decoration: none !important;
+  }
+  .fab:hover { filter: brightness(1.06); }
+
   @media (max-width: 600px) {
     h1 { font-size: 1.45rem; }
-    .topbar nav { display: none; }
+    .topbar nav a:not(.nav-cta) { display: none; }
   }
 </style>
 </head>
@@ -155,8 +223,8 @@
     <a href="#auth">Auth</a>
     <a href="#endpoints">Endpoints</a>
     <a href="#examples">Exemplos</a>
-    <a href="#errors">Erros</a>
     <a href="#security">Segurança</a>
+    <a class="nav-cta" href="/api-tester.html">▶ Testar API</a>
   </nav>
 </header>
 
@@ -166,6 +234,15 @@
     API HTTP para parceiros integrarem catálogo, fontes de filmes/séries e canais ao vivo
     no próprio aplicativo ou backend. Autenticação por token Bearer.
   </p>
+
+  <!-- CTA TESTER DESTACADO -->
+  <div class="tester-cta">
+    <div>
+      <h3>🧪 Testar a API agora</h3>
+      <p>Cole seu token e experimente ping, catalog e sources sem código.</p>
+    </div>
+    <a class="tester-btn" href="/api-tester.html">Abrir API Tester →</a>
+  </div>
 
   <div class="toc">
     <strong style="color:#fff">Índice</strong>
@@ -181,7 +258,6 @@
     </ol>
   </div>
 
-  <!-- QUICK -->
   <h2 id="quick">1. Início rápido</h2>
   <div class="card ok">
     <p style="margin-bottom:10px"><strong>O que você recebe de nós:</strong></p>
@@ -207,7 +283,6 @@
   "docs": { ... }
 }</code></pre>
 
-  <!-- AUTH -->
   <h2 id="auth">2. Autenticação</h2>
   <p>Todas as rotas exigem autenticação. Duas formas aceitas:</p>
   <table>
@@ -217,12 +292,10 @@
   </table>
   <p>Recomendado: <strong>Authorization: Bearer</strong>.</p>
 
-  <!-- BASE -->
   <h2 id="base">3. Base URL</h2>
   <div class="endpoint">https://www.streamflixvip.online</div>
   <p>Todas as rotas começam com <code>/api/partner</code>.</p>
 
-  <!-- ENDPOINTS -->
   <h2 id="endpoints">4. Endpoints</h2>
 
   <h3><span class="badge get">GET</span> Ping / Me</h3>
@@ -318,7 +391,6 @@
 }</code></pre>
   <p>Escopo necessário: <code>livetv</code>.</p>
 
-  <!-- EXAMPLES -->
   <h2 id="examples">5. Exemplos prontos</h2>
 
   <h3>cURL</h3>
@@ -362,7 +434,6 @@ const catalog = await partnerGet('catalog', { type: 'movie', limit: 30 });</code
     </ol>
   </div>
 
-  <!-- ERRORS -->
   <h2 id="errors">6. Códigos de erro</h2>
   <table>
     <tr><th>HTTP</th><th>Significado</th></tr>
@@ -374,7 +445,6 @@ const catalog = await partnerGet('catalog', { type: 'movie', limit: 30 });</code
     <tr><td><code>500</code></td><td>Erro interno</td></tr>
   </table>
 
-  <!-- LIMITS -->
   <h2 id="limits">7. Rate limit &amp; escopos</h2>
   <p><strong>Rate limit</strong> — definido por parceiro no painel (ex.: 60 req/min). Acima disso → HTTP 429.</p>
   <p><strong>Escopos possíveis</strong></p>
@@ -385,7 +455,6 @@ const catalog = await partnerGet('catalog', { type: 'movie', limit: 30 });</code
   </ul>
   <p>O painel admin controla quais escopos cada token tem e pode pausar/revogar a qualquer momento.</p>
 
-  <!-- SECURITY -->
   <h2 id="security">8. Segurança (obrigatório)</h2>
   <div class="card warn">
     <ul>
@@ -398,15 +467,20 @@ const catalog = await partnerGet('catalog', { type: 'movie', limit: 30 });</code
   </div>
 
   <h2>Suporte</h2>
-  <p>
-    Dúvidas de integração: fale com quem forneceu o token.
-    Tester online (quando logado no painel): <a href="/api-tester.html">/api-tester.html</a>
-  </p>
+  <div class="tester-cta" style="margin-top:12px">
+    <div>
+      <h3>Quer testar de novo?</h3>
+      <p>Abra o tester com seu token real.</p>
+    </div>
+    <a class="tester-btn" href="/api-tester.html">API Tester →</a>
+  </div>
 
   <footer>
     StreamFlixVIP Partner API · documentação de integração · token de exemplo não é válido
   </footer>
 </main>
+
+<a class="fab" href="/api-tester.html">▶ Testar</a>
 
 </body>
 </html>
