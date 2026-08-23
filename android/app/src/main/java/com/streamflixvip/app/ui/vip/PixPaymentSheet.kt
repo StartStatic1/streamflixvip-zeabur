@@ -160,7 +160,7 @@ fun PixPaymentSheet(
                 ) {
                     Icon(Icons.Default.Movie, null, tint = Color.White.copy(alpha = 0.6f))
                     Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(planLabel, fontWeight = FontWeight.Bold, color = Color.White)
                         Text(
                             "Acesso Premium",
@@ -392,7 +392,7 @@ private fun ManualPixBlock(
         color = PixTeal.copy(alpha = 0.12f),
         border = BorderStroke(1.dp, PixTeal.copy(alpha = 0.45f)),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 "Chave Pix (celular · Next)",
                 fontSize = 11.sp,
