@@ -9,10 +9,10 @@
   <style>
     :root {
       --bg:#08080f; --surface:#111119; --surface2:#1a1a26; --border:rgba(255,255,255,.08);
-      --text:#f0f0f8; --muted:#8888aa; --gold:#f5c518; --green:#22c55e; --red:#ef4444; --accent:#7c3aed;
+      --text:#f0f0f8; --muted:#8888aa; --gold:#f5c518; --green:#22c55e; --red:#ef4444;
     }
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Outfit,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+    body{font-family:Outfit,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden}
     #login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;width:100%;max-width:400px}
     .card h1{font-size:1.25rem;margin-bottom:8px}
@@ -24,52 +24,64 @@
     .msg{font-size:.85rem;min-height:20px;margin-top:8px}
     .msg.err{color:var(--red)}.msg.ok{color:var(--green)}
     #app{display:none}
-    header{position:sticky;top:0;background:rgba(8,8,15,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+    header{position:sticky;top:0;z-index:10;background:rgba(8,8,15,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
     header a{color:var(--muted);font-size:.85rem;text-decoration:none}
-    main{max-width:900px;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:20px}
-    .panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:20px}
-    .panel h2{font-size:1rem;margin-bottom:14px}
+    main{max-width:960px;margin:0 auto;padding:20px 14px 48px;display:flex;flex-direction:column;gap:16px;width:100%}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;overflow:hidden}
+    .panel h2{font-size:1rem;margin-bottom:12px;display:flex;align-items:center;flex-wrap:wrap;gap:8px}
     .hint{font-size:.8rem;color:var(--muted);margin-bottom:12px;line-height:1.45}
-    table{width:100%;border-collapse:collapse;font-size:.82rem}
-    th{text-align:left;color:var(--muted);font-size:.7rem;text-transform:uppercase;padding:8px;border-bottom:1px solid var(--border)}
-    td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
+    .field-label{font-size:.75rem;color:var(--muted);margin-bottom:4px;display:block}
+    .table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px;padding:0 4px}
+    table{width:100%;min-width:640px;border-collapse:collapse;font-size:.82rem}
+    th{text-align:left;color:var(--muted);font-size:.68rem;text-transform:uppercase;padding:8px 6px;border-bottom:1px solid var(--border);white-space:nowrap}
+    td{padding:10px 6px;border-bottom:1px solid rgba(255,255,255,.04);vertical-align:middle}
     .pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.7rem;font-weight:700}
     .pill.on{background:rgba(34,197,94,.15);color:var(--green)}
     .pill.off{background:rgba(136,136,170,.12);color:var(--muted)}
     .row-btns{display:flex;gap:6px;flex-wrap:wrap}
-    .row-btns button{padding:6px 10px;font-size:.72rem}
+    .row-btns button{padding:6px 10px;font-size:.72rem;white-space:nowrap}
     .key-box{background:#0a1f14;border:1px solid var(--green);border-radius:12px;padding:14px;margin-top:12px;display:none}
-    .key-box code{display:block;word-break:break-all;font-size:.85rem;color:var(--green);margin:8px 0}
+    .key-box code{display:block;word-break:break-all;font-size:.8rem;color:var(--green);margin:8px 0;line-height:1.4}
     .scopes{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
     .scopes label{font-size:.85rem;display:flex;align-items:center;gap:6px;cursor:pointer}
-    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;font-size:.85rem;opacity:0;transition:.25s;z-index:99}
+    .partner-cards{display:none;flex-direction:column;gap:10px}
+    .partner-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px}
+    .partner-card .meta{font-size:.75rem;color:var(--muted);margin-top:4px;word-break:break-all}
+    .partner-card .actions{margin-top:10px}
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;font-size:.85rem;opacity:0;transition:.25s;z-index:99;max-width:90vw}
     #toast.show{opacity:1}
+    pre.docs{background:var(--surface2);padding:14px;border-radius:10px;font-size:.72rem;overflow-x:auto;line-height:1.55;white-space:pre;max-width:100%}
+    @media (max-width:720px){
+      .table-scroll table{display:none}
+      .partner-cards{display:flex}
+    }
   </style>
 </head>
 <body>
 <div id="login">
   <div class="card">
-    <h1>🔑 API de Parceiros</h1>
+    <h1>API de Parceiros</h1>
     <p>Mesmo login do painel admin. Crie e gerencie tokens para outros apps.</p>
     <input type="email" id="email" placeholder="E-mail admin" autocomplete="email"/>
     <input type="password" id="pass" placeholder="Senha" autocomplete="current-password"/>
     <button class="btn-gold" id="btnLogin" onclick="doLogin()">Entrar</button>
     <div class="msg" id="loginMsg"></div>
-    <p style="margin-top:16px;font-size:.8rem"><a href="/admin.html" style="color:var(--gold)">← Voltar ao painel</a></p>
+    <p style="margin-top:16px;font-size:.8rem"><a href="/admin.html" style="color:var(--gold)">Voltar ao painel</a></p>
   </div>
 </div>
 
 <div id="app">
   <header>
     <div><strong>Stream<em style="color:var(--gold);font-style:italic">Flix</em>VIP</strong> · API Parceiros</div>
-    <div style="display:flex;gap:14px;align-items:center">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <a href="/api-tester.html">Testar API</a>
       <a href="/admin.html">Painel principal</a>
       <button class="btn-sec" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">Sair</button>
     </div>
   </header>
   <main>
     <div class="panel">
-      <h2>➕ Novo parceiro</h2>
+      <h2>Novo parceiro</h2>
       <p class="hint">A chave completa só aparece <b>uma vez</b> ao criar ou rotacionar. Guarde com o dono do outro app.</p>
       <input type="text" id="pName" placeholder="Nome do app / parceiro"/>
       <input type="email" id="pEmail" placeholder="E-mail de contato (opcional)"/>
@@ -78,25 +90,27 @@
         <label><input type="checkbox" id="scCatalog" checked/> catalog</label>
         <label><input type="checkbox" id="scLivetv"/> livetv</label>
       </div>
-      <input type="number" id="pRate" value="60" min="10" max="1000" placeholder="Req/min"/>
+      <label class="field-label" for="pRate">Limite de requisições por minuto</label>
+      <input type="number" id="pRate" value="60" min="10" max="1000" placeholder="60"/>
       <textarea id="pNotes" rows="2" placeholder="Notas internas (opcional)"></textarea>
       <button class="btn-gold" id="btnCreate" onclick="createPartner()">Gerar token</button>
       <div class="key-box" id="keyBox">
-        <div style="font-weight:700;color:var(--green)">✅ Copie agora — não será mostrada de novo</div>
+        <div style="font-weight:700;color:var(--green)">Copie agora — não será mostrada de novo</div>
         <code id="keyValue"></code>
-        <button class="btn-sec" onclick="copyKey()">📋 Copiar chave</button>
+        <button class="btn-sec" onclick="copyKey()">Copiar chave</button>
+        <a href="/api-tester.html" class="btn-sec" style="display:inline-block;margin-top:8px;text-decoration:none;padding:8px 14px;font-size:.8rem">Abrir tester com esta chave</a>
       </div>
     </div>
 
     <div class="panel">
-      <h2>📋 Parceiros <button class="btn-sec" style="padding:4px 10px;font-size:.75rem;margin-left:8px" onclick="loadPartners()">Atualizar</button></h2>
+      <h2>Parceiros <button class="btn-sec" style="padding:4px 10px;font-size:.75rem" onclick="loadPartners()">Atualizar</button></h2>
       <div id="listWrap"><p style="color:var(--muted)">Carregando…</p></div>
     </div>
 
     <div class="panel">
-      <h2>📖 Como o parceiro usa</h2>
+      <h2>Como o parceiro usa</h2>
       <p class="hint">Base: <code id="baseUrl"></code></p>
-      <pre style="background:var(--surface2);padding:14px;border-radius:10px;font-size:.75rem;overflow:auto;line-height:1.5">Authorization: Bearer sf_live_...
+      <pre class="docs">Authorization: Bearer sf_live_...
 
 GET /api/partner?action=ping
 GET /api/partner?action=sources&tmdb_id=550&type=movie
@@ -198,10 +212,11 @@ async function createPartner() {
     rate_limit_per_min: parseInt(document.getElementById('pRate').value, 10) || 60,
   });
   btn.disabled = false;
-  if (data.error) { toast('❌ ' + (data.error.message || data.error)); return; }
+  if (data.error) { toast((data.error.message || data.error)); return; }
   _lastKey = data.api_key;
   document.getElementById('keyValue').textContent = data.api_key;
   document.getElementById('keyBox').style.display = 'block';
+  try { sessionStorage.setItem('sf_partner_test_key', data.api_key); } catch (_) {}
   document.getElementById('pName').value = '';
   document.getElementById('pEmail').value = '';
   document.getElementById('pNotes').value = '';
@@ -210,7 +225,38 @@ async function createPartner() {
 }
 function copyKey() {
   if (!_lastKey) return;
-  navigator.clipboard.writeText(_lastKey).then(() => toast('📋 Chave copiada'));
+  navigator.clipboard.writeText(_lastKey).then(() => toast('Chave copiada'));
+}
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function renderPartnerRow(p) {
+  const nameSafe = esc(p.name).replace(/'/g, '&#39;');
+  const btns = `
+    <button class="btn-sec" onclick="toggleP('${p.id}', ${!p.is_active})">${p.is_active ? 'Pausar' : 'Ativar'}</button>
+    <button class="btn-sec" onclick="rotateP('${p.id}')">Nova chave</button>
+    <button class="btn-sec" onclick="delP('${p.id}', '${nameSafe}')">Excluir</button>`;
+  return {
+    tr: `<tr>
+      <td><b>${esc(p.name)}</b>${p.contact_email ? '<div style="font-size:.72rem;color:var(--muted)">' + esc(p.contact_email) + '</div>' : ''}</td>
+      <td><code style="font-size:.72rem">${esc(p.key_prefix)}…</code></td>
+      <td style="font-size:.72rem">${(p.scopes || []).join(', ')}</td>
+      <td>${p.request_count || 0}</td>
+      <td>${p.rate_limit_per_min || 60}</td>
+      <td><span class="pill ${p.is_active ? 'on' : 'off'}">${p.is_active ? 'Ativo' : 'Off'}</span></td>
+      <td class="row-btns">${btns}</td>
+    </tr>`,
+    card: `<div class="partner-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div><b>${esc(p.name)}</b>
+          <div class="meta">${esc(p.key_prefix)}… · ${(p.scopes || []).join(', ')}</div>
+          <div class="meta">Req: ${p.request_count || 0} · Limite: ${p.rate_limit_per_min || 60}/min</div>
+        </div>
+        <span class="pill ${p.is_active ? 'on' : 'off'}">${p.is_active ? 'Ativo' : 'Off'}</span>
+      </div>
+      <div class="row-btns actions">${btns}</div>
+    </div>`
+  };
 }
 async function loadPartners() {
   const wrap = document.getElementById('listWrap');
@@ -225,42 +271,31 @@ async function loadPartners() {
     wrap.innerHTML = '<p style="color:var(--muted)">Nenhum parceiro ainda.</p>';
     return;
   }
-  wrap.innerHTML = '<table><thead><tr><th>Nome</th><th>Prefixo</th><th>Escopos</th><th>Req</th><th>Limite/min</th><th>Status</th><th></th></tr></thead><tbody>' +
-    rows.map(p => `<tr>
-      <td><b>${esc(p.name)}</b>${p.contact_email ? '<div style="font-size:.72rem;color:var(--muted)">' + esc(p.contact_email) + '</div>' : ''}</td>
-      <td><code style="font-size:.72rem">${esc(p.key_prefix)}…</code></td>
-      <td style="font-size:.72rem">${(p.scopes || []).join(', ')}</td>
-      <td>${p.request_count || 0}</td>
-      <td>${p.rate_limit_per_min || 60}</td>
-      <td><span class="pill ${p.is_active ? 'on' : 'off'}">${p.is_active ? 'Ativo' : 'Off'}</span></td>
-      <td class="row-btns">
-        <button class="btn-sec" onclick="toggleP('${p.id}', ${!p.is_active})">${p.is_active ? 'Pausar' : 'Ativar'}</button>
-        <button class="btn-sec" onclick="rotateP('${p.id}')">Nova chave</button>
-        <button class="btn-sec" onclick="delP('${p.id}', '${esc(p.name).replace(/'/g, "\\'")}')">Excluir</button>
-      </td>
-    </tr>`).join('') + '</tbody></table>';
-}
-function esc(s) {
-  return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' }[c]));
+  const parts = rows.map(renderPartnerRow);
+  wrap.innerHTML =
+    '<div class="table-scroll"><table><thead><tr><th>Nome</th><th>Prefixo</th><th>Escopos</th><th>Req</th><th>Limite</th><th>Status</th><th></th></tr></thead><tbody>' +
+    parts.map(p => p.tr).join('') + '</tbody></table></div>' +
+    '<div class="partner-cards">' + parts.map(p => p.card).join('') + '</div>';
 }
 async function toggleP(id, isActive) {
   const d = await api('toggle-partner', { id, is_active: isActive });
-  if (d.error) toast('❌ ' + d.error); else { toast(isActive ? 'Ativo' : 'Pausado'); loadPartners(); }
+  if (d.error) toast(d.error); else { toast(isActive ? 'Ativo' : 'Pausado'); loadPartners(); }
 }
 async function rotateP(id) {
   if (!confirm('Gerar nova chave? A anterior para de funcionar na hora.')) return;
   const d = await api('rotate-partner-key', { id });
-  if (d.error) { toast('❌ ' + d.error); return; }
+  if (d.error) { toast(d.error); return; }
   _lastKey = d.api_key;
   document.getElementById('keyValue').textContent = d.api_key;
   document.getElementById('keyBox').style.display = 'block';
+  try { sessionStorage.setItem('sf_partner_test_key', d.api_key); } catch (_) {}
   toast('Nova chave — copie agora');
   loadPartners();
 }
 async function delP(id, name) {
   if (!confirm('Excluir parceiro "' + name + '"?')) return;
   const d = await api('delete-partner', { id });
-  if (d.error) toast('❌ ' + d.error); else { toast('Excluído'); loadPartners(); }
+  if (d.error) toast(d.error); else { toast('Excluído'); loadPartners(); }
 }
 checkSession();
 </script>
