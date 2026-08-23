@@ -7,7 +7,6 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,11 +18,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.LocalActivity
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.QrCode2
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
@@ -31,7 +32,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -60,21 +60,15 @@ import kotlinx.coroutines.launch
 
 private val InfiniteGreen = Color(0xFF00C853)
 private val PixTeal = Color(0xFF32BCAD)
+private val TelegramBlue = Color(0xFF29B6F6)
 private val SheetBg = Color(0xFF0F0F14)
 
-/** Chave Pix Next (telefone) para pagamento manual */
+/** Chave Pix Next (telefone) — só usada ao copiar, não exibida em destaque */
 private const val MANUAL_PIX_KEY = "84999585659"
-private const val MANUAL_PIX_DISPLAY = "(84) 99958-5659"
 private const val TELEGRAM_URL = "https://t.me/streamflixofc"
 
 private enum class PayStep { Choose, InfiniteLoading, InfiniteReady, InfiniteError, Manual }
 
-/**
- * Bottom sheet de pagamento VIP.
- * 1) Escolha: InfinitePay (automatico) ou Pix direto (manual).
- * 2a) Infinite: gera link e abre checkout.
- * 2b) Manual: mostra chave, valor, copia e instrui Telegram + codigo VIP.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PixPaymentSheet(
@@ -390,125 +384,123 @@ private fun ManualPixBlock(
     onBack: () -> Unit,
     onOpenTelegram: () -> Unit,
 ) {
+    var copied by remember { mutableStateOf(false) }
+
+    fun copyPixKey() {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("pix", MANUAL_PIX_KEY))
+        copied = true
+        Toast.makeText(context, "Chave Pix copiada! Cole no app do banco.", Toast.LENGTH_SHORT).show()
+    }
+
     Text(
-        "Pague direto na chave Pix",
-        fontSize = 15.sp,
-        fontWeight = FontWeight.SemiBold,
+        text = "Pix direto",
+        fontSize = 16.sp,
+        fontWeight = FontWeight.Bold,
         color = Color.White,
         modifier = Modifier.fillMaxWidth(),
     )
-    Spacer(modifier = Modifier.height(6.dp))
+    Spacer(modifier = Modifier.height(4.dp))
     Text(
-        "Envie exatamente R$ ${String.format("%.2f", amount)} · $planLabel",
+        text = "Pague R$ ${String.format("%.2f", amount)} · $planLabel",
         fontSize = 13.sp,
         color = Color.White.copy(alpha = 0.65f),
         modifier = Modifier.fillMaxWidth(),
     )
 
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(18.dp))
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        color = PixTeal.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, PixTeal.copy(alpha = 0.45f)),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                "Chave Pix (celular · Next)",
-                fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.5f),
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    MANUAL_PIX_DISPLAY,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(
-                    onClick = {
-                        val cm =
-                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("pix", MANUAL_PIX_KEY))
-                        Toast.makeText(context, "Chave Pix copiada!", Toast.LENGTH_SHORT).show()
-                    },
-                ) {
-                    Icon(
-                        Icons.Default.ContentCopy,
-                        contentDescription = "Copiar",
-                        tint = PixTeal,
+    // Passos limpos
+    listOf(
+        "1" to "Copie a chave e pague no app do banco",
+        "2" to "Envie o comprovante no nosso Telegram",
+        "3" to "Receba o codigo e ative em Ja tem um codigo?",
+    ).forEach { (num, label) ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = PixTeal.copy(alpha = 0.2f),
+                modifier = Modifier.size(26.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = num,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PixTeal,
                     )
                 }
             }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                color = Color.White.copy(alpha = 0.85f),
+            )
         }
     }
 
-    Spacer(modifier = Modifier.height(16.dp))
+    Spacer(modifier = Modifier.height(22.dp))
 
-    listOf(
-        "1. Copie a chave e pague no app do seu banco",
-        "2. Envie o comprovante no Telegram",
-        "3. Receba o codigo VIP e ative no app",
-    ).forEach { line ->
-        Text(
-            line,
-            fontSize = 13.sp,
-            color = Color.White.copy(alpha = 0.75f),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 3.dp),
-        )
-    }
-
-    Spacer(modifier = Modifier.height(20.dp))
-
+    // Botao principal: copiar chave (sem mostrar o numero)
     Button(
-        onClick = {
-            val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.setPrimaryClip(ClipData.newPlainText("pix", MANUAL_PIX_KEY))
-            Toast.makeText(context, "Chave Pix copiada!", Toast.LENGTH_SHORT).show()
-        },
+        onClick = { copyPixKey() },
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .height(54.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = PixTeal,
+            containerColor = if (copied) InfiniteGreen else PixTeal,
             contentColor = Color.Black,
         ),
     ) {
-        Icon(Icons.Default.ContentCopy, contentDescription = null)
+        Icon(
+            imageVector = if (copied) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
+            contentDescription = null,
+        )
         Spacer(modifier = Modifier.width(10.dp))
-        Text("Copiar chave Pix", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Text(
+            text = if (copied) "Chave copiada!" else "Copiar chave Pix",
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+        )
     }
 
     Spacer(modifier = Modifier.height(10.dp))
 
+    // Botao Telegram — enviar comprovante
     OutlinedButton(
         onClick = onOpenTelegram,
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp),
+            .height(54.dp),
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, Color(0xFF29B6F6)),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF29B6F6)),
+        border = BorderStroke(1.5.dp, TelegramBlue),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = TelegramBlue),
     ) {
-        Icon(Icons.Default.Payment, contentDescription = null)
+        Icon(Icons.Default.Send, contentDescription = null)
         Spacer(modifier = Modifier.width(10.dp))
-        Text("Abrir Telegram @streamflixofc", fontWeight = FontWeight.SemiBold)
+        Text(
+            text = "Enviar comprovante no Telegram",
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 14.sp,
+        )
     }
 
-    Spacer(modifier = Modifier.height(12.dp))
+    Spacer(modifier = Modifier.height(16.dp))
 
     Text(
-        "Depois do pagamento, use o codigo que enviarmos na area " +
-            "\"Ja tem um codigo?\" na tela VIP.",
-        fontSize = 11.sp,
+        text = "Apos o pagamento, use o codigo que enviarmos na area " +
+            "\"Ja tem um codigo?\" na tela VIP do app.",
+        fontSize = 12.sp,
         color = Color.White.copy(alpha = 0.45f),
         textAlign = TextAlign.Center,
+        lineHeight = 16.sp,
         modifier = Modifier.fillMaxWidth(),
     )
 
