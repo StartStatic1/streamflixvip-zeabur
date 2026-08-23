@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StreamFlixVIP · Partner API Docs</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --surface: #121820;
+    --surface2: #1a222d;
+    --border: #2a3544;
+    --text: #e8eef6;
+    --muted: #8b9bb0;
+    --accent: #00d4ff;
+    --accent2: #00b4d8;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+    --err: #ef4444;
+    --code-bg: #0d1117;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(11,15,20,.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .brand { font-weight: 700; font-size: 1.05rem; letter-spacing: .02em; }
+  .brand span { color: var(--accent); }
+  .topbar nav { display: flex; gap: 16px; flex-wrap: wrap; font-size: .88rem; }
+  .topbar nav a { color: var(--muted); }
+  .topbar nav a:hover { color: var(--accent); text-decoration: none; }
+
+  .wrap { max-width: 880px; margin: 0 auto; padding: 32px 20px 80px; }
+
+  h1 { font-size: 1.85rem; margin-bottom: 8px; }
+  h2 {
+    font-size: 1.25rem; margin: 40px 0 14px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    color: var(--accent);
+  }
+  h3 { font-size: 1.05rem; margin: 24px 0 10px; color: #c5d4e8; }
+  p, li { color: #c8d4e4; }
+  .lead { color: var(--muted); font-size: 1.05rem; margin-bottom: 28px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin: 16px 0;
+  }
+  .card.ok { border-color: rgba(34,197,94,.35); }
+  .card.warn { border-color: rgba(245,158,11,.4); }
+
+  .badge {
+    display: inline-block; font-size: .72rem; font-weight: 600;
+    padding: 3px 8px; border-radius: 6px; letter-spacing: .04em;
+  }
+  .badge.get { background: rgba(0,212,255,.15); color: var(--accent); }
+  .badge.auth { background: rgba(34,197,94,.15); color: var(--ok); }
+
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: .86em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-size: .82rem;
+    line-height: 1.5;
+  }
+  pre code { color: #e6edf3; }
+  .copy-row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+  .btn {
+    background: var(--accent); color: #001018; border: none;
+    font-weight: 600; font-size: .8rem; padding: 8px 14px;
+    border-radius: 8px; cursor: pointer;
+  }
+  .btn:hover { background: var(--accent2); }
+  .btn.ghost {
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0;
+    font-size: .9rem;
+  }
+  th, td {
+    text-align: left; padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--muted); font-weight: 600; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+  td code { color: var(--accent); }
+
+  .endpoint {
+    background: var(--surface2);
+    border-left: 3px solid var(--accent);
+    padding: 12px 14px;
+    border-radius: 0 10px 10px 0;
+    margin: 14px 0;
+    font-family: ui-monospace, monospace;
+    font-size: .88rem;
+    word-break: break-all;
+  }
+
+  ul { padding-left: 1.2rem; margin: 8px 0; }
+  li { margin: 6px 0; }
+
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 28px;
+  }
+  .toc ol { padding-left: 1.2rem; }
+  .toc a { color: #b8c9dc; }
+
+  footer {
+    margin-top: 48px; padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted); font-size: .85rem;
+  }
+
+  @media (max-width: 600px) {
+    h1 { font-size: 1.45rem; }
+    .topbar nav { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">StreamFlix<span>VIP</span> · Partner API</div>
+  <nav>
+    <a href="#auth">Auth</a>
+    <a href="#endpoints">Endpoints</a>
+    <a href="#examples">Exemplos</a>
+    <a href="#errors">Erros</a>
+    <a href="#security">Segurança</a>
+  </nav>
+</header>
+
+<main class="wrap">
+  <h1>Documentação da Partner API</h1>
+  <p class="lead">
+    API HTTP para parceiros integrarem catálogo, fontes de filmes/séries e canais ao vivo
+    no próprio aplicativo ou backend. Autenticação por token Bearer.
+  </p>
+
+  <div class="toc">
+    <strong style="color:#fff">Índice</strong>
+    <ol>
+      <li><a href="#quick">Início rápido</a></li>
+      <li><a href="#auth">Autenticação</a></li>
+      <li><a href="#base">Base URL</a></li>
+      <li><a href="#endpoints">Endpoints</a></li>
+      <li><a href="#examples">Exemplos (curl / JS)</a></li>
+      <li><a href="#errors">Códigos de erro</a></li>
+      <li><a href="#limits">Rate limit &amp; escopos</a></li>
+      <li><a href="#security">Segurança (obrigatório ler)</a></li>
+    </ol>
+  </div>
+
+  <!-- QUICK -->
+  <h2 id="quick">1. Início rápido</h2>
+  <div class="card ok">
+    <p style="margin-bottom:10px"><strong>O que você recebe de nós:</strong></p>
+    <ul>
+      <li><strong>Base URL</strong> — <code>https://www.streamflixvip.online</code></li>
+      <li><strong>Token</strong> — formato <code>sf_live_...</code> (gerado no painel)</li>
+    </ul>
+    <p style="margin-top:12px;color:var(--muted);font-size:.9rem">
+      Token de exemplo (não funciona de verdade):
+      <code class="mono">sf_live_EXEMPLO_nao_use_em_producao_abc123XYZ</code>
+    </p>
+  </div>
+
+  <p>Teste em 10 segundos:</p>
+<pre><code>curl -s "https://www.streamflixvip.online/api/partner?action=ping" \
+  -H "Authorization: Bearer SEU_TOKEN_AQUI"</code></pre>
+
+  <p>Resposta esperada (HTTP 200):</p>
+<pre><code>{
+  "ok": true,
+  "partner": "NomeDoParceiro",
+  "scopes": ["sources", "catalog", "livetv"],
+  "docs": { ... }
+}</code></pre>
+
+  <!-- AUTH -->
+  <h2 id="auth">2. Autenticação</h2>
+  <p>Todas as rotas exigem autenticação. Duas formas aceitas:</p>
+  <table>
+    <tr><th>Header</th><th>Valor</th></tr>
+    <tr><td><code>Authorization</code></td><td><code>Bearer sf_live_...</code></td></tr>
+    <tr><td><code>X-API-Key</code></td><td><code>sf_live_...</code></td></tr>
+  </table>
+  <p>Recomendado: <strong>Authorization: Bearer</strong>.</p>
+
+  <!-- BASE -->
+  <h2 id="base">3. Base URL</h2>
+  <div class="endpoint">https://www.streamflixvip.online</div>
+  <p>Todas as rotas começam com <code>/api/partner</code>.</p>
+
+  <!-- ENDPOINTS -->
+  <h2 id="endpoints">4. Endpoints</h2>
+
+  <h3><span class="badge get">GET</span> Ping / Me</h3>
+  <div class="endpoint">/api/partner?action=ping</div>
+  <p>Valida o token e devolve nome do parceiro + escopos liberados. Ideal para health-check.</p>
+  <p><strong>Resposta 200</strong></p>
+<pre><code>{
+  "ok": true,
+  "partner": "CineMeck",
+  "scopes": ["sources", "catalog", "livetv"],
+  "docs": {
+    "sources": "GET /api/partner?action=sources&amp;tmdb_id=550&amp;type=movie",
+    "sources_tv": "GET /api/partner?action=sources&amp;tmdb_id=1396&amp;type=tv&amp;season=1&amp;episode=1",
+    "catalog": "GET /api/partner?action=catalog&amp;type=movie&amp;limit=50",
+    "livetv": "GET /api/partner?action=livetv"
+  }
+}</code></pre>
+
+  <h3><span class="badge get">GET</span> Sources (filme ou episódio)</h3>
+  <div class="endpoint">/api/partner?action=sources&amp;tmdb_id={id}&amp;type=movie|tv</div>
+  <p>Retorna as fontes ativas de um título (ordenadas por prioridade).</p>
+  <table>
+    <tr><th>Parâmetro</th><th>Obrigatório</th><th>Descrição</th></tr>
+    <tr><td><code>tmdb_id</code></td><td>sim</td><td>ID do TMDB</td></tr>
+    <tr><td><code>type</code></td><td>sim</td><td><code>movie</code> ou <code>tv</code></td></tr>
+    <tr><td><code>season</code></td><td>só TV</td><td>número da temporada</td></tr>
+    <tr><td><code>episode</code></td><td>só TV</td><td>número do episódio</td></tr>
+  </table>
+  <p><strong>Filme (ex. Fight Club = 550)</strong></p>
+<pre><code>GET /api/partner?action=sources&amp;tmdb_id=550&amp;type=movie</code></pre>
+  <p><strong>Série (ex. Breaking Bad S01E01)</strong></p>
+<pre><code>GET /api/partner?action=sources&amp;tmdb_id=1396&amp;type=tv&amp;season=1&amp;episode=1</code></pre>
+  <p><strong>Resposta 200</strong></p>
+<pre><code>{
+  "tmdb_id": 550,
+  "type": "movie",
+  "season": null,
+  "episode": null,
+  "sources": [
+    {
+      "url": "http://exemplo.com/stream.mp4",
+      "label": "StreamFlix.Svent",
+      "priority": 5
+    },
+    {
+      "url": "http://outro.exemplo/stream.mp4",
+      "label": "StreamFlix.maxcine",
+      "priority": 4
+    }
+  ]
+}</code></pre>
+  <p>Escopo necessário: <code>sources</code>.</p>
+
+  <h3><span class="badge get">GET</span> Catalog</h3>
+  <div class="endpoint">/api/partner?action=catalog&amp;type=movie|tv|all&amp;limit=50&amp;offset=0</div>
+  <p>Lista títulos que possuem fonte ativa (para montar catálogo no app do parceiro).</p>
+  <table>
+    <tr><th>Parâmetro</th><th>Default</th><th>Descrição</th></tr>
+    <tr><td><code>type</code></td><td>all</td><td><code>movie</code>, <code>tv</code> ou <code>all</code></td></tr>
+    <tr><td><code>limit</code></td><td>50</td><td>máx. 100</td></tr>
+    <tr><td><code>offset</code></td><td>0</td><td>paginação</td></tr>
+  </table>
+  <p><strong>Resposta 200</strong></p>
+<pre><code>{
+  "items": [
+    {
+      "tmdb_id": 8555,
+      "media_type": "movie",
+      "title": "Plataforma do Medo",
+      "poster_path": "/abc123.jpg"
+    }
+  ],
+  "limit": 50,
+  "offset": 0
+}</code></pre>
+  <p><code>poster_path</code> é o path do TMDB (prefixe com <code>https://image.tmdb.org/t/p/w342</code>).</p>
+  <p>Escopo: <code>catalog</code> ou <code>sources</code>.</p>
+
+  <h3><span class="badge get">GET</span> Live TV</h3>
+  <div class="endpoint">/api/partner?action=livetv</div>
+  <p>Canais manuais ativos (IPTV / TS).</p>
+  <p><strong>Resposta 200</strong></p>
+<pre><code>{
+  "channels": [
+    {
+      "name": "BAND TOCANTINS",
+      "logo": "https://...",
+      "group": "BAND",
+      "url": "http://.../.ts",
+      "priority": 1
+    }
+  ]
+}</code></pre>
+  <p>Escopo necessário: <code>livetv</code>.</p>
+
+  <!-- EXAMPLES -->
+  <h2 id="examples">5. Exemplos prontos</h2>
+
+  <h3>cURL</h3>
+<pre><code># Ping
+curl -s "https://www.streamflixvip.online/api/partner?action=ping" \
+  -H "Authorization: Bearer sf_live_SEU_TOKEN"
+
+# Fontes de um filme
+curl -s "https://www.streamflixvip.online/api/partner?action=sources&amp;tmdb_id=550&amp;type=movie" \
+  -H "Authorization: Bearer sf_live_SEU_TOKEN"
+
+# Catálogo
+curl -s "https://www.streamflixvip.online/api/partner?action=catalog&amp;type=movie&amp;limit=20" \
+  -H "Authorization: Bearer sf_live_SEU_TOKEN"</code></pre>
+
+  <h3>JavaScript (fetch)</h3>
+<pre><code>const BASE = 'https://www.streamflixvip.online';
+const TOKEN = 'sf_live_SEU_TOKEN'; // só no backend / env
+
+async function partnerGet(action, params = {}) {
+  const qs = new URLSearchParams({ action, ...params });
+  const res = await fetch(`${BASE}/api/partner?${qs}`, {
+    headers: { Authorization: `Bearer ${TOKEN}` },
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// uso
+const me = await partnerGet('ping');
+const sources = await partnerGet('sources', { tmdb_id: 550, type: 'movie' });
+const catalog = await partnerGet('catalog', { type: 'movie', limit: 30 });</code></pre>
+
+  <h3>Como encaixar no app do parceiro</h3>
+  <div class="card">
+    <ol style="padding-left:1.2rem">
+      <li>Guarde o token <strong>somente no servidor</strong> dele (env / secrets). Nunca no APK.</li>
+      <li>Quando o usuário clicar em “Assistir”, o backend dele chama <code>action=sources</code> com o <code>tmdb_id</code>.</li>
+      <li>Devolve as URLs para o player (ExoPlayer, VLC, etc.).</li>
+      <li>Opcional: sincronizar <code>catalog</code> periodicamente para a base dele (não usa nosso Supabase).</li>
+    </ol>
+  </div>
+
+  <!-- ERRORS -->
+  <h2 id="errors">6. Códigos de erro</h2>
+  <table>
+    <tr><th>HTTP</th><th>Significado</th></tr>
+    <tr><td><code>400</code></td><td>Parâmetro faltando ou inválido (ex.: sem tmdb_id)</td></tr>
+    <tr><td><code>401</code></td><td>Token ausente ou inválido</td></tr>
+    <tr><td><code>403</code></td><td>Parceiro desativado ou escopo não liberado</td></tr>
+    <tr><td><code>405</code></td><td>Método diferente de GET</td></tr>
+    <tr><td><code>429</code></td><td>Rate limit excedido (veja header <code>Retry-After</code>)</td></tr>
+    <tr><td><code>500</code></td><td>Erro interno</td></tr>
+  </table>
+
+  <!-- LIMITS -->
+  <h2 id="limits">7. Rate limit &amp; escopos</h2>
+  <p><strong>Rate limit</strong> — definido por parceiro no painel (ex.: 60 req/min). Acima disso → HTTP 429.</p>
+  <p><strong>Escopos possíveis</strong></p>
+  <ul>
+    <li><code>sources</code> — links de filme/série</li>
+    <li><code>catalog</code> — listagem de títulos</li>
+    <li><code>livetv</code> — canais ao vivo</li>
+  </ul>
+  <p>O painel admin controla quais escopos cada token tem e pode pausar/revogar a qualquer momento.</p>
+
+  <!-- SECURITY -->
+  <h2 id="security">8. Segurança (obrigatório)</h2>
+  <div class="card warn">
+    <ul>
+      <li><strong>Nunca</strong> embuta o token no APK, no frontend ou em repositório público.</li>
+      <li>Use sempre no <strong>backend</strong> do parceiro (Node, PHP, Python, etc.).</li>
+      <li>Se o token vazar, o dono da API pausa ou gera nova chave no painel em segundos — a antiga para de funcionar.</li>
+      <li>Não há acesso ao nosso Supabase: só respostas HTTP filtradas pelos escopos do token.</li>
+      <li>CORS liberado para facilitar testes; produção deve ir pelo servidor do parceiro.</li>
+    </ul>
+  </div>
+
+  <h2>Suporte</h2>
+  <p>
+    Dúvidas de integração: fale com quem forneceu o token.
+    Tester online (quando logado no painel): <a href="/api-tester.html">/api-tester.html</a>
+  </p>
+
+  <footer>
+    StreamFlixVIP Partner API · documentação de integração · token de exemplo não é válido
+  </footer>
+</main>
+
+</body>
+</html>
