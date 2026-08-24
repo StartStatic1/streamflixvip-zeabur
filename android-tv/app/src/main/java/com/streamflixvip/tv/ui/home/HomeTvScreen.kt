@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,6 +50,7 @@ import coil.compose.AsyncImage
 import com.streamflixvip.tv.data.LocalWatchProgress
 import com.streamflixvip.tv.network.TmdbItem
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 private const val TMDB_POSTER = "https://image.tmdb.org/t/p/w342"
 private const val TMDB_BACKDROP = "https://image.tmdb.org/t/p/w780"
@@ -80,9 +82,24 @@ fun HomeTvScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val playFocus = remember { FocusRequester() }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    var didInitialFocus by remember { mutableStateOf(false) }
+
+    fun ensureTopVisible() {
+        scope.launch {
+            listState.animateScrollToItem(0)
+        }
+    }
+
     LaunchedEffect(Unit) { viewModel.loadAll() }
+    // Foco inicial só 1x — não re-prende no Assistir depois de rolar
     LaunchedEffect(state.isLoading) {
-        if (!state.isLoading) runCatching { playFocus.requestFocus() }
+        if (!state.isLoading && !didInitialFocus) {
+            didInitialFocus = true
+            listState.scrollToItem(0)
+            runCatching { playFocus.requestFocus() }
+        }
     }
 
     val heroPool = remember(state.heroItems, state.trendingItems) {
@@ -136,7 +153,10 @@ fun HomeTvScreen(
                     Text("S", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 }
                 Spacer(Modifier.height(28.dp))
-                NavRailItem(Icons.Filled.Home, "Início", selected = true, onClick = {})
+                NavRailItem(Icons.Filled.Home, "Início", selected = true, onClick = {
+                    ensureTopVisible()
+                    runCatching { playFocus.requestFocus() }
+                })
                 Spacer(Modifier.height(14.dp))
                 NavRailItem(Icons.Filled.LiveTv, "TV", selected = false, onClick = onNavigateToLiveTv)
                 Spacer(Modifier.height(14.dp))
@@ -157,8 +177,9 @@ fun HomeTvScreen(
                 }
                 else -> {
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = 16.dp, bottom = 28.dp),
+                        contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp),
                     ) {
                         if (hero != null) {
                             item(key = "hero") {
@@ -172,18 +193,20 @@ fun HomeTvScreen(
                                         playFocus = playFocus,
                                         onPlay = { onItemClick(h.id, h.resolvedMediaType) },
                                         onDetails = { onItemClick(h.id, h.resolvedMediaType) },
+                                        onTopFocused = { ensureTopVisible() },
                                     )
                                 }
                             }
                         }
 
                         item(key = "chips") {
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(8.dp))
                             ExploreChips(
                                 onCategory = onExploreCategory,
                                 onSearch = onNavigateToSearch,
+                                onFocused = { ensureTopVisible() },
                             )
-                            Spacer(Modifier.height(14.dp))
+                            Spacer(Modifier.height(12.dp))
                         }
 
                         item(key = "continue") {
@@ -194,7 +217,7 @@ fun HomeTvScreen(
                                 onFeaturedClick = onItemClick,
                                 onSeeAll = { onExploreCategory("continue") },
                             )
-                            Spacer(Modifier.height(16.dp))
+                            Spacer(Modifier.height(14.dp))
                         }
 
                         if (state.trendingItems.isNotEmpty()) {
@@ -204,7 +227,7 @@ fun HomeTvScreen(
                                     items = state.trendingItems,
                                     onItemClick = onItemClick,
                                 )
-                                Spacer(Modifier.height(14.dp))
+                                Spacer(Modifier.height(12.dp))
                             }
                         }
                         if (state.popularMovies.isNotEmpty()) {
@@ -214,7 +237,7 @@ fun HomeTvScreen(
                                     items = state.popularMovies,
                                     onItemClick = onItemClick,
                                 )
-                                Spacer(Modifier.height(14.dp))
+                                Spacer(Modifier.height(12.dp))
                             }
                         }
                         if (state.popularSeries.isNotEmpty()) {
@@ -224,7 +247,7 @@ fun HomeTvScreen(
                                     items = state.popularSeries,
                                     onItemClick = onItemClick,
                                 )
-                                Spacer(Modifier.height(14.dp))
+                                Spacer(Modifier.height(12.dp))
                             }
                         }
                         if (state.actionItems.isNotEmpty()) {
@@ -234,7 +257,7 @@ fun HomeTvScreen(
                                     items = state.actionItems,
                                     onItemClick = onItemClick,
                                 )
-                                Spacer(Modifier.height(14.dp))
+                                Spacer(Modifier.height(12.dp))
                             }
                         }
                         if (state.comedyItems.isNotEmpty()) {
@@ -289,12 +312,13 @@ private fun StreamlyHero(
     playFocus: FocusRequester,
     onPlay: () -> Unit,
     onDetails: () -> Unit,
+    onTopFocused: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 28.dp, end = 28.dp, top = 4.dp, bottom = 4.dp)
-            .height(236.dp),
+            .height(200.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(24.dp),
     ) {
@@ -309,17 +333,17 @@ private fun StreamlyHero(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.2.sp,
             )
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             Text(
                 item.displayTitle,
                 color = Color.White,
-                fontSize = 26.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                lineHeight = 30.sp,
+                lineHeight = 28.sp,
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 item.displayRating?.let {
                     Text("IMDb $it", color = Color(0xFFFBBF24), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -329,21 +353,23 @@ private fun StreamlyHero(
                 }
             }
             item.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     overview,
                     color = TextMuted,
                     fontSize = 12.sp,
-                    maxLines = 3,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     lineHeight = 16.sp,
                 )
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = onPlay,
-                    modifier = Modifier.focusRequester(playFocus),
+                    modifier = Modifier
+                        .focusRequester(playFocus)
+                        .onFocusChanged { if (it.isFocused) onTopFocused() },
                     colors = ButtonDefaults.colors(
                         containerColor = PlayBlue,
                         focusedContainerColor = PlayFocus,
@@ -357,6 +383,7 @@ private fun StreamlyHero(
                 }
                 Button(
                     onClick = onDetails,
+                    modifier = Modifier.onFocusChanged { if (it.isFocused) onTopFocused() },
                     colors = ButtonDefaults.colors(
                         containerColor = GlassStrong,
                         focusedContainerColor = Color.White.copy(alpha = 0.22f),
@@ -406,6 +433,7 @@ private fun StreamlyHero(
 private fun ExploreChips(
     onCategory: (String) -> Unit,
     onSearch: () -> Unit,
+    onFocused: () -> Unit = {},
 ) {
     val chips = listOf(
         "explorar" to "Explorar",
@@ -431,7 +459,10 @@ private fun ExploreChips(
                     focusedContentColor = Color.White,
                 ),
                 modifier = Modifier
-                    .onFocusChanged { focused = it.isFocused }
+                    .onFocusChanged {
+                        focused = it.isFocused
+                        if (it.isFocused) onFocused()
+                    }
                     .border(
                         width = if (focused) 1.5.dp else 1.dp,
                         color = if (focused) AccentSoft else GlassBorder,

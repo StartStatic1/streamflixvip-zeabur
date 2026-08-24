@@ -31,7 +31,6 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -123,8 +122,22 @@ class LiveTvViewModel : ViewModel() {
                         val keys = listOf("adult", "xxx", "porn", "erotic", "onlyfans", "+18", "18+", "adulto", "sexy")
                         return keys.any { n.contains(it) }
                     }
+                    // Manuais / VIP no topo da sidebar (depois de Todos)
                     val cats = res.categories
                         .filter { !isAdultCat(it.id, it.name) }
+                        .sortedWith(
+                            compareBy(
+                                { if (it.id == "all") 0 else 1 },
+                                { val n = it.name.lowercase()
+                                  when {
+                                      n.contains("manual") -> 1
+                                      n.contains("vip") -> 2
+                                      else -> 3
+                                  }
+                                },
+                                { it.name.lowercase() },
+                            ),
+                        )
                         .ifEmpty { listOf(LiveCategory("all", "Todos")) }
                     val chans = res.channels.filter { !isAdultCat(it.categoryId, it.name) }
                     _uiState.update {
@@ -183,7 +196,6 @@ fun LiveTvScreen(
             .fillMaxSize()
             .background(Bg),
     ) {
-        // Sidebar categorias (vertical, padrao IPTV TV)
         Column(
             Modifier
                 .width(220.dp)
@@ -305,7 +317,6 @@ fun LiveTvScreen(
             }
         }
 
-        // Conteudo principal: busca + lista
         Column(
             Modifier
                 .weight(1f)
@@ -462,6 +473,29 @@ private fun ChannelRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
 ) {
+    val streamCount = channel.streams.size
+    val qualities = channel.streams
+        .mapNotNull { it.quality?.takeIf { q -> q.isNotBlank() } }
+        .distinct()
+        .take(4)
+    val hasManual = channel.streams.any { (it.label ?: "").contains("manual", ignoreCase = true) }
+    val subText = buildString {
+        if (isFavorite) append("Favorito")
+        if (streamCount > 0) {
+            if (isNotEmpty()) append(" · ")
+            append(if (streamCount == 1) "1 fonte" else "$streamCount fontes")
+        }
+        if (qualities.isNotEmpty()) {
+            if (isNotEmpty()) append(" · ")
+            append(qualities.joinToString("/"))
+        }
+        if (hasManual) {
+            if (isNotEmpty()) append(" · ")
+            append("Manual")
+        }
+        if (isEmpty()) append(if (isFavorite) "Favorito · segure OK para tirar" else "Segure OK para favoritar")
+    }
+
     Card(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -514,9 +548,11 @@ private fun ChannelRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    if (isFavorite) "Favorito · segure OK para tirar" else "Segure OK para favoritar",
-                    color = if (isFavorite) Accent else TextMuted,
+                    subText,
+                    color = if (isFavorite || hasManual) Accent else TextMuted,
                     fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (isFavorite) {
