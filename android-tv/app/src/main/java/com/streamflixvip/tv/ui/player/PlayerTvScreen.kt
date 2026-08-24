@@ -142,7 +142,8 @@ private fun PlayerSession(
     val libraryStore = remember { LocalLibraryStore(context) }
     val trackSelector = remember { DefaultTrackSelector(context) }
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
+    // Spinner só no carregamento inicial / troca de fonte — NÃO em todo buffer
+    var showCenterSpinner by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var currentSource by remember { mutableStateOf(source) }
@@ -264,6 +265,32 @@ private fun PlayerSession(
             playWhenReady = true
         }
         player = exo
+
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_READY -> {
+                        // Primeiro frame pronto: some o spinner central e NÃO volta em buffers
+                        showCenterSpinner = false
+                    }
+                    Player.STATE_BUFFERING -> {
+                        // Buffer no meio do filme: NÃO mostra spinner no centro
+                        // (só mantém spinner se ainda não teve STATE_READY nesta fonte)
+                    }
+                    Player.STATE_IDLE -> { /* troca de mídia */ }
+                    Player.STATE_ENDED -> { /* fim */ }
+                }
+            }
+            override fun onIsPlayingChanged(v: Boolean) { isPlaying = v }
+            override fun onTracksChanged(tracks: Tracks) { refreshTracks(tracks) }
+            override fun onPlayerError(error: PlaybackException) {
+                playbackError = "Erro: ${error.message}"
+                showCenterSpinner = false
+                showControls()
+            }
+        }
+        exo.addListener(listener)
+
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> exo.pause()
@@ -275,13 +302,16 @@ private fun PlayerSession(
         onDispose {
             runCatching { persistProgress(exo) }
             lifecycleOwner.lifecycle.removeObserver(observer)
+            exo.removeListener(listener)
             exo.release(); player = null
         }
     }
 
     LaunchedEffect(currentSource) {
         val exo = player ?: return@LaunchedEffect
-        isLoading = true; playbackError = null; showControls()
+        showCenterSpinner = true
+        playbackError = null
+        showControls()
         try {
             val url = withContext(Dispatchers.IO) {
                 currentSource.resolvedPlaybackUrl(NetworkModule.ZEABUR_BASE_URL)
@@ -290,18 +320,11 @@ private fun PlayerSession(
             exo.prepare()
             if (resumePositionMs > 0) exo.seekTo(resumePositionMs)
             exo.playWhenReady = true
-            isLoading = false
+            // NÃO zerar spinner aqui — espera STATE_READY do listener
         } catch (e: Exception) {
-            playbackError = "Erro: ${e.message}"; isLoading = false
+            playbackError = "Erro: ${e.message}"
+            showCenterSpinner = false
         }
-        exo.addListener(object : Player.Listener {
-            override fun onIsLoadingChanged(v: Boolean) { isLoading = v }
-            override fun onIsPlayingChanged(v: Boolean) { isPlaying = v }
-            override fun onTracksChanged(tracks: Tracks) { refreshTracks(tracks) }
-            override fun onPlayerError(error: PlaybackException) {
-                playbackError = "Erro: ${error.message}"; isLoading = false; showControls()
-            }
-        })
     }
 
     LaunchedEffect(Unit) { rootFocus.requestFocus() }
@@ -430,7 +453,6 @@ private fun PlayerSession(
                             Icon(Icons.Filled.Forward10, null, tint = Color.White)
                         }
 
-                        // Avanço fixo (intros variam — Rick & Morty tem cold open)
                         CompactChip("+30s") {
                             player?.seekTo((player?.currentPosition ?: 0) + 30_000)
                             showControls()
@@ -509,7 +531,8 @@ private fun PlayerSession(
             }
         }
 
-        if (isLoading && playbackError == null) {
+        // Spinner CENTRAL só no load inicial / troca de fonte — nunca durante buffer do filme
+        if (showCenterSpinner && playbackError == null) {
             CircularProgressIndicator(color = AccentSoft, modifier = Modifier.align(Alignment.Center))
         }
         if (playbackError != null) {
