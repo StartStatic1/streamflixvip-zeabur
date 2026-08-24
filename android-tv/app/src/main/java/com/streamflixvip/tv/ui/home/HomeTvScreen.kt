@@ -7,6 +7,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -55,10 +56,10 @@ private const val TMDB_BACKDROP_LG = "https://image.tmdb.org/t/p/w1280"
 
 private val Bg = Color(0xFF0B0B14)
 private val RailBg = Color(0xFF10101A)
-private val Accent = Color(0xFF6366F1)
-private val AccentSoft = Color(0xFF818CF8)
-private val PlayBlue = Color(0xFF3B82F6)
-private val PlayFocus = Color(0xFF7C3AED)
+private val Accent = Color(0xFF00E5FF)
+private val AccentSoft = Color(0xFF22D3EE)
+private val PlayBlue = Color(0xFF00B4D8)
+private val PlayFocus = Color(0xFF00E5FF)
 private val TextMuted = Color(0xFFA1A1B5)
 private val Glass = Color.White.copy(alpha = 0.08f)
 private val GlassBorder = Color.White.copy(alpha = 0.14f)
@@ -123,7 +124,7 @@ fun HomeTvScreen(
             Column(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(80.dp)
+                    .width(88.dp)
                     .background(RailBg.copy(alpha = 0.92f))
                     .padding(vertical = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -132,17 +133,16 @@ fun HomeTvScreen(
                     Modifier.size(40.dp).clip(CircleShape).background(Accent),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("S", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Text("S", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 }
-                Spacer(Modifier.height(36.dp))
+                Spacer(Modifier.height(28.dp))
                 NavRailItem(Icons.Filled.Home, "Início", selected = true, onClick = {})
-                Spacer(Modifier.height(18.dp))
-                // TV ao vivo — logo abaixo do Início (fácil de achar no D-pad)
-                NavRailItem(Icons.Filled.LiveTv, "TV ao vivo", selected = false, onClick = onNavigateToLiveTv)
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(14.dp))
+                NavRailItem(Icons.Filled.LiveTv, "TV", selected = false, onClick = onNavigateToLiveTv)
+                Spacer(Modifier.height(14.dp))
                 NavRailItem(Icons.Filled.Search, "Buscar", selected = false, onClick = onNavigateToSearch)
-                Spacer(Modifier.height(18.dp))
-                NavRailItem(Icons.Filled.Favorite, "Minha lista", selected = false, onClick = onNavigateToMyList)
+                Spacer(Modifier.height(14.dp))
+                NavRailItem(Icons.Filled.Favorite, "Lista", selected = false, onClick = onNavigateToMyList)
                 Spacer(Modifier.weight(1f))
                 NavRailItem(Icons.Filled.Settings, "Conta", selected = false, onClick = onNavigateToAccount)
                 Spacer(Modifier.height(12.dp))
@@ -156,42 +156,128 @@ fun HomeTvScreen(
                     Text(state.error!!, color = Color.White)
                 }
                 else -> {
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(top = 20.dp, bottom = 20.dp),
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(top = 16.dp, bottom = 28.dp),
                     ) {
                         if (hero != null) {
-                            AnimatedContent(
-                                targetState = hero,
-                                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                                label = "hero",
-                            ) { h ->
-                                StreamlyHero(
-                                    item = h,
-                                    playFocus = playFocus,
-                                    onPlay = { onItemClick(h.id, h.resolvedMediaType) },
-                                    onDetails = { onItemClick(h.id, h.resolvedMediaType) },
-                                )
+                            item(key = "hero") {
+                                AnimatedContent(
+                                    targetState = hero,
+                                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                    label = "hero",
+                                ) { h ->
+                                    StreamlyHero(
+                                        item = h,
+                                        playFocus = playFocus,
+                                        onPlay = { onItemClick(h.id, h.resolvedMediaType) },
+                                        onDetails = { onItemClick(h.id, h.resolvedMediaType) },
+                                    )
+                                }
                             }
                         }
 
-                        Spacer(Modifier.height(10.dp))
+                        item(key = "chips") {
+                            Spacer(Modifier.height(10.dp))
+                            ExploreChips(
+                                onCategory = onExploreCategory,
+                                onSearch = onNavigateToSearch,
+                            )
+                            Spacer(Modifier.height(14.dp))
+                        }
 
-                        ExploreChips(
-                            onCategory = onExploreCategory,
-                            onSearch = onNavigateToSearch,
-                        )
+                        item(key = "continue") {
+                            ContinueSection(
+                                entries = state.continueWatching,
+                                featuredFallback = emptyList(),
+                                onContinueClick = onContinueClick,
+                                onFeaturedClick = onItemClick,
+                                onSeeAll = { onExploreCategory("continue") },
+                            )
+                            Spacer(Modifier.height(16.dp))
+                        }
 
-                        Spacer(Modifier.height(14.dp))
-
-                        ContinueSection(
-                            entries = state.continueWatching,
-                            featuredFallback = state.trendingItems.take(CONTINUE_VISIBLE),
-                            onContinueClick = onContinueClick,
-                            onFeaturedClick = onItemClick,
-                            onSeeAll = { onExploreCategory("continue") },
-                        )
+                        if (state.trendingItems.isNotEmpty()) {
+                            item(key = "trending") {
+                                CatalogRow(
+                                    title = "Em alta",
+                                    items = state.trendingItems,
+                                    onItemClick = onItemClick,
+                                )
+                                Spacer(Modifier.height(14.dp))
+                            }
+                        }
+                        if (state.popularMovies.isNotEmpty()) {
+                            item(key = "movies") {
+                                CatalogRow(
+                                    title = "Filmes populares",
+                                    items = state.popularMovies,
+                                    onItemClick = onItemClick,
+                                )
+                                Spacer(Modifier.height(14.dp))
+                            }
+                        }
+                        if (state.popularSeries.isNotEmpty()) {
+                            item(key = "series") {
+                                CatalogRow(
+                                    title = "Séries populares",
+                                    items = state.popularSeries,
+                                    onItemClick = onItemClick,
+                                )
+                                Spacer(Modifier.height(14.dp))
+                            }
+                        }
+                        if (state.actionItems.isNotEmpty()) {
+                            item(key = "action") {
+                                CatalogRow(
+                                    title = "Ação",
+                                    items = state.actionItems,
+                                    onItemClick = onItemClick,
+                                )
+                                Spacer(Modifier.height(14.dp))
+                            }
+                        }
+                        if (state.comedyItems.isNotEmpty()) {
+                            item(key = "comedy") {
+                                CatalogRow(
+                                    title = "Comédia",
+                                    items = state.comedyItems,
+                                    onItemClick = onItemClick,
+                                )
+                            }
+                        }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CatalogRow(
+    title: String,
+    items: List<TmdbItem>,
+    onItemClick: (Int, String) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            title,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 16.sp,
+            modifier = Modifier.padding(horizontal = 28.dp),
+        )
+        Spacer(Modifier.height(8.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(items.take(18), key = { "${title}_${it.id}" }) { item ->
+                FeaturedMiniCard(
+                    title = item.displayTitle,
+                    posterPath = item.poster_path,
+                    onClick = { onItemClick(item.id, item.resolvedMediaType) },
+                )
             }
         }
     }
@@ -261,8 +347,8 @@ private fun StreamlyHero(
                     colors = ButtonDefaults.colors(
                         containerColor = PlayBlue,
                         focusedContainerColor = PlayFocus,
-                        contentColor = Color.White,
-                        focusedContentColor = Color.White,
+                        contentColor = Color.Black,
+                        focusedContentColor = Color.Black,
                     ),
                 ) {
                     Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
@@ -366,6 +452,8 @@ private fun ContinueSection(
     onFeaturedClick: (Int, String) -> Unit,
     onSeeAll: () -> Unit,
 ) {
+    if (entries.isEmpty() && featuredFallback.isEmpty()) return
+
     Column(Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -431,24 +519,6 @@ private fun ContinueSection(
                     }
                 }
             }
-            else -> {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 28.dp, vertical = 12.dp)
-                        .height(96.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(Glass)
-                        .border(1.dp, GlassBorder, RoundedCornerShape(14.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        "Comece a assistir algo — o progresso aparece aqui",
-                        color = TextMuted,
-                        fontSize = 13.sp,
-                    )
-                }
-            }
         }
     }
 }
@@ -470,20 +540,31 @@ private fun NavRailItem(
         focused || selected -> AccentSoft
         else -> Color.White.copy(alpha = 0.45f)
     }
-    Box(
-        modifier = Modifier
-            .size(46.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .border(2.dp, borderColor, RoundedCornerShape(12.dp))
-            .background(
-                if (focused) Accent.copy(alpha = 0.18f) else Color.Transparent,
-                RoundedCornerShape(12.dp),
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .border(2.dp, borderColor, RoundedCornerShape(12.dp))
+                .background(
+                    if (focused) Accent.copy(alpha = 0.18f) else Color.Transparent,
+                    RoundedCornerShape(12.dp),
+                )
+                .onFocusChanged { focused = it.isFocused },
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.material3.IconButton(onClick = onClick) {
+                Icon(icon, contentDescription, tint = iconTint)
+            }
+        }
+        if (focused || selected) {
+            Text(
+                contentDescription,
+                color = AccentSoft,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
             )
-            .onFocusChanged { focused = it.isFocused },
-        contentAlignment = Alignment.Center,
-    ) {
-        androidx.compose.material3.IconButton(onClick = onClick) {
-            Icon(icon, contentDescription, tint = iconTint)
         }
     }
 }
