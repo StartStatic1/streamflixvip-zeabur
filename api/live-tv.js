@@ -3,14 +3,14 @@
 // Lista canais ao vivo. Preferência:
 //   1) tabela live_tv_sources (fontes só de TV — não misturam com sync VOD)
 //   2) fallback: iptv_sources (comportamento antigo)
-// Até 3 fontes, URLs agrupadas por nome para fallback no player.
-// Adulto / XXX: consolidado na categoria "000" e colocado no FINAL da lista.
+// Até 5 fontes, URLs agrupadas por nome para fallback no player.
+// Cache em memória no VPS (TTL 20 min) para reduzir egress Supabase + carga Xtream.
+// Force refresh: GET /api/live-tv?refresh=1
 //
 // SEGURANÇA VIP (lib/vip-gate.js):
 //   Por padrão NÃO bloqueia (app mobile/TV ainda não mandam JWT).
 //   Com REQUIRE_VIP_LIVE_TV=1 no ambiente: só responde canais se houver
 //   VIP válido (JWT Supabase, userId com vip_status ativo, ou deviceId TV).
-//   Ative o hard gate DEPOIS de publicar app que envia Authorization.
 
 const { enforceVipOrReject } = require('../lib/vip-gate');
 
@@ -19,7 +19,13 @@ const MAX_SOURCES = 5;
 const ADULT_CATEGORY_ID = '000';
 const ADULT_CATEGORY_NAME = '000';
 
-// Nomes/palavras típicas de categorias e canais adultos (normalizados sem acento).
+/** Cache da lista de canais (mesma para todos — catálogo público). */
+const CACHE_TTL_MS = Math.max(
+  60_000,
+  Number(process.env.LIVE_TV_CACHE_TTL_MS || 20 * 60 * 1000) || 20 * 60 * 1000,
+);
+let liveTvCache = { at: 0, payload: null };
+
 const ADULT_RE =
   /\b(adult|adulto|adultos|xxx|xx|x18|18\+|\+18|porn|porno|pornografia|sex|sexo|sexy|erot|erotica|erotico|nsfw|onlyfans|hot\s*live|canal\s*hot|playboy|sexshop|anal|lesbian|gay\s*xxx)\b/i;
 
@@ -70,7 +76,6 @@ async function xtreamFetch(baseUrl, username, password, action, params = {}) {
   }
 }
 
-
 function channelMergeKey(name) {
   let n = normalizeName(name);
   if (!n) return '';
@@ -112,11 +117,6 @@ function qualityScore(name) {
   return 20;
 }
 
-function isSdOnlyName(name) {
-  const n = normalizeName(name);
-  return /\bsd\b/.test(n) && !/\b(hd|fhd|uhd|4k|full\s*hd)\b/.test(n);
-}
-
 function normalizeName(name) {
   return String(name || '')
     .toLowerCase()
@@ -129,7 +129,6 @@ function normalizeName(name) {
 function isAdultText(text) {
   const n = normalizeName(text);
   if (!n) return false;
-  // "000" / "00" sozinho já é o bucket adulto em muitos painéis
   if (n === '000' || n === '00' || n === '0') return true;
   return ADULT_RE.test(n);
 }
@@ -185,7 +184,6 @@ async function loadFromSource(source) {
     })),
   };
 }
-
 
 async function loadManualChannels(serviceKey) {
   try {
@@ -250,9 +248,30 @@ async function handler(req, res) {
     return;
   }
 
-  // Gate VIP (soft por padrão — não quebra app sem token).
-  // Com REQUIRE_VIP_LIVE_TV=1: bloqueia se não houver VIP no banco.
   if (await enforceVipOrReject(req, res, serviceKey, { feature: 'live-tv' })) {
+    return;
+  }
+
+  const forceRefresh =
+    String(req.query?.refresh || '').toLowerCase() === '1' ||
+    String(req.query?.refresh || '').toLowerCase() === 'true';
+
+  const now = Date.now();
+  if (
+    !forceRefresh &&
+    liveTvCache.payload &&
+    liveTvCache.payload.channels &&
+    liveTvCache.payload.channels.length > 0 &&
+    now - liveTvCache.at < CACHE_TTL_MS
+  ) {
+    res.setHeader('X-Cache', 'HIT');
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.status(200).json({
+      ...liveTvCache.payload,
+      cached: true,
+      cacheAgeSec: Math.round((now - liveTvCache.at) / 1000),
+      cacheTtlSec: Math.round(CACHE_TTL_MS / 1000),
+    });
     return;
   }
 
@@ -296,7 +315,6 @@ async function handler(req, res) {
       return;
     }
 
-    // Mapa categoryId original -> se é adulto
     const adultCatIds = new Set();
     for (const r of results) {
       for (const c of r.categories) {
@@ -313,7 +331,7 @@ async function handler(req, res) {
       for (const c of r.categories) {
         if (adultCatIds.has(String(c.id)) || isAdultText(c.name)) {
           hasAdult = true;
-          continue; // não listar Adult/XXX soltos — tudo vira "000"
+          continue;
         }
         const key = normalizeName(c.name);
         if (!key) continue;
@@ -351,7 +369,6 @@ async function handler(req, res) {
           };
           channelMap.set(key, ch);
         } else if (isAdult) {
-          // Se qualquer fonte marcar como adulto, fica em 000
           ch.categoryId = ADULT_CATEGORY_ID;
         }
         if (!ch.logo && s.logo) ch.logo = s.logo;
@@ -373,7 +390,6 @@ async function handler(req, res) {
         }
       }
     }
-
 
     for (const m of manuals) {
       const url = String(m.stream_url || '').trim();
@@ -425,7 +441,6 @@ async function handler(req, res) {
     });
     channels = channels.filter((c) => c.categoryId !== ADULT_CATEGORY_ID);
 
-    // Junta canais com o mesmo nome na tela (BR HBO + HBO -> um item)
     {
       const byDisplay = new Map();
       for (const ch of channels) {
@@ -454,8 +469,6 @@ async function handler(req, res) {
     );
     const usedCats = new Set(channels.map((c) => c.categoryId));
     let filteredCategories = categories.filter((c) => usedCats.has(c.id));
-
-    // Adulto nao entra na lista publica
     filteredCategories = filteredCategories.filter((c) => c.id !== ADULT_CATEGORY_ID);
 
     const sourcesUsed = results.filter((r) => r.streams.length > 0).length;
@@ -481,9 +494,25 @@ async function handler(req, res) {
       };
     }
 
+    if (channels.length > 0) {
+      liveTvCache = { at: Date.now(), payload };
+      console.log(`[live-tv] cache atualizado: ${channels.length} canais, TTL ${Math.round(CACHE_TTL_MS / 60000)} min`);
+    }
+
+    res.setHeader('X-Cache', forceRefresh ? 'BYPASS' : 'MISS');
     res.status(200).json(payload);
   } catch (err) {
     console.error('[live-tv]', err);
+    if (liveTvCache.payload && liveTvCache.payload.channels && liveTvCache.payload.channels.length) {
+      res.setHeader('X-Cache', 'STALE');
+      res.status(200).json({
+        ...liveTvCache.payload,
+        cached: true,
+        stale: true,
+        cacheAgeSec: Math.round((Date.now() - liveTvCache.at) / 1000),
+      });
+      return;
+    }
     res.status(500).json({
       error: err.message || 'Erro ao carregar canais',
       categories: [],
