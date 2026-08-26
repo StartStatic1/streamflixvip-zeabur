@@ -10,40 +10,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Restore MainActivity if placeholder and add onBack
+      - name: Restore MainActivity and wire onBack
         run: |
           set -eux
           MAIN=android/app/src/main/java/com/streamflixvip/app/MainActivity.kt
-          if grep -q PLACEHOLDER "$MAIN" || [ "$(wc -c < "$MAIN")" -lt 1000 ]; then
-            git show 75168551d5f28343662f037732f2c29faf2bd356:"$MAIN" > "$MAIN"
-          fi
-          python3 - <<'PY'
+          git show 75168551d5f28343662f037732f2c29faf2bd356:"$MAIN" > "$MAIN"
+          python3 << 'PY'
           from pathlib import Path
           p = Path("android/app/src/main/java/com/streamflixvip/app/MainActivity.kt")
           t = p.read_text()
-          if "PLACEHOLDER" in t:
-              raise SystemExit("still placeholder")
-          needle = "isDirectPlayable = isDirect,\n                        userId = userId,"
-          insert = "isDirectPlayable = isDirect,\n                        onBack = { navController.popBackStack() },\n                        userId = userId,"
-          if "onBack = { navController.popBackStack() }" in t and "sourceUrl = url" in t:
-              # ensure it is on the VOD PlayerScreen call
-              if "sourceUrl = url" in t and "onBack = { navController.popBackStack() }" in t[t.find("sourceUrl = url"):t.find("sourceUrl = url")+200]:
-                  print("already wired")
-              else:
-                  if needle not in t:
-                      raise SystemExit("needle missing")
-                  p.write_text(t.replace(needle, insert, 1))
-                  print("inserted")
-          else:
-              if needle not in t:
-                  raise SystemExit("needle missing: " + repr(t[t.find("PlayerScreen"):t.find("PlayerScreen")+300]))
-              p.write_text(t.replace(needle, insert, 1))
+          assert "fun MainActivity" in t or "class MainActivity" in t
+          assert "sourceUrl = url" in t
+          if "onBack = { navController.popBackStack() }" not in t.split("sourceUrl = url", 1)[1][:400]:
+              old = "isDirectPlayable = isDirect,\n                        userId = userId,"
+              new = "isDirectPlayable = isDirect,\n                        onBack = { navController.popBackStack() },\n                        userId = userId,"
+              if old not in t:
+                  raise SystemExit("pattern not found")
+              t = t.replace(old, new, 1)
+              p.write_text(t)
               print("inserted")
+          else:
+              print("already present")
           t2 = p.read_text()
-          assert "sourceUrl = url" in t2
-          idx = t2.find("sourceUrl = url")
-          assert "onBack = { navController.popBackStack() }" in t2[idx-80:idx+120]
-          print("verify OK", p.stat().st_size)
+          chunk = t2.split("sourceUrl = url", 1)[1][:400]
+          assert "onBack = { navController.popBackStack() }" in chunk, chunk
+          print("OK", p.stat().st_size)
           PY
       - name: Commit
         run: |
