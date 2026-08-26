@@ -36,6 +36,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -175,8 +176,10 @@ fun PlayerScreen(
     title: String,
     posterPath: String?,
     resumeSeconds: Int = 0,
+    onBack: () -> Unit = {},
 ) {
     val view = LocalView.current
+    BackHandler { onBack() }
     DisposableEffect(Unit) {
         val window = (view.context as? Activity)?.window
         val insetsController = window?.let { WindowCompat.getInsetsController(it, view) }
@@ -226,6 +229,7 @@ fun PlayerScreen(
             title = title,
             posterPath = posterPath,
             resumeSeconds = resumeSeconds,
+            onBack = onBack,
         )
     } else {
         EmbedWebView(url = currentResolvedUrl)
@@ -245,6 +249,7 @@ private fun NativePlayer(
     title: String,
     posterPath: String?,
     resumeSeconds: Int,
+    onBack: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val progressRepository = remember { ProgressRepository() }
@@ -645,10 +650,23 @@ private fun NativePlayer(
             val epLabel = if (mediaType == "tv" && currentSeason > 0 && currentEpisode > 0) {
                 "S${currentSeason} E${currentEpisode}"
             } else null
-            Column {
-                Text(currentTitle, color = Color.White, fontSize = 15.sp, maxLines = 1)
-                if (epLabel != null) {
-                    Text(epLabel, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Surface(
+                    color = Color.White.copy(alpha = 0.16f),
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                    modifier = Modifier.clickable { onBack() },
+                ) {
+                    Text("Voltar", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                }
+                Column {
+                    Text(currentTitle, color = Color.White, fontSize = 15.sp, maxLines = 1)
+                    if (epLabel != null) {
+                        Text(epLabel, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    }
                 }
             }
         }
