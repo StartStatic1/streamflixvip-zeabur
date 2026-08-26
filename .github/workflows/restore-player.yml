@@ -1,6 +1,10 @@
 name: Restore PlayerScreen
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/player_b64_*.txt'
+      - 'scripts/restore_player_screen.py'
 jobs:
   restore:
     runs-on: ubuntu-latest
@@ -8,14 +12,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Restore from good commit
+      - name: Restore PlayerScreen from b64
+        run: python3 scripts/restore_player_screen.py
+      - name: Commit if changed
         run: |
-          git checkout 0e78c849d37d18c02fc08caf86d5ac9bc051e960 -- android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
-          wc -c android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
-          git commit -m "fix(player): restore PlayerScreen from 0e78c849" || echo "nothing to commit"
+          git diff --cached --quiet || git commit -m "fix(player): restore PlayerScreen with episode LEG/audio prefs + bottom bar"
           git push
