@@ -1,0 +1,20 @@
+name: Fix player back exit
+on:
+  workflow_dispatch:
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply back exit fix
+        run: python3 scripts/apply_back_fix.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add android/app/src/main/java/com/streamflixvip/app/MainActivity.kt \
+                  android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          git diff --cached --quiet || git commit -m "fix(player): saida do play (onBack + Voltar)"
+          git push
