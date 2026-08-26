@@ -808,21 +808,6 @@ private fun NativePlayer(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    fun chip(label: String, onClick: () -> Unit) {
-                        Surface(
-                            color = Color.White.copy(alpha = 0.10f),
-                            shape = RoundedCornerShape(16.dp),
-                            modifier = Modifier.clickable(onClick = onClick),
-                        ) {
-                            Text(
-                                label,
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            )
-                        }
-                    }
-                    // local chips as Surfaces (Compose local fun not allowed in lambda — inline)
                     Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
                         aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
                     }) {
