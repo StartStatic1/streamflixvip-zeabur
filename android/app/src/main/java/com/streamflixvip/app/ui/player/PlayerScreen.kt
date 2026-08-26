@@ -58,6 +58,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackGroup
@@ -76,7 +77,9 @@ import com.streamflixvip.app.BuildConfig
 import com.streamflixvip.app.data.ProgressRepository
 import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.StreamUrlResolver
+import com.streamflixvip.app.network.SubtitleSearchItem
 import com.streamflixvip.app.network.VipSource
+import java.io.File
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -150,6 +153,37 @@ private fun saveSeriesPref(context: android.content.Context, tmdbId: Int, key: S
 }
 
 private data class TrackOption(val label: String, val group: TrackGroup, val trackIndex: Int)
+
+private fun humanTrackLabel(label: String?, language: String?, index: Int): String {
+    val raw = (label ?: language ?: "").trim()
+    val low = raw.lowercase()
+    if (raw.isBlank() || low in setOf("und", "undefined", "null", "unknown")) {
+        return "Faixa ${index + 1}"
+    }
+    val map = mapOf(
+        "pt" to "Portugues",
+        "por" to "Portugues",
+        "pt-br" to "Portugues (BR)",
+        "pt-pt" to "Portugues (PT)",
+        "en" to "Ingles",
+        "eng" to "Ingles",
+        "es" to "Espanhol",
+        "spa" to "Espanhol",
+        "fr" to "Frances",
+        "de" to "Alemao",
+        "it" to "Italiano",
+        "ja" to "Japones",
+        "ko" to "Coreano",
+        "zh" to "Chines",
+        "ru" to "Russo",
+    )
+    map[low]?.let { return it }
+    // language codes like por-BR
+    val base = low.split("-", "_").firstOrNull() ?: low
+    map[base]?.let { return it }
+    return raw
+}
+
 
 private fun openInExternalPlayer(context: android.content.Context, url: String) {
     try {
@@ -260,6 +294,10 @@ private fun NativePlayer(
     var audioOptions by remember { mutableStateOf(listOf<TrackOption>()) }
     var qualityOptions by remember { mutableStateOf(listOf<TrackOption>()) }
     var selectedSubtitleLabel by remember { mutableStateOf("Desligada") }
+    var onlineSubtitleResults by remember { mutableStateOf(listOf<SubtitleSearchItem>()) }
+    var onlineSubtitlesLoading by remember { mutableStateOf(false) }
+    var onlineSubtitlesError by remember { mutableStateOf<String?>(null) }
+    var onlineSubtitleApplied by remember { mutableStateOf(false) }
     var selectedAudioLabel by remember { mutableStateOf("Padrao") }
     var selectedQualityLabel by remember { mutableStateOf("Automatico") }
     var playbackSpeed by remember { mutableStateOf(1f) }
@@ -362,11 +400,11 @@ private fun NativePlayer(
                         when (group.type) {
                             C.TRACK_TYPE_TEXT -> for (i in 0 until group.length) {
                                 val f = group.getTrackFormat(i)
-                                subtitles += TrackOption(f.label ?: f.language ?: "Faixa ${i + 1}", group.mediaTrackGroup, i)
+                                subtitles += TrackOption(humanTrackLabel(f.label, f.language, i), group.mediaTrackGroup, i)
                             }
                             C.TRACK_TYPE_AUDIO -> for (i in 0 until group.length) {
                                 val f = group.getTrackFormat(i)
-                                audios += TrackOption(f.label ?: f.language ?: "Faixa ${i + 1}", group.mediaTrackGroup, i)
+                                audios += TrackOption(humanTrackLabel(f.label, f.language, i), group.mediaTrackGroup, i)
                             }
                             C.TRACK_TYPE_VIDEO -> for (i in 0 until group.length) {
                                 val f = group.getTrackFormat(i)
@@ -492,16 +530,96 @@ private fun NativePlayer(
     }
 
     fun selectSubtitle(option: TrackOption?) {
+        onlineSubtitleApplied = false
         trackSelector.parameters = if (option == null) {
             selectedSubtitleLabel = "Desligada"
-            persistSubtitleKey("off")
             trackSelector.parameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
         } else {
-            selectedSubtitleLabel = option.label
-            persistSubtitleKey(option.label)
+            selectedSubtitleLabel = "Stream: ${option.label}"
             trackSelector.parameters.buildUpon().setOverrideForType(TrackSelectionOverride(option.group, option.trackIndex)).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
         }
     }
+
+    suspend fun searchOnlineSubtitles() {
+        onlineSubtitlesLoading = true
+        onlineSubtitlesError = null
+        try {
+            val seasonArg = if (mediaType == "tv" && currentSeason > 0) currentSeason else null
+            val episodeArg = if (mediaType == "tv" && currentEpisode > 0) currentEpisode else null
+            val resp = NetworkModule.subtitlesApi.search(
+                tmdbId = tmdbId,
+                season = seasonArg,
+                episode = episodeArg,
+            )
+            if (!resp.error.isNullOrBlank()) {
+                onlineSubtitlesError = resp.error
+                onlineSubtitleResults = emptyList()
+            } else {
+                onlineSubtitleResults = resp.results.filter { it.file_id != null }.take(12)
+                if (onlineSubtitleResults.isEmpty()) {
+                    onlineSubtitlesError = "Nenhuma legenda PT-BR encontrada"
+                }
+            }
+        } catch (e: Exception) {
+            onlineSubtitlesError = e.message ?: "Falha na busca"
+            onlineSubtitleResults = emptyList()
+        } finally {
+            onlineSubtitlesLoading = false
+        }
+    }
+
+    suspend fun applyOnlineSubtitle(item: SubtitleSearchItem) {
+        val fileId = item.file_id ?: return
+        onlineSubtitlesLoading = true
+        onlineSubtitlesError = null
+        try {
+            val seasonArg = if (mediaType == "tv" && currentSeason > 0) currentSeason else null
+            val episodeArg = if (mediaType == "tv" && currentEpisode > 0) currentEpisode else null
+            val resp = NetworkModule.subtitlesApi.download(
+                fileId = fileId,
+                tmdbId = tmdbId,
+                mediaType = if (mediaType == "tv") "tv" else "movie",
+                season = seasonArg,
+                episode = episodeArg,
+            )
+            val content = resp.content
+            if (content.isNullOrBlank()) {
+                onlineSubtitlesError = resp.error ?: "Legenda vazia"
+                return
+            }
+            val file = File(context.cacheDir, "os_${tmdbId}_${currentSeason}_${currentEpisode}.vtt")
+            file.writeText(content)
+            val pos = exoPlayer.currentPosition
+            val wasPlaying = exoPlayer.playWhenReady
+            val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                .setMimeType(MimeTypes.TEXT_VTT)
+                .setLanguage("pt")
+                .setLabel(item.release ?: "Online PT-BR")
+                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                .build()
+            val mediaItem = MediaItem.Builder()
+                .setUri(activeUrl)
+                .setSubtitleConfigurations(listOf(subConfig))
+                .build()
+            exoPlayer.setMediaItem(mediaItem)
+            exoPlayer.prepare()
+            exoPlayer.seekTo(pos)
+            exoPlayer.playWhenReady = wasPlaying
+            trackSelector.parameters = trackSelector.parameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .build()
+            val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "…" else it }
+            selectedSubtitleLabel = "Online: $short"
+            onlineSubtitleApplied = true
+            settingsPanel = SettingsPanel.MAIN
+        } catch (e: Exception) {
+            onlineSubtitlesError = e.message ?: "Falha ao baixar legenda"
+        } finally {
+            onlineSubtitlesLoading = false
+        }
+    }
+
     fun selectAudio(option: TrackOption?) {
         trackSelector.parameters = if (option == null) {
             selectedAudioLabel = "Padrao"
@@ -675,30 +793,93 @@ private fun NativePlayer(
             visible = controlsVisible,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 12.dp, bottom = 8.dp),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (mediaType == "tv" && currentEpisode > 0) {
-                    Surface(
-                        color = Color.White.copy(alpha = 0.16f),
-                        shape = RoundedCornerShape(18.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                        modifier = Modifier.clickable { if (!isLoadingNext) MainScope().launch { playNextEpisode() } },
-                    ) {
-                        Text(
-                            if (isLoadingNext) "..." else "Proximo",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        )
-                    }
-                }
-                Surface(
-                    color = Color.White.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(18.dp),
-                    modifier = Modifier.clickable { settingsPanel = SettingsPanel.MAIN },
+            Surface(
+                color = Color.Black.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(22.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Ajustes", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                    fun chip(label: String, onClick: () -> Unit) {
+                        Surface(
+                            color = Color.White.copy(alpha = 0.10f),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.clickable(onClick = onClick),
+                        ) {
+                            Text(
+                                label,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                    // local chips as Surfaces (Compose local fun not allowed in lambda — inline)
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                        aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
+                    }) {
+                        Text(aspectMode.label, color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                        settingsPanel = SettingsPanel.SPEED
+                    }) {
+                        Text("${playbackSpeed}x", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                        settingsPanel = SettingsPanel.SUBTITLE
+                    }) {
+                        Text("Legendas", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
+                    if (audioOptions.isNotEmpty()) {
+                        Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                            settingsPanel = SettingsPanel.AUDIO
+                        }) {
+                            Text("Audio", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                        }
+                    }
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                        MainScope().launch {
+                            if (alternateSources.isEmpty()) loadAlternateSources()
+                            if (alternateSources.isEmpty()) {
+                                Toast.makeText(context, "Sem outra fonte", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val next = alternateSources[alternateIndex % alternateSources.size]
+                                alternateIndex += 1
+                                reloadWithUrl(next)
+                                Toast.makeText(context, "Trocando fonte…", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }) {
+                        Text("Fontes", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
+                    if (mediaType == "tv" && currentEpisode > 0) {
+                        Surface(
+                            color = Color.White.copy(alpha = 0.16f),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)),
+                            modifier = Modifier.clickable { if (!isLoadingNext) MainScope().launch { playNextEpisode() } },
+                        ) {
+                            Text(
+                                if (isLoadingNext) "…" else "Episodios",
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                        settingsPanel = SettingsPanel.MAIN
+                    }) {
+                        Text("Mais", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
                 }
             }
         }
@@ -770,9 +951,58 @@ private fun NativePlayer(
                         }
                         SettingsPanel.SUBTITLE -> {
                             SubmenuHeader("Legenda") { settingsPanel = SettingsPanel.MAIN }
-                            SubmenuItem("Desligada", selectedSubtitleLabel == "Desligada") { selectSubtitle(null); settingsPanel = SettingsPanel.MAIN }
-                            subtitleOptions.forEach { o ->
-                                SubmenuItem(o.label, selectedSubtitleLabel == o.label) { selectSubtitle(o); settingsPanel = SettingsPanel.MAIN }
+                            SubmenuItem("Desligada", selectedSubtitleLabel == "Desligada" && !onlineSubtitleApplied) {
+                                selectSubtitle(null); settingsPanel = SettingsPanel.MAIN
+                            }
+                            if (subtitleOptions.isNotEmpty()) {
+                                Text(
+                                    "Do stream",
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                )
+                                subtitleOptions.forEach { o ->
+                                    SubmenuItem(
+                                        "Stream: ${o.label}",
+                                        selectedSubtitleLabel == "Stream: ${o.label}" && !onlineSubtitleApplied,
+                                    ) { selectSubtitle(o); settingsPanel = SettingsPanel.MAIN }
+                                }
+                            }
+                            Text(
+                                "Online PT-BR",
+                                color = Color.White.copy(alpha = 0.55f),
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            )
+                            if (onlineSubtitlesLoading) {
+                                Text(
+                                    "Buscando…",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            } else {
+                                SubmenuItem("Buscar legendas online", false) {
+                                    MainScope().launch { searchOnlineSubtitles() }
+                                }
+                            }
+                            onlineSubtitlesError?.let { err ->
+                                Text(
+                                    err,
+                                    color = Color(0xFFFF8A80),
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                )
+                            }
+                            onlineSubtitleResults.forEach { item ->
+                                val label = buildString {
+                                    append(item.release ?: "Legenda")
+                                    if (item.downloads > 0) append(" · ${item.downloads} dl")
+                                    if (item.hd) append(" · HD")
+                                }.let { if (it.length > 42) it.take(42) + "…" else it }
+                                SubmenuItem(label, selectedSubtitleLabel.startsWith("Online:") && onlineSubtitleApplied) {
+                                    MainScope().launch { applyOnlineSubtitle(item) }
+                                }
                             }
                         }
                         SettingsPanel.AUDIO -> {
