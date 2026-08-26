@@ -36,6 +36,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -175,8 +176,10 @@ fun PlayerScreen(
     title: String,
     posterPath: String?,
     resumeSeconds: Int = 0,
+    onBack: () -> Unit = {},
 ) {
     val view = LocalView.current
+    BackHandler { onBack() }
     DisposableEffect(Unit) {
         val window = (view.context as? Activity)?.window
         val insetsController = window?.let { WindowCompat.getInsetsController(it, view) }
