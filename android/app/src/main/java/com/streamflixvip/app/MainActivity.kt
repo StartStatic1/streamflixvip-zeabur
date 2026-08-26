@@ -470,7 +470,6 @@ private fun MainAppScaffold(
                     PlayerScreen(
                         sourceUrl = url,
                         isDirectPlayable = isDirect,
-                        onBack = { navController.popBackStack() },
                         userId = userId,
                         accessToken = accessToken,
                         tmdbId = playerTmdbId,
