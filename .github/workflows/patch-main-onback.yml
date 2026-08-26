@@ -1,0 +1,54 @@
+name: patch-main-onback
+on:
+  workflow_dispatch:
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore MainActivity if placeholder and add onBack
+        run: |
+          set -eux
+          MAIN=android/app/src/main/java/com/streamflixvip/app/MainActivity.kt
+          if grep -q PLACEHOLDER "$MAIN" || [ "$(wc -c < "$MAIN")" -lt 1000 ]; then
+            git show 75168551d5f28343662f037732f2c29faf2bd356:"$MAIN" > "$MAIN"
+          fi
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/java/com/streamflixvip/app/MainActivity.kt")
+          t = p.read_text()
+          if "PLACEHOLDER" in t:
+              raise SystemExit("still placeholder")
+          needle = "isDirectPlayable = isDirect,\n                        userId = userId,"
+          insert = "isDirectPlayable = isDirect,\n                        onBack = { navController.popBackStack() },\n                        userId = userId,"
+          if "onBack = { navController.popBackStack() }" in t and "sourceUrl = url" in t:
+              # ensure it is on the VOD PlayerScreen call
+              if "sourceUrl = url" in t and "onBack = { navController.popBackStack() }" in t[t.find("sourceUrl = url"):t.find("sourceUrl = url")+200]:
+                  print("already wired")
+              else:
+                  if needle not in t:
+                      raise SystemExit("needle missing")
+                  p.write_text(t.replace(needle, insert, 1))
+                  print("inserted")
+          else:
+              if needle not in t:
+                  raise SystemExit("needle missing: " + repr(t[t.find("PlayerScreen"):t.find("PlayerScreen")+300]))
+              p.write_text(t.replace(needle, insert, 1))
+              print("inserted")
+          t2 = p.read_text()
+          assert "sourceUrl = url" in t2
+          idx = t2.find("sourceUrl = url")
+          assert "onBack = { navController.popBackStack() }" in t2[idx-80:idx+120]
+          print("verify OK", p.stat().st_size)
+          PY
+      - name: Commit
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/src/main/java/com/streamflixvip/app/MainActivity.kt
+          git commit -m "fix(player): MainActivity onBack no PlayerScreen VOD" || exit 0
+          git push
