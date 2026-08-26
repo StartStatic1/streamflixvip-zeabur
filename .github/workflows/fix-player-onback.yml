@@ -1,0 +1,22 @@
+name: Fix PlayerScreen onBack
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/fix_player_onback.py'
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply onBack fix
+        run: python3 scripts/fix_player_onback.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          git diff --cached --quiet || git commit -m "fix(player): parametro onBack para compilar com MainActivity"
+          git push
