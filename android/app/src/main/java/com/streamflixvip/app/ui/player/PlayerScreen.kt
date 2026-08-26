@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.media.AudioManager
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.widget.Toast
@@ -15,10 +16,15 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +42,10 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BrightnessHigh
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.Icon
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -46,6 +56,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
@@ -84,6 +95,7 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -314,6 +326,22 @@ private fun NativePlayer(
     var currentTitle by remember { mutableStateOf(title) }
     var isLoadingNext by remember { mutableStateOf(false) }
     var showNextPrompt by remember { mutableStateOf(false) }
+
+    // Gestos: esquerda = brilho, direita = volume
+    val audioManager = remember {
+        context.getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+    }
+    val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1) }
+    var brightnessLevel by remember {
+        val cur = (context as? android.app.Activity)?.window?.attributes?.screenBrightness ?: -1f
+        mutableStateOf(if (cur in 0f..1f) cur else 0.5f)
+    }
+    var volumeLevel by remember {
+        mutableStateOf(audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maxVolume)
+    }
+    var gestureKind by remember { mutableStateOf<String?>(null) }
+    var gestureValue by remember { mutableStateOf(0f) }
+    var gestureHideJob by remember { mutableStateOf<Job?>(null) }
 
     var preferredSourceMode by remember {
         mutableStateOf(loadSeriesPref(context, tmdbId, "source_mode", "any"))
@@ -728,6 +756,102 @@ private fun NativePlayer(
             update = { v -> v.resizeMode = aspectMode.resizeMode },
         )
 
+        // Zonas de gesto: 28% esquerda = brilho, 28% direita = volume
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(0.28f)
+                .align(Alignment.CenterStart)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragStart = {
+                            gestureHideJob?.cancel()
+                            gestureKind = "brightness"
+                            gestureValue = brightnessLevel
+                        },
+                        onVerticalDrag = { _, dragAmount ->
+                            val delta = -dragAmount / size.height.toFloat()
+                            brightnessLevel = (brightnessLevel + delta).coerceIn(0.01f, 1f)
+                            gestureValue = brightnessLevel
+                            val act = context as? android.app.Activity
+                            act?.window?.let { w ->
+                                val lp = w.attributes
+                                lp.screenBrightness = brightnessLevel
+                                w.attributes = lp
+                            }
+                        },
+                        onDragEnd = {
+                            gestureHideJob?.cancel()
+                            gestureHideJob = MainScope().launch {
+                                delay(900)
+                                gestureKind = null
+                            }
+                        },
+                        onDragCancel = { gestureKind = null },
+                    )
+                },
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(0.28f)
+                .align(Alignment.CenterEnd)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragStart = {
+                            gestureHideJob?.cancel()
+                            gestureKind = "volume"
+                            gestureValue = volumeLevel
+                        },
+                        onVerticalDrag = { _, dragAmount ->
+                            val delta = -dragAmount / size.height.toFloat()
+                            volumeLevel = (volumeLevel + delta).coerceIn(0f, 1f)
+                            gestureValue = volumeLevel
+                            val vol = (volumeLevel * maxVolume).toInt().coerceIn(0, maxVolume)
+                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, vol, 0)
+                        },
+                        onDragEnd = {
+                            gestureHideJob?.cancel()
+                            gestureHideJob = MainScope().launch {
+                                delay(900)
+                                gestureKind = null
+                            }
+                        },
+                        onDragCancel = { gestureKind = null },
+                    )
+                },
+        )
+
+        if (gestureKind != null) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.75f),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.align(Alignment.Center),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(
+                        imageVector = if (gestureKind == "brightness") Icons.Filled.BrightnessHigh else Icons.Filled.VolumeUp,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
+                    Text(
+                        if (gestureKind == "brightness") {
+                            "Brilho ${(gestureValue * 100).toInt()}%"
+                        } else {
+                            "Volume ${(gestureValue * 100).toInt()}%"
+                        },
+                        color = Color.White,
+                        fontSize = 15.sp,
+                    )
+                }
+            }
+        }
+
         if (errorMessage != null || isRecovering) {
             Surface(color = Color.Black.copy(alpha = 0.88f), shape = RoundedCornerShape(12.dp), modifier = Modifier.padding(16.dp)) {
                 Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -853,7 +977,7 @@ private fun NativePlayer(
                             modifier = Modifier.clickable { if (!isLoadingNext) MainScope().launch { playNextEpisode() } },
                         ) {
                             Text(
-                                if (isLoadingNext) "…" else "Episodios",
+                                if (isLoadingNext) "…" else "Proximo",
                                 color = Color.White,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
