@@ -1,0 +1,34 @@
+name: restore-back-exit
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore and patch
+        run: |
+          set -eux
+          MAIN=android/app/src/main/java/com/streamflixvip/app/MainActivity.kt
+          PLAYER=android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+
+          git show 75168551d5f28343662f037732f2c29faf2bd356:"$MAIN" > "$MAIN"
+          git show e10217d9a9439e3cf3192ef3157e56a88a5ac29f:"$PLAYER" > "$PLAYER"
+
+          python3 scripts/patch_back_exit.py
+
+      - name: Commit and push
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add android/app/src/main/java/com/streamflixvip/app/MainActivity.kt \
+                  android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          git commit -m "fix(player): restore files + onBack/Voltar exit" || exit 0
+          git push
