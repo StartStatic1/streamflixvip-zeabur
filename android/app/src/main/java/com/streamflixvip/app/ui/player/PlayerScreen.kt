@@ -77,6 +77,7 @@ import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.exoplayer.hls.HlsMediaSource
@@ -414,7 +415,13 @@ private fun NativePlayer(
         } else {
             ProgressiveMediaSource.Factory(httpDataSourceFactory, extractorsFactory).createMediaSource(mediaItem)
         }
-        ExoPlayer.Builder(context).setTrackSelector(trackSelector).setMediaSourceFactory(mediaSourceFactory).build().apply {
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+        ExoPlayer.Builder(context)
+            .setRenderersFactory(renderersFactory)
+            .setTrackSelector(trackSelector)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build().apply {
             setMediaSource(mediaSource)
             prepare()
             playWhenReady = true
@@ -422,7 +429,13 @@ private fun NativePlayer(
             addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     super.onPlayerError(error)
-                    errorMessage = error.errorCodeName
+                    val code = error.errorCodeName ?: ""
+                    errorMessage = if (code.contains("DECODING", ignoreCase = true) ||
+                        code.contains("DECODER", ignoreCase = true)) {
+                        "Este aparelho nao consegue decodificar este video (codec). Toque em Trocar servidor ou abra no VLC."
+                    } else {
+                        code
+                    }
                 }
                 override fun onTracksChanged(tracks: Tracks) {
                     val subtitles = mutableListOf<TrackOption>()
