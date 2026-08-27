@@ -17,6 +17,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -342,6 +343,7 @@ private fun NativePlayer(
     var gestureKind by remember { mutableStateOf<String?>(null) }
     var gestureValue by remember { mutableStateOf(0f) }
     var gestureHideJob by remember { mutableStateOf<Job?>(null) }
+    var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
 
     var preferredSourceMode by remember {
         mutableStateOf(loadSeriesPref(context, tmdbId, "source_mode", "any"))
@@ -718,9 +720,12 @@ private fun NativePlayer(
             factory = {
                 PlayerView(context).apply {
                     player = exoPlayer
+                    playerViewRef = this
+                    useController = true
+                    controllerAutoShow = true
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    controllerShowTimeoutMs = 3500
-                    controllerHideOnTouch = true
+                    controllerShowTimeoutMs = 5000
+                    controllerHideOnTouch = false
                     post { hideController() }
                     subtitleView?.let { sub ->
                         sub.setApplyEmbeddedStyles(false)
@@ -755,6 +760,26 @@ private fun NativePlayer(
             },
             update = { v -> v.resizeMode = aspectMode.resizeMode },
         )
+
+        // So quando o menu esta oculto: toque mostra controles/timeline
+        // (nao fica por cima da barra de progresso quando visivel)
+        if (!controlsVisible) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                val pv = playerViewRef
+                                if (pv != null) {
+                                    pv.showController()
+                                }
+                                controlsVisible = true
+                            },
+                        )
+                    },
+            )
+        }
 
         // Zonas de gesto: 28% esquerda = brilho, 28% direita = volume
         Box(
