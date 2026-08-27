@@ -376,16 +376,18 @@ private fun NativePlayer(
         val builder = trackSelector.parameters.buildUpon()
             .clearOverridesOfType(C.TRACK_TYPE_TEXT)
             .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-        val subPref = preferredSubtitleKey
-        if (subPref.isBlank() || subPref == "off") {
-            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-            selectedSubtitleLabel = "Desligada"
-        } else {
-            val match = subs.firstOrNull { trackMatchesPref(it.label, subPref) }
-            if (match != null) {
-                builder.setOverrideForType(TrackSelectionOverride(match.group, match.trackIndex))
-                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                selectedSubtitleLabel = match.label
+        if (!onlineSubtitleApplied) {
+            val subPref = preferredSubtitleKey
+            if (subPref.isBlank() || subPref == "off") {
+                builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                selectedSubtitleLabel = "Desligada"
+            } else {
+                val match = subs.firstOrNull { trackMatchesPref(it.label, subPref) }
+                if (match != null) {
+                    builder.setOverrideForType(TrackSelectionOverride(match.group, match.trackIndex))
+                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    selectedSubtitleLabel = "Stream: ${match.label}"
+                }
             }
         }
         val audioPref = preferredAudioKey
@@ -563,9 +565,11 @@ private fun NativePlayer(
         onlineSubtitleApplied = false
         trackSelector.parameters = if (option == null) {
             selectedSubtitleLabel = "Desligada"
+            persistSubtitleKey("off")
             trackSelector.parameters.buildUpon().clearOverridesOfType(C.TRACK_TYPE_TEXT).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
         } else {
             selectedSubtitleLabel = "Stream: ${option.label}"
+            persistSubtitleKey(option.label)
             trackSelector.parameters.buildUpon().setOverrideForType(TrackSelectionOverride(option.group, option.trackIndex)).setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).build()
         }
     }
@@ -642,6 +646,7 @@ private fun NativePlayer(
             val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "…" else it }
             selectedSubtitleLabel = "Online: $short"
             onlineSubtitleApplied = true
+            persistSubtitleKey("online")
             settingsPanel = SettingsPanel.MAIN
         } catch (e: Exception) {
             onlineSubtitlesError = e.message ?: "Falha ao baixar legenda"
@@ -725,7 +730,7 @@ private fun NativePlayer(
                     controllerAutoShow = true
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                     controllerShowTimeoutMs = 5000
-                    controllerHideOnTouch = false
+                    controllerHideOnTouch = true
                     post { hideController() }
                     subtitleView?.let { sub ->
                         sub.setApplyEmbeddedStyles(false)
@@ -767,29 +772,24 @@ private fun NativePlayer(
         )
 
 
-        // Toque em qualquer lugar: abre/fecha menu + timeline
-        // Com menu visivel, deixa livre o rodape (seek + chips) e o topo (Voltar)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    top = if (controlsVisible) 56.dp else 0.dp,
-                    bottom = if (controlsVisible) 96.dp else 0.dp,
-                )
-                .pointerInput(controlsVisible) {
-                    detectTapGestures(
-                        onTap = {
-                            if (controlsVisible) {
-                                playerViewRef?.hideController()
-                                controlsVisible = false
-                            } else {
+
+        // SHOW_ONLY_WHEN_HIDDEN: toque so ABRE o menu.
+        // Com menu aberto, PlayerView nativo cuida de pause/seek/timeline.
+        // Fechar: timeout do Exo ou toque no video (controllerHideOnTouch).
+        if (!controlsVisible && settingsPanel == SettingsPanel.NONE) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
                                 playerViewRef?.showController()
                                 controlsVisible = true
-                            }
-                        },
-                    )
-                },
-        )
+                            },
+                        )
+                    },
+            )
+        }
 
         // Zonas de gesto: 28% esquerda = brilho, 28% direita = volume
         Box(
