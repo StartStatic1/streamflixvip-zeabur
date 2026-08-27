@@ -19,8 +19,6 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 function resolveStaticDir() {
-  // Preferir Public/ (pasta oficial do site + APK do Actions).
-  // Nunca deixar public/ minúscula “roubar” o static se as duas existirem.
   const candidates = ['Public', 'PUBLIC', 'public'];
   for (const name of candidates) {
     const fullPath = path.join(__dirname, name);
@@ -50,6 +48,7 @@ app.use(express.json({ limit: '2mb' }));
 const activeAds = require('./api/active-ads.js');
 const adminVip = require('./api/admin-vip.js');
 const adminPartners = require('./api/admin-partners.js');
+const adminAddons = require('./api/admin-addons.js');
 const partnerApi = require('./api/partner.js');
 const appVersion = require('./api/app-version.js');
 const announcements = require('./api/announcements.js');
@@ -83,6 +82,7 @@ const wrap = (handler) => (req, res) => {
 app.all('/api/active-ads', wrap(activeAds));
 app.all('/api/admin-vip', wrap(adminVip));
 app.all('/api/admin-partners', wrap(adminPartners));
+app.all('/api/admin-addons', wrap(adminAddons));
 app.all('/api/partner', wrap(partnerApi));
 app.all('/api/app-version', wrap(appVersion));
 app.all('/api/announcements', wrap(announcements));
