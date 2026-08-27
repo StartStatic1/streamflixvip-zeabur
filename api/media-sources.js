@@ -2,7 +2,8 @@
 //
 // Resolve fontes de filme/série (vip_sources) no SERVIDOR.
 // Soft/hard auth + vip_lock iguais a antes.
-// Depois das fontes IPTV/manuais, anexa streams HTTP dos add-ons Stremio ativos.
+// Depois das fontes IPTV/manuais, anexa streams HTTP dos add-ons Stremio ativos
+// (somente para usuário VIP).
 //
 // GET /api/media-sources?tmdb_id=123&type=movie
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&episode=2
@@ -185,27 +186,31 @@ async function handler(req, res) {
   try {
     let sources = await loadSources(serviceKey, tmdbId, mediaType, season, episode);
 
-    // Add-ons Stremio: nao bloqueia se falhar; so enriquece a lista
-    try {
-      const addonSources = await collectAddonSources(
-        serviceKey,
-        tmdbId,
-        mediaType,
-        season,
-        episode,
-      );
-      if (addonSources.length) {
-        const existing = new Set(sources.map((s) => s.source_url));
-        for (const a of addonSources) {
-          if (!existing.has(a.source_url)) {
-            sources.push(a);
-            existing.add(a.source_url);
+    // Add-ons Stremio: exclusivos VIP (nao entram na lista free)
+    if (access.isVip) {
+      try {
+        const addonSources = await collectAddonSources(
+          serviceKey,
+          tmdbId,
+          mediaType,
+          season,
+          episode,
+        );
+        if (addonSources.length) {
+          const existing = new Set(sources.map((s) => s.source_url));
+          for (const a of addonSources) {
+            if (!existing.has(a.source_url)) {
+              sources.push(a);
+              existing.add(a.source_url);
+            }
           }
+          console.log(`[media-sources] addons +${addonSources.length} tmdb=${tmdbId} vip=1`);
         }
-        console.log(`[media-sources] addons +${addonSources.length} tmdb=${tmdbId}`);
+      } catch (addonErr) {
+        console.warn('[media-sources] addons skip:', addonErr.message);
       }
-    } catch (addonErr) {
-      console.warn('[media-sources] addons skip:', addonErr.message);
+    } else {
+      console.log(`[media-sources] addons skip free user tmdb=${tmdbId}`);
     }
 
     sources = sources.slice().sort((a, b) => {
