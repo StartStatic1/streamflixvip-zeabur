@@ -1,7 +1,7 @@
 {
-  "versionCode": 99,
-  "versionName": "10.9.1",
+  "versionCode": 100,
+  "versionName": "10.9.2",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Fix adicionado suporte a novos codec, fluxo compatibilidade"
+  "releaseNotes": "Melhorias na aba servidores, adicionado novas fontes, fix"
 }
