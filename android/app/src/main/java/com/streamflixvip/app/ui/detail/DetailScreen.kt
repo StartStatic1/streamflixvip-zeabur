@@ -169,16 +169,17 @@ fun DetailScreen(
                     Column(Modifier.padding(bottom = 24.dp)) {
                         Text(
                             "Escolha o servidor",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
                         )
                         Column(Modifier.padding(horizontal = 20.dp)) {
                             s.movieSources.forEachIndexed { index, source ->
-                                val lockedForFree = !isVip && index >= FREE_SERVER_SLOTS
+                                val isAddon = isAddonSourceLabel(source.source_label)
+                                val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
                                 SourceRow(
                                     source = source,
-                                    isRecommended = index == 0,
+                                    isRecommended = index == 0 && !isAddon,
                                     isLockedForFree = lockedForFree,
                                     onClick = {
                                         showMovieServerPicker = false
@@ -488,10 +489,11 @@ private fun DetailContent(
                 )
                 Column(Modifier.padding(horizontal = 20.dp)) {
                     state.episodeSources.forEachIndexed { index, source ->
-                        val lockedForFree = !isVip && index >= FREE_SERVER_SLOTS
+                        val isAddon = isAddonSourceLabel(source.source_label)
+                                val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
                         SourceRow(
                             source = source,
-                            isRecommended = index == 0,
+                            isRecommended = index == 0 && !isAddon,
                             isLockedForFree = lockedForFree,
                             onClick = {
                                 onDismissServerPicker()
@@ -1630,87 +1632,13 @@ private fun SourceRow(
     onClick: () -> Unit,
     onLockedClick: () -> Unit,
 ) {
-    val badge = qualityBadge(source.source_label)
-    val gold = MaterialTheme.colorScheme.primary
-
-    Surface(
-        onClick = if (isLockedForFree) onLockedClick else onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = when {
-            isLockedForFree -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-            isRecommended -> MaterialTheme.colorScheme.primaryContainer
-            else -> MaterialTheme.colorScheme.surfaceVariant
-        },
-        border = if (isLockedForFree) {
-            androidx.compose.foundation.BorderStroke(1.dp, gold.copy(alpha = 0.35f))
-        } else null,
-        tonalElevation = if (isRecommended) 3.dp else 0.dp,
-        shadowElevation = if (isRecommended) 2.dp else 0.dp,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(9.dp))
-                    .background(
-                        if (isLockedForFree) gold.copy(alpha = 0.14f)
-                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (isLockedForFree) {
-                    Icon(
-                        Icons.Outlined.Lock,
-                        contentDescription = null,
-                        tint = gold,
-                        modifier = Modifier.size(17.dp),
-                    )
-                } else {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                }
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    source.displayName,
-                    fontSize = 14.sp,
-                    fontWeight = if (isLockedForFree) FontWeight.Normal else FontWeight.SemiBold,
-                    color = if (isLockedForFree) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f) else MaterialTheme.colorScheme.onSurface,
-                )
-                Spacer(Modifier.height(2.dp))
-                when {
-                    isLockedForFree -> PremiumTag(gold)
-                    isRecommended -> Text(
-                        "RECOMENDADO",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-            badge?.let {
-                Spacer(Modifier.width(8.dp))
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 1.dp,
-                ) {
-                    Text(
-                        it,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isLockedForFree) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    )
-                }
-            }
-        }
-    }
+    ServerSourceCard(
+        source = source,
+        isRecommended = isRecommended,
+        isLockedForFree = isLockedForFree,
+        onClick = onClick,
+        onLockedClick = onLockedClick,
+    )
 }
 
 /**
