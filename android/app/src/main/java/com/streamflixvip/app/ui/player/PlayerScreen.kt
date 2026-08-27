@@ -752,7 +752,12 @@ private fun NativePlayer(
                     }
                     setControllerVisibilityListener(
                         PlayerView.ControllerVisibilityListener { visibility ->
-                            controlsVisible = visibility == android.view.View.VISIBLE
+                            // Sincroniza quando o Exo esconde por timeout; nao forca false no show
+                            if (visibility == android.view.View.VISIBLE) {
+                                controlsVisible = true
+                            } else if (visibility == android.view.View.GONE) {
+                                controlsVisible = false
+                            }
                             hideNativeSettingsButton()
                         },
                     )
@@ -761,25 +766,30 @@ private fun NativePlayer(
             update = { v -> v.resizeMode = aspectMode.resizeMode },
         )
 
-        // So quando o menu esta oculto: toque mostra controles/timeline
-        // (nao fica por cima da barra de progresso quando visivel)
-        if (!controlsVisible) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = {
-                                val pv = playerViewRef
-                                if (pv != null) {
-                                    pv.showController()
-                                }
+
+        // Toque em qualquer lugar: abre/fecha menu + timeline
+        // Com menu visivel, deixa livre o rodape (seek + chips) e o topo (Voltar)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    top = if (controlsVisible) 56.dp else 0.dp,
+                    bottom = if (controlsVisible) 96.dp else 0.dp,
+                )
+                .pointerInput(controlsVisible) {
+                    detectTapGestures(
+                        onTap = {
+                            if (controlsVisible) {
+                                playerViewRef?.hideController()
+                                controlsVisible = false
+                            } else {
+                                playerViewRef?.showController()
                                 controlsVisible = true
-                            },
-                        )
-                    },
-            )
-        }
+                            }
+                        },
+                    )
+                },
+        )
 
         // Zonas de gesto: 28% esquerda = brilho, 28% direita = volume
         Box(
