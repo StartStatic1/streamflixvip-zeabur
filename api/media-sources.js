@@ -1,19 +1,15 @@
 // api/media-sources.js
 //
 // Resolve fontes de filme/série (vip_sources) no SERVIDOR.
-// O app antigo lia vip_sources direto no Supabase com anon key —
-// qualquer MOD conseguia as URLs sem login real.
-//
-// Soft (padrão): devolve fontes sem exigir token (site/app antigo ok).
-// Hard REQUIRE_AUTH_MEDIA=1: exige JWT Supabase válido.
-//   - Título com vip_lock (vip_titles): exige VIP real no banco
-//   - Demais títulos: login free basta (anúncio/espera continua no client)
+// Soft/hard auth + vip_lock iguais a antes.
+// Depois das fontes IPTV/manuais, anexa streams HTTP dos add-ons Stremio ativos.
 //
 // GET /api/media-sources?tmdb_id=123&type=movie
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&episode=2
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&list_episodes=1
 
 const { resolveVipAccess } = require('../lib/vip-gate');
+const { collectAddonSources } = require('../lib/stremio-addons');
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
@@ -129,7 +125,6 @@ async function handler(req, res) {
     return;
   }
 
-  // Modo lista: quais EPs da temporada tem fonte (app marca "Sem fonte")
   if (String(req.query.list_episodes || '') === '1' && mediaType === 'tv' && season != null) {
     try {
       const episodesWithSources = await loadEpisodesWithSources(serviceKey, tmdbId, season);
@@ -142,8 +137,6 @@ async function handler(req, res) {
   }
 
   const hard = isMediaAuthHard();
-  // IMPORTANTE: serviceKey obrigatorio — sem ele checkVipStatus sempre retorna isVip=false
-  // e titulos VIP_LOCK aparecem como "sem fonte" mesmo para usuarios VIP.
   const access = await resolveVipAccess(req, serviceKey);
   const loggedIn = access.source === 'jwt' || access.source === 'userId' || access.source === 'deviceId';
 
@@ -191,10 +184,37 @@ async function handler(req, res) {
 
   try {
     let sources = await loadSources(serviceKey, tmdbId, mediaType, season, episode);
+
+    // Add-ons Stremio: nao bloqueia se falhar; so enriquece a lista
+    try {
+      const addonSources = await collectAddonSources(
+        serviceKey,
+        tmdbId,
+        mediaType,
+        season,
+        episode,
+      );
+      if (addonSources.length) {
+        const existing = new Set(sources.map((s) => s.source_url));
+        for (const a of addonSources) {
+          if (!existing.has(a.source_url)) {
+            sources.push(a);
+            existing.add(a.source_url);
+          }
+        }
+        console.log(`[media-sources] addons +${addonSources.length} tmdb=${tmdbId}`);
+      }
+    } catch (addonErr) {
+      console.warn('[media-sources] addons skip:', addonErr.message);
+    }
+
     sources = sources.slice().sort((a, b) => {
       const aVip = a.source_label === 'MegaEmbed VIP' ? 1 : 0;
       const bVip = b.source_label === 'MegaEmbed VIP' ? 1 : 0;
-      return bVip - aVip;
+      if (bVip !== aVip) return bVip - aVip;
+      const ap = a.priority != null ? a.priority : 0;
+      const bp = b.priority != null ? b.priority : 0;
+      return bp - ap;
     });
 
     res.status(200).json({
