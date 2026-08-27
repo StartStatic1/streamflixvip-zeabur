@@ -32,11 +32,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.streamflixvip.app.network.VipSource
 
-/** Cores do sheet de servidores — IPTV roxo, add-on ciano, qualidade em badge. */
+/** Cores do sheet — recomendado roxo; demais neutros; badges com contraste. */
 private val PurpleRec = Color(0xFF7C5CFF)
-private val CyanAddon = Color(0xFF2EC4B6)
+private val CyanAccent = Color(0xFF2EC4B6)
 private val GoldVip = Color(0xFFE8A317)
 private val BlueHd = Color(0xFF3B82F6)
+private val OrangeSd = Color(0xFFF59E0B)
 
 internal fun isAddonSourceLabel(label: String?): Boolean {
     val l = label.orEmpty()
@@ -110,7 +111,8 @@ fun ServerSectionLabel(text: String, accent: Color) {
 }
 
 /**
- * Card de servidor no sheet: IPTV (roxo), Add-on (ciano), VIP locked (dourado).
+ * Card de servidor no sheet.
+ * Sem texto "IPTV" / "Add-on" — so RECOMENDADO, PREMIUM e audio se houver.
  */
 @Composable
 fun ServerSourceCard(
@@ -120,26 +122,27 @@ fun ServerSourceCard(
     onClick: () -> Unit,
     onLockedClick: () -> Unit,
 ) {
-    val addon = isAddonSourceLabel(source.source_label)
     val badge = qualityFromLabel(source.source_label)
     val audio = audioFromLabel(source.source_label)
     val accent = when {
         isLockedForFree -> GoldVip
         isRecommended -> PurpleRec
-        addon -> CyanAddon
-        else -> PurpleRec.copy(alpha = 0.85f)
+        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
     }
+    // Badges com contraste forte (720p nao usa ciano do card antigo)
     val badgeBg = when (badge?.uppercase()) {
-        "4K" -> GoldVip.copy(alpha = 0.22f)
-        "1080P" -> BlueHd.copy(alpha = 0.22f)
-        "720P" -> CyanAddon.copy(alpha = 0.22f)
-        "HD" -> BlueHd.copy(alpha = 0.18f)
+        "4K" -> GoldVip.copy(alpha = 0.28f)
+        "1080P" -> BlueHd.copy(alpha = 0.28f)
+        "720P" -> OrangeSd.copy(alpha = 0.26f)
+        "HD" -> BlueHd.copy(alpha = 0.20f)
+        "SD" -> MaterialTheme.colorScheme.surfaceVariant
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
     val badgeFg = when (badge?.uppercase()) {
         "4K" -> GoldVip
         "1080P" -> Color(0xFF60A5FA)
-        "720P" -> CyanAddon
+        "720P" -> OrangeSd
+        "HD" -> Color(0xFF60A5FA)
         else -> MaterialTheme.colorScheme.onSurface
     }
 
@@ -149,13 +152,11 @@ fun ServerSourceCard(
         color = when {
             isLockedForFree -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
             isRecommended -> PurpleRec.copy(alpha = 0.28f)
-            addon -> CyanAddon.copy(alpha = 0.10f)
             else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
         },
         border = when {
             isLockedForFree -> BorderStroke(1.dp, GoldVip.copy(alpha = 0.40f))
             isRecommended -> BorderStroke(1.5.dp, PurpleRec.copy(alpha = 0.55f))
-            addon -> BorderStroke(1.dp, CyanAddon.copy(alpha = 0.35f))
             else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
         },
         tonalElevation = if (isRecommended) 4.dp else 0.dp,
@@ -214,15 +215,13 @@ fun ServerSourceCard(
                 )
                 Spacer(Modifier.height(3.dp))
                 when {
-                    isLockedForFree -> {
-                        Text(
-                            if (addon) "ADD-ON EXCLUSIVO VIP" else "PREMIUM",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp,
-                            color = GoldVip,
-                        )
-                    }
+                    isLockedForFree -> Text(
+                        "PREMIUM",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        color = GoldVip,
+                    )
                     isRecommended -> Text(
                         "RECOMENDADO",
                         fontSize = 10.sp,
@@ -230,21 +229,11 @@ fun ServerSourceCard(
                         letterSpacing = 0.6.sp,
                         color = PurpleRec,
                     )
-                    else -> {
-                        val hint = buildString {
-                            append(if (addon) "Add-on extra" else "IPTV")
-                            if (audio != null) {
-                                append(" · ")
-                                append(audio)
-                            }
-                        }
-                        Text(
-                            hint,
-                            fontSize = 11.sp,
-                            color = if (addon) CyanAddon.copy(alpha = 0.95f)
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    audio != null -> Text(
+                        audio,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
             badge?.let {
