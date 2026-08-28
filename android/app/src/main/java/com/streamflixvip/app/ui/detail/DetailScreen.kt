@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -166,29 +167,32 @@ fun DetailScreen(
                 val sheetState = rememberModalBottomSheetState()
                 var showPremiumSheet by remember { mutableStateOf(false) }
                 ModalBottomSheet(onDismissRequest = { showMovieServerPicker = false }, sheetState = sheetState) {
-                    Column(Modifier.padding(bottom = 24.dp)) {
-                        Text(
-                            "Escolha o servidor",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp),
-                        )
-                        Column(Modifier.padding(horizontal = 20.dp)) {
-                            s.movieSources.forEachIndexed { index, source ->
-                                val isAddon = isAddonSourceLabel(source.source_label)
-                                val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
-                                SourceRow(
-                                    source = source,
-                                    isRecommended = index == 0 && !isAddon,
-                                    isLockedForFree = lockedForFree,
-                                    onClick = {
-                                        showMovieServerPicker = false
-                                        pendingWatch = PendingSource(source, 0, 0)
-                                    },
-                                    onLockedClick = { showPremiumSheet = true },
-                                )
-                                Spacer(Modifier.height(8.dp))
-                            }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 48.dp),
+                    ) {
+                        item {
+                            Text(
+                                "Escolha o servidor",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier.padding(bottom = 12.dp),
+                            )
+                        }
+                        itemsIndexed(s.movieSources) { index, source ->
+                            val isAddon = isAddonSourceLabel(source.source_label)
+                            val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
+                            SourceRow(
+                                source = source,
+                                isRecommended = index == 0 && !isAddon,
+                                isLockedForFree = lockedForFree,
+                                onClick = {
+                                    showMovieServerPicker = false
+                                    pendingWatch = PendingSource(source, 0, 0)
+                                },
+                                onLockedClick = { showPremiumSheet = true },
+                            )
+                            Spacer(Modifier.height(8.dp))
                         }
                     }
                 }
@@ -480,29 +484,32 @@ private fun DetailContent(
             onDismissRequest = onDismissServerPicker,
             sheetState = sheetState,
         ) {
-            Column(Modifier.padding(bottom = 24.dp)) {
-                Text(
-                    "Episódio ${state.showServerPickerForEpisode} · Escolha o servidor",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
-                )
-                Column(Modifier.padding(horizontal = 20.dp)) {
-                    state.episodeSources.forEachIndexed { index, source ->
-                        val isAddon = isAddonSourceLabel(source.source_label)
-                                val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
-                        SourceRow(
-                            source = source,
-                            isRecommended = index == 0 && !isAddon,
-                            isLockedForFree = lockedForFree,
-                            onClick = {
-                                onDismissServerPicker()
-                                onRequestWatch(source, state.selectedSeason ?: 0, state.selectedEpisode ?: 0)
-                            },
-                            onLockedClick = { showPremiumSheet = true },
-                        )
-                        Spacer(Modifier.height(8.dp))
-                    }
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 48.dp),
+            ) {
+                item {
+                    Text(
+                        "Episódio ${state.showServerPickerForEpisode} · Escolha o servidor",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 12.dp),
+                    )
+                }
+                itemsIndexed(state.episodeSources) { index, source ->
+                    val isAddon = isAddonSourceLabel(source.source_label)
+                    val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
+                    SourceRow(
+                        source = source,
+                        isRecommended = index == 0 && !isAddon,
+                        isLockedForFree = lockedForFree,
+                        onClick = {
+                            onDismissServerPicker()
+                            onRequestWatch(source, state.selectedSeason ?: 0, state.selectedEpisode ?: 0)
+                        },
+                        onLockedClick = { showPremiumSheet = true },
+                    )
+                    Spacer(Modifier.height(8.dp))
                 }
             }
         }
