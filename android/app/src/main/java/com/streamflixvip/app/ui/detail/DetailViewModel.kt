@@ -12,6 +12,7 @@ import com.streamflixvip.app.network.TmdbResponse
 import com.streamflixvip.app.network.VipSource
 import com.streamflixvip.app.network.VipTitleConfig
 import com.streamflixvip.app.network.requiresVip
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -24,6 +25,8 @@ sealed interface DetailUiState {
         val mediaType: String,
         val tmdbId: Int,
         val movieSources: List<VipSource> = emptyList(),
+        /** true enquanto /media-sources do filme ainda carrega em background */
+        val isLoadingMovieSources: Boolean = false,
         val vipConfig: VipTitleConfig? = null,
         val expandedSeason: Int? = null,
         val episodesOfExpandedSeason: List<TmdbEpisode> = emptyList(),
@@ -75,27 +78,46 @@ class DetailViewModel(
         viewModelScope.launch {
             _uiState.value = DetailUiState.Loading
             try {
-                val details = if (mediaType == "tv") {
-                    repository.getSeriesDetails(tmdbId)
-                } else {
-                    repository.getMovieDetails(tmdbId)
+                // Detalhes TMDB + vipConfig em paralelo — tela aparece sem esperar fontes
+                val detailsDeferred = async {
+                    if (mediaType == "tv") repository.getSeriesDetails(tmdbId)
+                    else repository.getMovieDetails(tmdbId)
                 }
-
-                val movieSources = if (mediaType == "movie") {
-                    repository.getSourcesForMovie(tmdbId)
-                } else {
-                    emptyList()
+                val vipDeferred = async {
+                    try {
+                        repository.getVipTitleConfig(tmdbId, mediaType)
+                    } catch (_: Exception) {
+                        null
+                    }
                 }
-                val vipConfig = repository.getVipTitleConfig(tmdbId, mediaType)
+                val details = detailsDeferred.await()
+                val vipConfig = vipDeferred.await()
 
                 _uiState.value = DetailUiState.Success(
                     details = details,
                     mediaType = mediaType,
                     tmdbId = tmdbId,
-                    movieSources = movieSources,
+                    movieSources = emptyList(),
+                    isLoadingMovieSources = mediaType == "movie",
                     vipConfig = vipConfig,
                     canPostComments = userId != null && accessToken != null,
                 )
+
+                // Fontes do filme em background (add-ons podem demorar)
+                if (mediaType == "movie") {
+                    launch {
+                        val sources = try {
+                            repository.getSourcesForMovie(tmdbId)
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                        val still = _uiState.value as? DetailUiState.Success ?: return@launch
+                        _uiState.value = still.copy(
+                            movieSources = sources,
+                            isLoadingMovieSources = false,
+                        )
+                    }
+                }
 
                 if (userId != null && accessToken != null) {
                     launch {
@@ -135,7 +157,15 @@ class DetailViewModel(
         }
         _uiState.value = current.copy(expandedSeason = season, episodesOfExpandedSeason = emptyList(), isLoadingEpisodes = true)
         viewModelScope.launch {
+            // Episódios TMDB primeiro (rápido); marca de fontes em paralelo
             val episodes = repository.getSeasonEpisodes(tmdbId, season)
+            val mid = _uiState.value as? DetailUiState.Success
+            if (mid != null && mid.expandedSeason == season) {
+                _uiState.value = mid.copy(
+                    episodesOfExpandedSeason = episodes,
+                    isLoadingEpisodes = false,
+                )
+            }
             var withSources: Set<Int>? = null
             try {
                 val resp = NetworkModule.mediaSourcesApi.getSeasonEpisodesWithSources(tmdbId = tmdbId, season = season)
@@ -145,11 +175,7 @@ class DetailViewModel(
             }
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             if (stillCurrent.expandedSeason == season) {
-                _uiState.value = stillCurrent.copy(
-                    episodesOfExpandedSeason = episodes,
-                    isLoadingEpisodes = false,
-                    episodesWithSources = withSources,
-                )
+                _uiState.value = stillCurrent.copy(episodesWithSources = withSources)
             }
         }
     }
@@ -266,6 +292,13 @@ class DetailViewModel(
         )
         viewModelScope.launch {
             val episodes = repository.getSeasonEpisodes(tmdbId, season)
+            val mid = _uiState.value as? DetailUiState.Success
+            if (mid != null && mid.expandedSeason == season) {
+                _uiState.value = mid.copy(
+                    episodesOfExpandedSeason = episodes,
+                    isLoadingEpisodes = false,
+                )
+            }
             var withSources: Set<Int>? = null
             try {
                 val resp = NetworkModule.mediaSourcesApi.getSeasonEpisodesWithSources(tmdbId = tmdbId, season = season)
@@ -275,11 +308,7 @@ class DetailViewModel(
             }
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             if (stillCurrent.expandedSeason == season) {
-                _uiState.value = stillCurrent.copy(
-                    episodesOfExpandedSeason = episodes,
-                    isLoadingEpisodes = false,
-                    episodesWithSources = withSources,
-                )
+                _uiState.value = stillCurrent.copy(episodesWithSources = withSources)
             }
         }
     }
