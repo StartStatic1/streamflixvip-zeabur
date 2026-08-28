@@ -379,17 +379,28 @@ private fun NativePlayer(
             .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
         if (!onlineSubtitleApplied) {
             val subPref = preferredSubtitleKey
-            if (subPref.isBlank() || subPref == "off") {
-                builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                selectedSubtitleLabel = "Desligada"
-            } else {
-                val match = subs.firstOrNull { trackMatchesPref(it.label, subPref) }
-                if (match != null) {
-                    builder.setOverrideForType(TrackSelectionOverride(match.group, match.trackIndex))
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                    selectedSubtitleLabel = "Stream: ${match.label}"
+            when {
+                subPref.isBlank() || subPref == "off" -> {
+                    builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    selectedSubtitleLabel = "Desligada"
+                }
+                subPref == "online" -> {
+                    // Legenda externa em carga / re-prepare — nao desligar texto
+                    builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        .setPreferredTextLanguage("pt")
+                }
+                else -> {
+                    val match = subs.firstOrNull { trackMatchesPref(it.label, subPref) }
+                    if (match != null) {
+                        builder.setOverrideForType(TrackSelectionOverride(match.group, match.trackIndex))
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        selectedSubtitleLabel = "Stream: ${match.label}"
+                    }
                 }
             }
+        } else {
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setPreferredTextLanguage("pt")
         }
         val audioPref = preferredAudioKey
         if (audioPref.isNotBlank() && audioPref != "default") {
@@ -602,7 +613,7 @@ private fun NativePlayer(
                 onlineSubtitlesError = resp.error
                 onlineSubtitleResults = emptyList()
             } else {
-                onlineSubtitleResults = resp.results.filter { it.file_id != null }.take(12)
+                onlineSubtitleResults = resp.results.filter { it.file_id != null || !it.url.isNullOrBlank() }.take(12)
                 if (onlineSubtitleResults.isEmpty()) {
                     onlineSubtitlesError = "Nenhuma legenda PT-BR encontrada"
                 }
@@ -616,7 +627,12 @@ private fun NativePlayer(
     }
 
     suspend fun applyOnlineSubtitle(item: SubtitleSearchItem) {
-        val fileId = item.file_id ?: return
+        val fileId = item.file_id
+        val directUrl = item.url
+        if (fileId == null && directUrl.isNullOrBlank()) {
+            onlineSubtitlesError = "Legenda sem arquivo"
+            return
+        }
         onlineSubtitlesLoading = true
         onlineSubtitlesError = null
         try {
@@ -624,6 +640,7 @@ private fun NativePlayer(
             val episodeArg = if (mediaType == "tv" && currentEpisode > 0) currentEpisode else null
             val resp = NetworkModule.subtitlesApi.download(
                 fileId = fileId,
+                url = directUrl,
                 tmdbId = tmdbId,
                 mediaType = if (mediaType == "tv") "tv" else "movie",
                 season = seasonArg,
@@ -638,15 +655,35 @@ private fun NativePlayer(
             file.writeText(content)
             val pos = exoPlayer.currentPosition
             val wasPlaying = exoPlayer.playWhenReady
+            // Marca ANTES do prepare para o listener de tracks nao desligar a faixa
+            onlineSubtitleApplied = true
+            persistSubtitleKey("online")
+            val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "…" else it }
+            selectedSubtitleLabel = "Online: $short"
+            trackSelector.parameters = trackSelector.parameters.buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setPreferredTextLanguage("pt")
+                .build()
             val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
-                .setMimeType(MimeTypes.TEXT_VTT)
+                .setMimeType(MimeTypes.APPLICATION_SUBRIP)
                 .setLanguage("pt")
                 .setLabel(item.release ?: "Online PT-BR")
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                 .build()
+            // Tambem tenta VTT se o conteudo ja for WebVTT
+            val isVtt = content.trimStart().startsWith("WEBVTT", ignoreCase = true)
+            val subConfigFinal = if (isVtt) {
+                MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                    .setMimeType(MimeTypes.TEXT_VTT)
+                    .setLanguage("pt")
+                    .setLabel(item.release ?: "Online PT-BR")
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                    .build()
+            } else subConfig
             val mediaItem = MediaItem.Builder()
                 .setUri(activeUrl)
-                .setSubtitleConfigurations(listOf(subConfig))
+                .setSubtitleConfigurations(listOf(subConfigFinal))
                 .build()
             exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
@@ -655,13 +692,11 @@ private fun NativePlayer(
             trackSelector.parameters = trackSelector.parameters.buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                .setPreferredTextLanguage("pt")
                 .build()
-            val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "…" else it }
-            selectedSubtitleLabel = "Online: $short"
-            onlineSubtitleApplied = true
-            persistSubtitleKey("online")
             settingsPanel = SettingsPanel.MAIN
         } catch (e: Exception) {
+            onlineSubtitleApplied = false
             onlineSubtitlesError = e.message ?: "Falha ao baixar legenda"
         } finally {
             onlineSubtitlesLoading = false
