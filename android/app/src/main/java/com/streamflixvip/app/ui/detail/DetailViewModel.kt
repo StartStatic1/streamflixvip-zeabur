@@ -78,20 +78,9 @@ class DetailViewModel(
         viewModelScope.launch {
             _uiState.value = DetailUiState.Loading
             try {
-                // Detalhes TMDB + vipConfig em paralelo — tela aparece sem esperar fontes
-                val detailsDeferred = async {
-                    if (mediaType == "tv") repository.getSeriesDetails(tmdbId)
-                    else repository.getMovieDetails(tmdbId)
-                }
-                val vipDeferred = async {
-                    try {
-                        repository.getVipTitleConfig(tmdbId, mediaType)
-                    } catch (_: Exception) {
-                        null
-                    }
-                }
-                val details = detailsDeferred.await()
-                val vipConfig = vipDeferred.await()
+                // So TMDB bloqueia a tela — vip + fontes em background (evita 6-7s de spinner)
+                val details = if (mediaType == "tv") repository.getSeriesDetails(tmdbId)
+                else repository.getMovieDetails(tmdbId)
 
                 _uiState.value = DetailUiState.Success(
                     details = details,
@@ -99,9 +88,20 @@ class DetailViewModel(
                     tmdbId = tmdbId,
                     movieSources = emptyList(),
                     isLoadingMovieSources = mediaType == "movie",
-                    vipConfig = vipConfig,
+                    vipConfig = null,
                     canPostComments = userId != null && accessToken != null,
                 )
+
+                // VIP config em paralelo (nao trava abertura)
+                launch {
+                    val vipConfig = try {
+                        repository.getVipTitleConfig(tmdbId, mediaType)
+                    } catch (_: Exception) {
+                        null
+                    }
+                    val still = _uiState.value as? DetailUiState.Success ?: return@launch
+                    _uiState.value = still.copy(vipConfig = vipConfig)
+                }
 
                 // Fontes do filme em background (add-ons podem demorar)
                 if (mediaType == "movie") {

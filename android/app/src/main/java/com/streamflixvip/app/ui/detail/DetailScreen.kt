@@ -344,25 +344,15 @@ private fun DetailContent(
                 }
             } else if (state.isLoadingMovieSources) {
                 item {
-                    Row(
+                    // Indicador discreto — fontes chegam em background sem travar a tela
+                    Text(
+                        "Carregando servidores…",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            "Buscando fontes…",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
                 }
             } else if (state.movieSources.isEmpty()) {
                 item {
