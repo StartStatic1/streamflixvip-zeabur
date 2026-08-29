@@ -657,11 +657,17 @@ private fun NativePlayer(
             val body = if (content.trimStart().startsWith("WEBVTT", ignoreCase = true)) {
                 content
             } else {
-                "WEBVTT
-
-" + content
-                    .replace("", "")
-                    .replace(Regex("(\d{2}:\d{2}:\d{2}),(\d{3})"), "$1.$2")
+                val srt = content.replace("\r", "")
+                val sb = StringBuilder()
+                sb.append("WEBVTT\n\n")
+                for (line in srt.lineSequence()) {
+                    if (line.contains("-->")) {
+                        sb.append(line.replace(',', '.')).append('\n')
+                    } else {
+                        sb.append(line).append('\n')
+                    }
+                }
+                sb.toString()
             }
             val file = File(context.cacheDir, "os_${tmdbId}_${currentSeason}_${currentEpisode}.vtt")
             file.writeText(body)
