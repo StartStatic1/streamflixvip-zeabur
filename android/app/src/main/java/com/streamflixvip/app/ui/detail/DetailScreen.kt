@@ -1764,19 +1764,39 @@ private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit
 @Composable
 private fun MovieRequestCard() {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val telegramUrl = "https://t.me/streamflixofc/7335"
+    // Comunidade WhatsApp — pedidos de catálogo e novidades
+    val requestUrl = "https://chat.whatsapp.com/FAxyer3o2pe8x3JXZJBDDV"
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
         modifier = Modifier.fillMaxWidth().padding(16.dp),
     ) {
         Column(Modifier.padding(16.dp)) {
-            Text("Este filme ainda não está no catálogo", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text("Ainda não está na grade", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(6.dp))
-            Text("Quer assistir? Peça no nosso canal e a equipe analisa a inclusão o mais rápido possível.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp)
+            Text(
+                "Quer esse título no catálogo? Manda o pedido na comunidade — a equipe analisa e coloca na programação o mais rápido possível.",
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 18.sp,
+            )
             Spacer(Modifier.height(14.dp))
-            Button(onClick = { try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(telegramUrl))) } catch (_: Exception) { } }, shape = RoundedCornerShape(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Text("Pedir este filme no Telegram", fontWeight = FontWeight.SemiBold)
+            Button(
+                onClick = {
+                    try {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(requestUrl),
+                            ),
+                        )
+                    } catch (_: Exception) { }
+                },
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+            ) {
+                Text("Pedir este filme no WhatsApp", fontWeight = FontWeight.SemiBold, color = Color.White)
             }
         }
     }

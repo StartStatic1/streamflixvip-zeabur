@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PrivacyTip
+import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
@@ -43,7 +45,8 @@ import com.streamflixvip.app.ui.vip.VipViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private const val TELEGRAM_URL = "https://t.me/streamflixofc"
+private const val WHATSAPP_SUPPORT_URL = "https://wa.me/558498334731"
+private const val WHATSAPP_COMMUNITY_URL = "https://chat.whatsapp.com/FAxyer3o2pe8x3JXZJBDDV"
 private const val SUPPORT_EMAIL = "streamflixvip@outlook.com"
 private val Accent = Color(0xFF00E5FF)
 
@@ -177,21 +180,29 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(28.dp))
         }
 
-        SectionTitle("Contato Oficial")
+        SectionTitle("Central de Atendimento")
+        ProfileInfoCard(
+            icon = Icons.Filled.Chat,
+            title = "Suporte VIP · WhatsApp",
+            subtitle = "Atendimento rápido · conta, pagamento e pedidos",
+            iconTint = Color(0xFF25D366),
+            onClick = { uriHandler.openUri(WHATSAPP_SUPPORT_URL) },
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        ProfileInfoCard(
+            icon = Icons.Filled.Groups,
+            title = "Comunidade StreamFlix",
+            subtitle = "Novidades, bastidores e pedidos de filmes",
+            iconTint = Color(0xFF25D366),
+            onClick = { uriHandler.openUri(WHATSAPP_COMMUNITY_URL) },
+        )
+        Spacer(modifier = Modifier.height(8.dp))
         ProfileInfoCard(
             icon = Icons.Filled.Email,
             title = "E-mail de Suporte",
             subtitle = SUPPORT_EMAIL,
             iconTint = Color(0xFF29B6F6),
             onClick = { uriHandler.openUri("mailto:$SUPPORT_EMAIL") },
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        ProfileInfoCard(
-            icon = Icons.Filled.Send,
-            title = "Telegram Oficial",
-            subtitle = "@streamflixofc",
-            iconTint = Color(0xFF29B6F6),
-            onClick = { uriHandler.openUri(TELEGRAM_URL) },
         )
 
         Spacer(modifier = Modifier.height(28.dp))
@@ -288,7 +299,7 @@ fun ProfileScreen(
             body = "O StreamFlixVIP é um app de catálogo e organização de conteúdo. " +
                 "O acesso VIP é pessoal e intransferível. Reservamo-nos o direito de " +
                 "suspender contas em caso de uso indevido ou compartilhamento não autorizado " +
-                "de credenciais. Dúvidas sobre o serviço podem ser tiradas pelo Telegram ou e-mail de suporte.",
+                "de credenciais. Dúvidas sobre o serviço podem ser tiradas pelo WhatsApp de suporte, na comunidade ou por e-mail.",
             onDismiss = { showTermsDialog = false },
         )
     }
