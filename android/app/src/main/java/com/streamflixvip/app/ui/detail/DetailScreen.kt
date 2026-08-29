@@ -341,6 +341,28 @@ private fun DetailContent(
                         VipLockCard(onUpgradeClick = onUpgradeClick)
                     }
                 }
+            } else if (state.isLoadingMovieSources) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Buscando fontes…",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             } else if (state.movieSources.isEmpty()) {
                 item {
                     MovieRequestCard()

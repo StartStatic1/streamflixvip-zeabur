@@ -77,12 +77,15 @@ import androidx.media3.common.TrackGroup
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.SingleSampleMediaSource
+import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -651,11 +654,19 @@ private fun NativePlayer(
                 onlineSubtitlesError = resp.error ?: "Legenda vazia"
                 return
             }
+            val body = if (content.trimStart().startsWith("WEBVTT", ignoreCase = true)) {
+                content
+            } else {
+                "WEBVTT
+
+" + content
+                    .replace("", "")
+                    .replace(Regex("(\d{2}:\d{2}:\d{2}),(\d{3})"), "$1.$2")
+            }
             val file = File(context.cacheDir, "os_${tmdbId}_${currentSeason}_${currentEpisode}.vtt")
-            file.writeText(content)
+            file.writeText(body)
             val pos = exoPlayer.currentPosition
             val wasPlaying = exoPlayer.playWhenReady
-            // Marca ANTES do prepare para o listener de tracks nao desligar a faixa
             onlineSubtitleApplied = true
             persistSubtitleKey("online")
             val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "…" else it }
@@ -664,35 +675,43 @@ private fun NativePlayer(
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .setPreferredTextLanguage("pt")
+                .setSelectUndeterminedTextLanguage(true)
                 .build()
-            val subConfig = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
-                .setMimeType(MimeTypes.APPLICATION_SUBRIP)
+            val httpDs = DefaultHttpDataSource.Factory()
+                .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
+                .setDefaultRequestProperties(
+                    mapOf(
+                        "Referer" to activeUrl,
+                        "Connection" to "keep-alive",
+                        "Icy-MetaData" to "1",
+                    ),
+                )
+            val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
+            val videoItem = MediaItem.fromUri(activeUrl)
+            val videoSource = if (isLikelyHls(activeUrl)) {
+                HlsMediaSource.Factory(httpDs).createMediaSource(videoItem)
+            } else {
+                ProgressiveMediaSource.Factory(httpDs, extractors).createMediaSource(videoItem)
+            }
+            val subCfg = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                .setMimeType(MimeTypes.TEXT_VTT)
                 .setLanguage("pt")
                 .setLabel(item.release ?: "Online PT-BR")
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                 .build()
-            // Tambem tenta VTT se o conteudo ja for WebVTT
-            val isVtt = content.trimStart().startsWith("WEBVTT", ignoreCase = true)
-            val subConfigFinal = if (isVtt) {
-                MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
-                    .setMimeType(MimeTypes.TEXT_VTT)
-                    .setLanguage("pt")
-                    .setLabel(item.release ?: "Online PT-BR")
-                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                    .build()
-            } else subConfig
-            val mediaItem = MediaItem.Builder()
-                .setUri(activeUrl)
-                .setSubtitleConfigurations(listOf(subConfigFinal))
-                .build()
-            exoPlayer.setMediaItem(mediaItem)
+            val subSource = SingleSampleMediaSource.Factory(DefaultDataSource.Factory(context))
+                .createMediaSource(subCfg, C.TIME_UNSET)
+            val merged = MergingMediaSource(videoSource, subSource)
+            pendingReapplyTracks = true
+            exoPlayer.setMediaSource(merged)
             exoPlayer.prepare()
-            exoPlayer.seekTo(pos)
+            if (pos > 1000L) exoPlayer.seekTo(pos)
             exoPlayer.playWhenReady = wasPlaying
             trackSelector.parameters = trackSelector.parameters.buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                 .setPreferredTextLanguage("pt")
+                .setSelectUndeterminedTextLanguage(true)
                 .build()
             settingsPanel = SettingsPanel.MAIN
         } catch (e: Exception) {
