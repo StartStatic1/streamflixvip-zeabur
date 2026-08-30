@@ -1,0 +1,21 @@
+name: fix-hero-cinema-loading
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/fix_hero_cinema_loading.py'
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/fix_hero_cinema_loading.py
+      - name: Commit
+        run: |
+          git config user.name "streamflix-bot"
+          git config user.email "bot@streamflix.local"
+          git add android/app/src/main/java/com/streamflixvip/app/ui/detail/DetailScreen.kt || true
+          if git diff --cached --quiet; then echo "no change"; else
+            git commit -m "ux: loading cinema premium no lugar do Assistir"
+            git push
+          fi
