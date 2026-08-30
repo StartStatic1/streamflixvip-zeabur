@@ -3,8 +3,8 @@
 // Resolve fontes de filme/série (vip_sources) no SERVIDOR.
 // Soft/hard auth + vip_lock iguais a antes.
 // VIP: anexa streams reais dos add-ons.
-// Free: anexa add-ons de VÍDEO como cards PREMIUM (sem URL).
-// Add-ons de legenda/catálogo não entram na lista de servidores.
+// Free: anexa só add-ons de VÍDEO como cards PREMIUM (sem URL).
+// Legenda, catálogo e add-on de teste não entram na lista.
 //
 // GET /api/media-sources?tmdb_id=123&type=movie
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&episode=2
@@ -28,10 +28,14 @@ function sbHeaders(serviceKey) {
   };
 }
 
-function isSubtitleOrCatalogAddon(name) {
-  const t = String(name || '').toLowerCase();
-  if (!t) return true;
-  return /subtitle|legendas|opensubtitles|caption|\bsubs?\b|community subtitles|catalog/.test(t);
+function isVideoServerAddon(name) {
+  const t = String(name || '').toLowerCase().trim();
+  if (!t) return false;
+  if (/subtitle|legendas|opensubtitles|caption|\bsubs?\b|community subtitles|catalog|nexio|anilist|torii|nagare/.test(t)) {
+    return false;
+  }
+  if (t.startsWith('streamflix.')) return true;
+  return /fenix|frost|flix-streams|king\s?vod|bscine|popplay|comet|nuvio|megasource|webstream|allinone|bridge/.test(t);
 }
 
 async function loadVipTitleConfig(serviceKey, tmdbId, mediaType) {
@@ -105,7 +109,7 @@ async function lockedAddonStubs(serviceKey) {
   const out = [];
   for (const a of addons) {
     const name = String(a.name || '').trim();
-    if (!name || isSubtitleOrCatalogAddon(name)) continue;
+    if (!isVideoServerAddon(name)) continue;
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
