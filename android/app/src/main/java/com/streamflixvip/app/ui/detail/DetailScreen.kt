@@ -171,6 +171,15 @@ fun DetailScreen(
             if (showMovieServerPicker) {
                 val sheetState = rememberModalBottomSheetState()
                 var showPremiumSheet by remember { mutableStateOf(false) }
+                // Auto: 1 fonte pronta enquanto sheet aberto → segue pro play
+                LaunchedEffect(s.movieSources, s.isLoadingMovieSources, showMovieServerPicker) {
+                    if (!showMovieServerPicker) return@LaunchedEffect
+                    if (s.isLoadingMovieSources) return@LaunchedEffect
+                    if (s.movieSources.size == 1) {
+                        showMovieServerPicker = false
+                        pendingWatch = PendingSource(s.movieSources.first(), 0, 0)
+                    }
+                }
                 ModalBottomSheet(onDismissRequest = { showMovieServerPicker = false }, sheetState = sheetState) {
                     LazyColumn(
                         modifier = Modifier.fillMaxWidth(),
@@ -184,20 +193,35 @@ fun DetailScreen(
                                 modifier = Modifier.padding(bottom = 12.dp),
                             )
                         }
-                        itemsIndexed(s.movieSources) { index, source ->
-                            val isAddon = isAddonSourceLabel(source.source_label)
-                            val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
-                            SourceRow(
-                                source = source,
-                                isRecommended = index == 0 && !isAddon,
-                                isLockedForFree = lockedForFree,
-                                onClick = {
-                                    showMovieServerPicker = false
-                                    pendingWatch = PendingSource(source, 0, 0)
-                                },
-                                onLockedClick = { showPremiumSheet = true },
-                            )
-                            Spacer(Modifier.height(8.dp))
+                        if (s.movieSources.isEmpty() && s.isLoadingMovieSources) {
+                            item {
+                                CinemaServersLoading()
+                            }
+                        } else if (s.movieSources.isEmpty() && !s.isLoadingMovieSources) {
+                            item {
+                                Text(
+                                    "Nenhum servidor disponível agora. Tente de novo em instantes.",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 20.dp),
+                                )
+                            }
+                        } else {
+                            itemsIndexed(s.movieSources) { index, source ->
+                                val isAddon = isAddonSourceLabel(source.source_label)
+                                val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
+                                SourceRow(
+                                    source = source,
+                                    isRecommended = index == 0 && !isAddon,
+                                    isLockedForFree = lockedForFree,
+                                    onClick = {
+                                        showMovieServerPicker = false
+                                        pendingWatch = PendingSource(source, 0, 0)
+                                    },
+                                    onLockedClick = { showPremiumSheet = true },
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
                         }
                     }
                 }
@@ -1754,6 +1778,74 @@ private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CinemaServersLoading() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 28.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text("🎬", fontSize = 36.sp)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Preparando a sessão…",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Buscando os melhores servidores para este título",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        Spacer(Modifier.height(20.dp))
+        // Barrinha estilo “claquete / progressão de sessão”
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .height(6.dp)
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+        ) {
+            var progress by remember { mutableStateOf(0f) }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    progress = 0f
+                    val steps = 24
+                    repeat(steps) {
+                        progress = (it + 1) / steps.toFloat()
+                        kotlinx.coroutines.delay(90)
+                    }
+                    kotlinx.coroutines.delay(200)
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progress.coerceIn(0.08f, 1f))
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(
+                                Color(0xFF00E5FF),
+                                Color(0xFF7C5CFF),
+                            ),
+                        ),
+                    ),
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(
+            "Luz, câmera… servidores",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            fontWeight = FontWeight.Medium,
+        )
     }
 }
 
