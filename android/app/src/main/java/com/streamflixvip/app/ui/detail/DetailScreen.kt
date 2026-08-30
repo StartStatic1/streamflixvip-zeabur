@@ -10,6 +10,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -146,10 +147,6 @@ fun DetailScreen(
                 },
                 onWatchMovieNow = {
                     when {
-                        s.movieSources.isEmpty() && s.isLoadingMovieSources -> {
-                            // Ainda buscando — abre sheet; lista preenche quando chegar
-                            showMovieServerPicker = true
-                        }
                         s.movieSources.size == 1 -> pendingWatch = PendingSource(s.movieSources.first(), 0, 0)
                         s.movieSources.size > 1 -> showMovieServerPicker = true
                         else -> Unit
@@ -296,10 +293,11 @@ private fun DetailContent(
     // já busca a fonte e decide sozinho, ver loadEpisodeSources). Colocar
     // um botão fixo em cima seria redundante e ambíguo ("qual episódio
     // isso vai tocar?").
-    // Botao visivel cedo: com fontes prontas OU ainda carregando (nao trava 5-9s sem CTA)
+    // Assistir so quando existe fonte — evita clique em titulo fora da grade
+    // (loading embaixo; se vazio, card Pedir filme)
     val heroWatchEnabled = state.mediaType == "movie" &&
         !state.movieIsLocked(isVip) &&
-        (state.movieSources.isNotEmpty() || state.isLoadingMovieSources)
+        state.movieSources.isNotEmpty()
 
     // Controla se o modal de trailer inline está aberto.
     var showTrailerModal by remember { mutableStateOf(false) }
@@ -1783,69 +1781,109 @@ private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit
 
 @Composable
 private fun CinemaServersLoading() {
-    Column(
+    val cyan = Color(0xFF00E5FF)
+    val purple = Color(0xFF7C5CFF)
+    var progress by remember { mutableStateOf(0.12f) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            progress = 0.12f
+            val steps = 28
+            repeat(steps) {
+                progress = 0.12f + (it + 1) / steps.toFloat() * 0.88f
+                kotlinx.coroutines.delay(85)
+            }
+            kotlinx.coroutines.delay(180)
+        }
+    }
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Color(0xFF0A0E16),
+        border = BorderStroke(
+            1.dp,
+            androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(cyan.copy(alpha = 0.55f), purple.copy(alpha = 0.55f))),
+        ),
+        shadowElevation = 8.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 28.dp, horizontal = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(vertical = 8.dp),
     ) {
-        Text("🎬", fontSize = 36.sp)
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "Preparando a sessão…",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Buscando os melhores servidores para este título",
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 12.dp),
-        )
-        Spacer(Modifier.height(20.dp))
-        // Barrinha estilo “claquete / progressão de sessão”
-        Box(
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.85f)
-                .height(6.dp)
-                .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .fillMaxWidth()
+                .padding(horizontal = 22.dp, vertical = 26.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            var progress by remember { mutableStateOf(0f) }
-            LaunchedEffect(Unit) {
-                while (true) {
-                    progress = 0f
-                    val steps = 24
-                    repeat(steps) {
-                        progress = (it + 1) / steps.toFloat()
-                        kotlinx.coroutines.delay(90)
-                    }
-                    kotlinx.coroutines.delay(200)
-                }
-            }
+            // Icone estilo play / sessao (sem emoji basico)
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progress.coerceIn(0.08f, 1f))
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(50))
+                    .size(68.dp)
+                    .clip(RoundedCornerShape(18.dp))
                     .background(
-                        androidx.compose.ui.graphics.Brush.horizontalGradient(
-                            listOf(
-                                Color(0xFF00E5FF),
-                                Color(0xFF7C5CFF),
-                            ),
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            listOf(cyan.copy(alpha = 0.35f), purple.copy(alpha = 0.22f)),
                         ),
                     ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color(0xFF121826)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "▶",
+                        fontSize = 26.sp,
+                        color = cyan,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "PREPARANDO A SESSÃO",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.4.sp,
+                color = Color(0xFFF2F5FA),
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Localizando os melhores servidores para este título",
+                fontSize = 12.sp,
+                color = Color(0xFF9AA3B5),
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+            Spacer(Modifier.height(22.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFF1A2230)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress.coerceIn(0.1f, 1f))
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                listOf(cyan, purple, cyan),
+                            ),
+                        ),
+                )
+            }
+            Spacer(Modifier.height(14.dp))
+            Text(
+                "LUZ  ·  CÂMERA  ·  SERVIDORES",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.6.sp,
+                color = cyan.copy(alpha = 0.85f),
             )
         }
-        Spacer(Modifier.height(14.dp))
-        Text(
-            "Luz, câmera… servidores",
-            fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-            fontWeight = FontWeight.Medium,
-        )
     }
 }
 
