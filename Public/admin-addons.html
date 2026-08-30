@@ -67,9 +67,9 @@
   <main>
     <div class="panel">
       <h2>Novo add-on</h2>
-      <p class="hint">Cole a URL do <b>manifest.json</b>. Exemplo: <code>https://catalog.nuvio.tv/manifest.json</code>. O servidor valida o manifest antes de salvar. Streams HTTP entram nas fontes do app (rótulo “Addon · …”).</p>
+      <p class="hint">Cole a URL do <b>manifest.json</b>. O <b>Nome</b> é o que aparece no app (ex.: <code>StreamFlix.Fenix</code>). Se deixar vazio, usa o nome do manifest. Qualidade e dublado continuam automáticos.</p>
       <input type="url" id="aUrl" placeholder="https://…/manifest.json"/>
-      <input type="text" id="aName" placeholder="Nome (opcional — usa o do manifest)"/>
+      <input type="text" id="aName" placeholder="Nome no app — ex: StreamFlix.Fenix"/>
       <input type="number" id="aPriority" value="0" placeholder="Prioridade"/>
       <textarea id="aNotes" rows="2" placeholder="Notas (opcional)"></textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -81,6 +81,7 @@
 
     <div class="panel">
       <h2>Add-ons ativos <button class="btn-sec" style="padding:4px 10px;font-size:.75rem" onclick="loadAddons()">Atualizar</button></h2>
+      <p class="hint" style="margin-top:-4px">Use <b>Renomear</b> para mudar como o servidor aparece no app sem excluir o add-on.</p>
       <div id="listWrap"><p style="color:var(--muted)">Carregando…</p></div>
     </div>
 
@@ -219,10 +220,21 @@ async function loadAddons() {
         <span class="pill ${a.is_active ? 'on' : 'off'}">${a.is_active ? 'Ativo' : 'Off'}</span>
       </div>
       <div class="row-btns">
+        <button class="btn-sec" onclick="renameA('${a.id}', ${JSON.stringify(String(a.name || ''))})">Renomear</button>
         <button class="btn-sec" onclick="toggleA('${a.id}', ${!a.is_active})">${a.is_active ? 'Pausar' : 'Ativar'}</button>
-        <button class="btn-sec" onclick="delA('${a.id}', '${esc(a.name).replace(/'/g, '&#39;')}')">Excluir</button>
+        <button class="btn-sec" onclick="delA('${a.id}', ${JSON.stringify(String(a.name || ''))})">Excluir</button>
       </div>
     </div>`).join('');
+}
+async function renameA(id, currentName) {
+  const next = prompt('Nome que aparece no app (ex: StreamFlix.Fenix):', currentName || '');
+  if (next == null) return;
+  const name = String(next).trim();
+  if (!name) { toast('Nome não pode ficar vazio'); return; }
+  if (name === currentName) return;
+  const d = await api('update-addon', { id, name });
+  if (d.error) toast(typeof d.error === 'string' ? d.error : JSON.stringify(d.error));
+  else { toast('Nome atualizado: ' + name); loadAddons(); }
 }
 async function toggleA(id, isActive) {
   const d = await api('toggle-addon', { id, is_active: isActive });
