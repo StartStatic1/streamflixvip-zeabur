@@ -3,7 +3,8 @@
 // Resolve fontes de filme/série (vip_sources) no SERVIDOR.
 // Soft/hard auth + vip_lock iguais a antes.
 // VIP: anexa streams reais dos add-ons.
-// Free: anexa os mesmos add-ons como cards PREMIUM (sem URL).
+// Free: anexa add-ons de VÍDEO como cards PREMIUM (sem URL).
+// Add-ons de legenda/catálogo não entram na lista de servidores.
 //
 // GET /api/media-sources?tmdb_id=123&type=movie
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&episode=2
@@ -25,6 +26,12 @@ function sbHeaders(serviceKey) {
     apikey: serviceKey,
     Authorization: `Bearer ${serviceKey}`,
   };
+}
+
+function isSubtitleOrCatalogAddon(name) {
+  const t = String(name || '').toLowerCase();
+  if (!t) return true;
+  return /subtitle|legendas|opensubtitles|caption|\bsubs?\b|community subtitles|catalog/.test(t);
 }
 
 async function loadVipTitleConfig(serviceKey, tmdbId, mediaType) {
@@ -94,12 +101,23 @@ async function loadSources(serviceKey, tmdbId, mediaType, season, episode) {
 
 async function lockedAddonStubs(serviceKey) {
   const addons = await loadActiveAddons(serviceKey);
-  return addons.map((a) => ({
-    source_url: '',
-    source_label: String(a.name || 'Servidor Premium').trim() || 'Servidor Premium',
-    priority: 2,
-    vip_only: true,
-  }));
+  const seen = new Set();
+  const out = [];
+  for (const a of addons) {
+    const name = String(a.name || '').trim();
+    if (!name || isSubtitleOrCatalogAddon(name)) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      source_url: '',
+      source_label: name,
+      priority: 2,
+      vip_only: true,
+    });
+    if (out.length >= 8) break;
+  }
+  return out;
 }
 
 async function handler(req, res) {
