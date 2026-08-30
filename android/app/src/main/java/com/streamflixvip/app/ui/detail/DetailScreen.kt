@@ -145,10 +145,14 @@ fun DetailScreen(
                     }
                 },
                 onWatchMovieNow = {
-                    when (s.movieSources.size) {
-                        0 -> Unit
-                        1 -> pendingWatch = PendingSource(s.movieSources.first(), 0, 0)
-                        else -> showMovieServerPicker = true
+                    when {
+                        s.movieSources.isEmpty() && s.isLoadingMovieSources -> {
+                            // Ainda buscando — abre sheet; lista preenche quando chegar
+                            showMovieServerPicker = true
+                        }
+                        s.movieSources.size == 1 -> pendingWatch = PendingSource(s.movieSources.first(), 0, 0)
+                        s.movieSources.size > 1 -> showMovieServerPicker = true
+                        else -> Unit
                     }
                 },
                 onDismissServerPicker = viewModel::closeServerPicker,
@@ -268,9 +272,10 @@ private fun DetailContent(
     // já busca a fonte e decide sozinho, ver loadEpisodeSources). Colocar
     // um botão fixo em cima seria redundante e ambíguo ("qual episódio
     // isso vai tocar?").
+    // Botao visivel cedo: com fontes prontas OU ainda carregando (nao trava 5-9s sem CTA)
     val heroWatchEnabled = state.mediaType == "movie" &&
-        state.movieSources.isNotEmpty() &&
-        !state.movieIsLocked(isVip)
+        !state.movieIsLocked(isVip) &&
+        (state.movieSources.isNotEmpty() || state.isLoadingMovieSources)
 
     // Controla se o modal de trailer inline está aberto.
     var showTrailerModal by remember { mutableStateOf(false) }
