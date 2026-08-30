@@ -298,6 +298,10 @@ private fun DetailContent(
     val heroWatchEnabled = state.mediaType == "movie" &&
         !state.movieIsLocked(isVip) &&
         state.movieSources.isNotEmpty()
+    val heroServersLoading = state.mediaType == "movie" &&
+        !state.movieIsLocked(isVip) &&
+        state.isLoadingMovieSources &&
+        state.movieSources.isEmpty()
 
     // Controla se o modal de trailer inline está aberto.
     var showTrailerModal by remember { mutableStateOf(false) }
@@ -315,6 +319,7 @@ private fun DetailContent(
                 isFavorite = state.isFavorite,
                 onToggleFavorite = onToggleFavorite,
                 showWatchNowButton = heroWatchEnabled,
+                showServersLoading = heroServersLoading,
                 onWatchNowClick = onWatchMovieNow,
                 onBack = onBack,
                 trailerKey = state.trailerKey,
@@ -370,17 +375,7 @@ private fun DetailContent(
                     }
                 }
             } else if (state.isLoadingMovieSources) {
-                item {
-                    // Indicador discreto — fontes chegam em background sem travar a tela
-                    Text(
-                        "Carregando servidores…",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                }
+                // Loading cinema fica no hero (no lugar do Assistir)
             } else if (state.movieSources.isEmpty()) {
                 item {
                     MovieRequestCard()
@@ -996,6 +991,7 @@ private fun DetailHeader(
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
     showWatchNowButton: Boolean,
+    showServersLoading: Boolean = false,
     onWatchNowClick: () -> Unit,
     onBack: () -> Unit,
     trailerKey: String?,
@@ -1134,7 +1130,10 @@ private fun DetailHeader(
             // "player interno vs externo" que a lista de servidores usa.
             // Some (em vez de desabilitar) quando não há fonte disponível
             // ainda, pra não prometer um play que vai falhar.
-            if (showWatchNowButton) {
+            if (showServersLoading) {
+                Spacer(Modifier.height(16.dp))
+                HeroCinemaLoading()
+            } else if (showWatchNowButton) {
                 Spacer(Modifier.height(16.dp))
                 // Efeito Shimmer/Brilho sutil no botão CTA
                 val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "shimmer")
@@ -1190,7 +1189,7 @@ private fun DetailHeader(
             // Barra de ações secundárias: favorito, trailer (se existir) e
             // compartilhar — alinhados horizontalmente abaixo do CTA principal,
             // fáceis de alcançar com o polegar e sem poluir o backdrop.
-            Spacer(Modifier.height(if (showWatchNowButton) 12.dp else 20.dp))
+            Spacer(Modifier.height(if (showWatchNowButton || showServersLoading) 12.dp else 20.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1775,6 +1774,130 @@ private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        }
+    }
+}
+
+
+@Composable
+private fun HeroCinemaLoading() {
+    val cyan = Color(0xFF00E5FF)
+    val purple = Color(0xFF8B5CFF)
+    val gold = Color(0xFFFFD54F)
+    var progress by remember { mutableStateOf(0.14f) }
+    val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "heroPulse")
+    val glow by pulse.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            animation = androidx.compose.animation.core.tween(
+                durationMillis = 1100,
+                easing = androidx.compose.animation.core.FastOutSlowInEasing,
+            ),
+            repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
+        ),
+        label = "glow",
+    )
+    LaunchedEffect(Unit) {
+        while (true) {
+            progress = 0.14f
+            repeat(30) {
+                progress = 0.14f + (it + 1) / 30f * 0.86f
+                kotlinx.coroutines.delay(80)
+            }
+            kotlinx.coroutines.delay(160)
+        }
+    }
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = Color(0xFF070B12),
+        shadowElevation = 12.dp,
+        border = BorderStroke(
+            1.5.dp,
+            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                listOf(
+                    cyan.copy(alpha = 0.35f + glow * 0.45f),
+                    purple.copy(alpha = 0.4f + glow * 0.35f),
+                    gold.copy(alpha = 0.25f + glow * 0.25f),
+                ),
+            ),
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        listOf(Color(0xFF121A28), Color(0xFF070B12), Color(0xFF0C1020)),
+                    ),
+                )
+                .padding(horizontal = 18.dp, vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            listOf(cyan.copy(alpha = 0.4f), purple.copy(alpha = 0.28f)),
+                        ),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF0E1420)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("▶", fontSize = 22.sp, color = cyan, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "PREPARANDO A SESSÃO",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.8.sp,
+                color = Color(0xFFF5F7FB),
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Localizando servidores premium…",
+                fontSize = 11.sp,
+                color = Color(0xFF9AA3B5),
+            )
+            Spacer(Modifier.height(14.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(7.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFF1A2230)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(progress.coerceIn(0.12f, 1f))
+                        .height(7.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                listOf(cyan, purple, gold.copy(alpha = 0.9f)),
+                            ),
+                        ),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "LUZ  ·  CÂMERA  ·  AÇÃO",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 2.sp,
+                color = cyan.copy(alpha = 0.9f),
+            )
         }
     }
 }
