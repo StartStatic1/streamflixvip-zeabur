@@ -1784,7 +1784,7 @@ private fun HeroCinemaLoading() {
     val cyan = Color(0xFF00E5FF)
     val purple = Color(0xFF8B5CFF)
     val gold = Color(0xFFFFD54F)
-    var progress by remember { mutableStateOf(0.14f) }
+    var progress by remember { mutableStateOf(0.16f) }
     val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "heroPulse")
     val glow by pulse.animateFloat(
         initialValue = 0.45f,
@@ -1800,88 +1800,82 @@ private fun HeroCinemaLoading() {
     )
     LaunchedEffect(Unit) {
         while (true) {
-            progress = 0.14f
-            repeat(30) {
-                progress = 0.14f + (it + 1) / 30f * 0.86f
-                kotlinx.coroutines.delay(80)
+            progress = 0.16f
+            repeat(28) {
+                progress = 0.16f + (it + 1) / 28f * 0.78f
+                kotlinx.coroutines.delay(85)
             }
-            kotlinx.coroutines.delay(160)
+            kotlinx.coroutines.delay(140)
         }
     }
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         color = Color(0xFF070B12),
-        shadowElevation = 12.dp,
+        shadowElevation = 6.dp,
         border = BorderStroke(
-            1.5.dp,
+            1.dp,
             androidx.compose.ui.graphics.Brush.horizontalGradient(
                 listOf(
-                    cyan.copy(alpha = 0.35f + glow * 0.45f),
-                    purple.copy(alpha = 0.4f + glow * 0.35f),
-                    gold.copy(alpha = 0.25f + glow * 0.25f),
+                    cyan.copy(alpha = 0.35f + glow * 0.4f),
+                    purple.copy(alpha = 0.35f + glow * 0.3f),
+                    gold.copy(alpha = 0.22f + glow * 0.22f),
                 ),
             ),
         ),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
                     androidx.compose.ui.graphics.Brush.verticalGradient(
-                        listOf(Color(0xFF121A28), Color(0xFF070B12), Color(0xFF0C1020)),
+                        listOf(Color(0xFF101826), Color(0xFF070B12)),
                     ),
                 )
-                .padding(horizontal = 18.dp, vertical = 18.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(
                         androidx.compose.ui.graphics.Brush.linearGradient(
-                            listOf(cyan.copy(alpha = 0.4f), purple.copy(alpha = 0.28f)),
+                            listOf(cyan.copy(alpha = 0.38f), purple.copy(alpha = 0.24f)),
                         ),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF0E1420)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("▶", fontSize = 22.sp, color = cyan, fontWeight = FontWeight.Bold)
-                }
+                Text("▶", fontSize = 15.sp, color = cyan, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 "PREPARANDO A SESSÃO",
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.8.sp,
+                letterSpacing = 1.4.sp,
                 color = Color(0xFFF5F7FB),
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
             Text(
-                "Localizando servidores premium…",
+                "Buscando as melhores fontes…",
                 fontSize = 11.sp,
                 color = Color(0xFF9AA3B5),
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(8.dp))
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(7.dp)
+                    .height(4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Color(0xFF1A2230)),
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(progress.coerceIn(0.12f, 1f))
-                        .height(7.dp)
+                        .height(4.dp)
                         .clip(RoundedCornerShape(50))
                         .background(
                             androidx.compose.ui.graphics.Brush.horizontalGradient(
@@ -1890,19 +1884,18 @@ private fun HeroCinemaLoading() {
                         ),
                 )
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
-                "LUZ  ·  CÂMERA  ·  AÇÃO",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
-                color = cyan.copy(alpha = 0.9f),
+                "LUZ · CÂMERA · AÇÃO",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 1.6.sp,
+                color = cyan.copy(alpha = 0.85f),
             )
         }
     }
 }
 
-@Composable
 private fun CinemaServersLoading() {
     val cyan = Color(0xFF00E5FF)
     val purple = Color(0xFF7C5CFF)
