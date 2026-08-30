@@ -21,6 +21,7 @@
     button{font:inherit;cursor:pointer;border:none;border-radius:12px;padding:12px 18px;font-weight:700}
     .btn-gold{background:linear-gradient(135deg,var(--gold),#e6a800);color:#000;width:100%}
     .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+    .btn-danger{background:rgba(239,68,68,.16);color:#fca5a5;border:1px solid rgba(239,68,68,.35)}
     .msg{font-size:.85rem;min-height:20px;margin-top:8px}
     .msg.err{color:var(--red)}.msg.ok{color:var(--green)}
     #app{display:none}
@@ -86,7 +87,7 @@
 
     <div class="panel">
       <h2>Add-ons ativos <button class="btn-sec" style="padding:4px 10px;font-size:.75rem" onclick="loadAddons()">Atualizar</button></h2>
-      <p class="hint" style="margin-top:-4px">Toque <b>Renomear</b> → digite o nome → <b>Salvar</b>. Funciona no celular.</p>
+      <p class="hint" style="margin-top:-4px"><b>Pausar</b> tira do app. <b>Excluir</b> apaga do painel. Renomear funciona no celular.</p>
       <div id="listWrap"><p style="color:var(--muted)">Carregando…</p></div>
     </div>
 
@@ -159,13 +160,16 @@ async function api(action, extra = {}) {
     },
     body: JSON.stringify({ action, ...extra }),
   });
-  return res.json();
+  const text = await res.text();
+  try { return JSON.parse(text); } catch (e) {
+    return { error: text || ('HTTP ' + res.status) };
+  }
 }
 function toast(t) {
   const el = document.getElementById('toast');
   el.textContent = t;
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2500);
+  setTimeout(() => el.classList.remove('show'), 2800);
 }
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({
@@ -232,7 +236,7 @@ async function loadAddons() {
       <div class="row-btns">
         <button type="button" class="btn-sec" onclick="toggleRename('${id}')">Renomear</button>
         <button type="button" class="btn-sec" onclick="toggleA('${id}', ${!a.is_active})">${a.is_active ? 'Pausar' : 'Ativar'}</button>
-        <button type="button" class="btn-sec" onclick="delA('${id}', ${JSON.stringify(String(a.name || ''))})">Excluir</button>
+        <button type="button" class="btn-danger" onclick="delA('${id}')">Excluir</button>
       </div>
       <div class="rename-box" id="rn-${id}">
         <input type="text" id="rnIn-${id}" value="${name}" placeholder="Ex: StreamFlix.Fenix" autocomplete="off"/>
@@ -268,12 +272,20 @@ async function saveRename(id) {
 }
 async function toggleA(id, isActive) {
   const d = await api('toggle-addon', { id, is_active: isActive });
-  if (d.error) toast(d.error); else { toast(isActive ? 'Ativo' : 'Pausado'); loadAddons(); }
+  if (d.error) toast(typeof d.error === 'string' ? d.error : JSON.stringify(d.error));
+  else { toast(isActive ? 'Ativo' : 'Pausado'); loadAddons(); }
 }
-async function delA(id, name) {
-  if (!confirm('Excluir add-on "' + name + '"?')) return;
+async function delA(id) {
+  const labelEl = document.getElementById('nameLbl-' + id);
+  const label = labelEl ? labelEl.textContent : 'este add-on';
+  if (!confirm('Excluir "' + label + '" do painel? Isso não desfaz.')) return;
   const d = await api('delete-addon', { id });
-  if (d.error) toast(d.error); else { toast('Excluído'); loadAddons(); }
+  if (d.error) {
+    toast(typeof d.error === 'string' ? d.error : JSON.stringify(d.error));
+    return;
+  }
+  toast('Excluído');
+  loadAddons();
 }
 async function testStreams() {
   const tmdb = parseInt(document.getElementById('testTmdb').value, 10) || 550;
