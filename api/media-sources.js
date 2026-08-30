@@ -2,15 +2,15 @@
 //
 // Resolve fontes de filme/série (vip_sources) no SERVIDOR.
 // Soft/hard auth + vip_lock iguais a antes.
-// Depois das fontes IPTV/manuais, anexa streams HTTP dos add-ons Stremio ativos
-// (somente para usuário VIP).
+// VIP: anexa streams reais dos add-ons.
+// Free: anexa os mesmos add-ons como cards PREMIUM (sem URL).
 //
 // GET /api/media-sources?tmdb_id=123&type=movie
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&episode=2
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&list_episodes=1
 
 const { resolveVipAccess } = require('../lib/vip-gate');
-const { collectAddonSources } = require('../lib/stremio-addons');
+const { collectAddonSources, loadActiveAddons } = require('../lib/stremio-addons');
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
@@ -90,6 +90,16 @@ async function loadSources(serviceKey, tmdbId, mediaType, season, episode) {
   }
   const rows = await r.json();
   return Array.isArray(rows) ? rows : [];
+}
+
+async function lockedAddonStubs(serviceKey) {
+  const addons = await loadActiveAddons(serviceKey);
+  return addons.map((a) => ({
+    source_url: '',
+    source_label: String(a.name || 'Servidor Premium').trim() || 'Servidor Premium',
+    priority: 2,
+    vip_only: true,
+  }));
 }
 
 async function handler(req, res) {
@@ -186,7 +196,6 @@ async function handler(req, res) {
   try {
     let sources = await loadSources(serviceKey, tmdbId, mediaType, season, episode);
 
-    // Add-ons Stremio: exclusivos VIP (nao entram na lista free)
     if (access.isVip) {
       try {
         const addonSources = await collectAddonSources(
@@ -210,7 +219,13 @@ async function handler(req, res) {
         console.warn('[media-sources] addons skip:', addonErr.message);
       }
     } else {
-      console.log(`[media-sources] addons skip free user tmdb=${tmdbId}`);
+      try {
+        const stubs = await lockedAddonStubs(serviceKey);
+        sources = sources.concat(stubs);
+        console.log(`[media-sources] addon stubs +${stubs.length} tmdb=${tmdbId} free`);
+      } catch (stubErr) {
+        console.warn('[media-sources] addon stubs skip:', stubErr.message);
+      }
     }
 
     sources = sources.slice().sort((a, b) => {
