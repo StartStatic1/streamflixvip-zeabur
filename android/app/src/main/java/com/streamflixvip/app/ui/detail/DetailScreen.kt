@@ -99,21 +99,31 @@ fun DetailScreen(
     var showMovieServerPicker by remember { mutableStateOf(false) }
     var autoResumedContinue by rememberSaveable { mutableStateOf(false) }
     val successForResume = state as? DetailUiState.Success
-    LaunchedEffect(successForResume, resumeSeconds) {
+    LaunchedEffect(
+        successForResume?.details?.id,
+        resumeSeconds,
+        successForResume?.movieSources?.size,
+        successForResume?.isLoadingMovieSources,
+        initialSeason,
+        initialEpisode,
+    ) {
         if (autoResumedContinue || resumeSeconds <= 0) return@LaunchedEffect
         val s = successForResume ?: return@LaunchedEffect
-        autoResumedContinue = true
         val title = s.details.title ?: s.details.name ?: "Sem titulo"
         val posterPath = s.details.poster_path
-        if (s.movieSources.isNotEmpty() && initialSeason <= 0) {
-            onPlaySource(s.movieSources.first(), 0, 0, title, posterPath)
-            return@LaunchedEffect
-        }
         if (initialSeason > 0) {
+            autoResumedContinue = true
             val ep = initialEpisode.coerceAtLeast(1)
             viewModel.loadEpisodeSources(initialSeason, ep, forceAutoPlay = true) { src ->
                 onPlaySource(src, initialSeason, ep, title, posterPath)
             }
+            return@LaunchedEffect
+        }
+        if (s.mediaType == "movie") {
+            if (s.isLoadingMovieSources && s.movieSources.isEmpty()) return@LaunchedEffect
+            val src = s.movieSources.firstOrNull() ?: return@LaunchedEffect
+            autoResumedContinue = true
+            onPlaySource(src, 0, 0, title, posterPath)
         }
     }
 
