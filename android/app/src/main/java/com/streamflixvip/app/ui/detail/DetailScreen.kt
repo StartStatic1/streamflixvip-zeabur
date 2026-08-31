@@ -1130,9 +1130,16 @@ private fun DetailHeader(
             // "player interno vs externo" que a lista de servidores usa.
             // Some (em vez de desabilitar) quando não há fonte disponível
             // ainda, pra não prometer um play que vai falhar.
-            if (showServersLoading) {
+            var sessionReady by remember { mutableStateOf(false) }
+            LaunchedEffect(title, showServersLoading) {
+                if (showServersLoading) sessionReady = false
+            }
+            if (showServersLoading || (showWatchNowButton && !sessionReady)) {
                 Spacer(Modifier.height(16.dp))
-                HeroCinemaLoading()
+                HeroCinemaLoading(
+                    finishing = showWatchNowButton && !showServersLoading,
+                    onReady = { sessionReady = true },
+                )
             } else if (showWatchNowButton) {
                 Spacer(Modifier.height(16.dp))
                 // Efeito Shimmer/Brilho sutil no botão CTA
@@ -1780,11 +1787,21 @@ private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit
 
 
 @Composable
-private fun HeroCinemaLoading() {
+private fun HeroCinemaLoading(
+    finishing: Boolean = false,
+    onReady: () -> Unit = {},
+) {
     val cyan = Color(0xFF00E5FF)
     val purple = Color(0xFF8B5CFF)
     val gold = Color(0xFFFFD54F)
-    var progress by remember { mutableStateOf(0.16f) }
+    var progress by remember { mutableStateOf(0.10f) }
+    var phraseIdx by remember { mutableStateOf(0) }
+    val phrases = listOf(
+        "Abrindo a sala…",
+        "Ajustando o projetor…",
+        "Buscando as melhores fontes…",
+        "Sessão quase pronta…",
+    )
     val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "heroPulse")
     val glow by pulse.animateFloat(
         initialValue = 0.45f,
@@ -1798,14 +1815,26 @@ private fun HeroCinemaLoading() {
         ),
         label = "glow",
     )
-    LaunchedEffect(Unit) {
-        while (true) {
-            progress = 0.16f
-            repeat(28) {
-                progress = 0.16f + (it + 1) / 28f * 0.78f
-                kotlinx.coroutines.delay(85)
+    LaunchedEffect(finishing) {
+        if (finishing) {
+            phraseIdx = phrases.lastIndex
+            val from = progress.coerceAtLeast(0.35f)
+            val steps = 10
+            repeat(steps) { i ->
+                progress = from + (1f - from) * ((i + 1) / steps.toFloat())
+                kotlinx.coroutines.delay(28)
             }
-            kotlinx.coroutines.delay(140)
+            progress = 1f
+            kotlinx.coroutines.delay(90)
+            onReady()
+            return@LaunchedEffect
+        }
+        while (true) {
+            if (progress < 0.78f) {
+                progress = (progress + 0.018f).coerceAtMost(0.78f)
+            }
+            phraseIdx = (phraseIdx + 1) % (phrases.size - 1)
+            kotlinx.coroutines.delay(520)
         }
     }
     Surface(
@@ -1852,7 +1881,7 @@ private fun HeroCinemaLoading() {
             }
             Spacer(Modifier.height(6.dp))
             Text(
-                "PREPARANDO A SESSÃO",
+                if (finishing) "SESSÃO PRONTA" else "PREPARANDO A SESSÃO",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 1.4.sp,
@@ -1860,7 +1889,7 @@ private fun HeroCinemaLoading() {
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                "Buscando as melhores fontes…",
+                phrases[phraseIdx.coerceIn(0, phrases.lastIndex)],
                 fontSize = 11.sp,
                 color = Color(0xFF9AA3B5),
             )
@@ -1868,14 +1897,14 @@ private fun HeroCinemaLoading() {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(4.dp)
+                    .height(5.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Color(0xFF1A2230)),
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(progress.coerceIn(0.12f, 1f))
-                        .height(4.dp)
+                        .fillMaxWidth(progress.coerceIn(0.08f, 1f))
+                        .height(5.dp)
                         .clip(RoundedCornerShape(50))
                         .background(
                             androidx.compose.ui.graphics.Brush.horizontalGradient(
