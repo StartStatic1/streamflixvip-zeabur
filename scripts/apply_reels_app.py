@@ -30,7 +30,7 @@ if 'import com.streamflixvip.app.ui.reels.ReelsScreen' not in mt:
         'import com.streamflixvip.app.ui.livetv.LiveTvScreen',
         'import com.streamflixvip.app.ui.livetv.LiveTvScreen\nimport com.streamflixvip.app.ui.reels.ReelsScreen\nimport com.streamflixvip.app.ui.reels.ReelsViewModel\nimport com.streamflixvip.app.ui.reels.ReelPlayerScreen\nimport com.streamflixvip.app.ui.reels.PendingReel\nimport com.streamflixvip.app.ui.reels.PendingReelSession',
     )
-if '"reels"' not in mt.split('showBottomBar')[1][:200]:
+if '"reels"' not in mt.split('showBottomBar')[1][:220]:
     mt = mt.replace(
         'val showBottomBar = currentRoute in listOf("home", "explore", "livetv", "profile")',
         'val showBottomBar = currentRoute in listOf("home", "explore", "reels", "livetv", "profile")',
@@ -48,15 +48,15 @@ if 'composable("reels")' not in mt:
                     onStoryClick = { story ->
                         if (story.vip_only != false && !VipStatusHolder.isVipNow()) {
                             navController.navigate("profile") { launchSingleTop = true }
-                            return@ReelsScreen
-                        }
-                        kotlinx.coroutines.MainScope().launch {
-                            val detail = runCatching {
-                                com.streamflixvip.app.network.NetworkModule.reelsApi.getStory(id = story.id)
-                            }.getOrNull()
-                            val eps = detail?.episodes ?: emptyList()
-                            PendingReel.set(PendingReelSession(story = detail?.story ?: story, episodes = eps))
-                            navController.navigate("reelplayer")
+                        } else {
+                            resumeScope.launch {
+                                val detail = runCatching {
+                                    com.streamflixvip.app.network.NetworkModule.reelsApi.getStory(id = story.id)
+                                }.getOrNull()
+                                val eps = detail?.episodes ?: emptyList()
+                                PendingReel.set(PendingReelSession(story = detail?.story ?: story, episodes = eps))
+                                navController.navigate("reelplayer")
+                            }
                         }
                     },
                 )
@@ -81,10 +81,6 @@ if 'composable("reels")' not in mt:
     print('main routes ok')
 else:
     print('main routes ja ok')
-
-# ensure viewModel import exists (already used)
-if 'import androidx.lifecycle.viewmodel.compose.viewModel' not in mt and 'viewModel(' in mt:
-    print('viewModel ja usado')
 
 ma.write_text(mt)
 print('main written', ma.stat().st_size)
