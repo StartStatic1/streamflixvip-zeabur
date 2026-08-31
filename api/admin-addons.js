@@ -99,8 +99,9 @@ module.exports = async function handler(req, res) {
         name: probed.name,
         manifest_url: probed.manifest_url,
         base_url: probed.base_url,
-        types: probed.raw.types || [],
-        resources: probed.raw.resources || [],
+        types: probed.types || probed.raw.types || [],
+        resources: probed.resources || probed.raw.resources || [],
+        catalogs: probed.catalogs || 0,
       });
     } catch (e) {
       res.status(400).json({ error: e.message || 'Falha ao ler manifest' });
@@ -219,36 +220,41 @@ module.exports = async function handler(req, res) {
   if (action === 'test-addon') {
     const id = body.id || body.addonId;
     const tmdbId = body.tmdb_id || body.tmdbId || 550;
-    const type = String(body.type || 'movie').toLowerCase() === 'tv' ? 'tv' : 'movie';
-    const { collectAddonSources } = require('../lib/stremio-addons');
-    // testa so este addon: se id, marca temp — senao todos ativos
+    const rawType = String(body.type || 'movie').toLowerCase();
+    const type =
+      rawType === 'tv' || rawType === 'series' || rawType === 'anime'
+        ? rawType === 'anime'
+          ? 'anime'
+          : 'tv'
+        : 'movie';
+    const season = body.season != null ? Number(body.season) : type === 'movie' ? null : 1;
+    const episode = body.episode != null ? Number(body.episode) : type === 'movie' ? null : 1;
+    const { collectAddonSources, resolveAnimeIds } = require('../lib/stremio-addons');
     try {
+      const anime = await resolveAnimeIds(Number(tmdbId), type);
+      const all = await collectAddonSources(serviceKey, Number(tmdbId), type, season, episode);
+      let streams = all;
       if (id) {
         const one = await fetch(
-          `${SUPABASE_URL}/rest/v1/stremio_addons?id=eq.${encodeURIComponent(id)}&select=id,name,manifest_url,base_url,priority`,
+          `${SUPABASE_URL}/rest/v1/stremio_addons?id=eq.${encodeURIComponent(id)}&select=id,name`,
           { headers: svcHeaders },
         );
         const rows = await one.json();
-        if (!one.ok || !rows.length) {
-          res.status(404).json({ error: 'Add-on nao encontrado' });
-          return;
+        if (one.ok && rows.length) {
+          const filtered = all.filter((s) => String(s.source_label || '').includes(rows[0].name));
+          streams = filtered.length ? filtered : all.slice(0, 15);
         }
-        // força collect via list ativa + filter no resultado por label
-        const all = await collectAddonSources(serviceKey, Number(tmdbId), type, null, null);
-        const filtered = all.filter((s) =>
-          String(s.source_label || '').includes(rows[0].name),
-        );
-        res.status(200).json({
-          ok: true,
-          tmdb_id: Number(tmdbId),
-          type,
-          streams: filtered.length ? filtered : all.slice(0, 15),
-          count: filtered.length || all.length,
-        });
-        return;
       }
-      const all = await collectAddonSources(serviceKey, Number(tmdbId), type, null, null);
-      res.status(200).json({ ok: true, tmdb_id: Number(tmdbId), type, streams: all, count: all.length });
+      res.status(200).json({
+        ok: true,
+        tmdb_id: Number(tmdbId),
+        type,
+        season,
+        episode,
+        kitsu: anime,
+        streams,
+        count: streams.length,
+      });
     } catch (e) {
       res.status(500).json({ error: e.message || 'Falha no teste' });
     }
