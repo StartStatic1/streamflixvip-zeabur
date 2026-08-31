@@ -73,12 +73,12 @@ fun ReelPlayerScreen(
     val storyId = session.story.id
     val episodes = session.episodes.filter { !it.video_url.isNullOrBlank() }
     var index by remember {
-        val saved = prefs.getInt(ReelLocalStore.idxKey(storyId), -1)
-        val start = if (saved >= 0 && !prefs.getBoolean(ReelLocalStore.doneKey(storyId), false)) saved else 0
+        val saved = ReelLocalStore.savedIndex(prefs, storyId)
+        val start = if (saved >= 0 && !ReelLocalStore.isDone(prefs, storyId)) saved else 0
         mutableIntStateOf(start.coerceIn(0, (episodes.size - 1).coerceAtLeast(0)))
     }
     var showList by remember { mutableStateOf(false) }
-    var liked by remember { mutableStateOf(prefs.getBoolean(ReelLocalStore.likeKey(storyId), false)) }
+    var liked by remember { mutableStateOf(ReelLocalStore.isLiked(prefs, storyId)) }
     var error by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableFloatStateOf(0f) }
     var paused by remember { mutableStateOf(false) }
@@ -149,7 +149,7 @@ fun ReelPlayerScreen(
         } else {
             exo.setMediaItem(MediaItem.fromUri(url))
             exo.prepare()
-            val resume = if (prefs.getBoolean(ReelLocalStore.doneKey(storyId), false)) 0L else prefs.getLong(ReelLocalStore.posKey(storyId, index), 0L)
+            val resume = if (ReelLocalStore.isDone(prefs, storyId)) 0L else ReelLocalStore.savedPos(prefs, storyId, index)
             if (resume > 3_000L) exo.seekTo(resume)
             exo.playWhenReady = true
         }
