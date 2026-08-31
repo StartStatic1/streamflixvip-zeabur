@@ -62,9 +62,6 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import kotlinx.coroutines.delay
 
-private fun reelPrefs(context: Context) =
-    context.getSharedPreferences("sfv_reels", Context.MODE_PRIVATE)
-
 @Composable
 fun ReelPlayerScreen(
     session: PendingReelSession,
@@ -72,16 +69,16 @@ fun ReelPlayerScreen(
 ) {
     val context = LocalContext.current
     val view = LocalView.current
-    val prefs = remember { reelPrefs(context) }
+    val prefs = remember { ReelLocalStore.prefs(context) }
     val storyId = session.story.id
     val episodes = session.episodes.filter { !it.video_url.isNullOrBlank() }
     var index by remember {
-        val saved = prefs.getInt("idx_$storyId", -1)
-        val start = if (saved >= 0 && !prefs.getBoolean("done_$storyId", false)) saved else 0
+        val saved = prefs.getInt(ReelLocalStore.idxKey(storyId), -1)
+        val start = if (saved >= 0 && !prefs.getBoolean(ReelLocalStore.doneKey(storyId), false)) saved else 0
         mutableIntStateOf(start.coerceIn(0, (episodes.size - 1).coerceAtLeast(0)))
     }
     var showList by remember { mutableStateOf(false) }
-    var liked by remember { mutableStateOf(prefs.getBoolean("like_$storyId", false)) }
+    var liked by remember { mutableStateOf(prefs.getBoolean(ReelLocalStore.likeKey(storyId), false)) }
     var error by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableFloatStateOf(0f) }
     var paused by remember { mutableStateOf(false) }
@@ -120,22 +117,22 @@ fun ReelPlayerScreen(
                 if (index < episodes.lastIndex) {
                     index += 1
                 } else {
-                    prefs.edit().putBoolean("done_$storyId", true).remove("idx_$storyId").apply()
+                    prefs.edit().putBoolean(ReelLocalStore.doneKey(storyId), true).remove(ReelLocalStore.idxKey(storyId)).apply()
                 }
             }
         }
         exo.addListener(listener)
         onDispose {
-            val finished = prefs.getBoolean("done_$storyId", false) ||
+            val finished = prefs.getBoolean(ReelLocalStore.doneKey(storyId), false) ||
                 (exo.playbackState == Player.STATE_ENDED && index >= episodes.lastIndex) ||
                 (exo.duration > 0 && index >= episodes.lastIndex && exo.currentPosition > exo.duration * 0.92)
             val ed = prefs.edit()
             if (finished) {
-                ed.putBoolean("done_$storyId", true).remove("idx_$storyId")
+                ed.putBoolean(ReelLocalStore.doneKey(storyId), true).remove(ReelLocalStore.idxKey(storyId))
             } else {
-                ed.putBoolean("done_$storyId", false)
-                    .putLong("pos_${storyId}_$index", exo.currentPosition)
-                    .putInt("idx_$storyId", index)
+                ed.putBoolean(ReelLocalStore.doneKey(storyId), false)
+                    .putLong(ReelLocalStore.posKey(storyId, index), exo.currentPosition)
+                    .putInt(ReelLocalStore.idxKey(storyId), index)
             }
             ed.apply()
             exo.removeListener(listener)
@@ -152,7 +149,7 @@ fun ReelPlayerScreen(
         } else {
             exo.setMediaItem(MediaItem.fromUri(url))
             exo.prepare()
-            val resume = if (prefs.getBoolean("done_$storyId", false)) 0L else prefs.getLong("pos_${storyId}_$index", 0L)
+            val resume = if (prefs.getBoolean(ReelLocalStore.doneKey(storyId), false)) 0L else prefs.getLong(ReelLocalStore.posKey(storyId, index), 0L)
             if (resume > 3_000L) exo.seekTo(resume)
             exo.playWhenReady = true
         }
@@ -217,7 +214,7 @@ fun ReelPlayerScreen(
             }
             IconButton(onClick = {
                 liked = !liked
-                prefs.edit().putBoolean("like_$storyId", liked).apply()
+                prefs.edit().putBoolean(ReelLocalStore.likeKey(storyId), liked).apply()
             }) {
                 Icon(
                     if (liked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
