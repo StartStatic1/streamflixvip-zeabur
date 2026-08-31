@@ -6,12 +6,24 @@ import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -33,6 +45,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.streamflixvip.app.data.AuthRepository
+import com.streamflixvip.app.data.CatalogRepository
 import com.streamflixvip.app.data.SessionStore
 import com.streamflixvip.app.data.VipRepository
 import com.streamflixvip.app.data.VipStatusHolder
@@ -198,11 +211,31 @@ private fun MainAppScaffold(
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute in listOf("home", "explore", "livetv", "profile")
     val showTopBar = currentRoute in listOf("home", "explore", "livetv", "profile", "mylist", "genres")
+    val resumeScope = rememberCoroutineScope()
+    var resumeBusy by remember { mutableStateOf(false) }
+    val catalogRepo = remember { CatalogRepository() }
 
     LaunchedEffect(userId) {
         if (userId != null) {
             val status = VipRepository().getStatus(userId)
             VipStatusHolder.update(status.isVip, status.expiresAt)
+        }
+    }
+
+    if (resumeBusy) {
+        androidx.compose.ui.window.Dialog(onDismissRequest = {}) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xCC070B12)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = Color(0xFF00E5FF))
+                    Spacer(Modifier.height(14.dp))
+                    Text("Retomando de onde parou", color = Color.White)
+                }
+            }
         }
     }
 
@@ -237,9 +270,48 @@ private fun MainAppScaffold(
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
                     onContinueWatchingDismiss = { entry -> viewModel.dismissContinueWatching(entry) },
                     onContinueWatchingClick = { entry ->
-                        navController.navigate(
-                            "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
-                        )
+                        if (!resumeBusy) {
+                            resumeBusy = true
+                            resumeScope.launch {
+                                try {
+                                    val sources = withContext(Dispatchers.IO) {
+                                        if (entry.media_type == "tv" && entry.season > 0) {
+                                            catalogRepo.getSourcesForEpisode(
+                                                entry.tmdb_id,
+                                                entry.season,
+                                                entry.episode.coerceAtLeast(1),
+                                            )
+                                        } else {
+                                            catalogRepo.getSourcesForMovie(entry.tmdb_id)
+                                        }
+                                    }
+                                    val src = sources.firstOrNull { it.source_url.isNotBlank() }
+                                    if (src == null) {
+                                        navController.navigate(
+                                            "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
+                                        )
+                                    } else {
+                                        val encodedUrl = java.net.URLEncoder.encode(
+                                            src.resolvedPlaybackUrl(BuildConfig.API_BASE_URL),
+                                            "UTF-8",
+                                        )
+                                        val encodedTitle = java.net.URLEncoder.encode(entry.displayTitle, "UTF-8")
+                                        val encodedPoster = java.net.URLEncoder.encode(entry.poster_path ?: "none", "UTF-8")
+                                        val season = if (entry.media_type == "tv") entry.season.coerceAtLeast(1) else 0
+                                        val episode = if (entry.media_type == "tv") entry.episode.coerceAtLeast(1) else 0
+                                        navController.navigate(
+                                            "player/$encodedUrl/${src.isDirectPlayable}/${entry.tmdb_id}/${entry.media_type}/$season/$episode/$encodedTitle/$encodedPoster/${entry.position_seconds}",
+                                        )
+                                    }
+                                } catch (_: Exception) {
+                                    navController.navigate(
+                                        "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
+                                    )
+                                } finally {
+                                    resumeBusy = false
+                                }
+                            }
+                        }
                     },
                     onSeeAllClick = { link ->
                         PendingExploreFilter.set(
