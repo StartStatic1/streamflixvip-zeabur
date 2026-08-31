@@ -1,7 +1,9 @@
 package com.streamflixvip.app.ui.reels
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -32,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -54,6 +55,11 @@ import kotlinx.coroutines.launch
 
 private enum class ReelsFilter { Todas, Continuar, Favoritas }
 
+private fun isInProgress(prefs: SharedPreferences, id: String): Boolean {
+    if (prefs.getBoolean("done_$id", false)) return false
+    return prefs.contains("idx_$id") || prefs.all.keys.any { it.startsWith("pos_${id}_") }
+}
+
 sealed interface ReelsUiState {
     data object Loading : ReelsUiState
     data class Error(val message: String) : ReelsUiState
@@ -63,9 +69,7 @@ sealed interface ReelsUiState {
 class ReelsViewModel : ViewModel() {
     private val _state = MutableStateFlow<ReelsUiState>(ReelsUiState.Loading)
     val state: StateFlow<ReelsUiState> = _state
-
     init { refresh() }
-
     fun refresh() {
         viewModelScope.launch {
             _state.value = ReelsUiState.Loading
@@ -104,24 +108,12 @@ fun ReelsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF08080F))
-            .padding(horizontal = 16.dp),
+            .background(Color(0xFF07070C))
+            .padding(horizontal = 12.dp),
     ) {
-        Text(
-            "Historias",
-            color = Color.White,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
-        )
-        Text(
-            "Toque na capa e continua de onde parou.",
-            color = Color(0xFF8B8BA8),
-            fontSize = 13.sp,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
+        Text("Historias", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 6.dp, bottom = 10.dp))
         Row(
-            Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 14.dp),
+            Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             ReelsFilter.entries.forEach { item ->
@@ -146,9 +138,7 @@ fun ReelsScreen(
             is ReelsUiState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(s.message, color = Color(0xFFFF8A80))
-                    TextButton(onClick = { viewModel.refresh() }) {
-                        Text("Tentar de novo", color = Color(0xFF00E5FF))
-                    }
+                    TextButton(onClick = { viewModel.refresh() }) { Text("Tentar de novo", color = Color(0xFF00E5FF)) }
                 }
             }
             is ReelsUiState.Ready -> {
@@ -158,14 +148,14 @@ fun ReelsScreen(
                     when (filter) {
                         ReelsFilter.Todas -> true
                         ReelsFilter.Favoritas -> prefs.getBoolean("like_${story.id}", false)
-                        ReelsFilter.Continuar -> prefs.contains("idx_${story.id}") || prefs.all.keys.any { it.startsWith("pos_${story.id}_") }
+                        ReelsFilter.Continuar -> isInProgress(prefs, story.id)
                     }
                 }
                 if (shown.isEmpty()) {
                     val empty = when (filter) {
                         ReelsFilter.Todas -> "Nenhuma historia no painel ainda."
                         ReelsFilter.Favoritas -> "Nada favoritado. Toque no coracao no player."
-                        ReelsFilter.Continuar -> "Nada em andamento ainda."
+                        ReelsFilter.Continuar -> "Nada em andamento."
                     }
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(empty, color = Color(0xFF8B8BA8))
@@ -174,13 +164,16 @@ fun ReelsScreen(
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         contentPadding = PaddingValues(bottom = 24.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(shown, key = { it.id }) { story ->
-                            val liked = prefs.getBoolean("like_${story.id}", false)
-                            val watching = prefs.contains("idx_${story.id}")
-                            StoryCard(story, liked, watching) { onStoryClick(story) }
+                            StoryCard(
+                                story = story,
+                                liked = prefs.getBoolean("like_${story.id}", false),
+                                watching = isInProgress(prefs, story.id),
+                                onClick = { onStoryClick(story) },
+                            )
                         }
                     }
                 }
@@ -191,13 +184,15 @@ fun ReelsScreen(
 
 @Composable
 private fun StoryCard(story: ReelStory, liked: Boolean, watching: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
     Column(modifier = Modifier.clickable(onClick = onClick)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.72f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF161622)),
+                .aspectRatio(0.70f)
+                .clip(shape)
+                .border(1.2.dp, Color(0xFF00D4E8), shape)
+                .background(Color(0xFF101018)),
         ) {
             val poster = story.poster_url.orEmpty()
             if (poster.startsWith("http")) {
@@ -208,46 +203,32 @@ private fun StoryCard(story: ReelStory, liked: Boolean, watching: Boolean, onCli
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC08080F)))),
-            )
-            val badge = when {
-                watching -> "Continuar"
-                !story.genre.isNullOrBlank() -> story.genre
-                else -> null
-            }
-            if (badge != null) {
+            if (watching) {
                 Text(
-                    badge,
+                    "Continuar",
                     color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .align(Alignment.TopStart)
-                        .padding(8.dp)
-                        .background(if (watching) Color(0xFFFF2D55) else Color(0x99000000), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                        .padding(7.dp)
+                        .background(Color(0xFFFF2D55), RoundedCornerShape(7.dp))
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
                 )
             }
             if (liked) {
-                Text(
-                    "♥",
-                    color = Color(0xFFFF2D55),
-                    fontSize = 14.sp,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                )
+                Text("★", color = Color(0xFFFFD54F), fontSize = 13.sp, modifier = Modifier.align(Alignment.TopEnd).padding(7.dp))
             }
         }
         Text(
             story.title ?: "Sem titulo",
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 14.sp,
+            color = Color(0xFFE8E8F0),
+            fontWeight = FontWeight.Medium,
+            fontSize = 12.sp,
+            lineHeight = 15.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp),
         )
     }
 }
