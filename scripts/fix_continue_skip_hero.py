@@ -16,15 +16,15 @@ if 'skipHeroLoading: Boolean' not in t:
 else:
     print('sig ja ok')
 
-old_call = '''                DetailContent(
-                state = s,'''
-new_call = '''                DetailContent(
-                skipHeroLoading = resumeSeconds > 0,
-                state = s,'''
+marker = 'DetailContent(\n                state = s,'
 if 'skipHeroLoading = resumeSeconds' not in t:
-    if old_call not in t:
+    if marker not in t:
         raise SystemExit('call nao encontrado')
-    t = t.replace(old_call, new_call, 1)
+    t = t.replace(
+        marker,
+        'DetailContent(\n                skipHeroLoading = resumeSeconds > 0,\n                state = s,',
+        1,
+    )
     print('call ok')
 else:
     print('call ja ok')
