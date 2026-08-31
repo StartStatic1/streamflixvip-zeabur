@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -27,6 +28,7 @@ sealed class BottomNavItem(
 ) {
     data object Home : BottomNavItem("home", "Início", Icons.Filled.Home)
     data object Explore : BottomNavItem("explore", "Explorar", Icons.Filled.Explore)
+    data object Reels : BottomNavItem("reels", "Reels", Icons.Filled.VideoLibrary)
     data object LiveTv : BottomNavItem("livetv", "TV", Icons.Filled.LiveTv)
     data object Profile : BottomNavItem("profile", "Perfil", Icons.Filled.Person)
 }
@@ -34,6 +36,7 @@ sealed class BottomNavItem(
 val bottomNavItems = listOf(
     BottomNavItem.Home,
     BottomNavItem.Explore,
+    BottomNavItem.Reels,
     BottomNavItem.LiveTv,
     BottomNavItem.Profile,
 )
@@ -55,12 +58,10 @@ fun StreamFlixBottomBar(navController: NavController) {
                 selected = selected,
                 onClick = {
                     if (selected) return@NavigationBarItem
-
                     val restoredExistingDestination = navController.popBackStack(
                         route = item.route,
                         inclusive = false,
                     )
-
                     if (!restoredExistingDestination) {
                         navController.navigate(item.route) {
                             popUpTo(navController.graph.findStartDestination().id) {
@@ -75,7 +76,7 @@ fun StreamFlixBottomBar(navController: NavController) {
                 label = {
                     Text(
                         item.label,
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
