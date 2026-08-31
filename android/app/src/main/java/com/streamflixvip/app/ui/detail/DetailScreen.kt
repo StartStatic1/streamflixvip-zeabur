@@ -454,7 +454,7 @@ private fun DetailContent(
                             isLocked = state.episodeIsLocked(ep.episode_number, isVip),
                             isAvailable = state.episodesWithSources?.contains(ep.episode_number) != false,
                             onToggleExpand = { onToggleEpisodeExpanded(ep.episode_number) },
-                            onPlay = { val hasSource = state.episodesWithSources?.contains(ep.episode_number) != false; when { state.episodeIsLocked(ep.episode_number, isVip) -> onUpgradeClick(); !hasSource -> {}; else -> onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) } },
+                            onPlay = { val hasSource = state.episodesWithSources?.contains(ep.episode_number) != false; when { state.episodeIsLocked(ep.episode_number, isVip) -> onUpgradeClick(); !hasSource -> onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath); else -> onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) } },
                         )
                     }
                     Spacer(Modifier.height(8.dp))

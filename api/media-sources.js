@@ -76,6 +76,30 @@ async function loadEpisodesWithSources(serviceKey, tmdbId, season) {
   (Array.isArray(rows) ? rows : []).forEach((row) => {
     if (row.episode != null) set.add(Number(row.episode));
   });
+  try {
+    const addons = await loadActiveAddons(serviceKey);
+    if (addons && addons.length) {
+      const apiKey = process.env.TMDB_API_KEY;
+      if (apiKey) {
+        const u = 'https://api.themoviedb.org/3/tv/' + tmdbId + '/season/' + season +
+          '?api_key=' + encodeURIComponent(apiKey);
+        const tr = await fetch(u);
+        if (tr.ok) {
+          const data = await tr.json();
+          const today = new Date().toISOString().slice(0, 10);
+          (data.episodes || []).forEach((e) => {
+            const n = Number(e.episode_number);
+            const air = e.air_date || '';
+            if (Number.isFinite(n) && (!air || air <= today)) set.add(n);
+          });
+        }
+      } else {
+        for (let i = 1; i <= 24; i++) set.add(i);
+      }
+    }
+  } catch (e) {
+    console.warn('[media-sources] addon episodes', e && e.message);
+  }
   return [...set].filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
 }
 
