@@ -133,7 +133,6 @@ private fun playbackHeaders(url: String): Map<String, String> {
     }
     return mapOf(
         "Referer" to origin,
-        "Origin" to origin.trimEnd('/'),
         "Accept" to "*/*",
         "Connection" to "keep-alive",
     )
@@ -141,7 +140,7 @@ private fun playbackHeaders(url: String): Map<String, String> {
 
 private fun playbackHttpFactory(url: String): DefaultHttpDataSource.Factory =
     DefaultHttpDataSource.Factory()
-        .setUserAgent("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36")
+        .setUserAgent("VLC/3.0.20 LibVLC/3.0.20")
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(15000)
         .setReadTimeoutMs(20000)
@@ -451,9 +450,7 @@ private fun NativePlayer(
 
 
     val exoPlayer = remember {
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
-            .setDefaultRequestProperties(mapOf("Referer" to url, "Connection" to "keep-alive", "Icy-MetaData" to "1"))
+        val httpDataSourceFactory = playbackHttpFactory(url)
         val extractorsFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
         val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory).setDataSourceFactory(httpDataSourceFactory)
         val mediaItem = MediaItem.fromUri(url)
@@ -527,9 +524,7 @@ private fun NativePlayer(
             errorMessage = null
             isRecovering = true
             activeUrl = streamUrl
-            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
-                .setDefaultRequestProperties(mapOf("Referer" to streamUrl, "Connection" to "keep-alive", "Icy-MetaData" to "1"))
+            val httpDataSourceFactory = playbackHttpFactory(streamUrl)
             val extractorsFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
             val mediaItem = MediaItem.fromUri(streamUrl)
             val mediaSource = if (isLikelyHls(streamUrl)) {
