@@ -144,6 +144,7 @@ fun DetailScreen(
         }
         is DetailUiState.Success -> {
             DetailContent(
+                skipHeroLoading = resumeSeconds > 0,
                 state = s,
                 onRequestWatch = { source, season, episode -> pendingWatch = PendingSource(source, season, episode) },
                 onSelectEpisode = { season, episode, _, _ ->
@@ -287,6 +288,7 @@ private fun DetailContent(
     onDismissComments: () -> Unit,
     onPostComment: (text: String, onResult: (Boolean) -> Unit) -> Unit,
     onToggleFavorite: () -> Unit,
+    skipHeroLoading: Boolean = false,
 ) {
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
@@ -305,10 +307,10 @@ private fun DetailContent(
     // isso vai tocar?").
     // Assistir so quando existe fonte — evita clique em titulo fora da grade
     // (loading embaixo; se vazio, card Pedir filme)
-    val heroWatchEnabled = state.mediaType == "movie" &&
+    val heroWatchEnabled = !skipHeroLoading && state.mediaType == "movie" &&
         !state.movieIsLocked(isVip) &&
         state.movieSources.isNotEmpty()
-    val heroServersLoading = state.mediaType == "movie" &&
+    val heroServersLoading = !skipHeroLoading && state.mediaType == "movie" &&
         !state.movieIsLocked(isVip) &&
         state.isLoadingMovieSources &&
         state.movieSources.isEmpty()
