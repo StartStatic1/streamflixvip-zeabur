@@ -1,11 +1,14 @@
 package com.streamflixvip.app.ui.reels
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,23 +16,33 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
@@ -38,6 +51,8 @@ import com.streamflixvip.app.network.ReelStory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+
+private enum class ReelsFilter { Todas, Continuar, Favoritas }
 
 sealed interface ReelsUiState {
     data object Loading : ReelsUiState
@@ -75,6 +90,17 @@ fun ReelsScreen(
     onStoryClick: (ReelStory) -> Unit,
 ) {
     val ui by viewModel.state.collectAsState()
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("sfv_reels", Context.MODE_PRIVATE) }
+    var filter by remember { mutableStateOf(ReelsFilter.Todas) }
+    var tick by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) tick++ }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -89,11 +115,30 @@ fun ReelsScreen(
             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
         )
         Text(
-            "Minisseries verticais. Um toque e assiste.",
+            "Toque na capa e continua de onde parou.",
             color = Color(0xFF8B8BA8),
             fontSize = 13.sp,
-            modifier = Modifier.padding(bottom = 16.dp),
+            modifier = Modifier.padding(bottom = 12.dp),
         )
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ReelsFilter.entries.forEach { item ->
+                val on = filter == item
+                Text(
+                    item.name,
+                    color = if (on) Color.Black else Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (on) Color(0xFF00E5FF) else Color(0xFF1B1B28))
+                        .clickable { filter = item }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+        }
         when (val s = ui) {
             is ReelsUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Color(0xFF00E5FF))
@@ -107,9 +152,23 @@ fun ReelsScreen(
                 }
             }
             is ReelsUiState.Ready -> {
-                if (s.stories.isEmpty()) {
+                @Suppress("UNUSED_EXPRESSION")
+                tick
+                val shown = s.stories.filter { story ->
+                    when (filter) {
+                        ReelsFilter.Todas -> true
+                        ReelsFilter.Favoritas -> prefs.getBoolean("like_${story.id}", false)
+                        ReelsFilter.Continuar -> prefs.contains("idx_${story.id}") || prefs.all.keys.any { it.startsWith("pos_${story.id}_") }
+                    }
+                }
+                if (shown.isEmpty()) {
+                    val empty = when (filter) {
+                        ReelsFilter.Todas -> "Nenhuma historia no painel ainda."
+                        ReelsFilter.Favoritas -> "Nada favoritado. Toque no coracao no player."
+                        ReelsFilter.Continuar -> "Nada em andamento ainda."
+                    }
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Nenhuma historia no painel ainda.", color = Color(0xFF8B8BA8))
+                        Text(empty, color = Color(0xFF8B8BA8))
                     }
                 } else {
                     LazyVerticalGrid(
@@ -118,8 +177,10 @@ fun ReelsScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        items(s.stories, key = { it.id }) { story ->
-                            StoryCard(story) { onStoryClick(story) }
+                        items(shown, key = { it.id }) { story ->
+                            val liked = prefs.getBoolean("like_${story.id}", false)
+                            val watching = prefs.contains("idx_${story.id}")
+                            StoryCard(story, liked, watching) { onStoryClick(story) }
                         }
                     }
                 }
@@ -129,7 +190,7 @@ fun ReelsScreen(
 }
 
 @Composable
-private fun StoryCard(story: ReelStory, onClick: () -> Unit) {
+private fun StoryCard(story: ReelStory, liked: Boolean, watching: Boolean, onClick: () -> Unit) {
     Column(modifier = Modifier.clickable(onClick = onClick)) {
         Box(
             modifier = Modifier
@@ -150,13 +211,13 @@ private fun StoryCard(story: ReelStory, onClick: () -> Unit) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, Color(0xCC08080F)),
-                        ),
-                    ),
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xCC08080F)))),
             )
-            val badge = story.genre?.takeIf { it.isNotBlank() }
+            val badge = when {
+                watching -> "Continuar"
+                !story.genre.isNullOrBlank() -> story.genre
+                else -> null
+            }
             if (badge != null) {
                 Text(
                     badge,
@@ -166,8 +227,16 @@ private fun StoryCard(story: ReelStory, onClick: () -> Unit) {
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(8.dp)
-                        .background(Color(0x99000000), RoundedCornerShape(8.dp))
+                        .background(if (watching) Color(0xFFFF2D55) else Color(0x99000000), RoundedCornerShape(8.dp))
                         .padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+            }
+            if (liked) {
+                Text(
+                    "♥",
+                    color = Color(0xFFFF2D55),
+                    fontSize = 14.sp,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
                 )
             }
         }
@@ -180,9 +249,5 @@ private fun StoryCard(story: ReelStory, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 8.dp),
         )
-        val sub = story.subtitle?.takeIf { it.isNotBlank() }
-        if (sub != null) {
-            Text(sub, color = Color(0xFF8B8BA8), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
     }
 }
