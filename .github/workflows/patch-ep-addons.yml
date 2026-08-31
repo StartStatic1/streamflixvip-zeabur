@@ -1,0 +1,14 @@
+name: patch-ep-addons
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/patch_ep_addons_available.py
+      - run: |
+          git config user.name bot
+          git config user.email bot@local
+          git add api/media-sources.js android/app/src/main/java/com/streamflixvip/app/ui/detail/DetailScreen.kt
+          git diff --cached --quiet || (git commit -m "fix: EP anime clicavel quando ha add-on" && git push)
