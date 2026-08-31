@@ -49,6 +49,7 @@ const activeAds = require('./api/active-ads.js');
 const adminVip = require('./api/admin-vip.js');
 const adminPartners = require('./api/admin-partners.js');
 const adminAddons = require('./api/admin-addons.js');
+const adminReels = require('./api/admin-reels.js');
 const partnerApi = require('./api/partner.js');
 const appVersion = require('./api/app-version.js');
 const announcements = require('./api/announcements.js');
@@ -71,6 +72,7 @@ const tvStatus = require('./api/tv-status.js');
 const r2Presign = require('./api/r2-presign.js');
 const liveTv = require('./api/live-tv.js');
 const mediaSources = require('./api/media-sources.js');
+const reels = require('./api/reels.js');
 
 const wrap = (handler) => (req, res) => {
   Promise.resolve(handler(req, res)).catch((err) => {
@@ -83,6 +85,7 @@ app.all('/api/active-ads', wrap(activeAds));
 app.all('/api/admin-vip', wrap(adminVip));
 app.all('/api/admin-partners', wrap(adminPartners));
 app.all('/api/admin-addons', wrap(adminAddons));
+app.all('/api/admin-reels', wrap(adminReels));
 app.all('/api/partner', wrap(partnerApi));
 app.all('/api/app-version', wrap(appVersion));
 app.all('/api/announcements', wrap(announcements));
@@ -105,6 +108,7 @@ app.all('/api/tv-status', wrap(tvStatus));
 app.all('/api/r2-presign', wrap(r2Presign));
 app.all('/api/live-tv', wrap(liveTv));
 app.all('/api/media-sources', wrap(mediaSources));
+app.all('/api/reels', wrap(reels));
 
 app.use(
   express.static(STATIC_DIR, {
