@@ -25,12 +25,27 @@ object ReelLocalStore {
     fun isDone(p: SharedPreferences, storyId: String): Boolean =
         p.getBoolean(doneKey(storyId), p.getBoolean("done_$storyId", false))
 
+    fun savedIndex(p: SharedPreferences, storyId: String): Int {
+        val n = p.getInt(idxKey(storyId), -1)
+        if (n >= 0) return n
+        return p.getInt("idx_$storyId", -1)
+    }
+
+    fun savedPos(p: SharedPreferences, storyId: String, index: Int): Long {
+        val n = p.getLong(posKey(storyId, index), 0L)
+        if (n > 0L) return n
+        val old = p.getLong("pos_${storyId}_$index", 0L)
+        if (old > 0L) return old
+        return 0L
+    }
+
     fun isInProgress(p: SharedPreferences, storyId: String): Boolean {
         if (isDone(p, storyId)) return false
+        if (savedIndex(p, storyId) >= 0) return true
         val uid = uid()
-        if (p.contains(idxKey(storyId)) || p.all.keys.any { it.startsWith("pos_${uid}_${storyId}_") }) return true
-        if (p.contains("idx_$storyId") || p.all.keys.any { it.startsWith("pos_${storyId}_") && !it.startsWith("pos_${uid}_") }) return true
-        return false
+        return p.all.keys.any {
+            it.startsWith("pos_${uid}_${storyId}_") || it.startsWith("pos_${storyId}_")
+        }
     }
 
     private fun migrateLegacy(p: SharedPreferences) {
@@ -65,8 +80,13 @@ object ReelLocalStore {
                     if (cut > 0) {
                         val id = rest.substring(0, cut)
                         val idx = rest.substring(cut + 1).toIntOrNull()
-                        if (idx != null && uuid.matches(id) && !p.contains(posKey(id, idx)) && v is Long) {
-                            editor.putLong(posKey(id, idx), v)
+                        val ms = when (v) {
+                            is Long -> v
+                            is Int -> v.toLong()
+                            else -> 0L
+                        }
+                        if (idx != null && uuid.matches(id) && ms > 0L && !p.contains(posKey(id, idx))) {
+                            editor.putLong(posKey(id, idx), ms)
                         }
                     }
                 }
