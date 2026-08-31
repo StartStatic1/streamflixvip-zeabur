@@ -1,0 +1,14 @@
+name: scope-reel-prefs
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/scope_reel_prefs.py
+      - run: |
+          git config user.name bot
+          git config user.email bot@local
+          git add android/app/src/main/java/com/streamflixvip/app/ui/reels/ReelPlayerScreen.kt
+          git diff --cached --quiet || (git commit -m "fix: progresso reels por usuario" && git push)
