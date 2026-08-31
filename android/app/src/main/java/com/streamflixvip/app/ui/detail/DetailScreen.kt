@@ -1896,6 +1896,7 @@ private fun HeroCinemaLoading() {
     }
 }
 
+@Composable
 private fun CinemaServersLoading() {
     val cyan = Color(0xFF00E5FF)
     val purple = Color(0xFF7C5CFF)
