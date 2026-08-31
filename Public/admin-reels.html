@@ -35,7 +35,7 @@
   </div>
 </header>
 <main>
-  <p class="muted">Cadastre a historinha e os EPs. Com “usar add-ons” o player tambem busca fonte pelo titulo nos add-ons do painel (e legendas, se o addon de LEG estiver ativo).</p>
+  <p class="muted">Cadastre a historinha e os EPs. Com “usar add-ons” o player tambem busca fonte pelo titulo nos add-ons do painel.</p>
   <div id="msg" class="muted"></div>
   <h2>Nova historia</h2>
   <input id="title" placeholder="Titulo"/>
@@ -64,7 +64,9 @@
 <script>
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'sfv-admin-auth-token', storage: window.localStorage }
+});
 let token = '';
 let currentStory = null;
 function msg(t, ok) {
@@ -90,7 +92,10 @@ async function api(action, extra) {
 async function boot() {
   const sess = await db.auth.getSession();
   token = sess.data && sess.data.session && sess.data.session.access_token;
-  if (!token) { location.href = '/admin.html'; return; }
+  if (!token) {
+    location.href = '/admin.html';
+    return;
+  }
   await load();
 }
 async function load() {
