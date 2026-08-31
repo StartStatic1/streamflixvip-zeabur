@@ -1,0 +1,14 @@
+name: patch-admin-anime
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/patch_admin_anime_test.py
+      - run: |
+          git config user.name bot
+          git config user.email bot@local
+          git add Public/admin-addons.html
+          git diff --cached --quiet || (git commit -m "feat: seletor filme/serie/anime no teste" && git push)
