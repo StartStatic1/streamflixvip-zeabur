@@ -1,0 +1,15 @@
+name: polish-reels-chrome
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/polish_reels_chrome.py
+      - name: Commit
+        run: |
+          git config user.name streamflix-bot
+          git config user.email bot@streamflix.local
+          git add android/app/src/main/java/com/streamflixvip/app/MainActivity.kt android/app/build.gradle.kts
+          git diff --cached --quiet || (git commit -m "fix: sem header StreamFlix na aba Reels" && git push)
