@@ -17,13 +17,17 @@ if 'import androidx.compose.foundation.layout.Box' not in t:
     t = t.replace('import androidx.compose.foundation.layout.fillMaxSize\n', 'import androidx.compose.foundation.layout.Box\nimport androidx.compose.foundation.layout.Column\nimport androidx.compose.foundation.layout.Spacer\nimport androidx.compose.foundation.layout.fillMaxSize\nimport androidx.compose.foundation.layout.height\nimport androidx.compose.foundation.background\nimport androidx.compose.ui.Alignment\nimport androidx.compose.ui.graphics.Color\nimport androidx.compose.ui.unit.dp\nimport androidx.compose.material3.CircularProgressIndicator\nimport androidx.compose.material3.Text\n')
     print('import ui')
 
-old_state = '''    val showTopBar = currentRoute in listOf("home", "explore", "livetv", "profile", "mylist", "genres")
-'''
-new_state = '''    val showTopBar = currentRoute in listOf("home", "explore", "livetv", "profile", "mylist", "genres")
-    val resumeScope = rememberCoroutineScope()
-    var resumeBusy by remember { mutableStateOf(false) }
-    val catalogRepo = remember { CatalogRepository() }
-'''
+old_state = '''    val showTopBar = currentRoute in listOf("home", "explore", "livetv", "profile", "mylist", "genres")\n'''
+new_state = '''    val showTopBar = currentRoute in listOf("home", "explore", "livetv", "profile", "mylist", "genres")\n    val resumeScope = rememberCoroutineScope()\n    var resumeBusy by remember { mutableStateOf(false) }\n    val catalogRepo = remember { CatalogRepository() }\n'''
+# use real newlines in search via already-written strings below
+
+old_state = "    val showTopBar = currentRoute in listOf(\"home\", \"explore\", \"livetv\", \"profile\", \"mylist\", \"genres\")\n"
+new_state = (
+    "    val showTopBar = currentRoute in listOf(\"home\", \"explore\", \"livetv\", \"profile\", \"mylist\", \"genres\")\n"
+    "    val resumeScope = rememberCoroutineScope()\n"
+    "    var resumeBusy by remember { mutableStateOf(false) }\n"
+    "    val catalogRepo = remember { CatalogRepository() }\n"
+)
 if 'var resumeBusy by remember' not in t:
     if old_state not in t:
         raise SystemExit('showTopBar nao encontrado')
@@ -38,45 +42,46 @@ old_click = '''                    onContinueWatchingClick = { entry ->
                         )
                     },'''
 new_click = '''                    onContinueWatchingClick = { entry ->
-                        if (resumeBusy) return@HomeScreen
-                        resumeBusy = true
-                        resumeScope.launch {
-                            try {
-                                val sources = withContext(Dispatchers.IO) {
-                                    if (entry.media_type == "tv" && entry.season > 0) {
-                                        catalogRepo.getSourcesForEpisode(
-                                            entry.tmdb_id,
-                                            entry.season,
-                                            entry.episode.coerceAtLeast(1),
+                        if (!resumeBusy) {
+                            resumeBusy = true
+                            resumeScope.launch {
+                                try {
+                                    val sources = withContext(Dispatchers.IO) {
+                                        if (entry.media_type == "tv" && entry.season > 0) {
+                                            catalogRepo.getSourcesForEpisode(
+                                                entry.tmdb_id,
+                                                entry.season,
+                                                entry.episode.coerceAtLeast(1),
+                                            )
+                                        } else {
+                                            catalogRepo.getSourcesForMovie(entry.tmdb_id)
+                                        }
+                                    }
+                                    val src = sources.firstOrNull { it.source_url.isNotBlank() }
+                                    if (src == null) {
+                                        navController.navigate(
+                                            "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
                                         )
                                     } else {
-                                        catalogRepo.getSourcesForMovie(entry.tmdb_id)
+                                        val encodedUrl = java.net.URLEncoder.encode(
+                                            src.resolvedPlaybackUrl(BuildConfig.API_BASE_URL),
+                                            "UTF-8",
+                                        )
+                                        val encodedTitle = java.net.URLEncoder.encode(entry.displayTitle, "UTF-8")
+                                        val encodedPoster = java.net.URLEncoder.encode(entry.poster_path ?: "none", "UTF-8")
+                                        val season = if (entry.media_type == "tv") entry.season.coerceAtLeast(1) else 0
+                                        val episode = if (entry.media_type == "tv") entry.episode.coerceAtLeast(1) else 0
+                                        navController.navigate(
+                                            "player/$encodedUrl/${src.isDirectPlayable}/${entry.tmdb_id}/${entry.media_type}/$season/$episode/$encodedTitle/$encodedPoster/${entry.position_seconds}",
+                                        )
                                     }
-                                }
-                                val src = sources.firstOrNull { it.source_url.isNotBlank() }
-                                if (src == null) {
+                                } catch (_: Exception) {
                                     navController.navigate(
                                         "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
                                     )
-                                } else {
-                                    val encodedUrl = java.net.URLEncoder.encode(
-                                        src.resolvedPlaybackUrl(BuildConfig.API_BASE_URL),
-                                        "UTF-8",
-                                    )
-                                    val encodedTitle = java.net.URLEncoder.encode(entry.displayTitle, "UTF-8")
-                                    val encodedPoster = java.net.URLEncoder.encode(entry.poster_path ?: "none", "UTF-8")
-                                    val season = if (entry.media_type == "tv") entry.season.coerceAtLeast(1) else 0
-                                    val episode = if (entry.media_type == "tv") entry.episode.coerceAtLeast(1) else 0
-                                    navController.navigate(
-                                        "player/$encodedUrl/${src.isDirectPlayable}/${entry.tmdb_id}/${entry.media_type}/$season/$episode/$encodedTitle/$encodedPoster/${entry.position_seconds}",
-                                    )
+                                } finally {
+                                    resumeBusy = false
                                 }
-                            } catch (_: Exception) {
-                                navController.navigate(
-                                    "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
-                                )
-                            } finally {
-                                resumeBusy = false
                             }
                         }
                     },'''
@@ -88,8 +93,9 @@ if 'catalogRepo.getSourcesForMovie' not in t:
 else:
     print('click ja ok')
 
-old_scaf = '''    Scaffold(
-        topBar = {'''
+old_scaf = '''    Scaffold(\n        topBar = {'''
+# fix
+old_scaf = '    Scaffold(\n        topBar = {'
 new_scaf = '''    if (resumeBusy) {
         androidx.compose.ui.window.Dialog(onDismissRequest = {}) {
             Box(
