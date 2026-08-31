@@ -1,0 +1,18 @@
+name: apply-resume-direct
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/apply_resume_direct.py
+      - name: Commit
+        run: |
+          git config user.name "streamflix-bot"
+          git config user.email "bot@streamflix.local"
+          git add android/app/src/main/java/com/streamflixvip/app/ui/home/HomeViewModel.kt android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt android/app/src/main/java/com/streamflixvip/app/MainActivity.kt android/app/build.gradle.kts
+          if git diff --cached --quiet; then echo "no change"; else
+            git commit -m "feat: continuar assistindo abre o player direto"
+            git push
+          fi
