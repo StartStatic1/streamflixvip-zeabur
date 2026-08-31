@@ -6,9 +6,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 scripts/scope_reel_prefs.py
+      - run: python3 scripts/fix_reel_resume.py
       - run: |
           git config user.name bot
           git config user.email bot@local
           git add android/app/src/main/java/com/streamflixvip/app/ui/reels/ReelPlayerScreen.kt
-          git diff --cached --quiet || (git commit -m "fix: progresso reels por usuario" && git push)
+          git diff --cached --quiet || (git commit -m "fix: player le progresso antigo" && git push)
