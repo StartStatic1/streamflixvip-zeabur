@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Historias — StreamFlixVIP</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root{--bg:#08080f;--surface:#111119;--surface2:#1a1a26;--border:rgba(255,255,255,.08);--text:#f0f0f8;--muted:#8888aa;--gold:#f5c518;--green:#22c55e;--red:#ef4444;--cyan:#00e5ff}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Outfit,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+    header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
+    header a{color:var(--gold);text-decoration:none;font-size:.85rem}
+    main{max-width:980px;margin:0 auto;padding:20px}
+    input,textarea,select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font:inherit;margin-bottom:8px}
+    button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:10px 14px;font-weight:700}
+    .btn-gold{background:linear-gradient(135deg,var(--gold),#e6a800);color:#000}
+    .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+    .btn-red{background:#3a1212;color:#ffb4b4}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px}
+    .muted{color:var(--muted);font-size:.8rem}
+    .ok{color:var(--green)}
+    h2{font-size:1.05rem;margin:18px 0 10px}
+  </style>
+</head>
+<body>
+<header>
+  <strong>Historias verticais</strong>
+  <div>
+    <a href="/admin-addons.html">Add-ons</a>
+    &nbsp;·&nbsp;
+    <a href="/admin.html">Painel</a>
+  </div>
+</header>
+<main>
+  <p class="muted">Cadastre a historinha e os EPs (URL mp4/hls/ts). Marque “usar add-ons” para o player tambem procurar fonte pelo titulo nos add-ons do painel + legendas.</p>
+  <div id="msg" class="muted"></div>
+
+  <h2>Nova historia</h2>
+  <input id="title" placeholder="Titulo"/>
+  <input id="subtitle" placeholder="Subtitulo / slogan"/>
+  <input id="poster" placeholder="URL da capa"/>
+  <div class="row">
+    <input id="genre" placeholder="Genero (Amor, Vinganca...)" style="flex:1"/>
+    <input id="lang" placeholder="Idioma" value="pt-BR" style="width:120px"/>
+  </div>
+  <label class="muted"><input type="checkbox" id="vip" checked/> so VIP</label>
+  <label class="muted"><input type="checkbox" id="addons" checked/> usar add-ons do painel</label>
+  <div class="row"><button class="btn-gold" onclick="saveStory()">Salvar historia</button></div>
+
+  <h2>Lista</h2>
+  <div id="list"></div>
+
+  <div id="epsBox" style="display:none">
+    <h2 id="epsTitle">Episodios</h2>
+    <div class="row">
+      <input id="epn" placeholder="EP" style="width:80px"/>
+      <input id="ept" placeholder="Titulo do EP" style="flex:1"/>
+    </div>
+    <input id="epu" placeholder="URL do video (mp4, m3u8, ts)"/>
+    <button class="btn-gold" onclick="saveEp()">Adicionar EP</button>
+    <div id="eps"></div>
+  </div>
+</main>
+<script>
+const SB_URL='https://gkujbjpvphuvrejpvvtz.supabase.co';
+const SB_ANON=localStorage.getItem('sf_anon')||'';
+let token='';
+let currentStory=null;
+const sb=window.supabase.createClient(SB_URL, (window.SF_ANON||SB_ANON||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwMzAyMzMsImV4cCI6MjA2OTYwNjIzM30.placeholder'));
+
+function msg(t,ok){const e=document.getElementById('msg');e.textContent=t;e.className=ok?'ok':'muted'}
+async function api(action, extra={}){
+  const r=await fetch('/api/admin-reels',{
+    method:'POST',
+    headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+    body:JSON.stringify({action,...extra})
+  });
+  return r.json();
+}
+async function boot(){
+  const {data}=await sb.auth.getSession();
+  token=data&&data.session&&data.session.access_token;
+  if(!token){location.href='/admin.html';return}
+  await load();
+}
+async function load(){
+  const data=await api('list');
+  if(data.error){msg((data.error.message||data.error)+' — rode sql/reels.sql');return}
+  const wrap=document.getElementById('list');
+  wrap.innerHTML=(data.stories||[]).map(s=>`
+    <div class="card">
+      <strong>${esc(s.title)}</strong>
+      <div class="muted">${s.episode_count||0} EPs · ${s.genre||'—'} · ${s.is_active?'ativa':'pausada'} · ${s.use_addons?'addons on':'addons off'}</div>
+      <div class="row">
+        <button class="btn-sec" onclick="openEps('${s.id}','${esc(s.title)}')">Episodios</button>
+        <button class="btn-sec" onclick="toggleStory('${s.id}',${!s.is_active},'${esc(s.title)}','${esc(s.poster_url||'')}','${esc(s.genre||'')}',${!!s.vip_only},${!!s.use_addons})">${s.is_active?'Pausar':'Ativar'}</button>
+        <button class="btn-red" onclick="delStory('${s.id}')">Excluir</button>
+      </div>
+    </div>`).join('')||'<p class="muted">Nenhuma historia ainda.</p>';
+}
+async function saveStory(){
+  const data=await api('save_story',{
+    title:document.getElementById('title').value,
+    subtitle:document.getElementById('subtitle').value,
+    poster_url:document.getElementById('poster').value,
+    genre:document.getElementById('genre').value,
+    language:document.getElementById('lang').value,
+    vip_only:document.getElementById('vip').checked,
+    use_addons:document.getElementById('addons').checked,
+    is_active:true
+  });
+  if(data.error){msg(JSON.stringify(data.error));return}
+  msg('Historia salva',true);await load();
+}
+async function toggleStory(id,is_active,title,poster,genre,vip,addons){
+  await api('save_story',{id,title,poster_url:poster,genre,is_active,vip_only:vip,use_addons:addons});
+  await load();
+}
+async function delStory(id){
+  if(!confirm('Excluir historia e EPs?'))return;
+  await api('delete_story',{id});currentStory=null;document.getElementById('epsBox').style.display='none';await load();
+}
+async function openEps(id,title){
+  currentStory=id;
+  document.getElementById('epsBox').style.display='block';
+  document.getElementById('epsTitle').textContent='EPs — '+title;
+  const data=await api('list_episodes',{story_id:id});
+  document.getElementById('eps').innerHTML=(data.episodes||[]).map(e=>`
+    <div class="card"><strong>EP ${e.episode}</strong> ${esc(e.title||'')}<div class="muted">${esc((e.video_url||'').slice(0,90))}</div>
+    <button class="btn-red" onclick="delEp('${e.id}')">Excluir EP</button></div>`).join('')||'<p class="muted">Sem EPs.</p>';
+}
+async function saveEp(){
+  if(!currentStory)return;
+  const data=await api('save_episode',{
+    story_id:currentStory,
+    episode:Number(document.getElementById('epn').value||0),
+    title:document.getElementById('ept').value,
+    video_url:document.getElementById('epu').value
+  });
+  if(data.error){msg(JSON.stringify(data.error));return}
+  document.getElementById('epn').value='';document.getElementById('epu').value='';
+  await openEps(currentStory,document.getElementById('epsTitle').textContent.replace(/^EPs — /,''));
+}
+async function delEp(id){await api('delete_episode',{id});await openEps(currentStory,document.getElementById('epsTitle').textContent.replace(/^EPs — /,''))}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&','<':'<','>':'>','"':'"',"'":'&#39;'}[c]))}
+boot();
+</script>
+</body>
+</html>
