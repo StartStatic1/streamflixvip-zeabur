@@ -109,6 +109,15 @@ object NetworkModule {
             .create(VipApi::class.java)
     }
 
+    val reelsApi: ReelsApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(ReelsApi::class.java)
+    }
+
     val liveTvApi: LiveTvApi by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL)

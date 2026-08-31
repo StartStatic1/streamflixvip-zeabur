@@ -61,6 +61,11 @@ import com.streamflixvip.app.ui.home.HomeScreen
 import com.streamflixvip.app.ui.home.HomeViewModel
 import com.streamflixvip.app.ui.livetv.LivePlayerScreen
 import com.streamflixvip.app.ui.livetv.LiveTvScreen
+import com.streamflixvip.app.ui.reels.ReelsScreen
+import com.streamflixvip.app.ui.reels.ReelsViewModel
+import com.streamflixvip.app.ui.reels.ReelPlayerScreen
+import com.streamflixvip.app.ui.reels.PendingReel
+import com.streamflixvip.app.ui.reels.PendingReelSession
 import com.streamflixvip.app.ui.livetv.PendingLiveChannel
 import com.streamflixvip.app.ui.mylist.MyListScreen
 import com.streamflixvip.app.ui.mylist.MyListViewModel
@@ -210,8 +215,8 @@ private fun MainAppScaffold(
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
-    val showBottomBar = currentRoute in listOf("home", "explore", "livetv", "profile")
-    val showTopBar = currentRoute in listOf("home", "explore", "livetv", "profile", "mylist", "genres")
+    val showBottomBar = currentRoute in listOf("home", "explore", "reels", "livetv", "profile")
+    val showTopBar = currentRoute in listOf("home", "explore", "reels", "livetv", "profile", "mylist", "genres")
     val resumeScope = rememberCoroutineScope()
     var resumeBusy by remember { mutableStateOf(false) }
     val catalogRepo = remember { CatalogRepository() }
@@ -356,6 +361,39 @@ private fun MainAppScaffold(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
                 )
+            }
+
+            composable("reels") {
+                val viewModel: ReelsViewModel = viewModel()
+                ReelsScreen(
+                    viewModel = viewModel,
+                    onStoryClick = { story ->
+                        if (story.vip_only != false && !VipStatusHolder.isVipNow()) {
+                            navController.navigate("profile") { launchSingleTop = true }
+                        } else {
+                            resumeScope.launch {
+                                val detail = runCatching {
+                                    com.streamflixvip.app.network.NetworkModule.reelsApi.getStory(id = story.id)
+                                }.getOrNull()
+                                val eps = detail?.episodes ?: emptyList()
+                                PendingReel.set(PendingReelSession(story = detail?.story ?: story, episodes = eps))
+                                navController.navigate("reelplayer")
+                            }
+                        }
+                    },
+                )
+            }
+
+            composable("reelplayer") {
+                val session = remember { PendingReel.consume() }
+                if (session == null) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    ReelPlayerScreen(
+                        session = session,
+                        onBack = { navController.popBackStack() },
+                    )
+                }
             }
 
             composable("livetv") {
