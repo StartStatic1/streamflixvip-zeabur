@@ -5,11 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.streamflixvip.app.data.CatalogRepository
 import com.streamflixvip.app.data.GenreCategory
 import com.streamflixvip.app.data.ProgressRepository
+import com.streamflixvip.app.data.ResumePlaybackCache
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.WatchProgressEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class HomeRowExploreLink(
     val category: GenreCategory,
@@ -87,6 +90,7 @@ class HomeViewModel(
                     repository.exploreCatalog(category = GenreCategory.MOVIES, genreId = 27, year = trashYear)
                 }.getOrElse { emptyList() }
 
+                prefetchContinueSources(continueWatching)
                 _uiState.value = HomeUiState.Success(
                     continueWatching = continueWatching,
                     heroItems = (
@@ -119,6 +123,34 @@ class HomeViewModel(
                 )
             } catch (e: Exception) {
                 _uiState.value = HomeUiState.Error(e.message ?: "Erro ao carregar catalogo")
+            }
+        }
+    }
+
+    private fun prefetchContinueSources(list: List<WatchProgressEntry>) {
+        if (list.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            list.take(8).forEach { entry ->
+                runCatching {
+                    val season = if (entry.media_type == "tv") entry.season.coerceAtLeast(1) else 0
+                    val episode = if (entry.media_type == "tv") entry.episode.coerceAtLeast(1) else 0
+                    if (ResumePlaybackCache.get(entry.tmdb_id, entry.media_type, season, episode) != null) return@forEach
+                    val sources = if (entry.media_type == "tv" && entry.season > 0) {
+                        repository.getSourcesForEpisode(entry.tmdb_id, season, episode)
+                    } else {
+                        repository.getSourcesForMovie(entry.tmdb_id)
+                    }
+                    val src = sources.firstOrNull { it.source_url.isNotBlank() } ?: return@forEach
+                    ResumePlaybackCache.put(
+                        entry.tmdb_id,
+                        entry.media_type,
+                        season,
+                        episode,
+                        src.resolvedPlaybackUrl(com.streamflixvip.app.BuildConfig.API_BASE_URL),
+                        src.isDirectPlayable,
+                        src.source_label,
+                    )
+                }
             }
         }
     }

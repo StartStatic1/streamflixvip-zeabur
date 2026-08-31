@@ -1,5 +1,7 @@
 package com.streamflixvip.app.ui.player
 
+import com.streamflixvip.app.data.ResumePlaybackCache
+
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.pm.ActivityInfo
@@ -230,6 +232,12 @@ fun PlayerScreen(
     onBack: () -> Unit = {},
 ) {
     val view = LocalView.current
+    androidx.compose.runtime.LaunchedEffect(sourceUrl, tmdbId, season, episode) {
+        ResumePlaybackCache.init(view.context)
+        if (sourceUrl.isNotBlank()) {
+            ResumePlaybackCache.put(tmdbId, mediaType, season, episode, sourceUrl, isDirectPlayable)
+        }
+    }
     BackHandler { onBack() }
     DisposableEffect(Unit) {
         val window = (view.context as? Activity)?.window

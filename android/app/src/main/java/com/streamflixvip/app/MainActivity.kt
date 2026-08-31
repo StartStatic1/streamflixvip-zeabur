@@ -46,6 +46,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.streamflixvip.app.data.AuthRepository
 import com.streamflixvip.app.data.CatalogRepository
+import com.streamflixvip.app.data.ResumePlaybackCache
 import com.streamflixvip.app.data.SessionStore
 import com.streamflixvip.app.data.VipRepository
 import com.streamflixvip.app.data.VipStatusHolder
@@ -214,6 +215,8 @@ private fun MainAppScaffold(
     val resumeScope = rememberCoroutineScope()
     var resumeBusy by remember { mutableStateOf(false) }
     val catalogRepo = remember { CatalogRepository() }
+    val resumeCtx = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) { ResumePlaybackCache.init(resumeCtx) }
 
     LaunchedEffect(userId) {
         if (userId != null) {
@@ -233,7 +236,7 @@ private fun MainAppScaffold(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = Color(0xFF00E5FF))
                     Spacer(Modifier.height(14.dp))
-                    Text("Retomando de onde parou", color = Color.White)
+                    Text("Retomando de onde parou", color = Color.White, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
                 }
             }
         }
@@ -274,39 +277,43 @@ private fun MainAppScaffold(
                             resumeBusy = true
                             resumeScope.launch {
                                 try {
-                                    val sources = withContext(Dispatchers.IO) {
-                                        if (entry.media_type == "tv" && entry.season > 0) {
-                                            catalogRepo.getSourcesForEpisode(
-                                                entry.tmdb_id,
-                                                entry.season,
-                                                entry.episode.coerceAtLeast(1),
-                                            )
-                                        } else {
-                                            catalogRepo.getSourcesForMovie(entry.tmdb_id)
-                                        }
-                                    }
-                                    val src = sources.firstOrNull { it.source_url.isNotBlank() }
-                                    if (src == null) {
-                                        navController.navigate(
-                                            "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
-                                        )
+                                    val season = if (entry.media_type == "tv") entry.season.coerceAtLeast(1) else 0
+                                    val episode = if (entry.media_type == "tv") entry.episode.coerceAtLeast(1) else 0
+                                    val cached = ResumePlaybackCache.get(entry.tmdb_id, entry.media_type, season, episode)
+                                    val playbackUrl: String
+                                    val isDirect: Boolean
+                                    if (cached != null) {
+                                        playbackUrl = cached.url
+                                        isDirect = cached.isDirect
                                     } else {
-                                        val encodedUrl = java.net.URLEncoder.encode(
-                                            src.resolvedPlaybackUrl(BuildConfig.API_BASE_URL),
-                                            "UTF-8",
-                                        )
-                                        val encodedTitle = java.net.URLEncoder.encode(entry.displayTitle, "UTF-8")
-                                        val encodedPoster = java.net.URLEncoder.encode(entry.poster_path ?: "none", "UTF-8")
-                                        val season = if (entry.media_type == "tv") entry.season.coerceAtLeast(1) else 0
-                                        val episode = if (entry.media_type == "tv") entry.episode.coerceAtLeast(1) else 0
-                                        navController.navigate(
-                                            "player/$encodedUrl/${src.isDirectPlayable}/${entry.tmdb_id}/${entry.media_type}/$season/$episode/$encodedTitle/$encodedPoster/${entry.position_seconds}",
+                                        val sources = withContext(Dispatchers.IO) {
+                                            if (entry.media_type == "tv" && entry.season > 0) {
+                                                catalogRepo.getSourcesForEpisode(
+                                                    entry.tmdb_id,
+                                                    entry.season,
+                                                    entry.episode.coerceAtLeast(1),
+                                                )
+                                            } else {
+                                                catalogRepo.getSourcesForMovie(entry.tmdb_id)
+                                            }
+                                        }
+                                        val src = sources.firstOrNull { it.source_url.isNotBlank() }
+                                            ?: throw IllegalStateException("no-source")
+                                        playbackUrl = src.resolvedPlaybackUrl(BuildConfig.API_BASE_URL)
+                                        isDirect = src.isDirectPlayable
+                                        ResumePlaybackCache.put(
+                                            entry.tmdb_id, entry.media_type, season, episode,
+                                            playbackUrl, isDirect, src.source_label,
                                         )
                                     }
-                                } catch (_: Exception) {
+                                    val encodedUrl = java.net.URLEncoder.encode(playbackUrl, "UTF-8")
+                                    val encodedTitle = java.net.URLEncoder.encode(entry.displayTitle, "UTF-8")
+                                    val encodedPoster = java.net.URLEncoder.encode(entry.poster_path ?: "none", "UTF-8")
                                     navController.navigate(
-                                        "detail/${entry.tmdb_id}/${entry.media_type}?season=${entry.season}&episode=${entry.episode}&resume=${entry.position_seconds}",
+                                        "player/$encodedUrl/$isDirect/${entry.tmdb_id}/${entry.media_type}/$season/$episode/$encodedTitle/$encodedPoster/${entry.position_seconds}",
                                     )
+                                } catch (_: Exception) {
+                                    // Sem ficha: tenta de novo a API; se falhar, some o overlay.
                                 } finally {
                                     resumeBusy = false
                                 }
