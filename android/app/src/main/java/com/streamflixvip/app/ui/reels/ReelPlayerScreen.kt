@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Icon
@@ -78,11 +77,10 @@ fun ReelPlayerScreen(
     val episodes = session.episodes.filter { !it.video_url.isNullOrBlank() }
     var index by remember {
         val saved = prefs.getInt("idx_$storyId", -1)
-        val start = if (saved >= 0) saved else episodes.indexOfFirst { (it.episode ?: 1) == session.startEpisode }.coerceAtLeast(0)
+        val start = if (saved >= 0 && !prefs.getBoolean("done_$storyId", false)) saved else 0
         mutableIntStateOf(start.coerceIn(0, (episodes.size - 1).coerceAtLeast(0)))
     }
     var showList by remember { mutableStateOf(false) }
-    var showHud by remember { mutableStateOf(true) }
     var liked by remember { mutableStateOf(prefs.getBoolean("like_$storyId", false)) }
     var error by remember { mutableStateOf<String?>(null) }
     var progress by remember { mutableFloatStateOf(0f) }
@@ -118,12 +116,28 @@ fun ReelPlayerScreen(
                 paused = !isPlaying
             }
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED && index < episodes.lastIndex) index += 1
+                if (state != Player.STATE_ENDED) return
+                if (index < episodes.lastIndex) {
+                    index += 1
+                } else {
+                    prefs.edit().putBoolean("done_$storyId", true).remove("idx_$storyId").apply()
+                }
             }
         }
         exo.addListener(listener)
         onDispose {
-            prefs.edit().putLong("pos_${storyId}_$index", exo.currentPosition).putInt("idx_$storyId", index).apply()
+            val finished = prefs.getBoolean("done_$storyId", false) ||
+                (exo.playbackState == Player.STATE_ENDED && index >= episodes.lastIndex) ||
+                (exo.duration > 0 && index >= episodes.lastIndex && exo.currentPosition > exo.duration * 0.92)
+            val ed = prefs.edit()
+            if (finished) {
+                ed.putBoolean("done_$storyId", true).remove("idx_$storyId")
+            } else {
+                ed.putBoolean("done_$storyId", false)
+                    .putLong("pos_${storyId}_$index", exo.currentPosition)
+                    .putInt("idx_$storyId", index)
+            }
+            ed.apply()
             exo.removeListener(listener)
             exo.release()
         }
@@ -131,7 +145,6 @@ fun ReelPlayerScreen(
 
     LaunchedEffect(current?.video_url, index) {
         error = null
-        prefs.edit().putInt("idx_$storyId", index).apply()
         val url = current?.video_url.orEmpty()
         if (url.isBlank()) {
             error = "Este episodio nao tem fonte."
@@ -139,7 +152,7 @@ fun ReelPlayerScreen(
         } else {
             exo.setMediaItem(MediaItem.fromUri(url))
             exo.prepare()
-            val resume = prefs.getLong("pos_${storyId}_$index", 0L)
+            val resume = if (prefs.getBoolean("done_$storyId", false)) 0L else prefs.getLong("pos_${storyId}_$index", 0L)
             if (resume > 3_000L) exo.seekTo(resume)
             exo.playWhenReady = true
         }
@@ -158,12 +171,7 @@ fun ReelPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        if (exo.isPlaying) exo.pause() else exo.play()
-                        showHud = true
-                    },
-                )
+                detectTapGestures(onTap = { if (exo.isPlaying) exo.pause() else exo.play() })
             },
     ) {
         if (current != null && error == null) {
@@ -186,21 +194,14 @@ fun ReelPlayerScreen(
 
         if (paused) {
             Box(
-                Modifier
-                    .align(Alignment.Center)
-                    .clip(CircleShape)
-                    .background(Color(0x66000000))
-                    .padding(16.dp),
+                Modifier.align(Alignment.Center).clip(CircleShape).background(Color(0x66000000)).padding(16.dp),
             ) {
                 Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White)
             }
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.TopStart)
-                .padding(top = 8.dp, start = 4.dp, end = 8.dp),
+            modifier = Modifier.fillMaxWidth().align(Alignment.TopStart).padding(top = 8.dp, start = 4.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
@@ -238,10 +239,7 @@ fun ReelPlayerScreen(
 
         LinearProgressIndicator(
             progress = { progress },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .height(3.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
             color = Color(0xFFFF2D55),
             trackColor = Color(0x33FFFFFF),
         )
@@ -259,8 +257,7 @@ fun ReelPlayerScreen(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(Color(0xF214141C), RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
-                    .padding(16.dp)
-                    .padding(bottom = 8.dp),
+                    .padding(16.dp),
             ) {
                 Text("Episodios", color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 10.dp))
                 LazyVerticalGrid(
