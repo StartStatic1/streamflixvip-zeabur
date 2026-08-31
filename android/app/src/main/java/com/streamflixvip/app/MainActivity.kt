@@ -216,7 +216,7 @@ private fun MainAppScaffold(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute in listOf("home", "explore", "reels", "livetv", "profile")
-    val showTopBar = currentRoute in listOf("home", "explore", "reels", "livetv", "profile", "mylist", "genres")
+    val showTopBar = currentRoute in listOf("home", "explore", "livetv", "profile", "mylist", "genres")
     val resumeScope = rememberCoroutineScope()
     var resumeBusy by remember { mutableStateOf(false) }
     val catalogRepo = remember { CatalogRepository() }
