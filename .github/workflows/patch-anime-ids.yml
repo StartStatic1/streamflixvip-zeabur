@@ -1,0 +1,14 @@
+name: patch-anime-ids
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/patch_anime_multi_ids.py
+      - run: |
+          git config user.name bot
+          git config user.email bot@local
+          git add lib/stremio-addons.js
+          git diff --cached --quiet || (git commit -m "feat: AniList e MAL alem do Kitsu" && git push)
