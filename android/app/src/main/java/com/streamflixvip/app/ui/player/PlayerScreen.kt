@@ -119,8 +119,33 @@ private val PLAYBACK_SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 private fun isLikelyHls(url: String): Boolean {
     val lower = url.lowercase()
     return lower.contains(".m3u8") || lower.contains("format=m3u8") || lower.contains("type=m3u8") ||
-        lower.contains("/hls/") || (lower.contains("playlist") && lower.contains("m3u"))
+        lower.contains("/hls/") || lower.contains("mpegurl") || lower.contains("index.m3u") ||
+        (lower.contains("playlist") && (lower.contains("m3u") || lower.contains("/hls/"))) ||
+        (lower.contains("pengu.uk") && lower.contains("/hls/"))
 }
+
+private fun playbackHeaders(url: String): Map<String, String> {
+    val host = try { java.net.URI(url).host.orEmpty() } catch (_: Exception) { "" }
+    val origin = when {
+        host.contains("pengu.uk", ignoreCase = true) -> "https://pengu.uk/"
+        host.isNotBlank() -> "https://$host/"
+        else -> url
+    }
+    return mapOf(
+        "Referer" to origin,
+        "Origin" to origin.trimEnd('/'),
+        "Accept" to "*/*",
+        "Connection" to "keep-alive",
+    )
+}
+
+private fun playbackHttpFactory(url: String): DefaultHttpDataSource.Factory =
+    DefaultHttpDataSource.Factory()
+        .setUserAgent("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/124.0.0.0 Mobile Safari/537.36")
+        .setAllowCrossProtocolRedirects(true)
+        .setConnectTimeoutMs(15000)
+        .setReadTimeoutMs(20000)
+        .setDefaultRequestProperties(playbackHeaders(url))
 
 
 private const val SERIES_PREFS = "streamflix_series_prefs"
@@ -691,15 +716,7 @@ private fun NativePlayer(
                 .setPreferredTextLanguage("pt")
                 .setSelectUndeterminedTextLanguage(true)
                 .build()
-            val httpDs = DefaultHttpDataSource.Factory()
-                .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
-                .setDefaultRequestProperties(
-                    mapOf(
-                        "Referer" to activeUrl,
-                        "Connection" to "keep-alive",
-                        "Icy-MetaData" to "1",
-                    ),
-                )
+            val httpDs = playbackHttpFactory(activeUrl)
             val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
             val videoItem = MediaItem.fromUri(activeUrl)
             val videoSource = if (isLikelyHls(activeUrl)) {
