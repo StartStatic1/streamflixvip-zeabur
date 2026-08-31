@@ -13,7 +13,8 @@
     header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
     header a{color:var(--gold);text-decoration:none;font-size:.85rem}
     main{max-width:980px;margin:0 auto;padding:20px}
-    input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font:inherit;margin-bottom:8px}
+    input,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font:inherit;margin-bottom:8px}
+    textarea{min-height:120px;font-size:.8rem}
     button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:10px 14px;font-weight:700}
     .btn-gold{background:linear-gradient(135deg,var(--gold),#e6a800);color:#000}
     .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
@@ -35,7 +36,7 @@
   </div>
 </header>
 <main>
-  <p class="muted">Cadastre a historinha e os EPs. Com “usar add-ons” o player tambem busca fonte pelo titulo nos add-ons do painel.</p>
+  <p class="muted">Uma historia + EPs. 1 URL longa = historia completa. Varios links = grade no player. Colar M3U so daquela historinha, nao a lista inteira.</p>
   <div id="msg" class="muted"></div>
   <h2>Nova historia</h2>
   <input id="title" placeholder="Titulo"/>
@@ -58,6 +59,9 @@
     </div>
     <input id="epu" placeholder="URL do video (mp4, m3u8, ts)"/>
     <button class="btn-gold" onclick="saveEp()">Adicionar EP</button>
+    <p class="muted" style="margin-top:14px">Ou cola o bloco M3U desta historia (#EXTINF + URL):</p>
+    <textarea id="m3u" placeholder="#EXTINF:-1 tvg-name="EP 01",EP 01&#10;http://.../1.ts"></textarea>
+    <button class="btn-sec" onclick="importM3u()">Importar M3U desta historia</button>
     <div id="eps"></div>
   </div>
 </main>
@@ -160,6 +164,44 @@ async function saveEp() {
   document.getElementById('epn').value = '';
   document.getElementById('epu').value = '';
   await openEps(currentStory, document.getElementById('epsTitle').textContent.replace(/^EPs — /, ''));
+}
+function parseM3u(raw) {
+  const lines = String(raw || '').split(/\r?\n/);
+  const out = [];
+  let meta = '';
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    if (line.indexOf('#EXTINF') === 0) { meta = line; continue; }
+    if (line.charAt(0) === '#') continue;
+    if (!/^https?:\/\//i.test(line)) continue;
+    const title = meta.indexOf(',') >= 0 ? meta.slice(meta.lastIndexOf(',') + 1).trim() : '';
+    const epm = /(?:EP|E)\s*0*(\d+)/i.exec(title) || /S\d+E0*(\d+)/i.exec(title);
+    out.push({ title: title, url: line, episode: epm ? Number(epm[1]) : out.length + 1 });
+    meta = '';
+  }
+  return out;
+}
+async function importM3u() {
+  if (!currentStory) return;
+  const items = parseM3u(document.getElementById('m3u').value);
+  if (!items.length) { msg('Nenhum EP no M3U.'); return; }
+  if (items.length > 80) { msg('M3U grande demais. Cole so os EPs desta historia (max 80).'); return; }
+  msg('Importando ' + items.length + ' EPs...');
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const data = await api('save_episode', {
+      story_id: currentStory,
+      episode: it.episode,
+      title: it.title,
+      video_url: it.url,
+    });
+    if (data.error) { msg('Parou no EP ' + it.episode + ': ' + JSON.stringify(data.error)); return; }
+  }
+  document.getElementById('m3u').value = '';
+  msg(items.length + ' EPs importados', true);
+  await openEps(currentStory, document.getElementById('epsTitle').textContent.replace(/^EPs — /, ''));
+  await load();
 }
 async function delEp(id) {
   await api('delete_episode', { id: id });
