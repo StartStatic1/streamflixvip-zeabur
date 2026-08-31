@@ -1,7 +1,5 @@
 package com.streamflixvip.app.ui.reels
 
-import android.content.Context
-import android.content.SharedPreferences
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,11 +53,6 @@ import kotlinx.coroutines.launch
 
 private enum class ReelsFilter { Todas, Continuar, Favoritas }
 
-private fun isInProgress(prefs: SharedPreferences, id: String): Boolean {
-    if (prefs.getBoolean("done_$id", false)) return false
-    return prefs.contains("idx_$id") || prefs.all.keys.any { it.startsWith("pos_${id}_") }
-}
-
 sealed interface ReelsUiState {
     data object Loading : ReelsUiState
     data class Error(val message: String) : ReelsUiState
@@ -95,7 +88,7 @@ fun ReelsScreen(
 ) {
     val ui by viewModel.state.collectAsState()
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("sfv_reels", Context.MODE_PRIVATE) }
+    val prefs = remember { ReelLocalStore.prefs(context) }
     var filter by remember { mutableStateOf(ReelsFilter.Todas) }
     var tick by remember { mutableIntStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -147,15 +140,15 @@ fun ReelsScreen(
                 val shown = s.stories.filter { story ->
                     when (filter) {
                         ReelsFilter.Todas -> true
-                        ReelsFilter.Favoritas -> prefs.getBoolean("like_${story.id}", false)
-                        ReelsFilter.Continuar -> isInProgress(prefs, story.id)
+                        ReelsFilter.Favoritas -> ReelLocalStore.isLiked(prefs, story.id)
+                        ReelsFilter.Continuar -> ReelLocalStore.isInProgress(prefs, story.id)
                     }
                 }
                 if (shown.isEmpty()) {
                     val empty = when (filter) {
                         ReelsFilter.Todas -> "Nenhuma historia no painel ainda."
-                        ReelsFilter.Favoritas -> "Nada favoritado. Toque no coracao no player."
-                        ReelsFilter.Continuar -> "Nada em andamento."
+                        ReelsFilter.Favoritas -> "Nada favoritado nesta conta."
+                        ReelsFilter.Continuar -> "Nada em andamento nesta conta."
                     }
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(empty, color = Color(0xFF8B8BA8))
@@ -170,8 +163,8 @@ fun ReelsScreen(
                         items(shown, key = { it.id }) { story ->
                             StoryCard(
                                 story = story,
-                                liked = prefs.getBoolean("like_${story.id}", false),
-                                watching = isInProgress(prefs, story.id),
+                                liked = ReelLocalStore.isLiked(prefs, story.id),
+                                watching = ReelLocalStore.isInProgress(prefs, story.id),
                                 onClick = { onStoryClick(story) },
                             )
                         }
@@ -185,6 +178,7 @@ fun ReelsScreen(
 @Composable
 private fun StoryCard(story: ReelStory, liked: Boolean, watching: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
+    val vip = story.vip_only != false
     Column(modifier = Modifier.clickable(onClick = onClick)) {
         Box(
             modifier = Modifier
@@ -203,21 +197,35 @@ private fun StoryCard(story: ReelStory, liked: Boolean, watching: Boolean, onCli
                     modifier = Modifier.fillMaxSize(),
                 )
             }
-            if (watching) {
-                Text(
-                    "Continuar",
-                    color = Color.White,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(7.dp)
-                        .background(Color(0xFFFF2D55), RoundedCornerShape(7.dp))
-                        .padding(horizontal = 7.dp, vertical = 2.dp),
-                )
+            Row(
+                modifier = Modifier.align(Alignment.TopStart).padding(7.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                if (vip) {
+                    Text(
+                        "VIP",
+                        color = Color.Black,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier
+                            .background(Color(0xFFF5C518), RoundedCornerShape(7.dp))
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                    )
+                }
+                if (watching) {
+                    Text(
+                        "Continuar",
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(Color(0xFFFF2D55), RoundedCornerShape(7.dp))
+                            .padding(horizontal = 7.dp, vertical = 2.dp),
+                    )
+                }
             }
             if (liked) {
-                Text("★", color = Color(0xFFFFD54F), fontSize = 13.sp, modifier = Modifier.align(Alignment.TopEnd).padding(7.dp))
+                Text("\u2605", color = Color(0xFFFFD54F), fontSize = 13.sp, modifier = Modifier.align(Alignment.TopEnd).padding(7.dp))
             }
         }
         Text(
