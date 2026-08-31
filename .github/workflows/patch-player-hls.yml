@@ -1,0 +1,14 @@
+name: patch-player-hls
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/patch_player_hls.py
+      - run: |
+          git config user.name bot
+          git config user.email bot@local
+          git add android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          git diff --cached --quiet || (git commit -m "fix: HLS Pengu headers e redirect no player" && git push)
