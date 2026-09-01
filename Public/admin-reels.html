@@ -14,16 +14,17 @@
     header a{color:var(--gold);text-decoration:none;font-size:.85rem}
     main{max-width:980px;margin:0 auto;padding:20px}
     input,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font:inherit;margin-bottom:8px}
-    textarea{min-height:120px;font-size:.8rem}
+    textarea{min-height:90px;font-size:.8rem}
     button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:10px 14px;font-weight:700}
     .btn-gold{background:linear-gradient(135deg,var(--gold),#e6a800);color:#000}
     .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
     .btn-red{background:#3a1212;color:#ffb4b4}
-    .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px}
     .muted{color:var(--muted);font-size:.8rem}
     .ok{color:var(--green)}
     h2{font-size:1.05rem;margin:18px 0 10px}
+    #csvName{font-size:.8rem;color:var(--gold)}
   </style>
 </head>
 <body>
@@ -36,8 +37,23 @@
   </div>
 </header>
 <main>
-  <p class="muted">Uma historia + EPs. 1 URL longa = historia completa. Varios links = grade no player. Colar M3U so daquela historinha, nao a lista inteira.</p>
+  <p class="muted">Uma historia + EPs. 1 URL = filme completo. Varios links = grade no player.</p>
   <div id="msg" class="muted"></div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Importar CSV</h2>
+    <p class="muted">Escolhe o arquivo no celular. Depois toca em Enviar. Sobe de 50 em 50. Titulo repetido e pulado. Deixa a aba aberta.</p>
+    <input id="csvFile" type="file" accept=".csv,text/csv,text/plain" onchange="onFilePicked(event)"/>
+    <div id="csvName" class="muted"></div>
+    <div class="row">
+      <input id="csvLimit" value="50" style="width:80px" title="por lote"/>
+      <button class="btn-gold" type="button" onclick="importSelectedFile()">Enviar arquivo</button>
+    </div>
+    <p class="muted" style="margin-top:12px">Ou cola um pedaco pequeno:</p>
+    <textarea id="csvBox" placeholder="nome,idioma,link_imagem,link_mp4"></textarea>
+    <button class="btn-sec" type="button" onclick="importCsv()">Importar texto</button>
+  </div>
+
   <h2>Nova historia</h2>
   <input id="title" placeholder="Titulo"/>
   <input id="subtitle" placeholder="Subtitulo"/>
@@ -60,7 +76,7 @@
     <input id="epu" placeholder="URL do video (mp4, m3u8, ts)"/>
     <button class="btn-gold" onclick="saveEp()">Adicionar EP</button>
     <p class="muted" style="margin-top:14px">Ou cola o bloco M3U desta historia (#EXTINF + URL):</p>
-    <textarea id="m3u" placeholder="#EXTINF:-1 tvg-name="EP 01",EP 01&#10;http://.../1.ts"></textarea>
+    <textarea id="m3u" placeholder="#EXTINF:-1,EP 01"></textarea>
     <button class="btn-sec" onclick="importM3u()">Importar M3U desta historia</button>
     <div id="eps"></div>
   </div>
@@ -73,6 +89,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 });
 let token = '';
 let currentStory = null;
+let pickedFile = null;
 function msg(t, ok) {
   const e = document.getElementById('msg');
   e.textContent = t;
@@ -113,11 +130,53 @@ async function load() {
   wrap.innerHTML = rows.map(function (s) {
     return '<div class="card"><strong>' + esc(s.title) + '</strong><div class="muted">' +
       (s.episode_count || 0) + ' EPs · ' + esc(s.genre || '—') + ' · ' +
-      (s.is_active ? 'ativa' : 'pausada') + ' · ' + (s.use_addons ? 'addons on' : 'addons off') +
+      (s.is_active ? 'ativa' : 'pausada') +
       '</div><div class="row">' +
       '<button class="btn-sec" data-id="' + s.id + '" data-title="' + esc(s.title) + '" onclick="openEps(this.dataset.id,this.dataset.title)">Episodios</button>' +
       '<button class="btn-red" data-id="' + s.id + '" onclick="delStory(this.dataset.id)">Excluir</button></div></div>';
   }).join('') || '<p class="muted">Nenhuma historia ainda.</p>';
+}
+function splitCsvLines(text) {
+  return String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+}
+async function importCsvText(text, limit) {
+  const lines = splitCsvLines(text);
+  if (lines.length < 2) { msg('CSV vazio.'); return; }
+  const header = lines[0];
+  const rows = lines.slice(1);
+  let created = 0, skipped = 0, failed = 0;
+  const batch = Math.min(Math.max(Number(limit || 50), 10), 80);
+  for (let i = 0; i < rows.length; i += batch) {
+    const part = rows.slice(i, i + batch);
+    msg('Enviando ' + (i + 1) + '-' + (i + part.length) + ' de ' + rows.length + '...');
+    const data = await api('import_csv', { csv: [header].concat(part).join('\n'), limit: batch });
+    if (data.error) {
+      msg('Parou no lote: ' + JSON.stringify(data.error));
+      return;
+    }
+    created += Number(data.created || 0);
+    skipped += Number(data.skipped || 0);
+    failed += Number(data.failed || 0);
+  }
+  msg('Pronto. Criadas ' + created + ' · puladas ' + skipped + ' · falhas ' + failed, true);
+  await load();
+}
+function onFilePicked(ev) {
+  pickedFile = ev.target.files && ev.target.files[0] ? ev.target.files[0] : null;
+  document.getElementById('csvName').textContent = pickedFile
+    ? ('Arquivo: ' + pickedFile.name + ' — agora toca em Enviar arquivo')
+    : '';
+}
+async function importSelectedFile() {
+  const input = document.getElementById('csvFile');
+  const f = pickedFile || (input.files && input.files[0]);
+  if (!f) { msg('Escolhe o CSV primeiro.'); return; }
+  msg('Lendo ' + f.name + '...');
+  const text = await f.text();
+  await importCsvText(text, document.getElementById('csvLimit').value);
+}
+async function importCsv() {
+  await importCsvText(document.getElementById('csvBox').value, document.getElementById('csvLimit').value);
 }
 async function saveStory() {
   const data = await api('save_story', {
@@ -186,7 +245,7 @@ async function importM3u() {
   if (!currentStory) return;
   const items = parseM3u(document.getElementById('m3u').value);
   if (!items.length) { msg('Nenhum EP no M3U.'); return; }
-  if (items.length > 80) { msg('M3U grande demais. Cole so os EPs desta historia (max 80).'); return; }
+  if (items.length > 80) { msg('M3U grande demais. Max 80.'); return; }
   msg('Importando ' + items.length + ' EPs...');
   for (let i = 0; i < items.length; i++) {
     const it = items[i];
