@@ -7,7 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet"/>
   <style>
-    :root{--bg:#08080f;--surface:#111119;--surface2:#1a1a26;--border:rgba(255,255,255,.08);--text:#f0f0f8;--muted:#8888aa;--gold:#f5c518;--green:#22c55e;--red:#ef4444}
+    :root{--bg:#08080f;--surface:#111119;--surface2:#1a1a26;--border:rgba(255,255,255,.08);--text:#f0f0f8;--muted:#8888aa;--gold:#f5c518;--green:#22c55e}
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:Outfit,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
     header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
@@ -22,30 +22,23 @@
     .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0;align-items:center}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px}
     .muted{color:var(--muted);font-size:.8rem}
-    .ok{color:var(--green)}
+    .ok{color:var(--green);font-size:.95rem;min-height:1.2em}
     h2{font-size:1.05rem;margin:18px 0 10px}
-    #csvFile{padding:8px}
-    #progress{margin:8px 0;font-size:.9rem}
   </style>
 </head>
 <body>
 <header>
   <strong>Historias verticais</strong>
-  <div>
-    <a href="/admin-addons.html">Add-ons</a>
-    &nbsp;·&nbsp;
-    <a href="/admin.html">Painel</a>
-  </div>
+  <div><a href="/admin-addons.html">Add-ons</a> · <a href="/admin.html">Painel</a></div>
 </header>
 <main>
-  <p class="muted">Uma historia + EPs. 1 URL longa = historia completa.</p>
   <div id="msg" class="muted"></div>
   <div id="progress" class="ok"></div>
   <h2>Importar CSV</h2>
-  <p class="muted">1 escolhe o arquivo. 2 toca Enviar arquivo. Nao fecha a aba.</p>
+  <p class="muted">Escolhe o arquivo e toca Enviar. No celular manda no maximo 80 por vez.</p>
   <input id="csvFile" type="file" accept=".csv,text/csv,text/plain"/>
   <div class="row">
-    <input id="csvLimit" value="40" style="width:80px"/>
+    <input id="csvMax" value="80" style="width:90px" title="max linhas desta vez"/>
     <button class="btn-gold" type="button" onclick="startFileImport()">Enviar arquivo</button>
   </div>
   <details style="margin:10px 0">
@@ -55,27 +48,16 @@
   </details>
   <h2>Nova historia</h2>
   <input id="title" placeholder="Titulo"/>
-  <input id="subtitle" placeholder="Subtitulo"/>
   <input id="poster" placeholder="URL da capa"/>
-  <div class="row">
-    <input id="genre" placeholder="Genero" style="flex:1"/>
-    <input id="lang" value="pt-BR" style="width:120px"/>
-  </div>
-  <label class="muted"><input type="checkbox" id="vip" checked/> so VIP</label>
-  <label class="muted"><input type="checkbox" id="addons" checked/> usar add-ons</label>
   <div class="row"><button class="btn-gold" onclick="saveStory()">Salvar historia</button></div>
   <h2>Lista</h2>
   <div id="list"></div>
   <div id="epsBox" style="display:none">
     <h2 id="epsTitle">Episodios</h2>
-    <div class="row">
-      <input id="epn" placeholder="EP" style="width:80px"/>
-      <input id="ept" placeholder="Titulo do EP" style="flex:1"/>
-    </div>
+    <input id="epn" placeholder="EP"/>
+    <input id="ept" placeholder="Titulo do EP"/>
     <input id="epu" placeholder="URL do video"/>
     <button class="btn-gold" onclick="saveEp()">Adicionar EP</button>
-    <textarea id="m3u" placeholder="#EXTINF"></textarea>
-    <button class="btn-sec" onclick="importM3u()">Importar M3U</button>
     <div id="eps"></div>
   </div>
 </main>
@@ -99,14 +81,30 @@ function esc(s) {
     return ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' })[c];
   });
 }
+function readFileText(file) {
+  return new Promise(function (resolve, reject) {
+    const r = new FileReader();
+    r.onload = function () { resolve(String(r.result || '')); };
+    r.onerror = function () { reject(new Error('Nao deu para ler o arquivo')); };
+    r.readAsText(file);
+  });
+}
 async function api(action, extra) {
   extra = extra || {}; extra.action = action;
-  const r = await fetch('/api/admin-reels', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-    body: JSON.stringify(extra),
-  });
-  return r.json();
+  const ctrl = new AbortController();
+  const t = setTimeout(function () { ctrl.abort(); }, 45000);
+  try {
+    const r = await fetch('/api/admin-reels', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify(extra),
+      signal: ctrl.signal,
+    });
+    const data = await r.json();
+    return data;
+  } finally {
+    clearTimeout(t);
+  }
 }
 async function boot() {
   const sess = await db.auth.getSession();
@@ -129,47 +127,62 @@ async function load() {
 function splitCsvLines(text) {
   return String(text || '').replace(/^\uFEFF/, '').split(/\r?\n/).filter(function (l) { return l.trim(); });
 }
+function wait(ms) { return new Promise(function (ok) { setTimeout(ok, ms); }); }
 async function importCsvText(text) {
   if (importing) { msg('Ja esta enviando.'); return; }
   const lines = splitCsvLines(text);
   if (lines.length < 2) { msg('CSV vazio.'); return; }
   const header = lines[0];
-  const rows = lines.slice(1);
-  const batch = Math.min(Math.max(Number(document.getElementById('csvLimit').value || 40), 10), 60);
+  let rows = lines.slice(1);
+  const max = Math.min(Math.max(Number(document.getElementById('csvMax').value || 80), 10), 200);
+  if (rows.length > max) rows = rows.slice(0, max);
+  msg(rows.length + ' linhas nesta leva (max ' + max + ')');
   importing = true;
   let created = 0, skipped = 0, failed = 0;
+  const batch = 20;
   try {
     for (let i = 0; i < rows.length; i += batch) {
       const part = rows.slice(i, i + batch);
       prog('Enviando ' + (i + 1) + '-' + (i + part.length) + ' de ' + rows.length);
+      await wait(30);
       const data = await api('import_csv', { csv: [header].concat(part).join('\n'), limit: batch });
-      if (data.error) { msg('Parou: ' + JSON.stringify(data.error)); importing = false; return; }
+      if (!data || data.error) {
+        msg('Parou no lote ' + (i + 1) + ': ' + JSON.stringify((data && data.error) || 'sem resposta'));
+        importing = false;
+        return;
+      }
       created += Number(data.created || 0);
       skipped += Number(data.skipped || 0);
       failed += Number(data.failed || 0);
+      prog('Lote ok · criadas ' + created + ' · puladas ' + skipped + ' · falhas ' + failed);
     }
-    prog('');
     msg('Pronto. Criadas ' + created + ' · puladas ' + skipped + ' · falhas ' + failed, true);
     await load();
-  } finally { importing = false; }
+  } catch (e) {
+    msg('Erro: ' + (e.message || e));
+  } finally {
+    importing = false;
+  }
 }
 async function startFileImport() {
   const f = document.getElementById('csvFile').files && document.getElementById('csvFile').files[0];
   if (!f) { msg('Escolhe o CSV primeiro.'); return; }
-  msg('Lendo ' + f.name + '...');
-  await importCsvText(await f.text());
+  msg('Lendo ' + f.name + ' (' + Math.round(f.size / 1024) + ' KB)...');
+  try {
+    const text = await readFileText(f);
+    msg('Leu ' + text.length + ' caracteres. Separando linhas...');
+    await wait(20);
+    await importCsvText(text);
+  } catch (e) {
+    msg('Falha ao ler: ' + (e.message || e));
+  }
 }
 async function importPasted() { await importCsvText(document.getElementById('csvBox').value); }
 async function saveStory() {
   const data = await api('save_story', {
     title: document.getElementById('title').value,
-    subtitle: document.getElementById('subtitle').value,
     poster_url: document.getElementById('poster').value,
-    genre: document.getElementById('genre').value,
-    language: document.getElementById('lang').value,
-    vip_only: document.getElementById('vip').checked,
-    use_addons: document.getElementById('addons').checked,
-    is_active: true,
+    vip_only: true, use_addons: false, is_active: true,
   });
   if (data.error) { msg(JSON.stringify(data.error)); return; }
   msg('Historia salva', true); await load();
@@ -186,49 +199,17 @@ async function openEps(id, title) {
   const data = await api('list_episodes', { story_id: id });
   document.getElementById('eps').innerHTML = (data.episodes || []).map(function (e) {
     return '<div class="card"><strong>EP ' + e.episode + '</strong> ' + esc(e.title || '') +
-      '<div class="muted">' + esc((e.video_url || '').slice(0, 90)) + '</div>' +
-      '<button class="btn-red" data-id="' + e.id + '" onclick="delEp(this.dataset.id)">Excluir EP</button></div>';
+      '<div class="muted">' + esc((e.video_url || '').slice(0, 90)) + '</div></div>';
   }).join('') || '<p class="muted">Sem EPs.</p>';
 }
 async function saveEp() {
   if (!currentStory) return;
-  const data = await api('save_episode', {
+  await api('save_episode', {
     story_id: currentStory,
     episode: Number(document.getElementById('epn').value || 0),
     title: document.getElementById('ept').value,
     video_url: document.getElementById('epu').value,
   });
-  if (data.error) { msg(JSON.stringify(data.error)); return; }
-  await openEps(currentStory, document.getElementById('epsTitle').textContent.replace(/^EPs — /, ''));
-}
-function parseM3u(raw) {
-  const lines = String(raw || '').split(/\r?\n/); const out = []; let meta = '';
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    if (line.indexOf('#EXTINF') === 0) { meta = line; continue; }
-    if (line.charAt(0) === '#') continue;
-    if (!/^https?:\/\//i.test(line)) continue;
-    const title = meta.indexOf(',') >= 0 ? meta.slice(meta.lastIndexOf(',') + 1).trim() : '';
-    const epm = /(?:EP|E)\s*0*(\d+)/i.exec(title);
-    out.push({ title: title, url: line, episode: epm ? Number(epm[1]) : out.length + 1 }); meta = '';
-  }
-  return out;
-}
-async function importM3u() {
-  if (!currentStory) return;
-  const items = parseM3u(document.getElementById('m3u').value);
-  if (!items.length) { msg('Nenhum EP.'); return; }
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    const data = await api('save_episode', { story_id: currentStory, episode: it.episode, title: it.title, video_url: it.url });
-    if (data.error) { msg(JSON.stringify(data.error)); return; }
-  }
-  msg(items.length + ' EPs', true);
-  await openEps(currentStory, document.getElementById('epsTitle').textContent.replace(/^EPs — /, ''));
-}
-async function delEp(id) {
-  await api('delete_episode', { id: id });
   await openEps(currentStory, document.getElementById('epsTitle').textContent.replace(/^EPs — /, ''));
 }
 boot();
