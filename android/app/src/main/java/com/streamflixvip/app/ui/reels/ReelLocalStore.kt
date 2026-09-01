@@ -22,6 +22,13 @@ object ReelLocalStore {
     fun isLiked(p: SharedPreferences, storyId: String): Boolean =
         p.getBoolean(likeKey(storyId), p.getBoolean("like_$storyId", false))
 
+    fun setLiked(p: SharedPreferences, storyId: String, liked: Boolean) {
+        p.edit()
+            .putBoolean(likeKey(storyId), liked)
+            .putBoolean("like_$storyId", liked)
+            .apply()
+    }
+
     fun isDone(p: SharedPreferences, storyId: String): Boolean =
         p.getBoolean(doneKey(storyId), p.getBoolean("done_$storyId", false))
 
@@ -46,6 +53,20 @@ object ReelLocalStore {
         return p.all.keys.any {
             it.startsWith("pos_${uid}_${storyId}_") || it.startsWith("pos_${storyId}_")
         }
+    }
+
+    fun clearProgress(p: SharedPreferences, storyId: String) {
+        val uid = uid()
+        val editor = p.edit()
+            .remove(idxKey(storyId))
+            .remove("idx_$storyId")
+            .putBoolean(doneKey(storyId), true)
+            .putBoolean("done_$storyId", true)
+        val keys = p.all.keys.filter {
+            it.startsWith("pos_${uid}_${storyId}_") || it.startsWith("pos_${storyId}_")
+        }
+        for (k in keys) editor.remove(k)
+        editor.apply()
     }
 
     private fun migrateLegacy(p: SharedPreferences) {
