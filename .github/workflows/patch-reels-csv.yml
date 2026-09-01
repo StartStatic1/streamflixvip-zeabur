@@ -1,0 +1,14 @@
+name: patch-reels-csv
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/patch_reels_csv_import.py
+      - run: |
+          git config user.name bot
+          git config user.email bot@local
+          git add api/admin-reels.js Public/admin-reels.html
+          git diff --cached --quiet || (git commit -m "feat: import CSV novelinhas no painel reels" && git push)
