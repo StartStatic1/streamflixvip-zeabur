@@ -1,8 +1,10 @@
 package com.streamflixvip.app.ui.reels
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -81,6 +84,7 @@ class ReelsViewModel : ViewModel() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ReelsScreen(
     viewModel: ReelsViewModel,
@@ -91,6 +95,7 @@ fun ReelsScreen(
     val prefs = remember { ReelLocalStore.prefs(context) }
     var filter by remember { mutableStateOf(ReelsFilter.Todas) }
     var tick by remember { mutableIntStateOf(0) }
+    var q by remember { mutableStateOf("") }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) tick++ }
@@ -104,7 +109,20 @@ fun ReelsScreen(
             .background(Color(0xFF07070C))
             .padding(horizontal = 12.dp),
     ) {
-        Text("Historias", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 6.dp, bottom = 10.dp))
+        Text("Historias", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
+        OutlinedTextField(
+            value = q,
+            onValueChange = { q = it },
+            placeholder = { Text("Buscar titulo", color = Color(0xFF8B8BA8)) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        )
+        Text(
+            "Segura o card para tirar de Continuar ou Favoritas.",
+            color = Color(0xFF8B8BA8),
+            fontSize = 11.sp,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
         Row(
             Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -138,11 +156,13 @@ fun ReelsScreen(
                 @Suppress("UNUSED_EXPRESSION")
                 tick
                 val shown = s.stories.filter { story ->
-                    when (filter) {
+                    val okFilter = when (filter) {
                         ReelsFilter.Todas -> true
                         ReelsFilter.Favoritas -> ReelLocalStore.isLiked(prefs, story.id)
                         ReelsFilter.Continuar -> ReelLocalStore.isInProgress(prefs, story.id)
                     }
+                    val okQ = q.isBlank() || (story.title ?: "").contains(q, ignoreCase = true)
+                    okFilter && okQ
                 }
                 if (shown.isEmpty()) {
                     val empty = when (filter) {
@@ -166,6 +186,21 @@ fun ReelsScreen(
                                 liked = ReelLocalStore.isLiked(prefs, story.id),
                                 watching = ReelLocalStore.isInProgress(prefs, story.id),
                                 onClick = { onStoryClick(story) },
+                                onLongClick = {
+                                    when (filter) {
+                                        ReelsFilter.Favoritas -> ReelLocalStore.setLiked(prefs, story.id, false)
+                                        ReelsFilter.Continuar -> ReelLocalStore.clearProgress(prefs, story.id)
+                                        ReelsFilter.Todas -> {
+                                            if (ReelLocalStore.isLiked(prefs, story.id)) {
+                                                ReelLocalStore.setLiked(prefs, story.id, false)
+                                            }
+                                            if (ReelLocalStore.isInProgress(prefs, story.id)) {
+                                                ReelLocalStore.clearProgress(prefs, story.id)
+                                            }
+                                        }
+                                    }
+                                    tick++
+                                },
                             )
                         }
                     }
@@ -175,11 +210,18 @@ fun ReelsScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun StoryCard(story: ReelStory, liked: Boolean, watching: Boolean, onClick: () -> Unit) {
+private fun StoryCard(
+    story: ReelStory,
+    liked: Boolean,
+    watching: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
+) {
     val shape = RoundedCornerShape(14.dp)
     val vip = story.vip_only != false
-    Column(modifier = Modifier.clickable(onClick = onClick)) {
+    Column(modifier = Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
