@@ -45,13 +45,21 @@ async function xtream(b, action, extra) {
   }
 }
 
-async function loadBridge(id, key) {
+async function loadBridge(id, token, key) {
   const r = await fetch(
     SUPABASE_URL + '/rest/v1/iptv_bridges?id=eq.' + encodeURIComponent(id) + '&is_active=eq.true&select=*',
     { headers: svc(key) },
   );
   const rows = await r.json();
-  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+  const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
+  if (!row) return null;
+  const expected = String(row.access_token || '').trim();
+  if (!expected || String(token || '').trim() !== expected) {
+    const err = new Error('token');
+    err.code = 401;
+    throw err;
+  }
+  return row;
 }
 
 function catIds(arr) {
@@ -93,8 +101,8 @@ function pick(list, title) {
     else if (t.includes(n) || n.includes(t)) score = 70;
     else {
       const a = new Set(n.split(' '));
-      const b = t.split(' ');
-      const inter = b.filter((w) => a.has(w) && w.length > 2).length;
+      const btok = t.split(' ');
+      const inter = btok.filter((w) => a.has(w) && w.length > 2).length;
       if (inter >= 2) score = 40 + inter;
     }
     if (score > bestScore) {
@@ -122,7 +130,6 @@ async function tmdbTitle(tmdbId, kind) {
 }
 
 function parseStreamPath(rest) {
-  // stream/movie/tmdb:550.json  or stream/series/tmdb:1396:1:1.json
   const m = String(rest || '').match(/^stream\/([^/]+)\/(.+)\.json$/i);
   if (!m) return null;
   const type = m[1].toLowerCase();
@@ -154,15 +161,25 @@ module.exports = async function handler(req, res) {
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const path = String(req.path || req.url || '').split('?')[0];
-  const m = path.match(/\/api\/bridge\/([^/]+)\/(.+)$/);
+  const m = path.match(/\/api\/bridge\/([^/]+)\/([^/]+)\/(.+)$/);
   if (!m) {
-    res.status(404).json({ error: 'Rota bridge invalida' });
+    res.status(401).json({ error: 'Token obrigatorio. Use /api/bridge/ID/TOKEN/manifest.json' });
     return;
   }
   const id = m[1];
-  const rest = m[2];
+  const token = m[2];
+  const rest = m[3];
 
-  const b = await loadBridge(id, serviceKey);
+  let b;
+  try {
+    b = await loadBridge(id, token, serviceKey);
+  } catch (e) {
+    if (e && e.code === 401) {
+      res.status(401).json({ error: 'Token invalido ou revogado' });
+      return;
+    }
+    throw e;
+  }
   if (!b) {
     res.status(404).json({ error: 'Bridge inativa ou inexistente' });
     return;
@@ -202,7 +219,7 @@ module.exports = async function handler(req, res) {
     const streams = [];
     const kind = streamReq.type === 'movie' ? 'movie' : 'tv';
     const title = streamReq.tmdbId ? await tmdbTitle(streamReq.tmdbId, kind) : null;
-    if (title && (streamReq.type === 'movie') && b.use_movies) {
+    if (title && streamReq.type === 'movie' && b.use_movies) {
       const list = await vodList(b);
       const hit = pick(list, title);
       if (hit && hit.stream_id) {
