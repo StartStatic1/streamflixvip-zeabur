@@ -1,16 +1,18 @@
 // api/media-sources.js
 //
 // Resolve fontes de filme/série (vip_sources) no SERVIDOR.
-// Soft/hard auth + vip_lock iguais a antes.
-// VIP: anexa streams reais dos add-ons.
-// Free: anexa só add-ons de VÍDEO como cards PREMIUM (sem URL).
-// Legenda, catálogo e add-on de teste não entram na lista.
+//
+// Gates (env):
+//   MIN_APP_VERSION / MIN_APP_VERSION_CODE  → corta APK antigo/MOD sem header
+//   REQUIRE_AUTH_MEDIA=1                    → exige login
+//   REQUIRE_JWT_MEDIA=1                     → só JWT real (ignora X-User-Id forjado)
 //
 // GET /api/media-sources?tmdb_id=123&type=movie
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&episode=2
 // GET /api/media-sources?tmdb_id=123&type=tv&season=1&list_episodes=1
 
 const { resolveVipAccess } = require('../lib/vip-gate');
+const { enforceMinAppVersion } = require('../lib/client-gate');
 const { collectAddonSources, loadActiveAddons } = require('../lib/stremio-addons');
 
 const SUPABASE_URL =
@@ -151,7 +153,10 @@ async function lockedAddonStubs(serviceKey) {
 async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-App-Version, X-App-Version-Code, X-User-Id, X-Device-Id',
+  );
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
@@ -160,6 +165,9 @@ async function handler(req, res) {
     res.status(405).json({ error: 'Método não permitido', sources: [] });
     return;
   }
+
+  // Corta MOD / APK abaixo da versão mínima ANTES de qualquer fonte
+  if (enforceMinAppVersion(req, res)) return;
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
@@ -194,7 +202,7 @@ async function handler(req, res) {
   }
 
   const hard = isMediaAuthHard();
-  const access = await resolveVipAccess(req, serviceKey);
+  const access = await resolveVipAccess(req, serviceKey, { feature: 'media-sources' });
   const loggedIn = access.source === 'jwt' || access.source === 'userId' || access.source === 'deviceId';
 
   const vipConfig = await loadVipTitleConfig(serviceKey, tmdbId, mediaType);
