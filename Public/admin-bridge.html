@@ -183,16 +183,27 @@ async function save() {
   _editId = null;
   loadList();
 }
+async function rotateTok(id) {
+  if (!confirm('Gera token novo e corta o link antigo?')) return;
+  const d = await api('rotate-token', { id: id });
+  toast(d.error ? (d.error.message || d.error) : 'Token novo. Link antigo morto.');
+  loadList();
+}
 async function loadList() {
   const d = await api('list');
   const wrap = document.getElementById('list');
-  if (d.error) { wrap.innerHTML = '<p style="color:var(--red)">' + (d.error.message || d.error) + '<br>Rode sql/iptv_bridges.sql</p>'; return; }
+  if (d.error) { wrap.innerHTML = '<p style="color:var(--red)">' + (d.error.message || d.error) + '</p>'; return; }
   const rows = d.bridges || [];
   if (!rows.length) { wrap.innerHTML = '<p class="hint">Nenhuma ponte ainda.</p>'; return; }
   wrap.innerHTML = rows.map((b) => {
-    const url = (d.publicBase || '') + '/api/bridge/' + b.id + '/manifest.json';
+    const token = b.access_token || '';
+    const url = token
+      ? ((d.publicBase || '') + '/api/bridge/' + b.id + '/' + token + '/manifest.json')
+      : ((d.publicBase || '') + '/api/bridge/' + b.id + '/manifest.json');
+    const locked = token ? 'trancada' : 'SEM TOKEN';
     return '<div class="item"><b>' + b.name + '</b> '
       + (b.is_active ? '<span style="color:var(--green)">ativa</span>' : '<span style="color:var(--muted)">off</span>')
+      + ' <span class="meta">' + locked + '</span>'
       + '<div class="meta">' + (b.xtream_host || '') + '</div>'
       + '<div class="meta">TV ' + (b.use_live ? (b.live_cats||[]).length : 0)
       + ' · Filmes ' + (b.use_movies ? (b.vod_cats||[]).length : 0)
@@ -200,6 +211,7 @@ async function loadList() {
       + '<div class="meta">' + url + '</div>'
       + '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">'
       + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + url + '\');toast(\'URL copiada\')">Copiar JSON</button>'
+      + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="rotateTok(\'' + b.id + '\')">Novo token</button>'
       + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'toggle\',{id:\'' + b.id + '\',is_active:' + (!b.is_active) + '}).then(loadList)">' + (b.is_active ? 'Pausar' : 'Ativar') + '</button>'
       + '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="if(confirm(\'Excluir?\'))api(\'delete\',{id:\'' + b.id + '\'}).then(loadList)">Excluir</button>'
       + '</div></div>';
