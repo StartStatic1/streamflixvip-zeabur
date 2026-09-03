@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bridge — StreamFlixVIP</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root{--bg:#08080f;--surface:#111119;--surface2:#1a1a26;--border:rgba(255,255,255,.08);--text:#f0f0f8;--muted:#8888aa;--gold:#f5c518;--green:#22c55e;--red:#ef4444}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Outfit,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+    #login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;width:100%;max-width:400px}
+    input,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 14px;font:inherit;margin-bottom:10px}
+    button{font:inherit;cursor:pointer;border:none;border-radius:12px;padding:12px 18px;font-weight:700}
+    .btn-gold{background:linear-gradient(135deg,var(--gold),#e6a800);color:#000}
+    .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+    .btn-danger{background:rgba(239,68,68,.16);color:#fca5a5}
+    #app{display:none}
+    header{position:sticky;top:0;z-index:10;background:rgba(8,8,15,.92);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+    header a{color:var(--muted);font-size:.85rem;text-decoration:none}
+    main{max-width:920px;margin:0 auto;padding:20px 14px 48px;display:flex;flex-direction:column;gap:16px}
+    .panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px}
+    .hint{font-size:.8rem;color:var(--muted);margin-bottom:12px;line-height:1.45}
+    .checks{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px}
+    .chip{display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:.85rem}
+    .cats{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto;margin-bottom:10px}
+    .cats label{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.75rem;display:flex;gap:6px;align-items:center}
+    .item{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+    .meta{font-size:.75rem;color:var(--muted);word-break:break-all;margin-top:4px}
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;opacity:0;transition:.25s;z-index:99}
+    #toast.show{opacity:1}
+  </style>
+</head>
+<body>
+<div id="login">
+  <div class="card">
+    <h1>Bridge IPTV</h1>
+    <p class="hint">Mesmo login do painel. Lista pastas e gera add-on no seu dominio.</p>
+    <input type="email" id="email" placeholder="E-mail admin"/>
+    <input type="password" id="pass" placeholder="Senha"/>
+    <button class="btn-gold" style="width:100%" onclick="doLogin()">Entrar</button>
+    <p class="hint" style="margin-top:12px"><a href="/admin.html" style="color:var(--gold)">Voltar</a></p>
+  </div>
+</div>
+<div id="app">
+  <header>
+    <div><strong>Stream<em style="color:var(--gold);font-style:italic">Flix</em>VIP</strong> · Bridge</div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <a href="/admin-addons.html">Add-ons</a>
+      <a href="/admin.html">Painel</a>
+      <button class="btn-sec" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">Sair</button>
+    </div>
+  </header>
+  <main>
+    <div class="panel">
+      <h2>Nova ponte</h2>
+      <p class="hint">Host + usuario + senha Xtream. Le as pastas, marca o que quer, salva. Vira add-on no app (VIP).</p>
+      <input id="bName" placeholder="Nome no app — ex: StreamFlix.Lista2"/>
+      <input id="bHost" placeholder="http://servidor.com:80"/>
+      <input id="bUser" placeholder="Usuario"/>
+      <input id="bPass" placeholder="Senha" type="password"/>
+      <div class="checks">
+        <label class="chip"><input type="checkbox" id="tLive"/> Live TV</label>
+        <label class="chip"><input type="checkbox" id="tMov" checked/> Filmes</label>
+        <label class="chip"><input type="checkbox" id="tSer" checked/> Series</label>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-sec" style="flex:1" onclick="probe()">Listar pastas</button>
+        <button class="btn-gold" style="flex:1" onclick="save()">Salvar e gerar</button>
+      </div>
+      <div id="probeBox" style="display:none;margin-top:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b id="liveH">TV</b>
+          <span><a href="#" onclick="togAll('live',true);return false">Todas</a> · <a href="#" onclick="togAll('live',false);return false">Nenhuma</a></span>
+        </div>
+        <div class="cats" id="liveCats"></div>
+        <div style="display:flex;justify-content:space-between"><b>Filmes</b>
+          <span><a href="#" onclick="togAll('mov',true);return false">Todas</a> · <a href="#" onclick="togAll('mov',false);return false">Nenhuma</a></span></div>
+        <div class="cats" id="movCats"></div>
+        <div style="display:flex;justify-content:space-between"><b>Series</b>
+          <span><a href="#" onclick="togAll('ser',true);return false">Todas</a> · <a href="#" onclick="togAll('ser',false);return false">Nenhuma</a></span></div>
+        <div class="cats" id="serCats"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Pontes salvas <button class="btn-sec" style="padding:4px 10px;font-size:.75rem" onclick="loadList()">Atualizar</button></h2>
+      <div id="list"><p class="hint">Carregando…</p></div>
+    </div>
+  </main>
+</div>
+<div id="toast"></div>
+<script>
+const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'sfv-admin-auth-token' },
+});
+let _session = null;
+let _editId = null;
+async function checkSession() {
+  const { data } = await db.auth.getSession();
+  if (data && data.session && await isAdmin(data.session)) showApp(data.session);
+}
+async function isAdmin(s) {
+  const { data } = await db.from('vip_panel_admins').select('id').eq('id', s.user.id).maybeSingle();
+  return !!data;
+}
+async function doLogin() {
+  const { data, error } = await db.auth.signInWithPassword({
+    email: document.getElementById('email').value.trim(),
+    password: document.getElementById('pass').value,
+  });
+  if (error) { toast(error.message); return; }
+  if (!(await isAdmin(data.session))) { await db.auth.signOut(); toast('Sem permissao'); return; }
+  showApp(data.session);
+}
+function showApp(s) {
+  _session = s;
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadList();
+}
+async function doLogout() { await db.auth.signOut(); location.reload(); }
+async function api(action, extra) {
+  const res = await fetch('/api/admin-bridge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _session.access_token },
+    body: JSON.stringify(Object.assign({ action: action }, extra || {})),
+  });
+  const t = await res.text();
+  try { return JSON.parse(t); } catch (e) { return { error: t || ('HTTP ' + res.status) }; }
+}
+function toast(t) {
+  const el = document.getElementById('toast');
+  el.textContent = t;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+function renderCats(elId, rows, prefix) {
+  const el = document.getElementById(elId);
+  el.innerHTML = (rows || []).map((c) =>
+    '<label><input type="checkbox" class="c-' + prefix + '" data-id="' + c.id + '" data-name="' + String(c.name).replace(/"/g,'') + '" checked/> ' + c.name + '</label>'
+  ).join('') || '<span class="hint">Nenhuma pasta</span>';
+}
+function selected(prefix) {
+  return Array.from(document.querySelectorAll('.c-' + prefix + ':checked')).map((i) => ({ id: i.getAttribute('data-id'), name: i.getAttribute('data-name') }));
+}
+function togAll(prefix, on) {
+  document.querySelectorAll('.c-' + prefix).forEach((i) => { i.checked = on; });
+}
+async function probe() {
+  toast('Lendo servidor…');
+  const d = await api('probe', {
+    host: document.getElementById('bHost').value,
+    user: document.getElementById('bUser').value,
+    pass: document.getElementById('bPass').value,
+  });
+  if (d.error) { toast(typeof d.error === 'string' ? d.error : JSON.stringify(d.error)); return; }
+  document.getElementById('probeBox').style.display = 'block';
+  renderCats('liveCats', d.live, 'live');
+  renderCats('movCats', d.movies, 'mov');
+  renderCats('serCats', d.series, 'ser');
+  toast('Pastas ok · ' + ((d.live||[]).length + (d.movies||[]).length + (d.series||[]).length));
+}
+async function save() {
+  const d = await api('save', {
+    id: _editId || undefined,
+    name: document.getElementById('bName').value.trim() || 'StreamFlix.Bridge',
+    host: document.getElementById('bHost').value,
+    user: document.getElementById('bUser').value,
+    pass: document.getElementById('bPass').value,
+    use_live: document.getElementById('tLive').checked,
+    use_movies: document.getElementById('tMov').checked,
+    use_series: document.getElementById('tSer').checked,
+    live_cats: selected('live'),
+    vod_cats: selected('mov'),
+    series_cats: selected('ser'),
+  });
+  if (d.error) { toast(typeof d.error === 'string' ? d.error : JSON.stringify(d.error)); return; }
+  toast('Salvo');
+  _editId = null;
+  loadList();
+}
+async function loadList() {
+  const d = await api('list');
+  const wrap = document.getElementById('list');
+  if (d.error) { wrap.innerHTML = '<p style="color:var(--red)">' + (d.error.message || d.error) + '<br>Rode sql/iptv_bridges.sql</p>'; return; }
+  const rows = d.bridges || [];
+  if (!rows.length) { wrap.innerHTML = '<p class="hint">Nenhuma ponte ainda.</p>'; return; }
+  wrap.innerHTML = rows.map((b) => {
+    const url = (d.publicBase || '') + '/api/bridge/' + b.id + '/manifest.json';
+    return '<div class="item"><b>' + b.name + '</b> '
+      + (b.is_active ? '<span style="color:var(--green)">ativa</span>' : '<span style="color:var(--muted)">off</span>')
+      + '<div class="meta">' + (b.xtream_host || '') + '</div>'
+      + '<div class="meta">TV ' + (b.use_live ? (b.live_cats||[]).length : 0)
+      + ' · Filmes ' + (b.use_movies ? (b.vod_cats||[]).length : 0)
+      + ' · Series ' + (b.use_series ? (b.series_cats||[]).length : 0) + '</div>'
+      + '<div class="meta">' + url + '</div>'
+      + '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">'
+      + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + url + '\');toast(\'URL copiada\')">Copiar JSON</button>'
+      + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'toggle\',{id:\'' + b.id + '\',is_active:' + (!b.is_active) + '}).then(loadList)">' + (b.is_active ? 'Pausar' : 'Ativar') + '</button>'
+      + '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="if(confirm(\'Excluir?\'))api(\'delete\',{id:\'' + b.id + '\'}).then(loadList)">Excluir</button>'
+      + '</div></div>';
+  }).join('');
+}
+checkSession();
+</script>
+</body>
+</html>
