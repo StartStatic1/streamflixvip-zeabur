@@ -1,7 +1,18 @@
 // api/admin-bridge.js — aba Bridge (não altera admin-vip / add-ons).
+const crypto = require('crypto');
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const PUBLIC_BASE = (process.env.PUBLIC_BASE_URL || 'https://www.streamflixvip.online').replace(/\/+$/, '');
+
+function newToken() {
+  return crypto.randomBytes(24).toString('hex');
+}
+function manifestOf(id, token) {
+  return PUBLIC_BASE + '/api/bridge/' + id + '/' + token + '/manifest.json';
+}
+function baseOf(id, token) {
+  return PUBLIC_BASE + '/api/bridge/' + id + '/' + token;
+}
 
 function svc(serviceKey) {
   return {
@@ -62,6 +73,19 @@ async function requireAdmin(req, serviceKey) {
   return { userId: user.id };
 }
 
+async function ensureToken(row, h) {
+  let token = String(row.access_token || '').trim();
+  if (token) return token;
+  token = newToken();
+  await fetch(SUPABASE_URL + '/rest/v1/iptv_bridges?id=eq.' + encodeURIComponent(row.id), {
+    method: 'PATCH',
+    headers: h,
+    body: JSON.stringify({ access_token: token }),
+  });
+  row.access_token = token;
+  return token;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -84,18 +108,15 @@ module.exports = async function handler(req, res) {
 
   if (action === 'list') {
     const r = await fetch(
-      SUPABASE_URL + '/rest/v1/iptv_bridges?select=id,name,xtream_host,use_live,use_movies,use_series,live_cats,vod_cats,series_cats,is_active,addon_id,created_at&order=created_at.desc',
+      SUPABASE_URL + '/rest/v1/iptv_bridges?select=id,name,xtream_host,use_live,use_movies,use_series,live_cats,vod_cats,series_cats,is_active,addon_id,access_token,created_at&order=created_at.desc',
       { headers: h },
     );
     const rows = await r.json();
     if (!r.ok) {
-      res.status(502).json({ error: 'Rode sql/iptv_bridges.sql no Supabase', detail: rows });
+      res.status(502).json({ error: 'Rode sql/iptv_bridges.sql e sql/iptv_bridges_token.sql', detail: rows });
       return;
     }
-    res.status(200).json({
-      bridges: rows,
-      publicBase: PUBLIC_BASE,
-    });
+    res.status(200).json({ bridges: rows, publicBase: PUBLIC_BASE });
     return;
   }
 
@@ -155,6 +176,7 @@ module.exports = async function handler(req, res) {
       is_active: body.is_active !== false,
       updated_at: new Date().toISOString(),
     };
+    if (!body.id) payload.access_token = newToken();
     let row;
     if (body.id) {
       const r = await fetch(
@@ -171,15 +193,15 @@ module.exports = async function handler(req, res) {
         body: JSON.stringify(payload),
       });
       const j = await r.json();
-      if (!r.ok) { res.status(502).json({ error: 'Erro ao criar. Rode sql/iptv_bridges.sql', detail: j }); return; }
+      if (!r.ok) { res.status(502).json({ error: 'Erro ao criar. Rode o SQL das pontes + token', detail: j }); return; }
       row = Array.isArray(j) ? j[0] : j;
     }
-
-    const manifestUrl = PUBLIC_BASE + '/api/bridge/' + row.id + '/manifest.json';
+    const token = await ensureToken(row, h);
+    const manifestUrl = manifestOf(row.id, token);
     const addonPayload = {
       name,
       manifest_url: manifestUrl,
-      base_url: PUBLIC_BASE + '/api/bridge/' + row.id,
+      base_url: baseOf(row.id, token),
       is_active: payload.is_active,
       priority: 3,
       notes: 'bridge',
@@ -211,6 +233,35 @@ module.exports = async function handler(req, res) {
       }
     }
     res.status(200).json({ ok: true, bridge: row, manifest_url: manifestUrl });
+    return;
+  }
+
+  if (action === 'rotate-token') {
+    if (!body.id) { res.status(400).json({ error: 'Informe id' }); return; }
+    const token = newToken();
+    const cur = await fetch(
+      SUPABASE_URL + '/rest/v1/iptv_bridges?id=eq.' + encodeURIComponent(body.id) + '&select=id,name,addon_id',
+      { headers: h },
+    ).then((r) => r.json());
+    const row = cur && cur[0];
+    if (!row) { res.status(404).json({ error: 'Ponte nao encontrada' }); return; }
+    await fetch(SUPABASE_URL + '/rest/v1/iptv_bridges?id=eq.' + encodeURIComponent(body.id), {
+      method: 'PATCH',
+      headers: h,
+      body: JSON.stringify({ access_token: token, updated_at: new Date().toISOString() }),
+    });
+    if (row.addon_id) {
+      await fetch(SUPABASE_URL + '/rest/v1/stremio_addons?id=eq.' + encodeURIComponent(row.addon_id), {
+        method: 'PATCH',
+        headers: h,
+        body: JSON.stringify({
+          manifest_url: manifestOf(row.id, token),
+          base_url: baseOf(row.id, token),
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    }
+    res.status(200).json({ ok: true, access_token: token, manifest_url: manifestOf(row.id, token) });
     return;
   }
 
@@ -259,5 +310,8 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  res.status(400).json({ error: 'action invalida', allowed: ['list', 'probe', 'save', 'toggle', 'delete'] });
+  res.status(400).json({
+    error: 'action invalida',
+    allowed: ['list', 'probe', 'save', 'toggle', 'delete', 'rotate-token'],
+  });
 };
