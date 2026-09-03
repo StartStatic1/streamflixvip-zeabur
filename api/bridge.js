@@ -1,11 +1,16 @@
-// api/bridge.js — add-on Stremio gerado pela aba Bridge.
+// api/bridge.js — add-on Stremio/Nuvio gerado pela aba Bridge.
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
 const cache = new Map();
+const PAGE = 80;
 
 function svc(key) {
   return { apikey: key, Authorization: 'Bearer ' + key };
+}
+
+function tmdbKey() {
+  return process.env.TMDB_API_KEY || '';
 }
 
 function norm(s) {
@@ -88,44 +93,75 @@ async function seriesList(b) {
   return rows;
 }
 
-function pick(list, title) {
-  const n = norm(title);
-  if (!n) return null;
+function pick(list, titles) {
+  const bag = (Array.isArray(titles) ? titles : [titles])
+    .map((t) => norm(t))
+    .filter(Boolean);
+  if (!bag.length) return null;
   let best = null;
   let bestScore = 0;
   for (const item of list) {
     const t = norm(item.name || item.title);
     if (!t) continue;
-    let score = 0;
-    if (t === n) score = 100;
-    else if (t.includes(n) || n.includes(t)) score = 70;
-    else {
-      const a = new Set(n.split(' '));
-      const btok = t.split(' ');
-      const inter = btok.filter((w) => a.has(w) && w.length > 2).length;
-      if (inter >= 2) score = 40 + inter;
-    }
-    if (score > bestScore) {
-      bestScore = score;
-      best = item;
+    for (const n of bag) {
+      let score = 0;
+      if (t === n) score = 100;
+      else if (t.includes(n) || n.includes(t)) score = 72;
+      else {
+        const a = new Set(n.split(' '));
+        const inter = t.split(' ').filter((w) => a.has(w) && w.length > 2).length;
+        if (inter >= 2) score = 42 + inter;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = item;
+      }
     }
   }
   return bestScore >= 40 ? best : null;
 }
 
 async function tmdbTitle(tmdbId, kind) {
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey || !tmdbId) return null;
+  const apiKey = tmdbKey();
+  if (!apiKey || !tmdbId) return [];
   const path = kind === 'tv' ? '/tv/' + tmdbId : '/movie/' + tmdbId;
   try {
     const r = await fetch(
-      'https://api.themoviedb.org/3' + path + '?api_key=' + encodeURIComponent(apiKey) + '&language=pt-BR',
+      'https://api.themoviedb.org/3' + path +
+        '?api_key=' + encodeURIComponent(apiKey) +
+        '&language=pt-BR',
     );
-    if (!r.ok) return null;
+    if (!r.ok) return [];
     const j = await r.json();
-    return j.title || j.name || j.original_title || j.original_name || null;
+    return [j.title, j.name, j.original_title, j.original_name].filter(Boolean);
   } catch (_) {
-    return null;
+    return [];
+  }
+}
+
+async function imdbTitles(imdbId, kind) {
+  const apiKey = tmdbKey();
+  if (!apiKey || !imdbId) return [];
+  const k = 'imdb:' + imdbId + ':' + kind;
+  const hit = cache.get(k);
+  if (hit && Date.now() - hit.at < 12 * 60 * 60 * 1000) return hit.titles;
+  try {
+    const r = await fetch(
+      'https://api.themoviedb.org/3/find/' + encodeURIComponent(imdbId) +
+        '?api_key=' + encodeURIComponent(apiKey) +
+        '&external_source=imdb_id&language=pt-BR',
+    );
+    if (!r.ok) return [];
+    const j = await r.json();
+    const rows = kind === 'tv' ? (j.tv_results || []) : (j.movie_results || []);
+    const row = rows[0] || (j.tv_results && j.tv_results[0]) || (j.movie_results && j.movie_results[0]);
+    const titles = row
+      ? [row.title, row.name, row.original_title, row.original_name].filter(Boolean)
+      : [];
+    cache.set(k, { at: Date.now(), titles });
+    return titles;
+  } catch (_) {
+    return [];
   }
 }
 
@@ -133,9 +169,11 @@ function parseStreamPath(rest) {
   const m = String(rest || '').match(/^stream\/([^/]+)\/(.+)\.json$/i);
   if (!m) return null;
   const type = m[1].toLowerCase();
-  const id = decodeURIComponent(m[2]);
-  const parts = id.split(':');
+  const raw = decodeURIComponent(m[2]);
+  const parts = raw.split(':');
   let tmdbId = null;
+  let imdbId = null;
+  let xtreamId = null;
   let season = null;
   let episode = null;
   if (parts[0] === 'tmdb') {
@@ -144,12 +182,49 @@ function parseStreamPath(rest) {
       season = Number(parts[2]);
       episode = Number(parts[3]);
     }
+  } else if (parts[0] === 'xtream' || parts[0] === 'sf') {
+    xtreamId = parts[1];
+    if (parts.length >= 4) {
+      season = Number(parts[2]);
+      episode = Number(parts[3]);
+    }
+  } else if (/^tt\d+$/i.test(parts[0])) {
+    imdbId = parts[0];
+    if (parts.length >= 3) {
+      season = Number(parts[1]);
+      episode = Number(parts[2]);
+    }
   } else if (/^\d+$/.test(parts[0]) && parts.length >= 3) {
     tmdbId = parts[0];
     season = Number(parts[1]);
     episode = Number(parts[2]);
   }
-  return { type, id, tmdbId, season, episode };
+  return { type, id: raw, tmdbId, imdbId, xtreamId, season, episode };
+}
+
+function parseCatalog(rest) {
+  const m = String(rest || '').match(/^catalog\/([^/]+)\/([^/.]+)(?:\/(.*))?\.json$/i);
+  if (!m) return null;
+  const extra = {};
+  String(m[3] || '').split('&').forEach((p) => {
+    const i = p.indexOf('=');
+    if (i > 0) extra[decodeURIComponent(p.slice(0, i))] = decodeURIComponent(p.slice(i + 1));
+  });
+  return { type: m[1].toLowerCase(), id: m[2], extra };
+}
+
+function posterOf(item) {
+  const p = item.stream_icon || item.cover || item.cover_big || '';
+  return p || null;
+}
+
+function pageSlice(rows, extra) {
+  const skip = Math.max(0, Number(extra.skip || 0) || 0);
+  const q = norm(extra.search || '');
+  let list = rows;
+  if (q) list = rows.filter((x) => norm(x.name || x.title).includes(q));
+  const slice = list.slice(skip, skip + PAGE);
+  return { slice, hasMore: skip + PAGE < list.length };
 }
 
 module.exports = async function handler(req, res) {
@@ -186,31 +261,69 @@ module.exports = async function handler(req, res) {
   }
 
   if (rest === 'manifest.json') {
+    const extras = [
+      { name: 'search', isRequired: false },
+      { name: 'skip', isRequired: false },
+    ];
     const types = [];
     const catalogs = [];
-    const idPrefixes = ['tmdb'];
     if (b.use_movies) {
       types.push('movie');
-      catalogs.push({ type: 'movie', id: 'sf_movies', name: b.name + ' Filmes' });
+      catalogs.push({ type: 'movie', id: 'sf_movies', name: b.name + ' Filmes', extra: extras });
     }
     if (b.use_series) {
       types.push('series');
-      catalogs.push({ type: 'series', id: 'sf_series', name: b.name + ' Series' });
+      catalogs.push({ type: 'series', id: 'sf_series', name: b.name + ' Series', extra: extras });
     }
     if (b.use_live) {
       types.push('tv');
-      catalogs.push({ type: 'tv', id: 'sf_live', name: b.name + ' TV' });
+      catalogs.push({ type: 'tv', id: 'sf_live', name: b.name + ' TV', extra: extras });
     }
     res.status(200).json({
       id: 'streamflix.bridge.' + b.id.slice(0, 8),
       name: b.name,
-      version: '1.0.0',
+      version: '1.1.0',
       description: 'Ponte Xtream StreamFlixVIP',
       resources: ['catalog', 'stream'],
       types,
       catalogs,
-      idPrefixes,
+      idPrefixes: ['tt', 'tmdb', 'xtream', 'sf'],
     });
+    return;
+  }
+
+  const catReq = parseCatalog(rest);
+  if (catReq) {
+    const metas = [];
+    if (catReq.type === 'movie' && b.use_movies) {
+      const list = await vodList(b);
+      const { slice } = pageSlice(list, catReq.extra);
+      slice.forEach((item) => {
+        const sid = item.stream_id;
+        if (!sid) return;
+        metas.push({
+          id: 'xtream:' + sid,
+          type: 'movie',
+          name: item.name || item.title || 'Filme',
+          poster: posterOf(item),
+        });
+      });
+    }
+    if ((catReq.type === 'series' || catReq.type === 'tv') && b.use_series) {
+      const list = await seriesList(b);
+      const { slice } = pageSlice(list, catReq.extra);
+      slice.forEach((item) => {
+        const sid = item.series_id || item.stream_id;
+        if (!sid) return;
+        metas.push({
+          id: 'xtream:' + sid,
+          type: 'series',
+          name: item.name || item.title || 'Serie',
+          poster: posterOf(item),
+        });
+      });
+    }
+    res.status(200).json({ metas });
     return;
   }
 
@@ -218,42 +331,56 @@ module.exports = async function handler(req, res) {
   if (streamReq) {
     const streams = [];
     const kind = streamReq.type === 'movie' ? 'movie' : 'tv';
-    const title = streamReq.tmdbId ? await tmdbTitle(streamReq.tmdbId, kind) : null;
-    if (title && streamReq.type === 'movie' && b.use_movies) {
+    let titles = [];
+    if (streamReq.imdbId) titles = await imdbTitles(streamReq.imdbId, kind);
+    if (!titles.length && streamReq.tmdbId) titles = await tmdbTitle(streamReq.tmdbId, kind);
+
+    if (streamReq.type === 'movie' && b.use_movies) {
       const list = await vodList(b);
-      const hit = pick(list, title);
+      let hit = null;
+      if (streamReq.xtreamId) {
+        hit = list.find((x) => String(x.stream_id) === String(streamReq.xtreamId));
+      }
+      if (!hit && titles.length) hit = pick(list, titles);
       if (hit && hit.stream_id) {
         const ext = (hit.container_extension || 'mp4').replace(/^\./, '');
         streams.push({
           name: b.name,
-          title: hit.name || title,
+          title: hit.name || titles[0] || 'Filme',
           url: hostOf(b) + '/movie/' + b.xtream_user + '/' + b.xtream_pass + '/' + hit.stream_id + '.' + ext,
         });
       }
     }
-    if (title && (streamReq.type === 'series' || streamReq.type === 'tv') && b.use_series && streamReq.episode) {
+
+    if ((streamReq.type === 'series' || streamReq.type === 'tv') && b.use_series) {
       const list = await seriesList(b);
-      const hit = pick(list, title);
+      let hit = null;
+      if (streamReq.xtreamId) {
+        hit = list.find((x) => String(x.series_id || x.stream_id) === String(streamReq.xtreamId));
+      }
+      if (!hit && titles.length) hit = pick(list, titles);
       if (hit && (hit.series_id || hit.stream_id)) {
         const sid = hit.series_id || hit.stream_id;
         const info = await xtream(b, 'get_series_info', { series_id: sid }).catch(() => null);
         const eps = (info && info.episodes) || {};
         const seasonKey = String(streamReq.season || 1);
         const bag = eps[seasonKey] || eps[String(Number(seasonKey))] || [];
+        const wantEp = Number(streamReq.episode || 1);
         const ep = (Array.isArray(bag) ? bag : []).find(
-          (e) => Number(e.episode_num || e.episode) === Number(streamReq.episode),
-        );
+          (e) => Number(e.episode_num || e.episode) === wantEp,
+        ) || (Array.isArray(bag) ? bag[0] : null);
         if (ep && (ep.id || ep.stream_id)) {
           const eid = ep.id || ep.stream_id;
           const ext = (ep.container_extension || 'mp4').replace(/^\./, '');
           streams.push({
             name: b.name,
-            title: (hit.name || title) + ' S' + seasonKey + 'E' + streamReq.episode,
+            title: (hit.name || titles[0] || 'Serie') + ' S' + seasonKey + 'E' + wantEp,
             url: hostOf(b) + '/series/' + b.xtream_user + '/' + b.xtream_pass + '/' + eid + '.' + ext,
           });
         }
       }
     }
+
     res.status(200).json({ streams });
     return;
   }
