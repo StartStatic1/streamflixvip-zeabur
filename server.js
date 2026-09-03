@@ -29,7 +29,7 @@ function resolveStaticDir() {
 const STATIC_DIR = resolveStaticDir();
 console.log('Servindo arquivos estaticos de:', STATIC_DIR);
 console.log(
-  'VIP gate Live TV:',
+  'VIP gate Live TV',
   process.env.REQUIRE_VIP_LIVE_TV === '1' ||
     String(process.env.REQUIRE_VIP_LIVE_TV || '').toLowerCase() === 'true'
     ? 'HARD (bloqueia nao-VIP)'
@@ -49,6 +49,8 @@ const activeAds = require('./api/active-ads.js');
 const adminVip = require('./api/admin-vip.js');
 const adminPartners = require('./api/admin-partners.js');
 const adminAddons = require('./api/admin-addons.js');
+const adminBridge = require('./api/admin-bridge.js');
+const bridgeApi = require('./api/bridge.js');
 const adminReels = require('./api/admin-reels.js');
 const partnerApi = require('./api/partner.js');
 const appVersion = require('./api/app-version.js');
@@ -85,6 +87,8 @@ app.all('/api/active-ads', wrap(activeAds));
 app.all('/api/admin-vip', wrap(adminVip));
 app.all('/api/admin-partners', wrap(adminPartners));
 app.all('/api/admin-addons', wrap(adminAddons));
+app.all('/api/admin-bridge', wrap(adminBridge));
+app.all('/api/bridge/*', wrap(bridgeApi));
 app.all('/api/admin-reels', wrap(adminReels));
 app.all('/api/partner', wrap(partnerApi));
 app.all('/api/app-version', wrap(appVersion));
