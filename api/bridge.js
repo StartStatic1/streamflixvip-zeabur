@@ -13,6 +13,15 @@ function tmdbKey() {
   return process.env.TMDB_API_KEY || '';
 }
 
+function yearOf(s) {
+  const m = String(s || '').match(/\b((?:19|20)\d{2})\b/);
+  return m ? Number(m[1]) : null;
+}
+
+function tokens(s) {
+  return norm(s).split(' ').filter((w) => w.length > 2);
+}
+
 function norm(s) {
   return String(s || '')
     .toLowerCase()
@@ -93,37 +102,61 @@ async function seriesList(b) {
   return rows;
 }
 
-function pick(list, titles) {
-  const bag = (Array.isArray(titles) ? titles : [titles])
-    .map((t) => norm(t))
-    .filter(Boolean);
+function scoreOne(itemName, queryTitle, queryYear) {
+  const t = norm(itemName);
+  const n = norm(queryTitle);
+  if (!t || !n) return 0;
+  const tTok = tokens(itemName);
+  const nTok = tokens(queryTitle);
+  if (!tTok.length || !nTok.length) return 0;
+  const tSet = new Set(tTok);
+  const nSet = new Set(nTok);
+  const interN = nTok.filter((w) => tSet.has(w)).length;
+  const interT = tTok.filter((w) => nSet.has(w)).length;
+  const coverN = interN / nTok.length;
+  const coverT = interT / tTok.length;
+  const itemYear = yearOf(itemName);
+
+  if (queryYear && itemYear && queryYear !== itemYear) return 0;
+
+  let score = 0;
+  if (t === n) score = 100;
+  else if (coverN >= 0.99 && nTok.length >= 2) score = 88;
+  else if (coverN >= 0.8 && coverT >= 0.7 && nTok.length >= 3) score = 80;
+  else if (coverT >= 0.99 && tTok.length >= nTok.length && nTok.length >= 3) score = 78;
+  else return 0;
+
+  if (queryYear && itemYear && queryYear === itemYear) score += 12;
+  return score;
+}
+
+function pick(list, titles, queryYear) {
+  const bag = (Array.isArray(titles) ? titles : [titles]).filter(Boolean);
   if (!bag.length) return null;
   let best = null;
   let bestScore = 0;
   for (const item of list) {
-    const t = norm(item.name || item.title);
-    if (!t) continue;
-    for (const n of bag) {
-      let score = 0;
-      if (t === n) score = 100;
-      else if (t.includes(n) || n.includes(t)) score = 72;
-      else {
-        const a = new Set(n.split(' '));
-        const inter = t.split(' ').filter((w) => a.has(w) && w.length > 2).length;
-        if (inter >= 2) score = 42 + inter;
-      }
+    const name = item.name || item.title || '';
+    for (const q of bag) {
+      const score = scoreOne(name, q, queryYear);
       if (score > bestScore) {
         bestScore = score;
         best = item;
       }
     }
   }
-  return bestScore >= 40 ? best : null;
+  return bestScore >= 78 ? best : null;
+}
+
+function metaFromTmdb(j) {
+  const titles = [j.title, j.name, j.original_title, j.original_name].filter(Boolean);
+  const y = yearOf(j.release_date || j.first_air_date || '');
+  return { titles, year: y };
 }
 
 async function tmdbTitle(tmdbId, kind) {
   const apiKey = tmdbKey();
-  if (!apiKey || !tmdbId) return [];
+  if (!apiKey || !tmdbId) return { titles: [], year: null };
   const path = kind === 'tv' ? '/tv/' + tmdbId : '/movie/' + tmdbId;
   try {
     const r = await fetch(
@@ -131,37 +164,34 @@ async function tmdbTitle(tmdbId, kind) {
         '?api_key=' + encodeURIComponent(apiKey) +
         '&language=pt-BR',
     );
-    if (!r.ok) return [];
-    const j = await r.json();
-    return [j.title, j.name, j.original_title, j.original_name].filter(Boolean);
+    if (!r.ok) return { titles: [], year: null };
+    return metaFromTmdb(await r.json());
   } catch (_) {
-    return [];
+    return { titles: [], year: null };
   }
 }
 
 async function imdbTitles(imdbId, kind) {
   const apiKey = tmdbKey();
-  if (!apiKey || !imdbId) return [];
+  if (!apiKey || !imdbId) return { titles: [], year: null };
   const k = 'imdb:' + imdbId + ':' + kind;
   const hit = cache.get(k);
-  if (hit && Date.now() - hit.at < 12 * 60 * 60 * 1000) return hit.titles;
+  if (hit && Date.now() - hit.at < 12 * 60 * 60 * 1000) return hit.meta;
   try {
     const r = await fetch(
       'https://api.themoviedb.org/3/find/' + encodeURIComponent(imdbId) +
         '?api_key=' + encodeURIComponent(apiKey) +
         '&external_source=imdb_id&language=pt-BR',
     );
-    if (!r.ok) return [];
+    if (!r.ok) return { titles: [], year: null };
     const j = await r.json();
     const rows = kind === 'tv' ? (j.tv_results || []) : (j.movie_results || []);
     const row = rows[0] || (j.tv_results && j.tv_results[0]) || (j.movie_results && j.movie_results[0]);
-    const titles = row
-      ? [row.title, row.name, row.original_title, row.original_name].filter(Boolean)
-      : [];
-    cache.set(k, { at: Date.now(), titles });
-    return titles;
+    const meta = row ? metaFromTmdb(row) : { titles: [], year: null };
+    cache.set(k, { at: Date.now(), meta });
+    return meta;
   } catch (_) {
-    return [];
+    return { titles: [], year: null };
   }
 }
 
@@ -282,7 +312,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.bridge.' + b.id.slice(0, 8),
       name: b.name,
-      version: '1.1.0',
+      version: '1.2.0',
       description: 'Ponte Xtream StreamFlixVIP',
       resources: ['catalog', 'stream'],
       types,
@@ -331,9 +361,11 @@ module.exports = async function handler(req, res) {
   if (streamReq) {
     const streams = [];
     const kind = streamReq.type === 'movie' ? 'movie' : 'tv';
-    let titles = [];
-    if (streamReq.imdbId) titles = await imdbTitles(streamReq.imdbId, kind);
-    if (!titles.length && streamReq.tmdbId) titles = await tmdbTitle(streamReq.tmdbId, kind);
+    let meta = { titles: [], year: null };
+    if (streamReq.imdbId) meta = await imdbTitles(streamReq.imdbId, kind);
+    if (!meta.titles.length && streamReq.tmdbId) meta = await tmdbTitle(streamReq.tmdbId, kind);
+    const titles = meta.titles || [];
+    const year = meta.year || null;
 
     if (streamReq.type === 'movie' && b.use_movies) {
       const list = await vodList(b);
@@ -341,7 +373,7 @@ module.exports = async function handler(req, res) {
       if (streamReq.xtreamId) {
         hit = list.find((x) => String(x.stream_id) === String(streamReq.xtreamId));
       }
-      if (!hit && titles.length) hit = pick(list, titles);
+      if (!hit && titles.length) hit = pick(list, titles, year);
       if (hit && hit.stream_id) {
         const ext = (hit.container_extension || 'mp4').replace(/^\./, '');
         streams.push({
@@ -358,7 +390,7 @@ module.exports = async function handler(req, res) {
       if (streamReq.xtreamId) {
         hit = list.find((x) => String(x.series_id || x.stream_id) === String(streamReq.xtreamId));
       }
-      if (!hit && titles.length) hit = pick(list, titles);
+      if (!hit && titles.length) hit = pick(list, titles, year);
       if (hit && (hit.series_id || hit.stream_id)) {
         const sid = hit.series_id || hit.stream_id;
         const info = await xtream(b, 'get_series_info', { series_id: sid }).catch(() => null);
@@ -368,7 +400,7 @@ module.exports = async function handler(req, res) {
         const wantEp = Number(streamReq.episode || 1);
         const ep = (Array.isArray(bag) ? bag : []).find(
           (e) => Number(e.episode_num || e.episode) === wantEp,
-        ) || (Array.isArray(bag) ? bag[0] : null);
+        );
         if (ep && (ep.id || ep.stream_id)) {
           const eid = ep.id || ep.stream_id;
           const ext = (ep.container_extension || 'mp4').replace(/^\./, '');
