@@ -1,1 +1,90 @@
-SEE_FILE
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Add-ons — StreamFlixVIP</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#08080f;--s:#111119;--s2:#1a1a26;--b:rgba(255,255,255,.08);--t:#f0f0f8;--m:#8888aa;--g:#f5c518;--ok:#22c55e}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--t);min-height:100dvh}
+#login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:var(--s);border:1px solid var(--b);border-radius:18px;padding:28px;width:100%;max-width:400px}
+input,textarea,select{width:100%;background:var(--s2);border:1px solid var(--b);border-radius:10px;color:var(--t);padding:12px 14px;font:inherit;margin-bottom:10px}
+button{font:inherit;cursor:pointer;border:none;border-radius:12px;padding:12px 18px;font-weight:700}
+.btn-gold{background:linear-gradient(135deg,var(--g),#e6a800);color:#000}
+.btn-sec{background:var(--s2);color:var(--t);border:1px solid var(--b)}
+.btn-danger{background:rgba(239,68,68,.16);color:#fca5a5}
+#app{display:none}
+header{position:sticky;top:0;background:rgba(8,8,15,.92);border-bottom:1px solid var(--b);padding:14px 16px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+header a{color:var(--m);text-decoration:none;font-size:.85rem}
+main{max-width:900px;margin:0 auto;padding:20px 14px 48px;display:flex;flex-direction:column;gap:16px}
+.panel{background:var(--s);border:1px solid var(--b);border-radius:16px;padding:18px}
+.hint{font-size:.8rem;color:var(--m);margin:8px 0 12px;line-height:1.45}
+.addon-card{background:var(--s2);border:1px solid var(--b);border-radius:12px;padding:14px;margin-bottom:10px}
+.meta{font-size:.75rem;color:var(--m);margin-top:4px;word-break:break-all}
+.row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.row button{padding:6px 10px;font-size:.72rem}
+.pill{padding:2px 8px;border-radius:6px;font-size:.7rem;font-weight:700}
+.on{background:rgba(34,197,94,.15);color:var(--ok)}
+.off{background:rgba(136,136,170,.12);color:var(--m)}
+.hide{display:none}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--s);border:1px solid var(--b);padding:10px 18px;border-radius:10px;opacity:0;z-index:99}
+#toast.show{opacity:1}
+pre{background:var(--s2);padding:12px;border-radius:10px;font-size:.72rem;overflow:auto}
+</style>
+</head>
+<body>
+<div id="login"><div class="card"><h1>Add-ons</h1><p class="hint">Mesmo login do painel.</p>
+<input type="email" id="email" placeholder="E-mail admin"/>
+<input type="password" id="pass" placeholder="Senha"/>
+<button class="btn-gold" style="width:100%" onclick="doLogin()">Entrar</button>
+<p id="loginMsg" class="hint"></p>
+<p><a href="/admin-hub.html" style="color:var(--g)">Hub</a></p></div></div>
+<div id="app">
+<header><div><b>StreamFlixVIP</b> · Add-ons</div>
+<div class="row" style="margin:0"><a href="/admin-hub.html">Hub</a><a href="/admin.html">IPTV</a>
+<button class="btn-sec" onclick="doLogout()">Sair</button></div></header>
+<main>
+<div class="panel"><h2>Novo add-on</h2>
+<p class="hint">Menor número sobe no app. IPTV (Vulke) fica sempre acima. Ex.: tplay=2 · Pengu=5 · Fênix=20.</p>
+<input type="url" id="aUrl" placeholder="https://…/manifest.json"/>
+<input type="text" id="aName" placeholder="Nome no app"/>
+<input type="number" id="aPriority" value="10" placeholder="Ordem"/>
+<textarea id="aNotes" rows="2" placeholder="Notas"></textarea>
+<div class="row"><button class="btn-sec" onclick="probeOnly()">Testar manifest</button>
+<button class="btn-gold" onclick="createAddon()">Adicionar</button></div>
+<pre id="probeOut" class="hide"></pre></div>
+<div class="panel"><h2>Add-ons <button class="btn-sec" onclick="loadAddons()">Atualizar</button></h2>
+<div id="listWrap"><p class="hint">Carregando…</p></div></div>
+<div class="panel"><h2>Testar streams</h2>
+<div class="row"><select id="testType"><option value="movie">Filme</option><option value="tv">Série</option><option value="anime">Anime</option></select>
+<input type="number" id="testTmdb" value="550"/></div>
+<button class="btn-sec" onclick="testStreams()">Buscar</button>
+<pre id="testOut" class="hide"></pre></div>
+</main></div>
+<div id="toast"></div>
+<script>
+const SUPABASE_URL='https://gkujbjpvphuvrejpvvtz.supabase.co';
+const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{auth:{persistSession:true,autoRefreshToken:true,storageKey:'sfv-admin-auth-token'}});
+let _session=null;
+function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2800)}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function api(action,extra={}){const res=await fetch('/api/admin-addons',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+_session.access_token},body:JSON.stringify({action,...extra})});const text=await res.text();try{return JSON.parse(text)}catch(e){return{error:text||('HTTP '+res.status)}}}
+async function ensureAdmin(session){const {data}=await db.from('vip_panel_admins').select('id').eq('id',session.user.id).maybeSingle();return !!data}
+async function doLogin(){const email=document.getElementById('email').value.trim();const password=document.getElementById('pass').value;try{const {data,error}=await db.auth.signInWithPassword({email,password});if(error)throw error;if(!(await ensureAdmin(data.session))){await db.auth.signOut();throw new Error('Sem permissão')}showApp(data.session)}catch(e){document.getElementById('loginMsg').textContent=e.message||'Erro'}}
+function showApp(session){_session=session;document.getElementById('login').style.display='none';document.getElementById('app').style.display='block';loadAddons()}
+async function doLogout(){await db.auth.signOut();location.reload()}
+async function probeOnly(){const url=document.getElementById('aUrl').value.trim();if(!url){toast('Cole a URL');return}const d=await api('probe-addon',{manifest_url:url});const out=document.getElementById('probeOut');out.classList.remove('hide');out.textContent=JSON.stringify(d,null,2);if(d.name&&!document.getElementById('aName').value.trim())document.getElementById('aName').value=d.name;toast(d.error||'Manifest OK')}
+async function createAddon(){const url=document.getElementById('aUrl').value.trim();if(!url){toast('Cole a URL');return}const d=await api('create-addon',{manifest_url:url,name:document.getElementById('aName').value.trim(),priority:parseInt(document.getElementById('aPriority').value,10)||10,notes:document.getElementById('aNotes').value.trim()});if(d.error){toast(typeof d.error==='string'?d.error:JSON.stringify(d.error));return}toast('Add-on adicionado');loadAddons()}
+async function loadAddons(){const wrap=document.getElementById('listWrap');const data=await api('list-addons');if(data.error){wrap.innerHTML='<p class="hint">'+esc(data.error.message||data.error)+'</p>';return}const rows=(data.addons||[]).slice().sort((a,b)=>(a.priority||0)-(b.priority||0));if(!rows.length){wrap.innerHTML='<p class="hint">Nenhum add-on.</p>';return}wrap.innerHTML=rows.map(a=>{const id=esc(a.id),name=esc(a.name);return '<div class="addon-card"><b>'+name+'</b><div class="meta">'+esc(a.manifest_url)+'</div><div class="row" style="align-items:center"><span class="meta">Ordem</span><input type="number" id="prIn-'+id+'" value="'+(a.priority??0)+'" style="width:90px;margin:0"/><button class="btn-sec" onclick="savePriority(\''+id+'\')">Salvar ordem</button><span class="pill '+(a.is_active?'on':'off')+'">'+(a.is_active?'Ativo':'Off')+'</span></div><div class="row"><button class="btn-sec" onclick="toggleA(\''+id+'\','+(!a.is_active)+')">'+(a.is_active?'Pausar':'Ativar')+'</button><button class="btn-danger" onclick="delA(\''+id+'\')">Excluir</button></div></div>'}).join('')}
+async function savePriority(id){const inp=document.getElementById('prIn-'+id);const priority=parseInt(inp&&inp.value,10);if(!Number.isFinite(priority)){toast('Número inválido');return}const d=await api('update-addon',{id,priority});if(d.error){toast(typeof d.error==='string'?d.error:JSON.stringify(d.error));return}toast('Ordem '+priority);loadAddons()}
+async function toggleA(id,isActive){const d=await api('toggle-addon',{id,is_active:isActive});toast(d.error||(isActive?'Ativo':'Pausado'));if(!d.error)loadAddons()}
+async function delA(id){if(!confirm('Excluir este add-on?'))return;const d=await api('delete-addon',{id});toast(d.error||'Excluído');if(!d.error)loadAddons()}
+async function testStreams(){const type=document.getElementById('testType').value||'movie';let tmdb=parseInt(document.getElementById('testTmdb').value,10)||550;const extra={tmdb_id:tmdb,type};if(type!=='movie'){extra.season=1;extra.episode=1}const out=document.getElementById('testOut');out.classList.remove('hide');out.textContent='Buscando…';const d=await api('test-addon',extra);out.textContent=JSON.stringify(d,null,2)}
+async function checkSession(){const {data}=await db.auth.getSession();if(data&&data.session&&await ensureAdmin(data.session))showApp(data.session)}
+checkSession();
+</script>
+</body></html>
