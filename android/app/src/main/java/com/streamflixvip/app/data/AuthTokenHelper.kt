@@ -6,20 +6,18 @@ import com.streamflixvip.app.network.RefreshTokenRequest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/**
- * Garante access_token valido antes de favoritos / progresso / etc.
- * Mutex evita race de refresh (Supabase rotaciona refresh_token).
- */
 object AuthTokenHelper {
 
     private val refreshMutex = Mutex()
 
     suspend fun validAccessToken(skewSeconds: Long = 180): String? {
         val store = NetworkModule.sessionStore ?: return null
-        val access = store.accessToken ?: return null
-        val refresh = store.refreshToken ?: return access
-
-        if (!isExpiredOrNear(access, skewSeconds)) return access
+        val access = store.accessToken
+        val refresh = store.refreshToken
+        if (!access.isNullOrBlank() && (refresh.isNullOrBlank() || !isExpiredOrNear(access, skewSeconds))) {
+            return access
+        }
+        if (refresh.isNullOrBlank()) return access
         return tryRefresh(store, refresh, skewSeconds) ?: store.accessToken
     }
 
