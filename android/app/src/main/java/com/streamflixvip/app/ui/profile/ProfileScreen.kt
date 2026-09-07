@@ -40,6 +40,7 @@ import com.streamflixvip.app.network.AnnouncementItem
 import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.ui.auth.AuthViewModel
 import androidx.compose.material.icons.filled.SettingsInputComponent
+import com.streamflixvip.app.ui.theme.StreamFlixColors
 import com.streamflixvip.app.ui.vip.VipSection
 import com.streamflixvip.app.ui.vip.VipViewModel
 import kotlinx.coroutines.Dispatchers
@@ -48,7 +49,7 @@ import kotlinx.coroutines.withContext
 private const val WHATSAPP_SUPPORT_URL = "https://wa.me/558498334731"
 private const val WHATSAPP_COMMUNITY_URL = "https://chat.whatsapp.com/FAxyer3o2pe8x3JXZJBDDV"
 private const val SUPPORT_EMAIL = "streamflixvip@outlook.com"
-private val Accent = Color(0xFF00E5FF)
+private val Accent = StreamFlixColors.Amber
 
 @Composable
 fun ProfileScreen(
@@ -100,7 +101,7 @@ fun ProfileScreen(
                     modifier = Modifier
                         .size(96.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF15151C)),
+                        .background(StreamFlixColors.SurfaceRaised),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -117,7 +118,7 @@ fun ProfileScreen(
                         .background(Accent),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFF001820), modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Star, contentDescription = null, tint = Color(0xFF1A1204), modifier = Modifier.size(16.dp))
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -458,7 +459,7 @@ private fun ProfileToggleCard(
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(checkedTrackColor = Accent, checkedThumbColor = Color(0xFF001820)),
+                colors = SwitchDefaults.colors(checkedTrackColor = Accent, checkedThumbColor = Color(0xFF1A1204)),
             )
         }
     }
