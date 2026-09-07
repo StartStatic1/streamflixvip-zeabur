@@ -255,57 +255,54 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
     val yearNum = item.displayYear?.toIntOrNull()
     val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     val isNew = yearNum != null && yearNum >= currentYear - 1
-    Column(
-        modifier = Modifier
-            .width(118.dp)
-            .height(236.dp)
-            .clickable(onClick = onClick),
+    Row(
+        modifier = Modifier.height(216.dp),
+        verticalAlignment = Alignment.Top,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(StreamFlixColors.SurfaceRaised),
-        ) {
-            AsyncImage(
-                model = posterUrl,
-                contentDescription = item.displayTitle,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
+        if (rank != null) {
+            Text(
+                "$rank",
+                modifier = Modifier.width(22.dp).padding(top = 4.dp),
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = StreamFlixColors.Amber,
             )
-            if (rank != null) {
-                Text(
-                    "$rank",
-                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 6.dp, bottom = 2.dp),
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = StreamFlixColors.Amber,
-                )
-            }
-            if (isNew) {
-                Text(
-                    "NOVO",
-                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(StreamFlixColors.BadgeNew).padding(horizontal = 6.dp, vertical = 2.dp),
-                    color = Color.White,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
         }
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .padding(top = 6.dp),
+                .width(118.dp)
+                .clickable(onClick = onClick),
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(StreamFlixColors.SurfaceRaised),
+            ) {
+                AsyncImage(
+                    model = posterUrl,
+                    contentDescription = item.displayTitle,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                if (isNew) {
+                    Text(
+                        "NOVO",
+                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(StreamFlixColors.BadgeNew).padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            Spacer(Modifier.height(6.dp))
             Text(
                 item.displayTitle,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                lineHeight = 15.sp,
                 color = StreamFlixColors.Text,
             )
             Text(
