@@ -4,6 +4,14 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const PUBLIC_BASE = (process.env.PUBLIC_BASE_URL || 'https://www.streamflixvip.online').replace(/\/+$/, '');
 
+const XTREAM_UAS = [
+  'okhttp/4.12.0',
+  'Dalvik/2.1.0 (Linux; U; Android 13; SM-S911B Build/TP1A.220624.014)',
+  'VLC/3.0.20 LibVLC/3.0.20',
+  'IPTVSmarters/1.0',
+  'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/122.0.0.0 Mobile Safari/537.36',
+];
+
 function newToken() {
   return crypto.randomBytes(24).toString('hex');
 }
@@ -29,23 +37,55 @@ function normHost(h) {
   return u.replace(/\/+$/, '');
 }
 
-async function xtream(host, user, pass, action) {
+async function xtreamOnce(host, user, pass, action, ua) {
   const url = new URL(normHost(host) + '/player_api.php');
   url.searchParams.set('username', user);
   url.searchParams.set('password', pass);
   if (action) url.searchParams.set('action', action);
   const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 25000);
+  const t = setTimeout(() => ac.abort(), 20000);
   try {
     const r = await fetch(url.toString(), {
       signal: ac.signal,
-      headers: { 'User-Agent': 'IPTVSmarters/1.0', Accept: 'application/json' },
+      redirect: 'follow',
+      headers: {
+        'User-Agent': ua,
+        Accept: 'application/json,text/plain,*/*',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      },
     });
-    if (!r.ok) throw new Error('Xtream HTTP ' + r.status);
-    return await r.json();
+    const text = await r.text();
+    if (!r.ok) {
+      const err = new Error('Xtream HTTP ' + r.status);
+      err.status = r.status;
+      throw err;
+    }
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      throw new Error('Xtream respondeu sem JSON');
+    }
   } finally {
     clearTimeout(t);
   }
+}
+
+async function xtream(host, user, pass, action) {
+  let last = null;
+  for (const ua of XTREAM_UAS) {
+    try {
+      return await xtreamOnce(host, user, pass, action, ua);
+    } catch (e) {
+      last = e;
+      if (e && e.status && e.status !== 403 && e.status !== 401 && e.status !== 406) break;
+    }
+  }
+  if (last && last.status === 403) {
+    throw new Error(
+      'Xtream HTTP 403 — o painel bloqueou o IP do VPS. No celular passa; Hetzner é datacenter e muitos Xtream barram. Peça liberação do IP 65.21.48.50 ou use outro host.',
+    );
+  }
+  throw last || new Error('Falha ao ler o servidor');
 }
 
 function cats(raw) {
