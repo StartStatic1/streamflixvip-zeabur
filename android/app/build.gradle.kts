@@ -28,8 +28,8 @@ android {
         applicationId = "com.streamflixvip.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 120001
-        versionName = "12.0.1"
+        versionCode = 120002
+        versionName = "12.0.2"
 
         // URL base do backend Express — o MESMO domínio que o site usa
         // hoje (Koyeb). Trocar aqui se o domínio mudar de novo no futuro,

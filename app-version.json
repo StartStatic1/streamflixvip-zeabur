@@ -1,7 +1,7 @@
 {
-  "versionCode": 120001,
-  "versionName": "12.0.1",
+  "versionCode": 120002,
+  "versionName": "12.0.2",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Fix, novidades, catálogo agora tem mais foco em animes e reels"
+  "releaseNotes": "Novidades mudança de layout."
 }
