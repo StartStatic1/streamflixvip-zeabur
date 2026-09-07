@@ -195,7 +195,7 @@ private fun ContinueWatchingRow(entries: List<WatchProgressEntry>, onItemClick: 
             }
             Text("${entries.size}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = StreamFlixColors.Amber)
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
             items(entries) { entry -> ContinueWatchingCard(entry = entry, onClick = { onItemClick(entry) }, onDismiss = { onItemDismiss(entry) }) }
         }
     }
@@ -218,7 +218,7 @@ private fun ContinueWatchingCard(entry: WatchProgressEntry, onClick: () -> Unit,
                 Box(modifier = Modifier.fillMaxWidth(entry.progressFraction.coerceIn(0f, 1f)).fillMaxHeight().background(StreamFlixColors.Amber))
             }
         }
-        Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)) {
+        Column(modifier = Modifier.height(40.dp).padding(horizontal = 6.dp, vertical = 6.dp)) {
             Text(entry.displayTitle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = StreamFlixColors.Text)
             val sub = if (entry.media_type == "tv" && entry.season > 0) "T${entry.season}:E${entry.episode} · $pct%" else "$pct%"
             Text(sub, fontSize = 10.sp, color = StreamFlixColors.TextDim, maxLines = 1)
@@ -235,7 +235,11 @@ private fun ContentRow(row: HomeRow, onItemClick: (tmdbId: Int, mediaType: Strin
                 Text("Ver mais", fontSize = 13.sp, color = StreamFlixColors.Amber, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { onSeeAllClick(link) })
             }
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
             itemsIndexed(row.items) { index, item ->
                 val clickType = item.resolvedMediaType.ifBlank { row.mediaType }
                 PosterCard(item = item, onClick = { onItemClick(item.id, clickType) }, rank = if (row.isRanked) index + 1 else null)
@@ -251,33 +255,59 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
     val yearNum = item.displayYear?.toIntOrNull()
     val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     val isNew = yearNum != null && yearNum >= currentYear - 1
-    Row(verticalAlignment = Alignment.Bottom) {
-        if (rank != null) {
-            Text(
-                "$rank",
-                fontSize = 34.sp,
-                fontWeight = FontWeight.Bold,
-                color = StreamFlixColors.Amber.copy(alpha = 0.55f),
-                modifier = Modifier.padding(end = 2.dp),
+    Column(
+        modifier = Modifier
+            .width(118.dp)
+            .height(236.dp)
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(StreamFlixColors.SurfaceRaised),
+        ) {
+            AsyncImage(
+                model = posterUrl,
+                contentDescription = item.displayTitle,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
             )
-        }
-        Column(modifier = Modifier.width(118.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)) {
-            Box(
-                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(StreamFlixColors.SurfaceRaised),
-            ) {
-                AsyncImage(model = posterUrl, contentDescription = item.displayTitle, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                if (isNew) {
-                    Text(
-                        "NOVO",
-                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(StreamFlixColors.BadgeNew).padding(horizontal = 6.dp, vertical = 2.dp),
-                        color = Color.White,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
+            if (rank != null) {
+                Text(
+                    "$rank",
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 6.dp, bottom = 2.dp),
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = StreamFlixColors.Amber,
+                )
             }
-            Spacer(Modifier.height(6.dp))
-            Text(item.displayTitle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp, color = StreamFlixColors.Text)
+            if (isNew) {
+                Text(
+                    "NOVO",
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(StreamFlixColors.BadgeNew).padding(horizontal = 6.dp, vertical = 2.dp),
+                    color = Color.White,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .padding(top = 6.dp),
+        ) {
+            Text(
+                item.displayTitle,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 15.sp,
+                color = StreamFlixColors.Text,
+            )
             Text(
                 listOfNotNull(kind, item.displayYear).joinToString(" · "),
                 fontSize = 10.sp,
