@@ -90,7 +90,7 @@ fun ExploreScreen(
 
         ChipRow {
             FilterChipPill(
-                label = "Todos os anos",
+                label = "Anos",
                 selected = filters.year == null,
                 onClick = { viewModel.applyFilters(filters.copy(year = null)) },
             )
