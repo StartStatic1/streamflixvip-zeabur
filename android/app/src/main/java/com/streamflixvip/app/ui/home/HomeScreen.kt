@@ -256,7 +256,7 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
     val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     val isNew = yearNum != null && yearNum >= currentYear - 1
     Row(
-        modifier = Modifier.height(216.dp),
+        modifier = Modifier.height(232.dp),
         verticalAlignment = Alignment.Top,
     ) {
         if (rank != null) {
@@ -296,21 +296,28 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
                     )
                 }
             }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                item.displayTitle,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = StreamFlixColors.Text,
-            )
-            Text(
-                listOfNotNull(kind, item.displayYear).joinToString(" · "),
-                fontSize = 10.sp,
-                color = StreamFlixColors.TextDim,
-                maxLines = 1,
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(top = 6.dp),
+            ) {
+                Text(
+                    item.displayTitle,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 15.sp,
+                    color = StreamFlixColors.Text,
+                )
+                Text(
+                    listOfNotNull(kind, item.displayYear).joinToString(" · "),
+                    fontSize = 10.sp,
+                    color = StreamFlixColors.TextDim,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
