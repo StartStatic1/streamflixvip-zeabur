@@ -39,6 +39,7 @@ import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.WatchProgressEntry
 import com.startapp.sdk.ads.banner.Banner
 import com.streamflixvip.app.data.VipStatusHolder
+import com.streamflixvip.app.ui.theme.StreamFlixColors
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 
@@ -64,7 +65,7 @@ fun HomeScreen(
     when (val s = state) {
         is HomeUiState.Loading -> {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                CircularProgressIndicator(color = StreamFlixColors.Amber)
             }
         }
         is HomeUiState.Error -> {
@@ -80,7 +81,7 @@ fun HomeScreen(
             val scrollState = rememberLazyListState()
             LazyColumn(
                 state = scrollState,
-                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+                modifier = Modifier.fillMaxSize().background(StreamFlixColors.Background),
                 contentPadding = PaddingValues(bottom = 28.dp),
             ) {
                 if (s.continueWatching.isNotEmpty()) {
@@ -99,7 +100,7 @@ fun HomeScreen(
                     }
                 }
                 itemsIndexed(s.rows) { index, row ->
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(18.dp))
                     ContentRow(row = row, onItemClick = onItemClick, onSeeAllClick = onSeeAllClick)
                     val isVip by VipStatusHolder.isVip.collectAsState()
                     if (!isVip && (index + 1) % 3 == 0) {
@@ -138,7 +139,7 @@ private fun HeroBanner(items: List<TmdbItem>, onClick: (TmdbItem) -> Unit) {
                 Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Black.copy(alpha = 0.05f), Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.92f)), startY = 60f)))
                 Column(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 18.dp, vertical = 22.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("EM ALTA", modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFF27667)).padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("EM ALTA", modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(StreamFlixColors.BadgeNew).padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         Text(item.displayMediaLabel.uppercase(), modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.height(10.dp))
@@ -148,13 +149,13 @@ private fun HeroBanner(items: List<TmdbItem>, onClick: (TmdbItem) -> Unit) {
                         item.displayYear?.let { year -> Text(year, color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp) }
                         if (item.displayYear != null && item.displayRating != null) Text(" • ", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
                         item.displayRating?.let { rating ->
-                            Icon(Icons.Filled.Star, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Filled.Star, null, modifier = Modifier.size(14.dp), tint = StreamFlixColors.Amber)
                             Spacer(Modifier.width(3.dp))
                             Text(rating, color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = { onClick(item) }, contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = Color.Black)) {
+                    Button(onClick = { onClick(item) }, contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = StreamFlixColors.Amber, contentColor = Color(0xFF1A1204))) {
                         Icon(Icons.Filled.PlayArrow, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Ver detalhes", fontWeight = FontWeight.Bold)
@@ -167,7 +168,7 @@ private fun HeroBanner(items: List<TmdbItem>, onClick: (TmdbItem) -> Unit) {
                 items.indices.forEach { index ->
                     val isActive = pagerState.currentPage == index
                     val width by animateFloatAsState(targetValue = if (isActive) 20f else 6f, label = "heroIndicatorWidth")
-                    Box(modifier = Modifier.padding(horizontal = 3.dp).height(5.dp).width(width.dp).clip(RoundedCornerShape(3.dp)).background(if (isActive) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.35f)))
+                    Box(modifier = Modifier.padding(horizontal = 3.dp).height(5.dp).width(width.dp).clip(RoundedCornerShape(3.dp)).background(if (isActive) StreamFlixColors.Amber else Color.White.copy(alpha = 0.35f)))
                 }
             }
         }
@@ -177,7 +178,7 @@ private fun HeroBanner(items: List<TmdbItem>, onClick: (TmdbItem) -> Unit) {
 @Composable
 private fun StartIoBanner() {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("Patrocinado", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f), modifier = Modifier.padding(bottom = 4.dp))
+        Text("Patrocinado", fontSize = 11.sp, color = StreamFlixColors.TextDim, modifier = Modifier.padding(bottom = 4.dp))
         AndroidView(modifier = Modifier.fillMaxWidth(), factory = { context -> Banner(context).apply { } })
     }
 }
@@ -186,15 +187,15 @@ private fun StartIoBanner() {
 private fun ContinueWatchingRow(entries: List<WatchProgressEntry>, onItemClick: (WatchProgressEntry) -> Unit, onItemDismiss: (WatchProgressEntry) -> Unit = {}) {
     Column {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.width(4.dp).height(28.dp).clip(RoundedCornerShape(2.dp)).background(MaterialTheme.colorScheme.primary))
+            Box(modifier = Modifier.width(3.dp).height(22.dp).clip(RoundedCornerShape(2.dp)).background(StreamFlixColors.Amber))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text("Continuar assistindo", fontSize = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.15.sp)
-                Text("Retome de onde parou", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Continuar assistindo", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Retome de onde parou", fontSize = 12.sp, color = StreamFlixColors.TextMuted)
             }
-            Text("${entries.size}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+            Text("${entries.size}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = StreamFlixColors.Amber)
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             items(entries) { entry -> ContinueWatchingCard(entry = entry, onClick = { onItemClick(entry) }, onDismiss = { onItemDismiss(entry) }) }
         }
     }
@@ -204,28 +205,23 @@ private fun ContinueWatchingRow(entries: List<WatchProgressEntry>, onItemClick: 
 private fun ContinueWatchingCard(entry: WatchProgressEntry, onClick: () -> Unit, onDismiss: () -> Unit = {}) {
     val posterUrl = entry.poster_path?.let { TmdbImages.poster(it) }
     val pct = (entry.progressFraction * 100f).toInt().coerceIn(0, 100)
-    Column(modifier = Modifier.width(132.dp).shadow(elevation = 12.dp, shape = RoundedCornerShape(14.dp), ambientColor = Color.Black.copy(alpha = 0.4f), spotColor = Color.Black.copy(alpha = 0.55f)).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface).clickable(onClick = onClick)) {
-        Box(modifier = Modifier.fillMaxWidth().height(188.dp).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+    Column(modifier = Modifier.width(124.dp).clip(RoundedCornerShape(12.dp)).background(StreamFlixColors.Surface).clickable(onClick = onClick)) {
+        Box(modifier = Modifier.fillMaxWidth().height(176.dp).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(StreamFlixColors.SurfaceRaised)) {
             AsyncImage(model = posterUrl, contentDescription = entry.displayTitle, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(56.dp).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)))))
-            Box(modifier = Modifier.align(Alignment.Center).size(44.dp).clip(RoundedCornerShape(22.dp)).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.92f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = "Continuar", tint = Color.Black, modifier = Modifier.size(28.dp))
+            Box(modifier = Modifier.align(Alignment.Center).size(40.dp).clip(RoundedCornerShape(20.dp)).background(StreamFlixColors.Amber.copy(alpha = 0.92f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = "Continuar", tint = Color(0xFF1A1204), modifier = Modifier.size(24.dp))
             }
-            Box(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(28.dp).clip(RoundedCornerShape(14.dp)).background(Color.Black.copy(alpha = 0.65f)).clickable { onDismiss() }, contentAlignment = Alignment.Center) {
-                Text("X", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Box(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(26.dp).clip(RoundedCornerShape(13.dp)).background(Color.Black.copy(alpha = 0.65f)).clickable { onDismiss() }, contentAlignment = Alignment.Center) {
+                Text("X", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
-            Text("$pct%", modifier = Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 10.dp), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Box(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().height(5.dp).background(Color.White.copy(alpha = 0.25f))) {
-                Box(modifier = Modifier.fillMaxWidth(entry.progressFraction.coerceIn(0f, 1f)).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
+            Box(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.22f))) {
+                Box(modifier = Modifier.fillMaxWidth(entry.progressFraction.coerceIn(0f, 1f)).fillMaxHeight().background(StreamFlixColors.Amber))
             }
         }
-        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-            Text(entry.displayTitle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (entry.media_type == "tv" && entry.season > 0) {
-                Text("T${entry.season}:E${entry.episode}", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium, maxLines = 1)
-            } else {
-                Text("Continuar", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-            }
+        Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp)) {
+            Text(entry.displayTitle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, color = StreamFlixColors.Text)
+            val sub = if (entry.media_type == "tv" && entry.season > 0) "T${entry.season}:E${entry.episode} · $pct%" else "$pct%"
+            Text(sub, fontSize = 10.sp, color = StreamFlixColors.TextDim, maxLines = 1)
         }
     }
 }
@@ -233,13 +229,13 @@ private fun ContinueWatchingCard(entry: WatchProgressEntry, onClick: () -> Unit,
 @Composable
 private fun ContentRow(row: HomeRow, onItemClick: (tmdbId: Int, mediaType: String) -> Unit, onSeeAllClick: (HomeRowExploreLink) -> Unit) {
     Column {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(row.title, fontSize = 20.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.15.sp, modifier = Modifier.weight(1f))
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(row.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), color = StreamFlixColors.Text)
             row.exploreLink?.let { link ->
-                Text("Ver mais", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { onSeeAllClick(link) })
+                Text("Ver mais", fontSize = 13.sp, color = StreamFlixColors.Amber, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { onSeeAllClick(link) })
             }
         }
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             itemsIndexed(row.items) { index, item ->
                 val clickType = item.resolvedMediaType.ifBlank { row.mediaType }
                 PosterCard(item = item, onClick = { onItemClick(item.id, clickType) }, rank = if (row.isRanked) index + 1 else null)
@@ -251,31 +247,43 @@ private fun ContentRow(row: HomeRow, onItemClick: (tmdbId: Int, mediaType: Strin
 @Composable
 private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
     val posterUrl = item.poster_path?.let { TmdbImages.poster(it) }
-    val rankColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+    val kind = if (item.resolvedMediaType == "movie") "Filme" else "Série"
+    val yearNum = item.displayYear?.toIntOrNull()
+    val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+    val isNew = yearNum != null && yearNum >= currentYear - 1
     Row(verticalAlignment = Alignment.Bottom) {
         if (rank != null) {
-            Text("$rank", fontSize = 58.sp, fontWeight = FontWeight.Black, color = rankColor, modifier = Modifier.offset(x = 10.dp))
+            Text(
+                "$rank",
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold,
+                color = StreamFlixColors.Amber.copy(alpha = 0.55f),
+                modifier = Modifier.padding(end = 2.dp),
+            )
         }
-        Column(modifier = Modifier.width(124.dp).shadow(elevation = 10.dp, shape = RoundedCornerShape(14.dp), ambientColor = Color.Black.copy(alpha = 0.4f), spotColor = Color.Black.copy(alpha = 0.55f)).clip(RoundedCornerShape(14.dp)).background(MaterialTheme.colorScheme.surface).clickable(onClick = onClick)) {
-            Box(modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(modifier = Modifier.width(118.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick)) {
+            Box(
+                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(StreamFlixColors.SurfaceRaised),
+            ) {
                 AsyncImage(model = posterUrl, contentDescription = item.displayTitle, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                item.displayRating?.let { rating ->
-                    Row(modifier = Modifier.align(Alignment.TopStart).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.68f)).padding(horizontal = 6.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Star, null, tint = Color(0xFFFFC107), modifier = Modifier.size(11.dp))
-                        Spacer(Modifier.width(2.dp))
-                        Text(rating, fontSize = 10.sp, color = Color.White)
-                    }
-                }
-                val yearNum = item.displayYear?.toIntOrNull()
-                val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-                if (yearNum != null && yearNum >= currentYear - 1) {
-                    Text("NOVO", modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFF27667)).padding(horizontal = 6.dp, vertical = 3.dp), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                if (isNew) {
+                    Text(
+                        "NOVO",
+                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(StreamFlixColors.BadgeNew).padding(horizontal = 6.dp, vertical = 2.dp),
+                        color = Color.White,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
             }
-            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-                Text(item.displayTitle, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                item.displayYear?.let { year -> Text(year, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
+            Spacer(Modifier.height(6.dp))
+            Text(item.displayTitle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp, color = StreamFlixColors.Text)
+            Text(
+                listOfNotNull(kind, item.displayYear).joinToString(" · "),
+                fontSize = 10.sp,
+                color = StreamFlixColors.TextDim,
+                maxLines = 1,
+            )
         }
     }
 }
