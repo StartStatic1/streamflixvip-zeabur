@@ -6,34 +6,43 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /**
- * StreamFlix — cinema escuro + ciano eletrico.
- * Hierarquia: fundo quase preto → surface → surfaceVariant → accent.
+ * StreamFlix — Cinema Noir (diretriz).
+ * Ação = âmbar. Turquesa só para ao vivo.
+ * Cyan permanece como alias do âmbar para telas antigas.
  */
 object StreamFlixColors {
-    val Cyan = Color(0xFF00E5FF)
-    val CyanDim = Color(0xFF00B8D4)
-    val Gold = Color(0xFFFFC107)
-    val BadgeNew = Color(0xFFFF3D71)
-    val BadgeVip = Color(0xFFFFD54F)
-    val BadgeHd = Color(0xFF69F0AE)
-    val Background = Color(0xFF05050A)
-    val Surface = Color(0xFF0F0F16)
-    val SurfaceRaised = Color(0xFF1A1A24)
-    val TextMuted = Color.White.copy(alpha = 0.58f)
+    val Background = Color(0xFF08090D)
+    val Surface = Color(0xFF101218)
+    val SurfaceRaised = Color(0xFF151820)
+    val SurfaceHigh = Color(0xFF1B1F29)
+    val Amber = Color(0xFFFFB547)
+    val AmberDeep = Color(0xFFFF8A3D)
+    val Teal = Color(0xFF25D0C7)
+    val Text = Color(0xFFF5F7FA)
+    val TextMuted = Color(0xFFA7ADB8)
+    val TextDim = Color(0xFF6F7683)
+    val BadgeNew = Color(0xFFF27667)
+    val BadgeVip = Color(0xFFFFB547)
+    val BadgeOk = Color(0xFF65C98A)
+    val Gold = Amber
+    val Cyan = Amber
+    val CyanDim = AmberDeep
+    val BadgeHd = BadgeOk
 }
 
 private val DarkColors = darkColorScheme(
-    primary = StreamFlixColors.Cyan,
-    onPrimary = Color(0xFF001820),
-    secondary = StreamFlixColors.CyanDim,
+    primary = StreamFlixColors.Amber,
+    onPrimary = Color(0xFF1A1204),
+    secondary = StreamFlixColors.Teal,
     tertiary = StreamFlixColors.BadgeNew,
     background = StreamFlixColors.Background,
     surface = StreamFlixColors.Surface,
     surfaceVariant = StreamFlixColors.SurfaceRaised,
-    onSurface = Color.White,
+    onBackground = StreamFlixColors.Text,
+    onSurface = StreamFlixColors.Text,
     onSurfaceVariant = StreamFlixColors.TextMuted,
-    outline = StreamFlixColors.Cyan.copy(alpha = 0.22f),
-    error = Color(0xFFFF5252),
+    outline = StreamFlixColors.Amber.copy(alpha = 0.22f),
+    error = Color(0xFFFF6B6B),
 )
 
 @Composable
@@ -42,6 +51,7 @@ fun StreamFlixTheme(
 ) {
     MaterialTheme(
         colorScheme = DarkColors,
+        typography = StreamFlixTypography,
         content = content,
     )
 }

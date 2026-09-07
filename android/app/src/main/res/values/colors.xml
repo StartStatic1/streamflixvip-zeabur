@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Cinema Flutuante — mesmo tom profundo usado no Theme.kt -->
-    <color name="splash_background">#05050A</color>
+    <color name="splash_background">#08090D</color>
 </resources>
