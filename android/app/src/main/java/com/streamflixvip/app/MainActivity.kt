@@ -94,7 +94,6 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            // Garante LocalLifecycleOwner p/ lifecycle-compose (release/minify)
             CompositionLocalProvider(LocalLifecycleOwner provides this) {
                 StreamFlixTheme {
                     Surface(modifier = Modifier.fillMaxSize()) {
@@ -216,7 +215,7 @@ private fun MainAppScaffold(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val showBottomBar = currentRoute in listOf("home", "explore", "reels", "livetv", "profile")
-    val showTopBar = currentRoute in listOf("home", "explore", "livetv", "profile", "mylist", "genres")
+    val showTopBar = currentRoute in listOf("home", "explore", "profile", "mylist", "genres")
     val resumeScope = rememberCoroutineScope()
     var resumeBusy by remember { mutableStateOf(false) }
     val catalogRepo = remember { CatalogRepository() }
@@ -318,7 +317,6 @@ private fun MainAppScaffold(
                                         "player/$encodedUrl/$isDirect/${entry.tmdb_id}/${entry.media_type}/$season/$episode/$encodedTitle/$encodedPoster/${entry.position_seconds}",
                                     )
                                 } catch (_: Exception) {
-                                    // Sem ficha: tenta de novo a API; se falhar, some o overlay.
                                 } finally {
                                     resumeBusy = false
                                 }
