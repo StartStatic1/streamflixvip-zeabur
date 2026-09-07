@@ -12,27 +12,24 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.streamflixvip.app.data.GenreCategory
 import com.streamflixvip.app.data.TMDB_GENRES
 import com.streamflixvip.app.network.TmdbItem
-
+import com.streamflixvip.app.ui.theme.StreamFlixColors
 
 /**
- * Explorar com filtros sempre visíveis:
- * Categoria · Gênero · Ano — toque aplica na hora (sem bottom sheet).
+ * Explorar — categoria em destaque, gênero e ano em chips menores.
  */
 @Composable
 fun ExploreScreen(
@@ -56,21 +53,24 @@ fun ExploreScreen(
             }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        // Categoria
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(StreamFlixColors.Background),
+    ) {
         ChipRow {
             GenreCategory.entries.forEach { category ->
                 FilterChipPill(
                     label = category.label,
                     selected = category == filters.category,
+                    emphasis = true,
                     onClick = { viewModel.applyFilters(filters.copy(category = category)) },
                 )
             }
         }
 
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
 
-        // Gênero
         ChipRow {
             FilterChipPill(
                 label = "Todos",
@@ -88,10 +88,9 @@ fun ExploreScreen(
 
         Spacer(Modifier.height(6.dp))
 
-        // Ano
         ChipRow {
             FilterChipPill(
-                label = "Todos",
+                label = "Todos os anos",
                 selected = filters.year == null,
                 onClick = { viewModel.applyFilters(filters.copy(year = null)) },
             )
@@ -104,44 +103,29 @@ fun ExploreScreen(
             }
         }
 
-        // Resumo compacto quando há filtro ativo
-        if (filters.genre != null || filters.year != null) {
-            val parts = buildList {
-                filters.genre?.let { add(it.displayName) }
-                filters.year?.let { add("$it") }
-            }
-            Text(
-                parts.joinToString(" · "),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-            )
-        } else {
-            Spacer(Modifier.height(6.dp))
-        }
+        Spacer(Modifier.height(10.dp))
 
         when (val s = state) {
             is ExploreUiState.Loading -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    CircularProgressIndicator(color = StreamFlixColors.Amber)
                 }
             }
             is ExploreUiState.Success -> {
                 if (s.items.isEmpty()) {
                     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                         Text(
-                            "Nenhum título encontrado com esses filtros.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            "Nenhum título com esses filtros.",
+                            color = StreamFlixColors.TextMuted,
                         )
                     }
                 } else {
                     LazyVerticalGrid(
                         state = gridState,
                         columns = GridCells.Fixed(3),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
                         modifier = Modifier.weight(1f),
                     ) {
                         items(s.items, key = { "${it.id}_${it.resolvedMediaType}" }) { item ->
@@ -156,7 +140,10 @@ fun ExploreScreen(
                                     Modifier.fillMaxWidth().padding(16.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(22.dp),
+                                        color = StreamFlixColors.Amber,
+                                    )
                                 }
                             }
                         }
@@ -174,44 +161,44 @@ private fun ChipRow(content: @Composable RowScope.() -> Unit) {
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         content = content,
     )
 }
 
 @Composable
-private fun FilterChipPill(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(
-                if (selected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.surfaceVariant,
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (selected) {
-            Icon(
-                Icons.Filled.Check,
-                contentDescription = null,
-                tint = Color.Black,
-                modifier = Modifier.size(14.dp),
-            )
-            Spacer(Modifier.width(4.dp))
-        }
-        Text(
-            label,
-            color = if (selected) Color.Black else MaterialTheme.colorScheme.onSurface,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            fontSize = 13.sp,
-        )
+private fun FilterChipPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    emphasis: Boolean = false,
+) {
+    val bg = when {
+        selected -> StreamFlixColors.Amber
+        emphasis -> StreamFlixColors.SurfaceHigh
+        else -> StreamFlixColors.SurfaceRaised
     }
+    val fg = if (selected) StreamFlixColors.Background else StreamFlixColors.Text
+    Text(
+        label,
+        color = if (selected) StreamFlixColors.Background else if (emphasis) StreamFlixColors.Text else StreamFlixColors.TextMuted,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+        fontSize = if (emphasis) 13.sp else 12.sp,
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = if (emphasis) 14.dp else 11.dp,
+                vertical = if (emphasis) 8.dp else 6.dp,
+            ),
+    )
 }
 
 @Composable
 private fun ExploreCard(item: TmdbItem, onClick: () -> Unit) {
+    val year = (item.release_date ?: item.first_air_date)?.take(4)
+    val kind = if (item.resolvedMediaType == "movie") "Filme" else "Série"
     Column(modifier = Modifier.clickable(onClick = onClick)) {
         AsyncImage(
             model = item.poster_path?.let { TmdbImages.poster(it) },
@@ -221,22 +208,23 @@ private fun ExploreCard(item: TmdbItem, onClick: () -> Unit) {
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
                 .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .background(StreamFlixColors.SurfaceRaised),
         )
-        Spacer(Modifier.height(4.dp))
-        Text(item.displayTitle, fontSize = 12.sp, maxLines = 1)
-        Row {
-            Text(
-                if (item.resolvedMediaType == "movie") "FILME" else "SÉRIE",
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(Modifier.width(6.dp))
-            val year = (item.release_date ?: item.first_air_date)?.take(4)
-            if (year != null) {
-                Text(year, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            item.displayTitle,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = StreamFlixColors.Text,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 15.sp,
+        )
+        Text(
+            listOfNotNull(kind, year).joinToString(" · "),
+            fontSize = 10.sp,
+            color = StreamFlixColors.TextDim,
+            maxLines = 1,
+        )
     }
 }
