@@ -25,8 +25,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.streamflixvip.app.ui.theme.StreamFlixColors
 
-private val Accent = Color(0xFF00E5FF)
+private val Accent = StreamFlixColors.Amber
 
 /**
  * Header: logo à esquerda · Favoritos + Busca à direita.
@@ -44,13 +45,12 @@ fun AppTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Logo / nome à esquerda
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "Stream",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color.White,
+                color = StreamFlixColors.Text,
             )
             Text(
                 text = "Flix",
@@ -60,7 +60,6 @@ fun AppTopBar(
             )
         }
 
-        // Ações à direita
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (onFavoritesClick != null) {
                 IconButton(
@@ -90,7 +89,7 @@ fun AppTopBar(
                     imageVector = Icons.Filled.Search,
                     contentDescription = "Buscar",
                     modifier = Modifier.size(22.dp),
-                    tint = Color.White,
+                    tint = StreamFlixColors.Text,
                 )
             }
         }

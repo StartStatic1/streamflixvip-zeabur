@@ -20,6 +20,7 @@ import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.streamflixvip.app.ui.theme.StreamFlixColors
 
 sealed class BottomNavItem(
     val route: String,
@@ -41,7 +42,7 @@ val bottomNavItems = listOf(
     BottomNavItem.Profile,
 )
 
-private val OceanCyan = Color(0xFF00E5FF)
+private val Accent = StreamFlixColors.Amber
 
 @Composable
 fun StreamFlixBottomBar(navController: NavController) {
@@ -49,8 +50,8 @@ fun StreamFlixBottomBar(navController: NavController) {
     val currentDestination = navBackStackEntry?.destination
 
     NavigationBar(
-        containerColor = Color(0xFF0A0A12),
-        contentColor = Color.White,
+        containerColor = StreamFlixColors.Surface,
+        contentColor = StreamFlixColors.Text,
     ) {
         bottomNavItems.forEach { item ->
             val selected = currentDestination?.hierarchy?.any { it.route == item.route } == true
@@ -82,11 +83,11 @@ fun StreamFlixBottomBar(navController: NavController) {
                     )
                 },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = OceanCyan,
-                    selectedTextColor = OceanCyan,
+                    selectedIconColor = Accent,
+                    selectedTextColor = Accent,
                     unselectedIconColor = Color.White.copy(alpha = 0.55f),
                     unselectedTextColor = Color.White.copy(alpha = 0.55f),
-                    indicatorColor = OceanCyan.copy(alpha = 0.14f),
+                    indicatorColor = Accent.copy(alpha = 0.14f),
                 ),
             )
         }
