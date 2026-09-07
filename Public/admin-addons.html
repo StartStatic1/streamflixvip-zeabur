@@ -25,10 +25,12 @@
     .panel h2{font-size:1rem;margin-bottom:12px}
     .hint{font-size:.8rem;color:var(--muted);margin-bottom:12px;line-height:1.45}
     .addon-card{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
-    .meta{font-size:.75rem;color:var(--muted);margin-top:4px;word-break:break-all}
+    .addon-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+    .addon-head .ttl{min-width:0;flex:1}
+    .meta{font-size:.72rem;color:var(--muted);margin-top:4px;word-break:break-all;line-height:1.35}
     .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
     .row button{padding:7px 12px;font-size:.75rem}
-    .pill{padding:2px 8px;border-radius:6px;font-size:.7rem;font-weight:700}
+    .pill{display:inline-flex;align-items:center;flex-shrink:0;height:22px;padding:0 8px;border-radius:999px;font-size:.68rem;font-weight:700;white-space:nowrap;line-height:1}
     .on{background:rgba(34,197,94,.15);color:var(--green)}
     .off{background:rgba(136,136,170,.12);color:var(--muted)}
     .hide{display:none}
@@ -38,57 +40,62 @@
   </style>
 </head>
 <body>
-<div id="login"><div class="card"><h1>Add-ons Stremio</h1><p class="hint">Mesmo login do painel principal.</p>
-<input type="email" id="email" placeholder="E-mail admin" autocomplete="email"/>
-<input type="password" id="pass" placeholder="Senha" autocomplete="current-password"/>
-<button class="btn-gold" style="width:100%" onclick="doLogin()">Entrar</button>
-<p id="loginMsg" class="hint"></p>
-<p><a href="/admin-hub.html" style="color:var(--gold)">Hub</a></p></div></div>
+<div id="login">
+  <div class="card">
+    <h1>Add-ons Stremio</h1>
+    <p class="hint">Mesmo login do painel principal.</p>
+    <input type="email" id="email" placeholder="E-mail admin" autocomplete="email"/>
+    <input type="password" id="pass" placeholder="Senha" autocomplete="current-password"/>
+    <button class="btn-gold" style="width:100%" onclick="doLogin()">Entrar</button>
+    <p id="loginMsg" class="hint"></p>
+    <p><a href="/admin-hub.html" style="color:var(--gold)">Hub</a></p>
+  </div>
+</div>
 <div id="app">
-<header>
-  <div><strong>Stream<em style="color:var(--gold);font-style:italic">Flix</em>VIP</strong> · Add-ons</div>
-  <div class="row" style="margin:0">
-    <a href="/admin-hub.html">Hub</a>
-    <a href="/admin.html">Painel principal</a>
-    <a href="/admin-api.html">API</a>
-    <button class="btn-sec" onclick="doLogout()">Sair</button>
-  </div>
-</header>
-<main>
-<div class="panel">
-  <h2>Novo add-on</h2>
-  <p class="hint">Cole o <b>manifest.json</b>. O nome é o que aparece no app. <b>Ordem</b>: menor número sobe. IPTV (Vulke) fica sempre acima. Ex.: tplay=2 · Pengu=5 · Fênix=20.</p>
-  <input type="url" id="aUrl" placeholder="https://…/manifest.json"/>
-  <input type="text" id="aName" placeholder="Nome no app — StreamFlix.Fenix"/>
-  <input type="number" id="aPriority" value="10" placeholder="Ordem (menor sobe)"/>
-  <textarea id="aNotes" rows="2" placeholder="Notas (opcional)"></textarea>
-  <div class="row">
-    <button class="btn-sec" style="flex:1" onclick="probeOnly()">Testar manifest</button>
-    <button class="btn-gold" style="flex:1" onclick="createAddon()">Adicionar</button>
-  </div>
-  <pre id="probeOut" class="hide"></pre>
-</div>
-<div class="panel">
-  <h2>Add-ons ativos <button class="btn-sec" onclick="loadAddons()">Atualizar</button></h2>
-  <p class="hint"><b>Ordem</b> menor sobe no app. <b>Pausar</b> tira do play. <b>Excluir</b> apaga do painel.</p>
-  <div id="listWrap"><p class="hint">Carregando…</p></div>
-</div>
-<div class="panel">
-  <h2>Testar streams</h2>
-  <p class="hint">Catálogo só lista título. Stream é o que aparece no play. Anime resolve Kitsu sozinho.</p>
-  <div class="row">
-    <select id="testType" style="flex:1;min-width:140px">
-      <option value="movie">Filme TMDB</option>
-      <option value="tv">Série TMDB</option>
-      <option value="anime">Anime (Kitsu)</option>
-    </select>
-    <input type="number" id="testTmdb" value="550" placeholder="tmdb_id" style="flex:1;margin:0"/>
-  </div>
-  <p class="hint">Presets: Filme <b>550</b> · Série <b>1396</b> · Anime <b>95479</b> (Jujutsu). Série/anime usa T1 E1.</p>
-  <button class="btn-sec" onclick="testStreams()">Buscar streams</button>
-  <pre id="testOut" class="hide"></pre>
-</div>
-</main>
+  <header>
+    <div><strong>Stream<em style="color:var(--gold);font-style:italic">Flix</em>VIP</strong> · Add-ons</div>
+    <div class="row" style="margin:0">
+      <a href="/admin-hub.html">Hub</a>
+      <a href="/admin.html">Painel principal</a>
+      <a href="/admin-api.html">API</a>
+      <button class="btn-sec" onclick="doLogout()">Sair</button>
+    </div>
+  </header>
+  <main>
+    <div class="panel">
+      <h2>Novo add-on</h2>
+      <p class="hint">Cole o <b>manifest.json</b>. O nome é o que aparece no app. <b>Ordem</b>: menor número sobe. IPTV (Vulke) fica sempre acima. Ex.: tplay=2 · Pengu=5 · Fênix=20.</p>
+      <input type="url" id="aUrl" placeholder="https://…/manifest.json"/>
+      <input type="text" id="aName" placeholder="Nome no app — StreamFlix.Fenix"/>
+      <input type="number" id="aPriority" value="10" placeholder="Ordem (menor sobe)"/>
+      <textarea id="aNotes" rows="2" placeholder="Notas (opcional)"></textarea>
+      <div class="row">
+        <button class="btn-sec" style="flex:1" onclick="probeOnly()">Testar manifest</button>
+        <button class="btn-gold" style="flex:1" onclick="createAddon()">Adicionar</button>
+      </div>
+      <pre id="probeOut" class="hide"></pre>
+    </div>
+    <div class="panel">
+      <h2>Add-ons ativos <button class="btn-sec" onclick="loadAddons()">Atualizar</button></h2>
+      <p class="hint"><b>Ordem</b> menor sobe no app. <b>Pausar</b> tira do play. <b>Excluir</b> apaga do painel.</p>
+      <div id="listWrap"><p class="hint">Carregando…</p></div>
+    </div>
+    <div class="panel">
+      <h2>Testar streams</h2>
+      <p class="hint">Catálogo só lista título. Stream é o que aparece no play. Anime resolve Kitsu sozinho.</p>
+      <div class="row">
+        <select id="testType" style="flex:1;min-width:140px">
+          <option value="movie">Filme TMDB</option>
+          <option value="tv">Série TMDB</option>
+          <option value="anime">Anime (Kitsu)</option>
+        </select>
+        <input type="number" id="testTmdb" value="550" placeholder="tmdb_id" style="flex:1;margin:0"/>
+      </div>
+      <p class="hint">Presets: Filme <b>550</b> · Série <b>1396</b> · Anime <b>95479</b> (Jujutsu). Série/anime usa T1 E1.</p>
+      <button class="btn-sec" onclick="testStreams()">Buscar streams</button>
+      <pre id="testOut" class="hide"></pre>
+    </div>
+  </main>
 </div>
 <div id="toast"></div>
 <script>
@@ -105,7 +112,7 @@ function showApp(session){_session=session;document.getElementById('login').styl
 async function doLogout(){await db.auth.signOut();location.reload()}
 async function probeOnly(){const url=document.getElementById('aUrl').value.trim();if(!url){toast('Cole a URL');return}const d=await api('probe-addon',{manifest_url:url});const out=document.getElementById('probeOut');out.classList.remove('hide');out.textContent=JSON.stringify(d,null,2);if(d.name&&!document.getElementById('aName').value.trim())document.getElementById('aName').value=d.name;toast(d.error||'Manifest OK')}
 async function createAddon(){const url=document.getElementById('aUrl').value.trim();if(!url){toast('Cole a URL');return}const d=await api('create-addon',{manifest_url:url,name:document.getElementById('aName').value.trim(),priority:parseInt(document.getElementById('aPriority').value,10)||10,notes:document.getElementById('aNotes').value.trim()});if(d.error){toast(typeof d.error==='string'?d.error:JSON.stringify(d.error));return}toast('Add-on adicionado');loadAddons()}
-async function loadAddons(){const wrap=document.getElementById('listWrap');const data=await api('list-addons');if(data.error){wrap.innerHTML='<p class="hint">'+esc(data.error.message||data.error)+'</p>';return}const rows=(data.addons||[]).slice().sort((a,b)=>(Number(a.priority)||0)-(Number(b.priority)||0));if(!rows.length){wrap.innerHTML='<p class="hint">Nenhum add-on.</p>';return}wrap.innerHTML=rows.map(a=>{const id=esc(a.id),name=esc(a.name);return '<div class="addon-card"><div style="display:flex;justify-content:space-between;gap:8px"><div><b>'+name+'</b><div class="meta">'+esc(a.manifest_url)+'</div></div><span class="pill '+(a.is_active?'on':'off')+'">'+(a.is_active?'Ativo':'Off')+'</span></div><div class="row"><span class="meta">Ordem</span><input type="number" id="prIn-'+id+'" value="'+(a.priority??0)+'" style="width:90px;margin:0"/><button class="btn-sec" onclick="savePriority(\''+id+'\')">Salvar ordem</button></div><div class="row"><button class="btn-sec" onclick="toggleA(\''+id+'\','+(!a.is_active)+')">'+(a.is_active?'Pausar':'Ativar')+'</button><button class="btn-danger" onclick="delA(\''+id+'\')">Excluir</button></div></div>'}).join('')}
+async function loadAddons(){const wrap=document.getElementById('listWrap');const data=await api('list-addons');if(data.error){wrap.innerHTML='<p class="hint">'+esc(data.error.message||data.error)+'</p>';return}const rows=(data.addons||[]).slice().sort((a,b)=>(Number(a.priority)||0)-(Number(b.priority)||0));if(!rows.length){wrap.innerHTML='<p class="hint">Nenhum add-on.</p>';return}wrap.innerHTML=rows.map(a=>{const id=esc(a.id),name=esc(a.name);return '<div class="addon-card"><div class="addon-head"><div class="ttl"><b>'+name+'</b><div class="meta">'+esc(a.manifest_url)+'</div></div><span class="pill '+(a.is_active?'on':'off')+'">'+(a.is_active?'Ativo':'Off')+'</span></div><div class="row"><span class="meta">Ordem</span><input type="number" id="prIn-'+id+'" value="'+(a.priority??0)+'" style="width:90px;margin:0"/><button class="btn-sec" onclick="savePriority(\''+id+'\')">Salvar ordem</button></div><div class="row"><button class="btn-sec" onclick="toggleA(\''+id+'\','+(!a.is_active)+')">'+(a.is_active?'Pausar':'Ativar')+'</button><button class="btn-danger" onclick="delA(\''+id+'\')">Excluir</button></div></div>'}).join('')}
 async function savePriority(id){const inp=document.getElementById('prIn-'+id);const priority=parseInt(inp&&inp.value,10);if(!Number.isFinite(priority)){toast('Número inválido');return}const d=await api('update-addon',{id,priority});if(d.error){toast(typeof d.error==='string'?d.error:JSON.stringify(d.error));return}toast('Ordem '+priority);loadAddons()}
 async function toggleA(id,isActive){const d=await api('toggle-addon',{id,is_active:isActive});toast(d.error||(isActive?'Ativo':'Pausado'));if(!d.error)loadAddons()}
 async function delA(id){if(!confirm('Excluir este add-on?'))return;const d=await api('delete-addon',{id});toast(d.error||'Excluído');if(!d.error)loadAddons()}
