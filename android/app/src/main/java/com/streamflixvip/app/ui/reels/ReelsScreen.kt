@@ -50,6 +50,7 @@ import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.ReelStory
+import com.streamflixvip.app.ui.theme.StreamFlixColors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -102,24 +103,25 @@ fun ReelsScreen(
         lifecycleOwner.lifecycle.addObserver(obs)
         onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
     }
+    val accent = StreamFlixColors.Amber
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF07070C))
+            .background(StreamFlixColors.Background)
             .padding(horizontal = 12.dp),
     ) {
-        Text("Historias", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
+        Text("Historias", color = StreamFlixColors.Text, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
         OutlinedTextField(
             value = q,
             onValueChange = { q = it },
-            placeholder = { Text("Buscar titulo", color = Color(0xFF8B8BA8)) },
+            placeholder = { Text("Buscar titulo", color = StreamFlixColors.TextDim) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
         )
         Text(
             "Segura o card para tirar de Continuar ou Favoritas.",
-            color = Color(0xFF8B8BA8),
+            color = StreamFlixColors.TextDim,
             fontSize = 11.sp,
             modifier = Modifier.padding(bottom = 8.dp),
         )
@@ -131,12 +133,12 @@ fun ReelsScreen(
                 val on = filter == item
                 Text(
                     item.name,
-                    color = if (on) Color.Black else Color.White,
+                    color = if (on) Color(0xFF1A1204) else StreamFlixColors.Text,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(if (on) Color(0xFF00E5FF) else Color(0xFF1B1B28))
+                        .background(if (on) accent else StreamFlixColors.SurfaceHigh)
                         .clickable { filter = item }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 )
@@ -144,12 +146,12 @@ fun ReelsScreen(
         }
         when (val s = ui) {
             is ReelsUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color(0xFF00E5FF))
+                CircularProgressIndicator(color = accent)
             }
             is ReelsUiState.Error -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(s.message, color = Color(0xFFFF8A80))
-                    TextButton(onClick = { viewModel.refresh() }) { Text("Tentar de novo", color = Color(0xFF00E5FF)) }
+                    TextButton(onClick = { viewModel.refresh() }) { Text("Tentar de novo", color = accent) }
                 }
             }
             is ReelsUiState.Ready -> {
@@ -171,7 +173,7 @@ fun ReelsScreen(
                         ReelsFilter.Continuar -> "Nada em andamento nesta conta."
                     }
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(empty, color = Color(0xFF8B8BA8))
+                        Text(empty, color = StreamFlixColors.TextDim)
                     }
                 } else {
                     LazyVerticalGrid(
@@ -227,8 +229,8 @@ private fun StoryCard(
                 .fillMaxWidth()
                 .aspectRatio(0.70f)
                 .clip(shape)
-                .border(1.2.dp, Color(0xFF00D4E8), shape)
-                .background(Color(0xFF101018)),
+                .border(1.dp, StreamFlixColors.Amber.copy(alpha = 0.35f), shape)
+                .background(StreamFlixColors.Surface),
         ) {
             val poster = story.poster_url.orEmpty()
             if (poster.startsWith("http")) {
@@ -246,11 +248,11 @@ private fun StoryCard(
                 if (vip) {
                     Text(
                         "VIP",
-                        color = Color.Black,
+                        color = Color(0xFF1A1204),
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Black,
                         modifier = Modifier
-                            .background(Color(0xFFF5C518), RoundedCornerShape(7.dp))
+                            .background(StreamFlixColors.Amber, RoundedCornerShape(7.dp))
                             .padding(horizontal = 7.dp, vertical = 2.dp),
                     )
                 }
@@ -261,18 +263,18 @@ private fun StoryCard(
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
-                            .background(Color(0xFFFF2D55), RoundedCornerShape(7.dp))
+                            .background(StreamFlixColors.BadgeNew, RoundedCornerShape(7.dp))
                             .padding(horizontal = 7.dp, vertical = 2.dp),
                     )
                 }
             }
             if (liked) {
-                Text("\u2605", color = Color(0xFFFFD54F), fontSize = 13.sp, modifier = Modifier.align(Alignment.TopEnd).padding(7.dp))
+                Text("\u2605", color = StreamFlixColors.Amber, fontSize = 13.sp, modifier = Modifier.align(Alignment.TopEnd).padding(7.dp))
             }
         }
         Text(
             story.title ?: "Sem titulo",
-            color = Color(0xFFE8E8F0),
+            color = StreamFlixColors.Text,
             fontWeight = FontWeight.Medium,
             fontSize = 12.sp,
             lineHeight = 15.sp,
