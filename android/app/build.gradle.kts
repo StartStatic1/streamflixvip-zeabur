@@ -28,8 +28,8 @@ android {
         applicationId = "com.streamflixvip.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 120109
-        versionName = "12.1.9"
+        versionCode = 120110
+        versionName = "12.2.0"
 
         // URL base do backend Express — o MESMO domínio que o site usa
         // hoje (Koyeb). Trocar aqui se o domínio mudar de novo no futuro,
@@ -59,12 +59,6 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Mesma keystore fixa do debug (ver signingConfigs.debug acima)
-            // — reaproveitada aqui só porque é a que você já tem gerada e
-            // guardada como Secret no GitHub. Se algum dia quiser trocar
-            // por uma keystore separada exclusiva de produção, é só criar
-            // um novo signingConfigs.getByName("release") com outro
-            // arquivo/senha e apontar pra ele aqui.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -81,9 +75,6 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // Necessário pra java.time (OffsetDateTime/DateTimeFormatter, usados
-        // em VipSection pra formatar data de expiração) funcionar em
-        // minSdk 24-25 — essas APIs só existem nativamente a partir da API 26.
         isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
@@ -98,17 +89,10 @@ android {
 }
 
 dependencies {
-    // Splash Screen API (Android 12+) — themes.xml referencia
-    // windowSplashScreen* attrs desta lib; sem ela o merge de resources falha.
     implementation("androidx.core:core-splashscreen:1.0.1")
-
-    // Start.io (ex-StartApp) — ads SDK
     implementation("com.startapp:inapp-sdk:5.1.0")
-
-    // Google AdMob
     implementation("com.google.android.gms:play-services-ads:23.3.0")
 
-    // Compose BOM — alinha as versões de todos os artefatos Compose
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
@@ -118,44 +102,25 @@ dependencies {
     implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
-    // "extended" traz ícones que não vêm no core (Groups, FavoriteBorder,
-    // Share, OpenInNew, etc.) — usados na bottom bar e no modal "Como
-    // deseja assistir". É um artefato bem maior que o core, mas evita
-    // ter que desenhar ícone customizado pra cada um desses.
     implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.compose.ui:ui-text-google-fonts")
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.2")
 
-    // Player nativo (Media3/ExoPlayer) — toca HLS (.m3u8) e MP4 direto
     implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("androidx.media3:media3-exoplayer-hls:1.3.1")
     implementation("androidx.media3:media3-ui:1.3.1")
 
-    // Rede: Retrofit fala com /api/tmdb (proxy Express) e com a REST API
-    // do Supabase (mesma anon key pública que o site usa no navegador)
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
-    // moshi-kotlin-codegen (KSP) em vez de moshi-kotlin (reflection):
-    // gera os adapters em tempo de compilação, então não depende de
-    // kotlin-reflect em runtime. Isso evita o R8 ter que processar a lib
-    // de reflection inteira no minifyRelease (causa do
-    // ConcurrentModificationException no build de release) e deixa o
-    // APK bem menor.
     implementation("com.squareup.moshi:moshi:1.15.1")
     ksp("com.squareup.moshi:moshi-kotlin-codegen:1.15.1")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-    // Carregamento de imagem (pôsteres/backdrops do TMDB)
     implementation("io.coil-kt:coil-compose:2.6.0")
-
-    // WebView isolado, só pra fontes que são iframe de terceiro
     implementation("androidx.webkit:webkit:1.11.0")
-
-    // Material Components for Android — necessário pois themes.xml usa
-    // parent="Theme.Material3.DayNight.NoActionBar", que vem desta lib
-    // (diferente do androidx.compose.material3, que não define estilos XML).
     implementation("com.google.android.material:material:1.12.0")
 
     implementation("androidx.core:core-ktx:1.13.1")
