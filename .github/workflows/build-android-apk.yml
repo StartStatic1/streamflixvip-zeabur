@@ -1,32 +1,18 @@
 name: Build Android APK - Debug (StreamFlixVIP)
 
-# Roda SOZINHO a cada push que mexe em android/ — é o seu fluxo de
-# sempre pra testar mudanças rapidamente (corrigir bug, subir pelo
-# Termux, baixar o APK gerado aqui no Actions). Não mexe em versão,
-# não publica no site, não faz commit — só builda e disponibiliza
-# pra download como artefato, igual sempre funcionou.
-#
-# Pra PUBLICAR oficialmente uma nova versão pros usuários (a que o
-# app vai detectar e pedir pra atualizar), use o outro workflow:
-# "Build Android APK - Release (Publicar)", que precisa ser acionado
-# manualmente na aba Actions.
-
 on:
   workflow_dispatch: {}
   push:
     branches: [main]
     paths:
       - 'android/**'
+      - 'scripts/patch_detail_cast.py'
       - '.github/workflows/build-android-apk.yml'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Pula esta run se o push veio do commit automático do workflow de
-    # release (mensagens "release: v...") — nesse caso o release já foi
-    # buildado, rodar o debug de novo em cima seria só gastar minutos
-    # do Actions à toa.
     if: ${{ !startsWith(github.event.head_commit.message, 'release:') }}
     defaults:
       run:
@@ -35,6 +21,10 @@ jobs:
     steps:
       - name: Checkout do repositório
         uses: actions/checkout@v4
+
+      - name: Ligar gêneros e elenco na tela de detalhes
+        working-directory: .
+        run: python3 scripts/patch_detail_cast.py
 
       - name: Configurar JDK 17
         uses: actions/setup-java@v4
