@@ -12,15 +12,6 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 
-/**
- * Repositório central: combina metadados (TMDB, via proxy Express) com
- * fontes de vídeo.
- *
- * Fontes de filme/série: preferência /api/media-sources (servidor, com
- * gate de auth/VIP). Fallback para leitura direta no Supabase se a API
- * ainda estiver soft ou indisponível — assim app antigo e transição
- * não quebram.
- */
 class CatalogRepository {
 
     private val tmdb = NetworkModule.tmdbApi
@@ -65,10 +56,10 @@ class CatalogRepository {
     }
 
     suspend fun getMovieDetails(tmdbId: Int) =
-        tmdb.request(path = "/movie/$tmdbId", appendToResponse = "videos")
+        tmdb.request(path = "/movie/$tmdbId", appendToResponse = "videos,credits")
 
     suspend fun getSeriesDetails(tmdbId: Int) =
-        tmdb.request(path = "/tv/$tmdbId", appendToResponse = "videos")
+        tmdb.request(path = "/tv/$tmdbId", appendToResponse = "videos,credits")
 
     suspend fun getSimilarTitles(tmdbId: Int, mediaType: String): List<TmdbItem> =
         try {
@@ -84,12 +75,7 @@ class CatalogRepository {
             emptyList()
         }
 
-    /**
-     * Fontes de filme: tenta API Express (manda JWT). Se falhar, cai no
-     * Supabase direto (comportamento antigo).
-     */
     suspend fun getSourcesForMovie(tmdbId: Int): List<VipSource> {
-        // 1) API (respeita VIP). 2) Fallback Supabase so se titulo NAO exige VIP.
         try {
             val res = mediaSources.getMovieSources(tmdbId)
             if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED") return emptyList()
@@ -114,7 +100,6 @@ class CatalogRepository {
     }
 
     suspend fun getSourcesForEpisode(tmdbId: Int, season: Int, episode: Int): List<VipSource> {
-        // API primeiro; fallback Supabase so se EP NAO exige VIP (respeita free ate N).
         try {
             val res = mediaSources.getEpisodeSources(tmdbId, season = season, episode = episode)
             if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED") return emptyList()
@@ -142,8 +127,6 @@ class CatalogRepository {
     private fun prioritize(sources: List<VipSource>): List<VipSource> =
         sources.sortedByDescending { it.source_label == "MegaEmbed VIP" }
 
-    
-    /** Busca vip_titles via API media-sources (body sempre legivel). */
     suspend fun probeVipConfigFromApi(tmdbId: Int, mediaType: String): com.streamflixvip.app.network.VipTitleConfig? {
         return try {
             val res = if (mediaType == "tv") {
@@ -226,7 +209,6 @@ enum class GenreCategory(val label: String, val mediaType: String?, val original
     ANIME("Animes", "tv", "ja"),
     DORAMA("Doramas", "tv", "ko"),
     ;
-
     val mediaTypeOrDefault: String get() = mediaType ?: "movie"
 }
 
