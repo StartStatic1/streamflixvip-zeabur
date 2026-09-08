@@ -1,7 +1,7 @@
 {
-  "versionCode": 120200,
-  "versionName": "12.2.0",
+  "versionCode": 120300,
+  "versionName": "12.3.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias, novo layout, melhorias de fontes, otimizações."
+  "releaseNotes": "Melhorias, adicionado elenco"
 }
