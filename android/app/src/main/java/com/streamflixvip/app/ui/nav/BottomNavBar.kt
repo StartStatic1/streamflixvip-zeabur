@@ -3,6 +3,7 @@ package com.streamflixvip.app.ui.nav
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
@@ -64,7 +66,8 @@ fun StreamFlixBottomBar(navController: NavController) {
                 .background(StreamFlixColors.Amber.copy(alpha = 0.18f)),
         )
         NavigationBar(
-            modifier = Modifier.height(72.dp),
+            modifier = Modifier.fillMaxWidth(),
+            windowInsets = NavigationBarDefaults.windowInsets,
             containerColor = StreamFlixColors.Background,
             contentColor = StreamFlixColors.Text,
             tonalElevation = 0.dp,
