@@ -1,7 +1,7 @@
 {
-  "versionCode": 120500,
-  "versionName": "12.5.0",
+  "versionCode": 120600,
+  "versionName": "12.6.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias e correcoes"
+  "releaseNotes": "Correções botão nav agora compatível com botões virtuais."
 }
