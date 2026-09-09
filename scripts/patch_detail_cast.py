@@ -7,11 +7,12 @@ t = p.read_text()
 
 def once(old, new, label):
     global t
+    if new.strip() in t:
+        print('ok', label)
+        return
     if old not in t:
-        if new.strip() in t or label in ('elenco',):
-            print('ok', label)
-            return
-        raise SystemExit('faltou bloco: ' + label)
+        print('aviso: faltou bloco', label)
+        return
     t = t.replace(old, new, 1)
     print('aplicou', label)
 
@@ -88,15 +89,13 @@ once(
                 isFavorite = state.isFavorite,''',
 'passa generos')
 
-once(
-'''                year?.let { MetaChip(it) }
-                runtimeLabel?.let { MetaChip(it) }
-                rating?.let { MetaChip("\u2b50 ${\"%.1f\".format(it)}") }
-            }''',
-'''                year?.let { MetaChip(it) }
-                runtimeLabel?.let { MetaChip(it) }
-                rating?.let { MetaChip("\u2b50 ${\"%.1f\".format(it)}") }
-            }
+star_line = '                rating?.let { MetaChip("\u2b50 ${\"%.1f\".format(it)}") }'
+# match real source star chip without relying on escaped star
+import re
+pat = r'([ \t]*year\?\.let \{ MetaChip\(it\) \}\n[ \t]*runtimeLabel\?\.let \{ MetaChip\(it\) \}\n[ \t]*rating\?\.let \{ MetaChip\(".*"\) \}\n[ \t]*\})'
+mchip = re.search(pat, t)
+if mchip and 'genreNames.isNotEmpty()' not in t:
+    chips = mchip.group(0) + '''
             if (genreNames.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
                 Row(
@@ -116,8 +115,13 @@ once(
                         )
                     }
                 }
-            }''',
-'chips no hero')
+            }'''
+    t = t[:mchip.start()] + chips + t[mchip.end():]
+    print('aplicou chips no hero')
+elif 'genreNames.isNotEmpty()' in t:
+    print('ok chips no hero')
+else:
+    print('aviso: chips no hero nao aplicados')
 
 old_pass = '''                onToggleFavorite = viewModel::toggleFavorite,
             )
@@ -140,3 +144,59 @@ if 'import com.streamflixvip.app.ui.theme.StreamFlixColors' not in t:
 
 p.write_text(t)
 print('pronto', p.stat().st_size)
+
+m = Path('android/app/src/main/java/com/streamflixvip/app/MainActivity.kt')
+if m.exists():
+    mt = m.read_text()
+    if 'import com.streamflixvip.app.ui.person.PersonScreen' not in mt:
+        mt = mt.replace(
+            'import com.streamflixvip.app.ui.detail.DetailViewModel\n',
+            'import com.streamflixvip.app.ui.detail.DetailViewModel\nimport com.streamflixvip.app.ui.person.PersonScreen\nimport com.streamflixvip.app.ui.person.PersonViewModel\n',
+        )
+    needle = (
+        '                    onOpenTitle = { openTmdbId, openMediaType ->\n'
+        '                        navController.navigate("detail/$openTmdbId/$openMediaType")\n'
+        '                    },\n'
+        '                )\n'
+        '            }\n\n'
+        '            composable(\n'
+        '                route = "player/'
+    )
+    insert = (
+        '                    onOpenTitle = { openTmdbId, openMediaType ->\n'
+        '                        navController.navigate("detail/$openTmdbId/$openMediaType")\n'
+        '                    },\n'
+        '                    onPersonClick = { personId ->\n'
+        '                        navController.navigate("person/$personId")\n'
+        '                    },\n'
+        '                )\n'
+        '            }\n\n'
+        '            composable(\n'
+        '                route = "person/{personId}",\n'
+        '                arguments = listOf(\n'
+        '                    navArgument("personId") { type = NavType.IntType },\n'
+        '                ),\n'
+        '            ) { entry ->\n'
+        '                val personId = entry.arguments?.getInt("personId") ?: return@composable\n'
+        '                val personVm: PersonViewModel = viewModel(\n'
+        '                    factory = viewModelFactory { PersonViewModel(personId) },\n'
+        '                )\n'
+        '                PersonScreen(\n'
+        '                    viewModel = personVm,\n'
+        '                    onBack = { navController.popBackStack() },\n'
+        '                    onOpenTitle = { openTmdbId, openMediaType ->\n'
+        '                        navController.navigate("detail/$openTmdbId/$openMediaType")\n'
+        '                    },\n'
+        '                )\n'
+        '            }\n\n'
+        '            composable(\n'
+        '                route = "player/'
+    )
+    if needle in mt:
+        mt = mt.replace(needle, insert, 1)
+        print('aplicou rota person')
+    elif 'route = "person/{personId}"' in mt:
+        print('ok rota person')
+    else:
+        print('aviso: rota person nao aplicada')
+    m.write_text(mt)
