@@ -1,6 +1,7 @@
 package com.streamflixvip.app.ui.detail
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,42 +27,38 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.streamflixvip.app.network.TmdbCastMember
+import com.streamflixvip.app.network.TmdbCrewMember
 import com.streamflixvip.app.network.TmdbGenre
+import com.streamflixvip.app.network.TmdbImages
 import com.streamflixvip.app.ui.theme.StreamFlixColors
 
 @Composable
 fun DetailGenreAndCast(
-    genres: List<TmdbGenre>?,
-    cast: List<TmdbCastMember>?,
+    genres: List<TmdbGenre>? = null,
+    cast: List<TmdbCastMember>? = null,
+    crew: List<TmdbCrewMember>? = null,
+    onPersonClick: (Int) -> Unit = {},
 ) {
-    val genreNames = genres.orEmpty().mapNotNull { it.name.takeIf { n -> n.isNotBlank() } }.take(4)
     val people = cast.orEmpty().sortedBy { it.order ?: 99 }.take(12)
-    if (genreNames.isEmpty() && people.isEmpty()) return
+    val directors = crew.orEmpty()
+        .filter { it.job.equals("Director", ignoreCase = true) }
+        .distinctBy { it.id }
+        .take(3)
+    if (people.isEmpty() && directors.isEmpty()) return
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
     ) {
-        if (genreNames.isNotEmpty()) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-            ) {
-                genreNames.forEach { name ->
-                    Text(
-                        text = name,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = StreamFlixColors.Text,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(StreamFlixColors.SurfaceHigh)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                }
-            }
-            Spacer(Modifier.height(14.dp))
+        if (directors.isNotEmpty()) {
+            Text(
+                text = "Dir. " + directors.joinToString(" · ") { it.name },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = StreamFlixColors.TextMuted,
+            )
+            Spacer(Modifier.height(12.dp))
         }
         if (people.isNotEmpty()) {
             Text(
@@ -79,14 +75,16 @@ fun DetailGenreAndCast(
                 people.forEach { person ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(76.dp),
+                        modifier = Modifier
+                            .width(72.dp)
+                            .clickable { onPersonClick(person.id) },
                     ) {
                         AsyncImage(
-                            model = person.profile_path?.let { "https://www.streamflixvip.online/api/tmdb-image?size=w185&path=$it" },
+                            model = TmdbImages.poster(person.profile_path, "w185"),
                             contentDescription = person.name,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier
-                                .size(68.dp)
+                                .size(64.dp)
                                 .clip(CircleShape)
                                 .background(StreamFlixColors.SurfaceHigh),
                         )
