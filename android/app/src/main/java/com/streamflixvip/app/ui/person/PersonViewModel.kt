@@ -2,7 +2,7 @@ package com.streamflixvip.app.ui.person
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.streamflixvip.app.data.CatalogRepository
+import com.streamflixvip.app.network.NetworkModule
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.network.TmdbResponse
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +19,6 @@ data class PersonUiState(
 
 class PersonViewModel(
     private val personId: Int,
-    private val repo: CatalogRepository = CatalogRepository(),
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(PersonUiState())
@@ -30,22 +29,25 @@ class PersonViewModel(
     fun reload() {
         viewModelScope.launch {
             _ui.value = PersonUiState(loading = true)
-            runCatching { repo.getPerson(personId) }
-                .onSuccess { person ->
-                    val credits = person.combined_credits?.cast.orEmpty()
-                        .filter { !it.poster_path.isNullOrBlank() }
-                        .distinctBy { "${it.id}_${it.resolvedMediaType}" }
-                        .sortedByDescending { it.popularity ?: 0.0 }
-                    _ui.value = PersonUiState(
-                        loading = false,
-                        person = person,
-                        movies = credits.filter { it.resolvedMediaType == "movie" }.take(24),
-                        series = credits.filter { it.resolvedMediaType == "tv" }.take(24),
-                    )
-                }
-                .onFailure {
-                    _ui.value = PersonUiState(loading = false, error = true)
-                }
+            runCatching {
+                NetworkModule.tmdbApi.request(
+                    path = "/person/$personId",
+                    appendToResponse = "combined_credits",
+                )
+            }.onSuccess { person ->
+                val credits = person.combined_credits?.cast.orEmpty()
+                    .filter { !it.poster_path.isNullOrBlank() }
+                    .distinctBy { "${it.id}_${it.resolvedMediaType}" }
+                    .sortedByDescending { it.popularity ?: 0.0 }
+                _ui.value = PersonUiState(
+                    loading = false,
+                    person = person,
+                    movies = credits.filter { it.resolvedMediaType == "movie" }.take(24),
+                    series = credits.filter { it.resolvedMediaType == "tv" }.take(24),
+                )
+            }.onFailure {
+                _ui.value = PersonUiState(loading = false, error = true)
+            }
         }
     }
 }
