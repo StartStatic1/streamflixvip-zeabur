@@ -45,6 +45,26 @@ import com.streamflixvip.app.network.TmdbImages
 import com.streamflixvip.app.network.TmdbItem
 import com.streamflixvip.app.ui.theme.StreamFlixColors
 
+private fun departmentPt(raw: String?): String? {
+    val value = raw?.trim().orEmpty()
+    if (value.isEmpty()) return null
+    return when (value.lowercase()) {
+        "acting" -> "Atuação"
+        "directing" -> "Direção"
+        "writing" -> "Roteiro"
+        "production" -> "Produção"
+        "camera" -> "Fotografia"
+        "editing" -> "Edição"
+        "sound" -> "Som"
+        "art" -> "Arte"
+        "costume & make-up", "costume and make-up" -> "Figurino"
+        "visual effects" -> "Efeitos"
+        "creator" -> "Criação"
+        "crew" -> "Equipe"
+        else -> value
+    }
+}
+
 @Composable
 fun PersonScreen(
     viewModel: PersonViewModel,
@@ -70,7 +90,7 @@ fun PersonScreen(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text("Nao deu para abrir este perfil.", color = StreamFlixColors.TextMuted)
+                    Text("Não deu para abrir este perfil.", color = StreamFlixColors.TextMuted)
                     TextButton(onClick = viewModel::reload) {
                         Text("Tentar de novo", color = StreamFlixColors.Amber)
                     }
@@ -127,7 +147,7 @@ fun PersonScreen(
                             fontWeight = FontWeight.ExtraBold,
                         )
                         val meta = listOfNotNull(
-                            person.known_for_department?.takeIf { it.isNotBlank() },
+                            departmentPt(person.known_for_department),
                             person.birthday?.take(4),
                             person.place_of_birth?.substringAfterLast(",")?.trim()?.takeIf { it.isNotBlank() },
                         )
@@ -168,7 +188,7 @@ fun PersonScreen(
                         CreditRow("Filmes", state.movies, onOpenTitle)
                     }
                     if (state.series.isNotEmpty()) {
-                        CreditRow("Series", state.series, onOpenTitle)
+                        CreditRow("Séries", state.series, onOpenTitle)
                     }
                 }
             }
