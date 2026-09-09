@@ -43,6 +43,12 @@ data class TmdbResponse(
     val original_language: String? = null,
     val videos: TmdbVideosResponse? = null,
     val credits: TmdbCredits? = null,
+    val biography: String? = null,
+    val birthday: String? = null,
+    val place_of_birth: String? = null,
+    val known_for_department: String? = null,
+    val profile_path: String? = null,
+    val combined_credits: TmdbCombinedCredits? = null,
 ) {
     val displayRuntime: String?
         get() = runtime?.takeIf { it > 0 }?.let {
@@ -72,6 +78,7 @@ data class TmdbVideo(
 @JsonClass(generateAdapter = true)
 data class TmdbCredits(
     val cast: List<TmdbCastMember>? = null,
+    val crew: List<TmdbCrewMember>? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -81,6 +88,20 @@ data class TmdbCastMember(
     val character: String? = null,
     val profile_path: String? = null,
     val order: Int? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbCrewMember(
+    val id: Int,
+    val name: String,
+    val job: String? = null,
+    val department: String? = null,
+    val profile_path: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class TmdbCombinedCredits(
+    val cast: List<TmdbItem>? = null,
 )
 
 @JsonClass(generateAdapter = true)
