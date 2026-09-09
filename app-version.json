@@ -1,7 +1,7 @@
 {
-  "versionCode": 120300,
-  "versionName": "12.3.0",
+  "versionCode": 120400,
+  "versionName": "12.4.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias, adicionado elenco"
+  "releaseNotes": "Melhorias significativas na aba sessão, adicionado biografia atores, diretor, gênero com mais detalhes... Fix."
 }
