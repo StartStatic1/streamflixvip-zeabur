@@ -1,5 +1,6 @@
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+const handleXtreamReels = require('./admin-reels-xtream');
 
 async function requireAdmin(req, res, serviceKey) {
   const authHeader = req.headers['authorization'] || '';
@@ -248,6 +249,7 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+    if (await handleXtreamReels({ action, body, res, serviceKey, SUPABASE_URL, h })) return;
     res.status(400).json({ error: 'action invalida' });
   } catch (e) {
     res.status(500).json({ error: e.message || 'erro' });
