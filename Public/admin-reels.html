@@ -24,6 +24,10 @@
     .muted{color:var(--muted);font-size:.8rem}
     .ok{color:var(--green);font-size:.95rem;min-height:1.2em}
     h2{font-size:1.05rem;margin:18px 0 10px}
+    .chip{font-size:.68rem;font-weight:800;letter-spacing:.04em;padding:2px 7px;border-radius:999px;margin-right:6px;vertical-align:middle}
+    .chip-vod{background:#1e293b;color:#93c5fd}
+    .chip-series{background:#3b1d2a;color:#f9a8d4}
+    .xcat-item{display:block;margin:6px 0;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:10px}
   </style>
 </head>
 <body>
@@ -47,7 +51,7 @@
     <button class="btn-sec" type="button" onclick="importPasted()">Importar texto</button>
   </details>
   <h2>Puxar pasta Xtream (Reels)</h2>
-  <p class="muted">Usa a ponte Xtream ativa. Lista pastas VOD, voce marca Reels/Novelinhas e importa. Marque trocar URL para atualizar historia que ja existe com link morto.</p>
+  <p class="muted">Lista pastas de Filmes (VOD) e Series. Marque Reels/Novelinhas. Series entram com todos os EPs. Marque trocar URL para atualizar historia com link morto.</p>
   <div class="row">
     <input id="xHost" placeholder="Host (opcional se ja tem ponte)"/>
     <input id="xUser" placeholder="Usuario"/>
@@ -58,6 +62,12 @@
     <label class="muted"><input id="xReplace" type="checkbox"/> trocar URL se ja existir</label>
     <input id="xMax" value="40" style="width:90px" title="max titulos"/>
     <button class="btn-gold" type="button" onclick="importXtream()">Importar marcadas</button>
+  </div>
+  <div class="row" id="xFilterRow" style="display:none">
+    <button class="btn-sec" type="button" onclick="filterCats('all')">Todas</button>
+    <button class="btn-sec" type="button" onclick="filterCats('series')">So series</button>
+    <button class="btn-sec" type="button" onclick="filterCats('vod')">So filmes</button>
+    <button class="btn-sec" type="button" onclick="filterCats('sug')">Sugeridas</button>
   </div>
   <div id="xCats" class="muted"></div>
   <div class="row">
@@ -113,7 +123,7 @@ function readFileText(file) {
 async function api(action, extra) {
   extra = extra || {}; extra.action = action;
   const ctrl = new AbortController();
-  const t = setTimeout(function () { ctrl.abort(); }, 90000);
+  const t = setTimeout(function () { ctrl.abort(); }, 180000);
   try {
     const r = await fetch('/api/admin-reels', {
       method: 'POST',
@@ -200,8 +210,28 @@ async function startFileImport() {
 }
 async function importPasted() { await importCsvText(document.getElementById('csvBox').value); }
 let xCatCache = [];
+let xSuggested = [];
+let xFilter = 'all';
+function renderCats() {
+  const wrap = document.getElementById('xCats');
+  const sug = new Set(xSuggested.map(function (c) { return c.id; }));
+  let rows = xCatCache.slice();
+  if (xFilter === 'series') rows = rows.filter(function (c) { return c.type === 'series'; });
+  if (xFilter === 'vod') rows = rows.filter(function (c) { return c.type !== 'series'; });
+  if (xFilter === 'sug') rows = rows.filter(function (c) { return sug.has(c.id); });
+  wrap.innerHTML = rows.map(function (c) {
+    const type = c.type === 'series' ? 'series' : 'vod';
+    const chip = '<span class="chip chip-' + type + '">' + (type === 'series' ? 'SERIE' : 'FILME') + '</span>';
+    const name = c.name || c.label || '';
+    return '<label class="xcat-item"><input type="checkbox" class="xcat" value="' + esc(c.id) + '"> ' + chip + esc(name) + '</label>';
+  }).join('') || '<p class="muted">Nenhuma pasta neste filtro.</p>';
+}
+function filterCats(kind) {
+  xFilter = kind || 'all';
+  renderCats();
+}
 async function probeXtream() {
-  msg('Lendo pastas Xtream...');
+  msg('Lendo pastas Xtream (filmes + series)...');
   const data = await api('probe_xtream', {
     host: document.getElementById('xHost').value,
     user: document.getElementById('xUser').value,
@@ -209,13 +239,11 @@ async function probeXtream() {
   });
   if (data.error) { msg(String(data.error.message || data.error)); return; }
   xCatCache = data.categories || [];
-  const sug = new Set((data.suggested || []).map(function (c) { return c.id; }));
-  const wrap = document.getElementById('xCats');
-  wrap.innerHTML = xCatCache.map(function (c) {
-    const chk = sug.has(c.id) ? ' checked' : '';
-    return '<label style="display:inline-block;margin:4px 8px 4px 0"><input type="checkbox" class="xcat" value="' + esc(c.id) + '"' + chk + '> ' + esc(c.name) + '</label>';
-  }).join('') || 'Nenhuma pasta VOD.';
-  msg((data.suggested || []).length + ' pastas sugeridas de ' + xCatCache.length, true);
+  xSuggested = data.suggested || [];
+  document.getElementById('xFilterRow').style.display = 'flex';
+  xFilter = xSuggested.length ? 'sug' : 'all';
+  renderCats();
+  msg((data.series || 0) + ' pastas de series · ' + (data.vod || 0) + ' de filmes · ' + xSuggested.length + ' sugeridas', true);
 }
 async function importXtream() {
   const ids = Array.from(document.querySelectorAll('.xcat:checked')).map(function (el) { return el.value; });
