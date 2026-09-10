@@ -46,6 +46,23 @@
     <textarea id="csvBox" placeholder="nome,idioma,link_imagem,link_mp4"></textarea>
     <button class="btn-sec" type="button" onclick="importPasted()">Importar texto</button>
   </details>
+  <h2>Puxar pasta Xtream (Reels)</h2>
+  <p class="muted">Usa a ponte Xtream ativa. Lista pastas VOD, voce marca Reels/Novelinhas e importa. Marque trocar URL para atualizar historia que ja existe com link morto.</p>
+  <div class="row">
+    <input id="xHost" placeholder="Host (opcional se ja tem ponte)"/>
+    <input id="xUser" placeholder="Usuario"/>
+    <input id="xPass" placeholder="Senha" type="password"/>
+  </div>
+  <div class="row">
+    <button class="btn-sec" type="button" onclick="probeXtream()">Listar pastas</button>
+    <label class="muted"><input id="xReplace" type="checkbox"/> trocar URL se ja existir</label>
+    <input id="xMax" value="40" style="width:90px" title="max titulos"/>
+    <button class="btn-gold" type="button" onclick="importXtream()">Importar marcadas</button>
+  </div>
+  <div id="xCats" class="muted"></div>
+  <div class="row">
+    <button class="btn-red" type="button" onclick="wipeReels()">Apagar TODAS as historias</button>
+  </div>
   <h2>Nova historia</h2>
   <input id="title" placeholder="Titulo"/>
   <input id="poster" placeholder="URL da capa"/>
@@ -78,7 +95,11 @@ function msg(t, ok) {
 function prog(t) { document.getElementById('progress').textContent = t || ''; }
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, function (c) {
-    return ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' })[c];
+    if (c === '&') return '&';
+    if (c === '<') return '<';
+    if (c === '>') return '>';
+    if (c === '"') return '"';
+    return '&#39;';
   });
 }
 function readFileText(file) {
@@ -92,7 +113,7 @@ function readFileText(file) {
 async function api(action, extra) {
   extra = extra || {}; extra.action = action;
   const ctrl = new AbortController();
-  const t = setTimeout(function () { ctrl.abort(); }, 45000);
+  const t = setTimeout(function () { ctrl.abort(); }, 90000);
   try {
     const r = await fetch('/api/admin-reels', {
       method: 'POST',
@@ -178,6 +199,48 @@ async function startFileImport() {
   }
 }
 async function importPasted() { await importCsvText(document.getElementById('csvBox').value); }
+let xCatCache = [];
+async function probeXtream() {
+  msg('Lendo pastas Xtream...');
+  const data = await api('probe_xtream', {
+    host: document.getElementById('xHost').value,
+    user: document.getElementById('xUser').value,
+    pass: document.getElementById('xPass').value,
+  });
+  if (data.error) { msg(String(data.error.message || data.error)); return; }
+  xCatCache = data.categories || [];
+  const sug = new Set((data.suggested || []).map(function (c) { return c.id; }));
+  const wrap = document.getElementById('xCats');
+  wrap.innerHTML = xCatCache.map(function (c) {
+    const chk = sug.has(c.id) ? ' checked' : '';
+    return '<label style="display:inline-block;margin:4px 8px 4px 0"><input type="checkbox" class="xcat" value="' + esc(c.id) + '"' + chk + '> ' + esc(c.name) + '</label>';
+  }).join('') || 'Nenhuma pasta VOD.';
+  msg((data.suggested || []).length + ' pastas sugeridas de ' + xCatCache.length, true);
+}
+async function importXtream() {
+  const ids = Array.from(document.querySelectorAll('.xcat:checked')).map(function (el) { return el.value; });
+  if (!ids.length) { msg('Marque pelo menos uma pasta.'); return; }
+  msg('Importando ' + ids.length + ' pasta(s)...');
+  const data = await api('import_xtream', {
+    host: document.getElementById('xHost').value,
+    user: document.getElementById('xUser').value,
+    pass: document.getElementById('xPass').value,
+    category_ids: ids,
+    limit: Number(document.getElementById('xMax').value || 40),
+    replace: document.getElementById('xReplace').checked,
+  });
+  if (data.error) { msg(JSON.stringify(data.error)); return; }
+  msg('Xtream ok. criadas ' + data.created + ' · atualizadas ' + data.updated + ' · puladas ' + data.skipped + ' · falhas ' + data.failed, true);
+  await load();
+}
+async function wipeReels() {
+  if (!confirm('Isso apaga TODAS as historias e EPs. Continuar?')) return;
+  const ok = prompt('Digite APAGAR para confirmar');
+  if (ok !== 'APAGAR') { msg('Cancelado'); return; }
+  const data = await api('delete_all', { confirm: 'APAGAR' });
+  if (data.error) { msg(JSON.stringify(data.error)); return; }
+  msg('Lista limpa', true); await load();
+}
 async function saveStory() {
   const data = await api('save_story', {
     title: document.getElementById('title').value,
@@ -210,7 +273,7 @@ async function saveEp() {
     title: document.getElementById('ept').value,
     video_url: document.getElementById('epu').value,
   });
-  await openEps(currentStory, document.getElementById('epsTitle').textContent.replace(/^EPs — /, ''));
+  await openEps(currentStory, document.getElementById('epsTitle').textContent.replace(/^EPs \u2014 /, ''));
 }
 boot();
 </script>
