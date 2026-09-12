@@ -2,6 +2,7 @@ package com.streamflixvip.app.ui.detail
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
@@ -32,21 +34,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.streamflixvip.app.network.VipSource
 
-/** Cores do sheet — recomendado roxo; demais neutros; badges com contraste. */
-private val PurpleRec = Color(0xFF7C5CFF)
-private val CyanAccent = Color(0xFF2EC4B6)
+private val Amber = Color(0xFFFFB547)
 private val GoldVip = Color(0xFFE8A317)
 private val BlueHd = Color(0xFF3B82F6)
 private val OrangeSd = Color(0xFFF59E0B)
+private val GreenDub = Color(0xFF34D399)
+private val BlueLeg = Color(0xFF60A5FA)
 
 internal fun isAddonSourceLabel(label: String?): Boolean {
     val l = label.orEmpty()
-    // IPTV nativo StreamFlix.* (Svent, maxcine, etc.) NAO conta como add-on
     val host = l.split("·", "•", "|").firstOrNull()?.trim().orEmpty()
     if (host.equals("StreamFlix.Svent", ignoreCase = true)) return false
     if (host.equals("StreamFlix.maxcine", ignoreCase = true)) return false
     if (host.equals("StreamFlix.dflix", ignoreCase = true)) return false
-    if (host.startsWith("StreamFlix.", ignoreCase = true)) return true // Fenix etc no painel
+    if (host.startsWith("StreamFlix.", ignoreCase = true)) return true
     return host.startsWith("Fenix", ignoreCase = true) ||
         host.startsWith("Frost", ignoreCase = true) ||
         host.startsWith("King", ignoreCase = true) ||
@@ -60,33 +61,45 @@ internal fun isAddonSourceLabel(label: String?): Boolean {
         host.startsWith("Comet", ignoreCase = true)
 }
 
-/** So o nome do servidor (sem 720p / Dublado no titulo). */
+/** Nome curto. Nao inventa qualidade no titulo. */
 private fun hostTitleFromLabel(label: String?): String {
     val raw = label?.trim().orEmpty()
     if (raw.isEmpty()) return "Servidor"
-    val host = raw.split("·", "•").firstOrNull()?.trim().orEmpty()
-    return host.ifBlank { raw }.take(28)
+    var host = raw.split("·", "•").firstOrNull()?.trim().orEmpty()
+    if (host.isBlank()) host = raw
+    host = host.replace(Regex("(?i)^streamflix\\."), "")
+    return host.ifBlank { "Servidor" }.take(26)
 }
 
-private fun qualityFromLabel(label: String?): String? {
-    if (label == null) return null
-    val u = label.uppercase()
-    return listOf("4K", "2160P", "1080P", "720P", "HD", "SD").firstOrNull { u.contains(it) }
-        ?.let { if (it == "2160P") "4K" else it }
-}
-
-private fun audioFromLabel(label: String?): String? {
-    val l = label.orEmpty()
+/**
+ * Qualidade so quando o texto/URL declara.
+ * IPTV sem 720/1080 no nome nao ganha selo falso.
+ */
+internal fun qualityFromSource(source: VipSource): String? {
+    val blob = listOf(source.source_label, source.source_url).filterNotNull().joinToString(" ")
+    val t = blob.lowercase()
     return when {
-        l.contains("Dublado", ignoreCase = true) -> "Dublado"
-        l.contains("Legendado", ignoreCase = true) -> "Legendado"
+        Regex("\\b(2160p?|4k|uhd)\\b").containsMatchIn(t) -> "4K"
+        Regex("\\b1080p?\\b").containsMatchIn(t) -> "1080p"
+        Regex("\\b720p?\\b").containsMatchIn(t) -> "720p"
+        Regex("\\b(480p?|360p?)\\b").containsMatchIn(t) -> "SD"
+        else -> null
+    }
+}
+
+internal fun audioFromSource(source: VipSource): String? {
+    val blob = listOf(source.source_label).filterNotNull().joinToString(" ")
+    val t = blob.lowercase()
+    return when {
+        Regex("dublad|\\bdub\\b|dual\\s*audio").containsMatchIn(t) -> "Dublado"
+        Regex("legendad|\\bleg\\b|subtitle").containsMatchIn(t) -> "Legendado"
         else -> null
     }
 }
 
 @Composable
 fun ServerSheetTitle(title: String, subtitle: String) {
-    Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp)) {
+    Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp)) {
         Text(
             title,
             fontSize = 20.sp,
@@ -113,7 +126,7 @@ fun ServerSectionLabel(text: String, accent: Color) {
         Box(
             modifier = Modifier
                 .width(3.dp)
-                .height(14.dp)
+                .height(12.dp)
                 .clip(RoundedCornerShape(2.dp))
                 .background(accent),
         )
@@ -128,24 +141,17 @@ fun ServerSectionLabel(text: String, accent: Color) {
     }
 }
 
-/**
- * Card de servidor no sheet.
- * Sem texto "IPTV" / "Add-on" — so RECOMENDADO, PREMIUM e audio se houver.
- */
 @Composable
 private fun SeloChip(text: String, fg: Color, bg: Color) {
-    Surface(
-        shape = RoundedCornerShape(6.dp),
-        color = bg,
-    ) {
+    Surface(shape = RoundedCornerShape(5.dp), color = bg) {
         Text(
             text.uppercase(),
             fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 0.4.sp,
+            letterSpacing = 0.3.sp,
             color = fg,
             maxLines = 1,
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
         )
     }
 }
@@ -158,58 +164,59 @@ fun ServerSourceCard(
     onClick: () -> Unit,
     onLockedClick: () -> Unit,
 ) {
-    val badge = qualityFromLabel(source.source_label)
-    val audio = audioFromLabel(source.source_label)
+    val badge = qualityFromSource(source)
+    val audio = audioFromSource(source)
+    val hasMeta = badge != null || audio != null || isRecommended || isLockedForFree
     val accent = when {
         isLockedForFree -> GoldVip
-        isRecommended -> PurpleRec
-        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+        isRecommended -> Amber
+        else -> Amber.copy(alpha = 0.85f)
     }
-    // Badges com contraste forte (720p nao usa ciano do card antigo)
-    val badgeBg = when (badge?.uppercase()) {
-        "4K" -> GoldVip.copy(alpha = 0.28f)
-        "1080P" -> BlueHd.copy(alpha = 0.28f)
-        "720P" -> OrangeSd.copy(alpha = 0.26f)
-        "HD" -> BlueHd.copy(alpha = 0.20f)
+    val badgeBg = when (badge) {
+        "4K" -> GoldVip.copy(alpha = 0.22f)
+        "1080p" -> BlueHd.copy(alpha = 0.22f)
+        "720p" -> OrangeSd.copy(alpha = 0.20f)
         "SD" -> MaterialTheme.colorScheme.surfaceVariant
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
-    val badgeFg = when (badge?.uppercase()) {
+    val badgeFg = when (badge) {
         "4K" -> GoldVip
-        "1080P" -> Color(0xFF60A5FA)
-        "720P" -> OrangeSd
-        "HD" -> Color(0xFF60A5FA)
-        else -> MaterialTheme.colorScheme.onSurface
+        "1080p" -> Color(0xFF93C5FD)
+        "720p" -> OrangeSd
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
     Surface(
         onClick = if (isLockedForFree) onLockedClick else onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = when {
-            isLockedForFree -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
-            isRecommended -> PurpleRec.copy(alpha = 0.28f)
-            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)
+            isLockedForFree -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+            isRecommended -> Amber.copy(alpha = 0.10f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
         },
         border = when {
-            isLockedForFree -> BorderStroke(1.dp, GoldVip.copy(alpha = 0.40f))
-            isRecommended -> BorderStroke(1.5.dp, PurpleRec.copy(alpha = 0.55f))
-            else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            isLockedForFree -> BorderStroke(1.dp, GoldVip.copy(alpha = 0.38f))
+            isRecommended -> BorderStroke(1.dp, Amber.copy(alpha = 0.45f))
+            else -> BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
         },
-        tonalElevation = if (isRecommended) 4.dp else 0.dp,
-        shadowElevation = if (isRecommended) 3.dp else 0.dp,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+            modifier = Modifier.padding(
+                horizontal = 12.dp,
+                vertical = if (hasMeta) 11.dp else 10.dp,
+            ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(36.dp)
+                    .clip(CircleShape)
                     .background(
                         Brush.verticalGradient(
-                            listOf(accent.copy(alpha = 0.35f), accent.copy(alpha = 0.12f)),
+                            listOf(accent.copy(alpha = 0.28f), accent.copy(alpha = 0.08f)),
                         ),
                     ),
                 contentAlignment = Alignment.Center,
@@ -219,28 +226,28 @@ fun ServerSourceCard(
                         Icons.Outlined.Lock,
                         contentDescription = null,
                         tint = GoldVip,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(16.dp),
                     )
                     isRecommended -> Icon(
                         Icons.Outlined.Star,
                         contentDescription = null,
-                        tint = PurpleRec,
-                        modifier = Modifier.size(20.dp),
+                        tint = Amber,
+                        modifier = Modifier.size(16.dp),
                     )
                     else -> Icon(
                         Icons.Filled.PlayArrow,
                         contentDescription = null,
                         tint = accent,
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     hostTitleFromLabel(source.source_label),
                     fontSize = 14.sp,
-                    fontWeight = if (isLockedForFree) FontWeight.Normal else FontWeight.SemiBold,
+                    fontWeight = FontWeight.SemiBold,
                     color = if (isLockedForFree) {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                     } else {
@@ -249,22 +256,19 @@ fun ServerSourceCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Spacer(Modifier.height(4.dp))
-                // Selos compactos (qualidade + audio + status)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isLockedForFree) {
-                        SeloChip("PREMIUM", GoldVip, GoldVip.copy(alpha = 0.2f))
-                    } else if (isRecommended) {
-                        SeloChip("RECOMENDADO", PurpleRec, PurpleRec.copy(alpha = 0.2f))
-                    }
-                    if (!isLockedForFree && badge != null) {
-                        if (isRecommended) Spacer(Modifier.width(6.dp))
-                        SeloChip(badge, badgeFg, badgeBg)
-                    }
-                    if (!isLockedForFree && audio != null) {
-                        Spacer(Modifier.width(6.dp))
-                        val audioColor = if (audio == "Dublado") Color(0xFF34D399) else Color(0xFF60A5FA)
-                        SeloChip(audio, audioColor, audioColor.copy(alpha = 0.18f))
+                if (hasMeta) {
+                    Spacer(Modifier.height(5.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        if (isLockedForFree) SeloChip("PREMIUM", GoldVip, GoldVip.copy(alpha = 0.18f))
+                        else if (isRecommended) SeloChip("TOP", Amber, Amber.copy(alpha = 0.16f))
+                        if (!isLockedForFree && badge != null) SeloChip(badge, badgeFg, badgeBg)
+                        if (!isLockedForFree && audio != null) {
+                            val c = if (audio == "Dublado") GreenDub else BlueLeg
+                            SeloChip(audio, c, c.copy(alpha = 0.16f))
+                        }
                     }
                 }
             }
