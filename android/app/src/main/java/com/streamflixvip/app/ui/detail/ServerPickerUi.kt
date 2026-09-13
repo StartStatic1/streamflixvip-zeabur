@@ -61,21 +61,47 @@ internal fun isAddonSourceLabel(label: String?): Boolean {
         host.startsWith("Comet", ignoreCase = true)
 }
 
-/** Nome do servidor. Mantem StreamFlix.xxx. Tira so qualidade/audio do titulo. */
-private fun hostTitleFromLabel(label: String?): String {
-    val raw = label?.trim().orEmpty()
-    if (raw.isEmpty()) return "Servidor"
-    val host = raw.split("·", "•").firstOrNull()?.trim().orEmpty()
-    return host.ifBlank { raw }.take(32)
+private fun titleCaseWord(word: String): String {
+    if (word.isBlank()) return word
+    val known = mapOf(
+        "fenix" to "Fenix",
+        "frost" to "Frost",
+        "vexio" to "Vexio",
+        "vulke" to "Vulke",
+        "wova" to "Wova",
+        "tplay" to "Tplay",
+        "flexone" to "Flexone",
+        "expacix" to "Expacix",
+        "hdhub" to "HdHub",
+        "bscine" to "BsCine",
+        "popplay" to "PopPlay",
+        "comet" to "Comet",
+        "nuvio" to "Nuvio",
+    )
+    val key = word.lowercase()
+    known[key]?.let { return it }
+    return word.lowercase().replaceFirstChar { it.titlecase() }
 }
 
-/**
- * Qualidade so quando o texto/URL declara.
- * IPTV sem 720/1080 no nome nao ganha selo falso.
- */
+/** Nome apresentavel: sem StreamFlix., title case. Qualidade sai do titulo. */
+internal fun hostTitleFromLabel(label: String?): String {
+    val raw = label?.trim().orEmpty()
+    if (raw.isEmpty()) return "Servidor"
+    var host = raw.split("·", "•").firstOrNull()?.trim().orEmpty()
+    if (host.isBlank()) host = raw
+    host = host.replace(Regex("(?i)^streamflix[._\\-\\s]+"), "")
+    host = host.replace(Regex("(?i)^addon[._\\-\\s]+"), "")
+    host = host.trim('.', '-', '_', ' ')
+    if (host.isBlank()) return "Servidor"
+    val pretty = host.split(Regex("[._\\-\\s]+"))
+        .filter { it.isNotBlank() }
+        .joinToString(" ") { titleCaseWord(it) }
+    return pretty.ifBlank { "Servidor" }.take(28)
+}
+
+/** Qualidade so no rotulo da fonte — URL gera falso 4K. */
 internal fun qualityFromSource(source: VipSource): String? {
-    val blob = listOf(source.source_label, source.source_url).filterNotNull().joinToString(" ")
-    val t = blob.lowercase()
+    val t = source.source_label.orEmpty().lowercase()
     return when {
         Regex("\\b(2160p?|4k|uhd)\\b").containsMatchIn(t) -> "4K"
         Regex("\\b1080p?\\b").containsMatchIn(t) -> "1080p"
@@ -86,8 +112,7 @@ internal fun qualityFromSource(source: VipSource): String? {
 }
 
 internal fun audioFromSource(source: VipSource): String? {
-    val blob = listOf(source.source_label).filterNotNull().joinToString(" ")
-    val t = blob.lowercase()
+    val t = source.source_label.orEmpty().lowercase()
     return when {
         Regex("dublad|\\bdub\\b|dual\\s*audio").containsMatchIn(t) -> "Dublado"
         Regex("legendad|\\bleg\\b|subtitle").containsMatchIn(t) -> "Legendado"
@@ -164,6 +189,7 @@ fun ServerSourceCard(
 ) {
     val badge = qualityFromSource(source)
     val audio = audioFromSource(source)
+    val title = hostTitleFromLabel(source.source_label)
     val hasMeta = badge != null || audio != null || isRecommended || isLockedForFree
     val accent = when {
         isLockedForFree -> GoldVip
@@ -203,14 +229,14 @@ fun ServerSourceCard(
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = 12.dp,
-                vertical = if (hasMeta) 11.dp else 10.dp,
+                horizontal = 14.dp,
+                vertical = if (hasMeta) 12.dp else 13.dp,
             ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.verticalGradient(
@@ -240,12 +266,13 @@ fun ServerSourceCard(
                     )
                 }
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    hostTitleFromLabel(source.source_label),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.15.sp,
                     color = if (isLockedForFree) {
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                     } else {
@@ -255,7 +282,7 @@ fun ServerSourceCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (hasMeta) {
-                    Spacer(Modifier.height(5.dp))
+                    Spacer(Modifier.height(6.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp),
