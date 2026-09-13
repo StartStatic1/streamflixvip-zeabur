@@ -61,6 +61,11 @@ internal fun isAddonSourceLabel(label: String?): Boolean {
         host.startsWith("Comet", ignoreCase = true)
 }
 
+private fun isBrandWord(word: String): Boolean {
+    val w = word.lowercase().replace(" ", "")
+    return w == "streamflix" || w == "stremflix" || w == "streamflixvip" || w == "addon"
+}
+
 private fun titleCaseWord(word: String): String {
     if (word.isBlank()) return word
     val known = mapOf(
@@ -77,29 +82,31 @@ private fun titleCaseWord(word: String): String {
         "popplay" to "PopPlay",
         "comet" to "Comet",
         "nuvio" to "Nuvio",
+        "gndk" to "Gndk",
+        "cdnz" to "Cdnz",
+        "diex" to "Diex",
+        "cebix" to "Cebix",
     )
     val key = word.lowercase()
     known[key]?.let { return it }
     return word.lowercase().replaceFirstChar { it.titlecase() }
 }
 
-/** Nome apresentavel: sem StreamFlix., title case. Qualidade sai do titulo. */
+/** Nome no card: tira StreamFlix / Stremflix / Addon e deixa title case. */
 internal fun hostTitleFromLabel(label: String?): String {
     val raw = label?.trim().orEmpty()
     if (raw.isEmpty()) return "Servidor"
     var host = raw.split("·", "•").firstOrNull()?.trim().orEmpty()
     if (host.isBlank()) host = raw
-    host = host.replace(Regex("(?i)^streamflix[._\\-\\s]+"), "")
-    host = host.replace(Regex("(?i)^addon[._\\-\\s]+"), "")
+    host = host.replace(Regex("(?i)^(stream\\s*flix|strem\\s*flix|streamflix|stremflix|addon)[._\\-\\s]*"), "")
     host = host.trim('.', '-', '_', ' ')
     if (host.isBlank()) return "Servidor"
     val pretty = host.split(Regex("[._\\-\\s]+"))
-        .filter { it.isNotBlank() }
+        .filter { it.isNotBlank() && !isBrandWord(it) }
         .joinToString(" ") { titleCaseWord(it) }
     return pretty.ifBlank { "Servidor" }.take(28)
 }
 
-/** Qualidade so no rotulo da fonte — URL gera falso 4K. */
 internal fun qualityFromSource(source: VipSource): String? {
     val t = source.source_label.orEmpty().lowercase()
     return when {
