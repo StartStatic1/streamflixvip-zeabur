@@ -61,14 +61,12 @@ internal fun isAddonSourceLabel(label: String?): Boolean {
         host.startsWith("Comet", ignoreCase = true)
 }
 
-/** Nome curto. Nao inventa qualidade no titulo. */
+/** Nome do servidor. Mantem StreamFlix.xxx. Tira so qualidade/audio do titulo. */
 private fun hostTitleFromLabel(label: String?): String {
     val raw = label?.trim().orEmpty()
     if (raw.isEmpty()) return "Servidor"
-    var host = raw.split("·", "•").firstOrNull()?.trim().orEmpty()
-    if (host.isBlank()) host = raw
-    host = host.replace(Regex("(?i)^streamflix\\."), "")
-    return host.ifBlank { "Servidor" }.take(26)
+    val host = raw.split("·", "•").firstOrNull()?.trim().orEmpty()
+    return host.ifBlank { raw }.take(32)
 }
 
 /**
