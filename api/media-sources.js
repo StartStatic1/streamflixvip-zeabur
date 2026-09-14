@@ -33,11 +33,53 @@ function isVideoServerAddon(name) {
   return /fenix|frost|flix-streams|king\s?vod|bscine|popplay|comet|nuvio|megasource|webstream|allinone|bridge|pengu/.test(t);
 }
 
-function isIptvSyncLabel(label) {
+function labelKey(label) {
+  return String(label || '')
+    .toLowerCase()
+    .replace(/streamflix|stremflix|addon/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function labelMatchesHost(label, hostName) {
+  const a = labelKey(label);
+  const b = labelKey(hostName);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const a0 = a.split(' ')[0];
+  const b0 = b.split(' ')[0];
+  return a0.length >= 4 && b0.length >= 4 && (a0 === b0 || a.includes(b0) || b.includes(a0));
+}
+
+async function loadPausedIptvHosts(serviceKey) {
+  try {
+    const url =
+      `${SUPABASE_URL}/rest/v1/iptv_sources?select=name,is_active,source_type`;
+    const r = await fetch(url, { headers: sbHeaders(serviceKey) });
+    if (!r.ok) return [];
+    const rows = await r.json();
+    return (Array.isArray(rows) ? rows : []).filter((row) => row && row.is_active === false);
+  } catch (e) {
+    console.warn('[media-sources] iptv_sources:', e.message);
+    return [];
+  }
+}
+
+function dropPausedHosts(sources, pausedHosts) {
+  if (!pausedHosts.length) return sources;
+  return sources.filter((s) => {
+    const label = s && s.source_label;
+    return !pausedHosts.some((h) => labelMatchesHost(label, h.name));
+  });
+}
+
+function qualityRank(label) {
   const t = String(label || '').toLowerCase();
-  if (!t) return false;
-  if (/fenix|frost|pengu|webstream|comet|nuvio|bridge|tplay|opensub|subtitle/.test(t)) return false;
-  return /vulke|svent|maxcine|damid|dbonline|kavru|\.cloud\b/.test(t);
+  if (/\b(2160p?|4k|uhd)\b/.test(t)) return 0;
+  if (/\b1080p?\b/.test(t)) return 1;
+  if (/\b720p?\b/.test(t)) return 2;
+  if (/dublad|\bdub\b/.test(t)) return 3;
+  return 4;
 }
 
 function sourceRank(row) {
@@ -45,8 +87,7 @@ function sourceRank(row) {
   const p = row && row.priority != null && Number.isFinite(Number(row.priority))
     ? Number(row.priority)
     : 50;
-  const group = isIptvSyncLabel(label) ? 0 : 1;
-  return { group, p };
+  return { q: qualityRank(label), p };
 }
 
 async function loadVipTitleConfig(serviceKey, tmdbId, mediaType) {
@@ -237,6 +278,8 @@ async function handler(req, res) {
 
   try {
     let sources = await loadSources(serviceKey, tmdbId, mediaType, season, episode);
+    const pausedHosts = await loadPausedIptvHosts(serviceKey);
+    sources = dropPausedHosts(sources, pausedHosts);
 
     if (access.isVip) {
       try {
@@ -261,14 +304,16 @@ async function handler(req, res) {
       }
     }
 
+    sources = dropPausedHosts(sources, pausedHosts);
+
     sources = sources.slice().sort((a, b) => {
       const aVip = a.source_label === 'MegaEmbed VIP' ? 1 : 0;
       const bVip = b.source_label === 'MegaEmbed VIP' ? 1 : 0;
       if (bVip !== aVip) return bVip - aVip;
       const ra = sourceRank(a);
       const rb = sourceRank(b);
-      if (ra.group !== rb.group) return ra.group - rb.group;
-      return ra.p - rb.p;
+      if (ra.p !== rb.p) return ra.p - rb.p;
+      return ra.q - rb.q;
     });
 
     res.status(200).json({
