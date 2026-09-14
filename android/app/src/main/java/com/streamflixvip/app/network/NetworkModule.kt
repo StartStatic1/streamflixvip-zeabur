@@ -80,8 +80,8 @@ object NetworkModule {
         .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
         .authenticator(tokenAuthenticator)
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(18, TimeUnit.SECONDS)
         .build()
 
     val fastProbeClient = OkHttpClient.Builder()
