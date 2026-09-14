@@ -82,6 +82,7 @@ const activateTv = require('./api/activate-tv.js');
 const tvStatus = require('./api/tv-status.js');
 const r2Presign = require('./api/r2-presign.js');
 const liveTv = require('./api/live-tv.js');
+const liveEpg = require('./api/live-epg.js');
 const mediaSources = require('./api/media-sources.js');
 const reels = require('./api/reels.js');
 
@@ -120,6 +121,7 @@ app.all('/api/activate-tv', wrap(activateTv));
 app.all('/api/tv-status', wrap(tvStatus));
 app.all('/api/r2-presign', wrap(r2Presign));
 app.all('/api/live-tv', wrap(liveTv));
+app.all('/api/live-epg', wrap(liveEpg));
 app.all('/api/media-sources', wrap(mediaSources));
 app.all('/api/reels', wrap(reels));
 
