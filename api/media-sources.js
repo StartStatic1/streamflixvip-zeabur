@@ -11,11 +11,6 @@ const { collectAddonSources, loadActiveAddons } = require('../lib/stremio-addons
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
-// O downloader grava o índice dos arquivos concluídos neste JSON público do
-// R2. Antes, esta API só consultava vip_sources e, quando não encontrava uma
-// linha, preenchia a lista com stubs dos addons. Assim, o arquivo que já
-// existia no R2 nunca chegava ao app e os addons pareciam ser a fonte do
-// título. O cache evita baixar o catálogo a cada abertura de filme.
 const R2_PUBLIC_BASE_URL = String(
   process.env.R2_PUBLIC_BASE_URL ||
     'https://pub-90cce3ad488f4a52ac089b9496083787.r2.dev',
@@ -73,6 +68,16 @@ function isR2Source(row) {
   return false;
 }
 
+function pickR2Url(row) {
+  const candidates = [row && row.r2_url, row && row.source_url, row && row.url];
+  for (const raw of candidates) {
+    const url = String(raw || '').trim();
+    if (!/^https?:\/\//i.test(url)) continue;
+    if (/r2\.dev|r2\.cloudflarestorage|\.r2\./i.test(url)) return url;
+  }
+  return '';
+}
+
 async function loadR2Catalog() {
   const now = Date.now();
   if (now - r2CatalogCache.loadedAt < R2_CATALOG_TTL_MS) {
@@ -93,8 +98,6 @@ async function loadR2Catalog() {
     return rows;
   } catch (e) {
     console.warn('[media-sources] catalogo R2:', e.message);
-    // Não derruba a API se o R2 estiver temporariamente indisponível; nesse
-    // caso a fonte cadastrada no Supabase continua funcionando normalmente.
     return [];
   } finally {
     clearTimeout(timer);
@@ -102,21 +105,21 @@ async function loadR2Catalog() {
 }
 
 async function loadR2Sources(tmdbId, mediaType, season, episode) {
-  // O movie-fetcher só cria entradas para filmes. Não devemos usar o nome de
-  // um filme para tentar atender episódios de séries.
-  if (mediaType !== 'movie' || season != null || episode != null) return [];
+  if (mediaType !== 'movie') return [];
+  if (episode != null) return [];
+  if (season != null && season !== 0) return [];
 
   const rows = await loadR2Catalog();
   const match = rows.find((row) => {
-    if (!row || String(row.status || '').toLowerCase() !== 'done') return false;
+    if (!row) return false;
     if (String(row.tmdb_id) !== String(tmdbId)) return false;
-    return /^https?:\/\//i.test(String(row.r2_url || '').trim());
+    return !!pickR2Url(row);
   });
   if (!match) return [];
 
   return [{
-    source_url: String(match.r2_url).trim(),
-    source_label: 'StreamFlix R2 · HD',
+    source_url: pickR2Url(match),
+    source_label: 'StreamFlix R2 \u00b7 HD',
     priority: 0,
   }];
 }
@@ -353,9 +356,6 @@ async function handler(req, res) {
     const dbR2Sources = dbSources.filter(isR2Source);
     const ownSources = [...catalogSources, ...dbR2Sources];
 
-    // Se há arquivo próprio no R2, ele é a fonte oficial deste título. Não
-    // misture streams de addons, porque alguns addons devolvem resultado para
-    // um ID alternativo ou errado e o usuário acaba vendo outro filme.
     let sources = ownSources.length
       ? ownSources.filter((source, index, all) =>
           all.findIndex((candidate) => candidate.source_url === source.source_url) === index)
