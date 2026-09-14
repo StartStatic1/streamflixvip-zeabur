@@ -20,6 +20,15 @@ try {
   console.warn('[boot] patch live-tv:', (e && e.message) || e);
 }
 
+try {
+  require('child_process').execSync('python3 scripts/patch_live_tv_speed.py', {
+    cwd: __dirname,
+    stdio: 'inherit',
+  });
+} catch (e) {
+  console.warn('[boot] patch live-tv speed:', (e && e.message) || e);
+}
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
