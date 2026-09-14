@@ -4,6 +4,7 @@ import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -75,8 +76,8 @@ private val Accent = Color(0xFF2EE6D6)
 private val AccentSoft = Color(0xFF0EA5E9)
 private val CardBg = Color(0xFF14141C)
 private val ScreenBg = Color(0xFF0A0A10)
-private val SideBg = Color(0xFF0E0E16)
 private val LogoPlate = Color(0xFFF3F4F6)
+private val ChipBg = Color(0xFF16161F)
 
 private val BadgeColors = listOf(
     Color(0xFF0EA5E9), Color(0xFF8B5CF6), Color(0xFF14B8A6),
@@ -113,21 +114,21 @@ fun LiveTvScreen(
 
     val list = state.filteredChannels
     val selected = state.selectedChannel
+    val showSkeleton = state.isLoading && state.channels.isEmpty()
 
     Column(
         Modifier
             .fillMaxSize()
             .background(ScreenBg),
     ) {
-        // ── Player fixo no topo ──
         LiveInlinePlayer(
             channel = selected,
+            nowTitle = selected?.let { state.nowTitle(it) },
             isFavorite = selected?.id?.let { state.favoriteIds.contains(it) } == true,
             onToggleFavorite = { selected?.let { viewModel.toggleFavorite(it.id) } },
             onFullscreen = { selected?.let { onChannelClick(it) } },
         )
 
-        // ── Busca ──
         Box(
             Modifier
                 .padding(horizontal = 16.dp, vertical = 10.dp)
@@ -159,7 +160,6 @@ fun LiveTvScreen(
             }
         }
 
-        // ── Abas Canais / Favoritos ──
         Row(
             Modifier
                 .fillMaxWidth()
@@ -180,13 +180,53 @@ fun LiveTvScreen(
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        if (state.tab == LiveTvTab.CHANNELS && state.searchQuery.isEmpty()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                state.categories.forEach { cat ->
+                    val sel = state.selectedCategoryId == cat.id
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(if (sel) Accent else ChipBg)
+                            .border(
+                                1.dp,
+                                if (sel) Accent else Color.White.copy(alpha = 0.08f),
+                                RoundedCornerShape(18.dp),
+                            )
+                            .clickable { viewModel.selectCategory(cat.id) }
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
+                    ) {
+                        Text(
+                            cat.name,
+                            color = if (sel) Color.Black else Color.White.copy(alpha = 0.72f),
+                            fontSize = 13.sp,
+                            fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
+                        )
+                    }
+                }
+            }
+        } else {
+            Spacer(Modifier.height(8.dp))
+        }
+
+        if (state.epgLoading && state.channels.isNotEmpty()) {
+            Text(
+                "Atualizando grade EPG…",
+                color = Color.White.copy(alpha = 0.4f),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
 
         when {
-            state.isLoading -> {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Accent)
-                }
+            showSkeleton -> {
+                ChannelSkeletonList()
             }
             state.error != null && state.channels.isEmpty() -> {
                 Column(
@@ -199,83 +239,92 @@ fun LiveTvScreen(
                     TextButton(onClick = viewModel::load) { Text("Tentar de novo", color = Accent) }
                 }
             }
-            else -> {
-                Row(Modifier.fillMaxSize()) {
-                    // Categorias na esquerda (inclui Telecine, HBO, Premiere, Discovery)
-                    if (state.tab == LiveTvTab.CHANNELS && state.searchQuery.isEmpty()) {
-                        LazyColumn(
-                            Modifier
-                                .width(112.dp)
-                                .fillMaxHeight()
-                                .background(SideBg)
-                                .padding(vertical = 4.dp),
-                        ) {
-                            items(state.categories, key = { it.id }) { cat ->
-                                val sel = state.selectedCategoryId == cat.id
-                                Row(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable { viewModel.selectCategory(cat.id) }
-                                        .background(if (sel) Accent.copy(alpha = 0.16f) else Color.Transparent)
-                                        .padding(vertical = 11.dp, horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Box(
-                                        Modifier
-                                            .width(3.dp)
-                                            .height(16.dp)
-                                            .clip(RoundedCornerShape(2.dp))
-                                            .background(if (sel) Accent else Color.Transparent),
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        cat.name,
-                                        color = if (sel) Accent else Color.White.copy(alpha = 0.55f),
-                                        fontSize = 12.sp,
-                                        fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        lineHeight = 14.sp,
-                                    )
-                                }
-                            }
-                            item { Spacer(Modifier.height(72.dp)) }
-                        }
-                    }
-                    if (list.isEmpty()) {
-                        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                            Text(
-                                if (state.tab == LiveTvTab.FAVORITES)
-                                    "Nenhum favorito ainda.\nToque no coração no player."
-                                else "Nenhum canal nesta categoria",
-                                color = Color.White.copy(alpha = 0.45f),
-                                textAlign = TextAlign.Center,
-                                fontSize = 13.sp,
-                            )
-                        }
-                    } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                        ) {
-                            items(list, key = { it.id }) { channel ->
-                                val isSel = channel.id == state.selectedChannelId
-                                val isFav = state.favoriteIds.contains(channel.id)
-                                ChannelRow(
-                                    channel = channel,
-                                    selected = isSel,
-                                    isFavorite = isFav,
-                                    onClick = { viewModel.selectChannel(channel) },
-                                    onToggleFavorite = { viewModel.toggleFavorite(channel.id) },
-                                    onOpenFullscreen = { onChannelClick(channel) },
-                                )
-                            }
-                            item { Spacer(Modifier.height(72.dp)) }
-                        }
-                    }
+            list.isEmpty() -> {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        if (state.tab == LiveTvTab.FAVORITES)
+                            "Nenhum favorito ainda.\nToque no coração no player."
+                        else "Nenhum canal nesta categoria",
+                        color = Color.White.copy(alpha = 0.45f),
+                        textAlign = TextAlign.Center,
+                        fontSize = 13.sp,
+                    )
                 }
             }
+            else -> {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(list, key = { it.id }) { channel ->
+                        val isSel = channel.id == state.selectedChannelId
+                        val isFav = state.favoriteIds.contains(channel.id)
+                        ChannelRow(
+                            channel = channel,
+                            selected = isSel,
+                            isFavorite = isFav,
+                            nowTitle = state.nowTitle(channel),
+                            nextTitle = state.nextTitle(channel),
+                            onClick = { viewModel.selectChannel(channel) },
+                            onToggleFavorite = { viewModel.toggleFavorite(channel.id) },
+                            onOpenFullscreen = { onChannelClick(channel) },
+                        )
+                    }
+                    item { Spacer(Modifier.height(72.dp)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChannelSkeletonList() {
+    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Text(
+            "Atualizando grade EPG…",
+            color = Color.White.copy(alpha = 0.4f),
+            fontSize = 12.sp,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        repeat(6) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(70.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(CardBg)
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(46.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.08f)))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(0.55f)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.12f)),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth(0.38f)
+                            .height(9.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.07f)),
+                    )
+                }
+                Box(
+                    Modifier
+                        .width(36.dp)
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Accent.copy(alpha = 0.18f)),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
         }
     }
 }
@@ -306,6 +355,7 @@ private fun TabPill(
 @Composable
 private fun LiveInlinePlayer(
     channel: LiveChannel?,
+    nowTitle: String?,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
     onFullscreen: () -> Unit,
@@ -377,6 +427,8 @@ private fun LiveInlinePlayer(
     Box(
         Modifier
             .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .clip(RoundedCornerShape(16.dp))
             .aspectRatio(16f / 9f)
             .background(Color.Black),
     ) {
@@ -416,7 +468,6 @@ private fun LiveInlinePlayer(
             )
         }
 
-        // Overlay inferior: nome + AO VIVO + ações
         if (channel != null) {
             Box(
                 Modifier
@@ -424,7 +475,7 @@ private fun LiveInlinePlayer(
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f)),
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f)),
                         ),
                     )
                     .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -433,21 +484,31 @@ private fun LiveInlinePlayer(
                     Box(
                         Modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .background(Accent.copy(alpha = 0.9f))
+                            .background(Color(0xFFE11D48))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
-                        Text("AO VIVO", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        Text("AO VIVO", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        channel.name,
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            channel.name,
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (!nowTitle.isNullOrBlank()) {
+                            Text(
+                                nowTitle,
+                                color = Accent,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                     IconButton(onClick = onToggleFavorite, modifier = Modifier.size(36.dp)) {
                         Icon(
                             if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -470,6 +531,8 @@ private fun ChannelRow(
     channel: LiveChannel,
     selected: Boolean,
     isFavorite: Boolean,
+    nowTitle: String,
+    nextTitle: String?,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOpenFullscreen: () -> Unit,
@@ -479,39 +542,39 @@ private fun ChannelRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .height(70.dp)
+            .clip(RoundedCornerShape(14.dp))
             .background(bg)
-            .border(1.dp, border, RoundedCornerShape(12.dp))
+            .border(1.dp, border, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ChannelLogo(channel, size = 44.dp)
+        ChannelLogo(channel, size = 46.dp)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 channel.name,
                 color = Color.White,
-                fontSize = 13.sp,
+                fontSize = 14.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val nSources = channel.streams.size
-            val hasManual = channel.streams.any { it.label.equals("Manual", ignoreCase = true) }
-            when {
-                selected -> Text("Tocando agora", color = Accent, fontSize = 11.sp)
-                nSources > 1 -> Text(
-                    buildString {
-                        append(nSources)
-                        append(" fontes")
-                        if (hasManual) append(" · Manual")
-                    },
-                    color = Color.White.copy(alpha = 0.45f),
-                    fontSize = 11.sp,
-                )
-                hasManual -> Text("Manual", color = Color(0xFF34D399), fontSize = 11.sp)
-            }
+            Text(
+                "Agora · $nowTitle",
+                color = if (selected) Accent else Color.White.copy(alpha = 0.62f),
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                if (!nextTitle.isNullOrBlank()) "A seguir · $nextTitle" else "A seguir · —",
+                color = Color.White.copy(alpha = 0.38f),
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         IconButton(onClick = onToggleFavorite, modifier = Modifier.size(34.dp)) {
             Icon(
@@ -521,10 +584,15 @@ private fun ChannelRow(
                 modifier = Modifier.size(18.dp),
             )
         }
-        if (selected) {
-            IconButton(onClick = onOpenFullscreen, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Filled.PlayArrow, "Abrir", tint = Accent, modifier = Modifier.size(22.dp))
-            }
+        Box(
+            Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(Accent.copy(alpha = if (selected) 0.22f else 0.12f))
+                .clickable(onClick = onOpenFullscreen),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.PlayArrow, "Abrir", tint = Accent, modifier = Modifier.size(18.dp))
         }
     }
 }
