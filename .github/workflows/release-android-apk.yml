@@ -30,6 +30,9 @@ jobs:
       - name: Ligar generos e elenco na tela de detalhes
         run: python3 scripts/patch_detail_cast.py
 
+      - name: Ligar picker de servidores (titulo, contagem, numeracao)
+        run: python3 scripts/patch_server_picker_detail.py
+
       - name: Configurar JDK 17
         uses: actions/setup-java@v4
         with:
