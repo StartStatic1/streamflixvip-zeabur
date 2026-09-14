@@ -1,6 +1,6 @@
 // api/media-sources.js
 //
-// Resolve fontes de filme/série (vip_sources) no SERVIDOR.
+// Resolve fontes de filme/série (R2 + vip_sources) no SERVIDOR.
 //
 // GET /api/media-sources?tmdb_id=123&type=movie
 
@@ -10,6 +10,19 @@ const { collectAddonSources, loadActiveAddons } = require('../lib/stremio-addons
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+
+// O downloader grava o índice dos arquivos concluídos neste JSON público do
+// R2. Antes, esta API só consultava vip_sources e, quando não encontrava uma
+// linha, preenchia a lista com stubs dos addons. Assim, o arquivo que já
+// existia no R2 nunca chegava ao app e os addons pareciam ser a fonte do
+// título. O cache evita baixar o catálogo a cada abertura de filme.
+const R2_PUBLIC_BASE_URL = String(
+  process.env.R2_PUBLIC_BASE_URL ||
+    'https://pub-90cce3ad488f4a52ac089b9496083787.r2.dev',
+).replace(/\/+$/, '');
+const R2_CATALOG_URL = `${R2_PUBLIC_BASE_URL}/movie-fetcher/candidates.json`;
+const R2_CATALOG_TTL_MS = 30 * 1000;
+let r2CatalogCache = { loadedAt: 0, rows: [] };
 
 function isMediaAuthHard() {
   const v = String(process.env.REQUIRE_AUTH_MEDIA || '').trim().toLowerCase();
@@ -58,6 +71,54 @@ function isR2Source(row) {
   if (/\br2\b/.test(label)) return true;
   if (label.includes('cloud') && (label.includes('r2') || label.includes('streamflix'))) return true;
   return false;
+}
+
+async function loadR2Catalog() {
+  const now = Date.now();
+  if (now - r2CatalogCache.loadedAt < R2_CATALOG_TTL_MS) {
+    return r2CatalogCache.rows;
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
+  try {
+    const r = await fetch(`${R2_CATALOG_URL}?v=${now}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!r.ok) throw new Error(`catalogo R2 ${r.status}`);
+    const data = await r.json();
+    const rows = Array.isArray(data) ? data : [];
+    r2CatalogCache = { loadedAt: now, rows };
+    return rows;
+  } catch (e) {
+    console.warn('[media-sources] catalogo R2:', e.message);
+    // Não derruba a API se o R2 estiver temporariamente indisponível; nesse
+    // caso a fonte cadastrada no Supabase continua funcionando normalmente.
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadR2Sources(tmdbId, mediaType, season, episode) {
+  // O movie-fetcher só cria entradas para filmes. Não devemos usar o nome de
+  // um filme para tentar atender episódios de séries.
+  if (mediaType !== 'movie' || season != null || episode != null) return [];
+
+  const rows = await loadR2Catalog();
+  const match = rows.find((row) => {
+    if (!row || String(row.status || '').toLowerCase() !== 'done') return false;
+    if (String(row.tmdb_id) !== String(tmdbId)) return false;
+    return /^https?:\/\//i.test(String(row.r2_url || '').trim());
+  });
+  if (!match) return [];
+
+  return [{
+    source_url: String(match.r2_url).trim(),
+    source_label: 'StreamFlix R2 · HD',
+    priority: 0,
+  }];
 }
 
 async function loadPausedIptvHosts(serviceKey) {
@@ -287,11 +348,24 @@ async function handler(req, res) {
   }
 
   try {
-    let sources = await loadSources(serviceKey, tmdbId, mediaType, season, episode);
+    const dbSources = await loadSources(serviceKey, tmdbId, mediaType, season, episode);
+    const catalogSources = await loadR2Sources(tmdbId, mediaType, season, episode);
+    const dbR2Sources = dbSources.filter(isR2Source);
+    const ownSources = [...catalogSources, ...dbR2Sources];
+
+    // Se há arquivo próprio no R2, ele é a fonte oficial deste título. Não
+    // misture streams de addons, porque alguns addons devolvem resultado para
+    // um ID alternativo ou errado e o usuário acaba vendo outro filme.
+    let sources = ownSources.length
+      ? ownSources.filter((source, index, all) =>
+          all.findIndex((candidate) => candidate.source_url === source.source_url) === index)
+      : dbSources;
     const pausedHosts = await loadPausedIptvHosts(serviceKey);
     sources = dropPausedHosts(sources, pausedHosts);
 
-    if (access.isVip) {
+    if (ownSources.length) {
+      console.info(`[media-sources] R2 próprio encontrado tmdb=${tmdbId}; addons ignorados`);
+    } else if (access.isVip) {
       try {
         const addonSources = await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode);
         if (addonSources.length) {
