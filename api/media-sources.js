@@ -51,6 +51,15 @@ function labelMatchesHost(label, hostName) {
   return a0.length >= 4 && b0.length >= 4 && (a0 === b0 || a.includes(b0) || b.includes(a0));
 }
 
+function isR2Source(row) {
+  const url = String((row && row.source_url) || '').toLowerCase();
+  const label = String((row && row.source_label) || '').toLowerCase();
+  if (/r2\.dev|r2\.cloudflarestorage|cloudflarestorage\.com|\.r2\./.test(url)) return true;
+  if (/\br2\b/.test(label)) return true;
+  if (label.includes('cloud') && (label.includes('r2') || label.includes('streamflix'))) return true;
+  return false;
+}
+
 async function loadPausedIptvHosts(serviceKey) {
   try {
     const url =
@@ -68,6 +77,7 @@ async function loadPausedIptvHosts(serviceKey) {
 function dropPausedHosts(sources, pausedHosts) {
   if (!pausedHosts.length) return sources;
   return sources.filter((s) => {
+    if (isR2Source(s)) return true;
     const label = s && s.source_label;
     return !pausedHosts.some((h) => labelMatchesHost(label, h.name));
   });
@@ -307,6 +317,9 @@ async function handler(req, res) {
     sources = dropPausedHosts(sources, pausedHosts);
 
     sources = sources.slice().sort((a, b) => {
+      const aR2 = isR2Source(a) ? 1 : 0;
+      const bR2 = isR2Source(b) ? 1 : 0;
+      if (bR2 !== aR2) return bR2 - aR2;
       const aVip = a.source_label === 'MegaEmbed VIP' ? 1 : 0;
       const bVip = b.source_label === 'MegaEmbed VIP' ? 1 : 0;
       if (bVip !== aVip) return bVip - aVip;
