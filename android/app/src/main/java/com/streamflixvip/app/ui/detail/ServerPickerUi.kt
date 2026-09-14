@@ -12,12 +12,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -26,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -37,9 +35,8 @@ import com.streamflixvip.app.network.VipSource
 private val Amber = Color(0xFFFFB547)
 private val GoldVip = Color(0xFFE8A317)
 private val BlueHd = Color(0xFF3B82F6)
-private val OrangeSd = Color(0xFFF59E0B)
-private val GreenDub = Color(0xFF34D399)
-private val BlueLeg = Color(0xFF60A5FA)
+private val PurpleLeg = Color(0xFF7C6CF0)
+private val GreenOk = Color(0xFF34D399)
 
 internal fun isAddonSourceLabel(label: String?): Boolean {
     val l = label.orEmpty()
@@ -71,6 +68,7 @@ private fun titleCaseWord(word: String): String {
     val known = mapOf(
         "fenix" to "Fenix",
         "frost" to "Frost",
+        "froststream" to "Frost",
         "vexio" to "Vexio",
         "vulke" to "Vulke",
         "wova" to "Wova",
@@ -82,6 +80,7 @@ private fun titleCaseWord(word: String): String {
         "popplay" to "PopPlay",
         "comet" to "Comet",
         "nuvio" to "Nuvio",
+        "pengu" to "Pengu",
         "gndk" to "Gndk",
         "cdnz" to "Cdnz",
         "diex" to "Diex",
@@ -125,6 +124,15 @@ internal fun audioFromSource(source: VipSource): String? {
         Regex("legendad|\\bleg\\b|subtitle").containsMatchIn(t) -> "Legendado"
         else -> null
     }
+}
+
+private fun statusLine(isRecommended: Boolean, badge: String?, audio: String?): String {
+    val bits = mutableListOf<String>()
+    if (isRecommended) bits.add("Recomendado")
+    if (badge != null && !isRecommended) bits.add(badge)
+    else if (badge != null && isRecommended) bits.add(badge)
+    if (audio != null) bits.add(audio.lowercase())
+    return bits.joinToString(" · ")
 }
 
 @Composable
@@ -172,16 +180,16 @@ fun ServerSectionLabel(text: String, accent: Color) {
 }
 
 @Composable
-private fun SeloChip(text: String, fg: Color, bg: Color) {
-    Surface(shape = RoundedCornerShape(5.dp), color = bg) {
+private fun InlineSelo(text: String, fg: Color, bg: Color) {
+    Surface(shape = RoundedCornerShape(8.dp), color = bg) {
         Text(
-            text.uppercase(),
-            fontSize = 9.sp,
+            text,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            letterSpacing = 0.3.sp,
+            letterSpacing = 0.2.sp,
             color = fg,
             maxLines = 1,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
         )
     }
 }
@@ -197,37 +205,40 @@ fun ServerSourceCard(
     val badge = qualityFromSource(source)
     val audio = audioFromSource(source)
     val title = hostTitleFromLabel(source.source_label)
-    val hasMeta = badge != null || audio != null || isRecommended || isLockedForFree
+    val status = statusLine(isRecommended && !isLockedForFree, badge, audio)
     val accent = when {
         isLockedForFree -> GoldVip
         isRecommended -> Amber
-        else -> Amber.copy(alpha = 0.85f)
-    }
-    val badgeBg = when (badge) {
-        "4K" -> GoldVip.copy(alpha = 0.22f)
-        "1080p" -> BlueHd.copy(alpha = 0.22f)
-        "720p" -> OrangeSd.copy(alpha = 0.20f)
-        "SD" -> MaterialTheme.colorScheme.surfaceVariant
-        else -> MaterialTheme.colorScheme.surfaceVariant
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val badgeFg = when (badge) {
-        "4K" -> GoldVip
+        "4K" -> Color(0xFF93C5FD)
         "1080p" -> Color(0xFF93C5FD)
-        "720p" -> OrangeSd
+        "720p" -> Amber
         else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val badgeBg = when (badge) {
+        "4K", "1080p" -> BlueHd.copy(alpha = 0.28f)
+        "720p" -> Amber.copy(alpha = 0.18f)
+        else -> MaterialTheme.colorScheme.surfaceVariant
+    }
+    val dot = when {
+        isLockedForFree -> GoldVip
+        isRecommended -> GreenOk
+        badge == "4K" || badge == "1080p" -> GreenOk.copy(alpha = 0.7f)
+        badge == "720p" -> Amber
+        else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
     }
 
     Surface(
         onClick = if (isLockedForFree) onLockedClick else onClick,
-        shape = RoundedCornerShape(14.dp),
-        color = when {
-            isLockedForFree -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
-            isRecommended -> Amber.copy(alpha = 0.10f)
-            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
-        },
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(
+            alpha = if (isRecommended && !isLockedForFree) 0.34f else 0.28f,
+        ),
         border = when {
             isLockedForFree -> BorderStroke(1.dp, GoldVip.copy(alpha = 0.38f))
-            isRecommended -> BorderStroke(1.dp, Amber.copy(alpha = 0.45f))
+            isRecommended -> BorderStroke(1.2.dp, Amber.copy(alpha = 0.55f))
             else -> BorderStroke(1.dp, Color.White.copy(alpha = 0.06f))
         },
         tonalElevation = 0.dp,
@@ -235,20 +246,19 @@ fun ServerSourceCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = 14.dp,
-                vertical = if (hasMeta) 12.dp else 13.dp,
-            ),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
-                        Brush.verticalGradient(
-                            listOf(accent.copy(alpha = 0.28f), accent.copy(alpha = 0.08f)),
-                        ),
+                        if (isRecommended && !isLockedForFree) {
+                            Color(0xFF1A2744)
+                        } else {
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+                        },
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -257,53 +267,75 @@ fun ServerSourceCard(
                         Icons.Outlined.Lock,
                         contentDescription = null,
                         tint = GoldVip,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    isRecommended -> Icon(
-                        Icons.Outlined.Star,
-                        contentDescription = null,
-                        tint = Amber,
-                        modifier = Modifier.size(16.dp),
+                        modifier = Modifier.size(18.dp),
                     )
                     else -> Icon(
                         Icons.Filled.PlayArrow,
                         contentDescription = null,
-                        tint = accent,
-                        modifier = Modifier.size(18.dp),
+                        tint = if (isRecommended) Color(0xFF93C5FD) else accent.copy(alpha = 0.85f),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.15.sp,
-                    color = if (isLockedForFree) {
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                if (hasMeta) {
-                    Spacer(Modifier.height(6.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        if (isLockedForFree) SeloChip("PREMIUM", GoldVip, GoldVip.copy(alpha = 0.18f))
-                        else if (isRecommended) SeloChip("TOP", Amber, Amber.copy(alpha = 0.16f))
-                        if (!isLockedForFree && badge != null) SeloChip(badge, badgeFg, badgeBg)
-                        if (!isLockedForFree && audio != null) {
-                            val c = if (audio == "Dublado") GreenDub else BlueLeg
-                            SeloChip(audio, c, c.copy(alpha = 0.16f))
-                        }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isLockedForFree) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (!isLockedForFree && badge != null) {
+                        InlineSelo(badge, badgeFg, badgeBg)
+                    }
+                    if (!isLockedForFree && audio != null && badge == null) {
+                        InlineSelo(
+                            audio.lowercase(),
+                            Color(0xFFD6D0FF),
+                            PurpleLeg.copy(alpha = 0.35f),
+                        )
+                    }
+                    if (isLockedForFree) {
+                        InlineSelo("VIP", GoldVip, GoldVip.copy(alpha = 0.18f))
+                    }
+                }
+                if (status.isNotBlank() || isLockedForFree) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(7.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(dot),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (isLockedForFree) "Disponível no Premium" else status,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
             }
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                modifier = Modifier.size(22.dp),
+            )
         }
     }
 }
