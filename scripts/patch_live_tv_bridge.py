@@ -2,7 +2,17 @@ from pathlib import Path
 
 p = Path('api/live-tv.js')
 t = p.read_text()
+
+if 'setTimeout(() => controller.abort(), 25000)' in t:
+    t = t.replace('setTimeout(() => controller.abort(), 25000)', 'setTimeout(() => controller.abort(), 8000)', 1)
+    print('live-tv timeout 8s')
+elif 'setTimeout(() => controller.abort(), 8000)' in t:
+    print('live-tv timeout ja 8s')
+else:
+    print('live-tv timeout trecho nao achado')
+
 if 'loadBridgeRows' in t:
+    p.write_text(t)
     print('live-tv ja tem pontes')
     raise SystemExit(0)
 
@@ -43,6 +53,7 @@ async function loadFromBridge(bridge) {
 ''' + needle
 
 if needle not in t:
+    p.write_text(t)
     raise SystemExit('bloco loadManualChannels nao achado')
 t = t.replace(needle, insert, 1)
 
@@ -107,6 +118,7 @@ new = '''    let results = withCreds.length
     if (!withCreds.length && !bridges.length && !manuals.length) {'''
 
 if old not in t:
+    p.write_text(t)
     raise SystemExit('bloco results nao achado — confira live-tv.js')
 t = t.replace(old, new, 1)
 p.write_text(t)
