@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -100,6 +101,7 @@ private fun titleCaseWord(word: String): String {
         "cdnz" to "Cdnz",
         "diex" to "Diex",
         "cebix" to "Cebix",
+        "webstream" to "Webstream",
     )
     known[word.lowercase()]?.let { return it }
     return word.lowercase().replaceFirstChar { it.titlecase() }
@@ -139,8 +141,9 @@ internal fun audioFromSource(source: VipSource): String? {
     }
 }
 
-/** Qualidade declarada no label sobe. Sem qualidade no nome, fica no fim. Nao inventa 4K. */
+/** Painel manda. Numero menor sobe. Qualidade so desempata. */
 internal fun sourceDisplayRank(source: VipSource): Int {
+    val p = (source.priority ?: 50).coerceIn(0, 999)
     val q = when (qualityFromSource(source)) {
         "4K" -> 0
         "1080p" -> 1
@@ -148,12 +151,7 @@ internal fun sourceDisplayRank(source: VipSource): Int {
         "SD" -> 3
         else -> 8
     }
-    val a = when (audioFromSource(source)) {
-        "Dublado" -> 0
-        "Legendado" -> 1
-        else -> 2
-    }
-    return q * 10 + a
+    return p * 10 + q
 }
 
 internal fun serversAvailableLabel(count: Int, loading: Boolean = false): String {
@@ -167,7 +165,7 @@ internal fun serversAvailableLabel(count: Int, loading: Boolean = false): String
 
 @Composable
 fun ServerSheetTitle(title: String, subtitle: String) {
-    Column(Modifier.padding(bottom = 14.dp)) {
+    Column(Modifier.padding(bottom = 12.dp)) {
         Text(
             title,
             fontSize = 22.sp,
@@ -265,7 +263,7 @@ fun ServerSourceCard(
 
     Surface(
         onClick = if (isLockedForFree) onLockedClick else onClick,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = Color.Transparent,
         border = BorderStroke(
             width = if (highlight) 1.4.dp else 1.dp,
@@ -283,7 +281,7 @@ fun ServerSourceCard(
                     if (highlight) {
                         Brush.horizontalGradient(
                             listOf(
-                                Amber.copy(alpha = 0.22f),
+                                Amber.copy(alpha = 0.20f),
                                 CardNavyHi.copy(alpha = 0.96f),
                                 CardNavy,
                             ),
@@ -292,26 +290,32 @@ fun ServerSourceCard(
                         Brush.horizontalGradient(listOf(CardNavyHi, CardNavy))
                     },
                 )
-                .height(64.dp),
+                .height(58.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .padding(horizontal = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     number,
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (highlight) Amber else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                    modifier = Modifier.padding(start = 12.dp, end = 10.dp),
+                    modifier = Modifier.width(22.dp),
                 )
                 Box(
                     modifier = Modifier
+                        .padding(end = 10.dp)
                         .width(1.dp)
-                        .height(22.dp)
+                        .height(18.dp)
                         .background(Color.White.copy(alpha = if (highlight) 0.18f else 0.08f)),
                 )
-                Spacer(Modifier.width(10.dp))
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.linearGradient(
@@ -320,28 +324,20 @@ fun ServerSourceCard(
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF0B0F16).copy(alpha = 0.55f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (isLockedForFree) {
-                            Icon(
-                                Icons.Outlined.Lock,
-                                contentDescription = null,
-                                tint = GoldVip,
-                                modifier = Modifier.size(16.dp),
-                            )
-                        } else {
-                            Icon(
-                                Icons.Filled.PlayArrow,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
+                    if (isLockedForFree) {
+                        Icon(
+                            Icons.Outlined.Lock,
+                            contentDescription = null,
+                            tint = GoldVip,
+                            modifier = Modifier.size(15.dp),
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp),
+                        )
                     }
                 }
                 Spacer(Modifier.width(12.dp))
@@ -352,7 +348,7 @@ fun ServerSourceCard(
                 ) {
                     Text(
                         title,
-                        fontSize = 16.5.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isLockedForFree) {
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
@@ -372,16 +368,14 @@ fun ServerSourceCard(
                         tint = Amber,
                         modifier = Modifier
                             .padding(start = 4.dp)
-                            .size(18.dp),
+                            .size(16.dp),
                     )
                 }
                 Icon(
                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-                    modifier = Modifier
-                        .padding(end = 10.dp, start = 2.dp)
-                        .size(20.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             }
         }
