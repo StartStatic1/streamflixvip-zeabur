@@ -5,7 +5,7 @@ if not p.exists():
     raise SystemExit('api/live-tv.js ausente')
 t = p.read_text()
 
-t = t.replace('const MAX_SOURCES = 5;', 'const MAX_SOURCES = 3;', 1)
+t = t.replace('const MAX_SOURCES = 3;', 'const MAX_SOURCES = 5;', 1)
 t = t.replace(
     "const timeoutId = setTimeout(() => controller.abort(), 25000);",
     "const timeoutId = setTimeout(() => controller.abort(), 8000);",
@@ -48,7 +48,6 @@ function settleWithBudget(promises, budgetMs) {
     t = t.replace('function hasXtreamCreds(source) {', helper + 'function hasXtreamCreds(source) {', 1)
 
 t = t.replace('await Promise.all(\n          withCreds.map((s) =>', 'await settleWithBudget(\n          withCreds.map((s) =>', 1)
-# close Promise.all extra paren vs settle budget ms
 if 'settleWithBudget' in t and '          10000,' not in t:
     old_end = '''            }),
           ),
@@ -62,8 +61,10 @@ if 'settleWithBudget' in t and '          10000,' not in t:
     if old_end in t:
         t = t.replace(old_end, new_end, 1)
 
+t = t.replace('streams.slice(0, 2).map(({ url, label, priority, quality, leg }) => ({',
+              'streams.slice(0, 4).map(({ url, label, priority, quality, leg }) => ({', 1)
 t = t.replace('streams: streams.map(({ url, label, priority, quality, leg }) => ({',
-              'streams: streams.slice(0, 2).map(({ url, label, priority, quality, leg }) => ({', 1)
+              'streams: streams.slice(0, 4).map(({ url, label, priority, quality, leg }) => ({', 1)
 
 if "[live-tv] warmup" not in t:
     t = t.rstrip() + '''
