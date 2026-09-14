@@ -7,15 +7,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
@@ -26,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -35,9 +37,21 @@ import com.streamflixvip.app.network.VipSource
 
 private val Amber = Color(0xFFFFB547)
 private val GoldVip = Color(0xFFE8A317)
-private val NavyPlay = Color(0xFF1C2433)
 private val BlueBadge = Color(0xFF3B82F6)
 private val PurpleLeg = Color(0xFF6E63E0)
+private val CardNavy = Color(0xFF141A24)
+private val CardNavyHi = Color(0xFF1C2433)
+
+private val PlayAccents = listOf(
+    Color(0xFFFFB547),
+    Color(0xFF7C6CFF),
+    Color(0xFF2DD4BF),
+    Color(0xFFF59E0B),
+    Color(0xFFFB7185),
+    Color(0xFF38BDF8),
+    Color(0xFFA78BFA),
+    Color(0xFF34D399),
+)
 
 internal fun isAddonSourceLabel(label: String?): Boolean {
     val l = label.orEmpty()
@@ -125,20 +139,48 @@ internal fun audioFromSource(source: VipSource): String? {
     }
 }
 
+/** Qualidade declarada no label sobe. Sem qualidade no nome, fica no fim. Nao inventa 4K. */
+internal fun sourceDisplayRank(source: VipSource): Int {
+    val q = when (qualityFromSource(source)) {
+        "4K" -> 0
+        "1080p" -> 1
+        "720p" -> 2
+        "SD" -> 3
+        else -> 8
+    }
+    val a = when (audioFromSource(source)) {
+        "Dublado" -> 0
+        "Legendado" -> 1
+        else -> 2
+    }
+    return q * 10 + a
+}
+
+internal fun serversAvailableLabel(count: Int, loading: Boolean = false): String {
+    return when {
+        loading && count == 0 -> "Procurando servidores…"
+        count <= 0 -> "Nenhum servidor neste título"
+        count == 1 -> "1 servidor disponível"
+        else -> "$count servidores disponíveis"
+    }
+}
+
 @Composable
 fun ServerSheetTitle(title: String, subtitle: String) {
-    Column(Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp)) {
+    Column(Modifier.padding(bottom = 14.dp)) {
         Text(
             title,
-            fontSize = 20.sp,
+            fontSize = 22.sp,
             fontWeight = FontWeight.ExtraBold,
             color = MaterialTheme.colorScheme.onSurface,
+            letterSpacing = (-0.3).sp,
         )
         Spacer(Modifier.height(4.dp))
         Text(
             subtitle,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
         )
     }
 }
@@ -171,7 +213,7 @@ fun ServerSectionLabel(text: String, accent: Color) {
 
 @Composable
 private fun MetaPill(text: String, fg: Color, bg: Color) {
-    Surface(shape = RoundedCornerShape(7.dp), color = bg) {
+    Surface(shape = RoundedCornerShape(8.dp), color = bg) {
         Text(
             text,
             fontSize = 10.sp,
@@ -190,20 +232,16 @@ fun ServerSourceCard(
     isLockedForFree: Boolean,
     onClick: () -> Unit,
     onLockedClick: () -> Unit,
+    index: Int = 0,
 ) {
     val badge = qualityFromSource(source)
     val audio = audioFromSource(source)
     val title = hostTitleFromLabel(source.source_label)
+    val accent = PlayAccents[index.coerceAtLeast(0) % PlayAccents.size]
     val pillText = when {
         isLockedForFree -> "VIP"
         badge != null -> badge
         audio != null -> audio
-        else -> null
-    }
-    val extraLine = when {
-        isLockedForFree -> "Disponível no Premium"
-        isRecommended -> "Melhor opção agora"
-        badge != null && audio != null -> audio
         else -> null
     }
     val pillFg = when (pillText) {
@@ -215,112 +253,135 @@ fun ServerSourceCard(
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val pillBg = when (pillText) {
-        "VIP" -> GoldVip.copy(alpha = 0.16f)
-        "4K", "1080p" -> BlueBadge.copy(alpha = 0.32f)
-        "720p" -> Amber.copy(alpha = 0.16f)
+        "VIP" -> GoldVip.copy(alpha = 0.18f)
+        "4K", "1080p" -> BlueBadge.copy(alpha = 0.34f)
+        "720p" -> Amber.copy(alpha = 0.18f)
         "Dublado" -> Color(0xFF34D399).copy(alpha = 0.18f)
         "Legendado" -> PurpleLeg.copy(alpha = 0.28f)
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
+    val highlight = isRecommended && !isLockedForFree
+    val number = (index + 1).toString().padStart(2, '0')
 
     Surface(
         onClick = if (isLockedForFree) onLockedClick else onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(
-            alpha = if (isRecommended && !isLockedForFree) 0.38f else 0.26f,
-        ),
+        shape = RoundedCornerShape(18.dp),
+        color = Color.Transparent,
         border = BorderStroke(
-            1.dp,
-            when {
-                isLockedForFree -> GoldVip.copy(alpha = 0.35f)
-                isRecommended -> Amber.copy(alpha = 0.42f)
-                else -> Color.White.copy(alpha = 0.05f)
+            width = if (highlight) 1.4.dp else 1.dp,
+            color = when {
+                isLockedForFree -> GoldVip.copy(alpha = 0.38f)
+                highlight -> Amber.copy(alpha = 0.72f)
+                else -> Color.White.copy(alpha = 0.06f)
             },
         ),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Row(
-            modifier = Modifier.height(if (extraLine != null) 64.dp else 56.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .fillMaxHeight()
-                    .background(
-                        when {
-                            isLockedForFree -> GoldVip
-                            isRecommended -> Amber
-                            else -> Color.Transparent
-                        },
-                    ),
-            )
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (isRecommended) NavyPlay else Color.White.copy(alpha = 0.06f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (isLockedForFree) {
-                        Icon(
-                            Icons.Outlined.Lock,
-                            contentDescription = null,
-                            tint = GoldVip,
-                            modifier = Modifier.size(16.dp),
+        Box(
+            modifier = Modifier
+                .background(
+                    if (highlight) {
+                        Brush.horizontalGradient(
+                            listOf(
+                                Amber.copy(alpha = 0.22f),
+                                CardNavyHi.copy(alpha = 0.96f),
+                                CardNavy,
+                            ),
                         )
                     } else {
-                        Icon(
-                            Icons.Filled.PlayArrow,
-                            contentDescription = null,
-                            tint = if (isRecommended) Amber else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            modifier = Modifier.size(20.dp),
-                        )
+                        Brush.horizontalGradient(listOf(CardNavyHi, CardNavy))
+                    },
+                )
+                .height(64.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    number,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (highlight) Amber else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.padding(start = 12.dp, end = 10.dp),
+                )
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(22.dp)
+                        .background(Color.White.copy(alpha = if (highlight) 0.18f else 0.08f)),
+                )
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                listOf(accent, accent.copy(alpha = 0.55f)),
+                            ),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF0B0F16).copy(alpha = 0.55f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (isLockedForFree) {
+                            Icon(
+                                Icons.Outlined.Lock,
+                                contentDescription = null,
+                                tint = GoldVip,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        } else {
+                            Icon(
+                                Icons.Filled.PlayArrow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Text(
-                            title,
-                            fontSize = 15.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isLockedForFree) {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        if (pillText != null) MetaPill(pillText, pillFg, pillBg)
-                    }
-                    if (extraLine != null) {
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            extraLine,
-                            fontSize = 11.sp,
-                            color = if (isRecommended) Amber.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        title,
+                        fontSize = 16.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isLockedForFree) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                        } else {
+                            Color.White
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (pillText != null) MetaPill(pillText, pillFg, pillBg)
+                }
+                if (highlight) {
+                    Icon(
+                        Icons.Filled.Check,
+                        contentDescription = null,
+                        tint = Amber,
+                        modifier = Modifier
+                            .padding(start = 4.dp)
+                            .size(18.dp),
+                    )
                 }
                 Icon(
                     Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
-                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+                    modifier = Modifier
+                        .padding(end = 10.dp, start = 2.dp)
+                        .size(20.dp),
                 )
             }
         }
