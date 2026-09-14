@@ -34,7 +34,22 @@ data class LiveTvResponse(
     val sourcesUsed: Int = 0,
 )
 
+@JsonClass(generateAdapter = true)
+data class LiveEpgProgramme(
+    val name: String = "",
+    val now: String? = null,
+    val next: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class LiveEpgResponse(
+    val programmes: List<LiveEpgProgramme> = emptyList(),
+)
+
 interface LiveTvApi {
     @GET("api/live-tv")
     suspend fun getLiveTv(): LiveTvResponse
+
+    @GET("api/live-epg")
+    suspend fun getLiveEpg(): LiveEpgResponse
 }
