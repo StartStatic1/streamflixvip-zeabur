@@ -29,6 +29,7 @@
     .cats label{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:.75rem;display:flex;gap:6px;align-items:center}
     .item{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
     .meta{font-size:.75rem;color:var(--muted);word-break:break-all;margin-top:4px}
+    label.fld{display:block;font-size:.72rem;color:var(--muted);margin:10px 0 4px}
     #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;opacity:0;transition:.25s;z-index:99}
     #toast.show{opacity:1}
   </style>
@@ -56,8 +57,8 @@
   <main>
     <div class="panel">
       <h2>Nova ponte</h2>
-      <p class="hint">Host + usuario + senha Xtream. Le as pastas, marca o que quer, salva. Vira add-on no app (VIP).</p>
-      <input id="bName" placeholder="Nome no app — ex: StreamFlix.Lista2"/>
+      <p class="hint">Host + usuario + senha Xtream. O <b>nome no app</b> é o que aparece no card (Vexio, Wova...).</p>
+      <input id="bName" placeholder="Nome no app — ex: Vexio"/>
       <input id="bHost" placeholder="http://servidor.com:80"/>
       <input id="bUser" placeholder="Usuario"/>
       <input id="bPass" placeholder="Senha" type="password"/>
@@ -138,6 +139,11 @@ function toast(t) {
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2800);
 }
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, function (c) {
+    return ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' })[c];
+  });
+}
 function renderCats(elId, rows, prefix) {
   const el = document.getElementById(elId);
   el.innerHTML = (rows || []).map((c) =>
@@ -167,7 +173,7 @@ async function probe() {
 async function save() {
   const d = await api('save', {
     id: _editId || undefined,
-    name: document.getElementById('bName').value.trim() || 'StreamFlix.Bridge',
+    name: document.getElementById('bName').value.trim() || 'Bridge',
     host: document.getElementById('bHost').value,
     user: document.getElementById('bUser').value,
     pass: document.getElementById('bPass').value,
@@ -182,6 +188,14 @@ async function save() {
   toast('Salvo');
   _editId = null;
   loadList();
+}
+async function renameB(id) {
+  const inp = document.getElementById('bn-' + id);
+  const name = (inp && inp.value || '').trim();
+  if (!name) { toast('Digite um nome'); return; }
+  const d = await api('rename', { id: id, name: name });
+  toast(d.error ? (d.error.message || d.error) : ('Nome no app: ' + name));
+  if (!d.error) loadList();
 }
 async function rotateTok(id) {
   if (!confirm('Gera token novo e corta o link antigo?')) return;
@@ -201,15 +215,19 @@ async function loadList() {
       ? ((d.publicBase || '') + '/api/bridge/' + b.id + '/' + token + '/manifest.json')
       : ((d.publicBase || '') + '/api/bridge/' + b.id + '/manifest.json');
     const locked = token ? 'trancada' : 'SEM TOKEN';
-    return '<div class="item"><b>' + b.name + '</b> '
+    const name = esc(b.name || '');
+    return '<div class="item"><b>' + name + '</b> '
       + (b.is_active ? '<span style="color:var(--green)">ativa</span>' : '<span style="color:var(--muted)">off</span>')
       + ' <span class="meta">' + locked + '</span>'
-      + '<div class="meta">' + (b.xtream_host || '') + '</div>'
+      + '<div class="meta">' + esc(b.xtream_host || '') + '</div>'
       + '<div class="meta">TV ' + (b.use_live ? (b.live_cats||[]).length : 0)
       + ' · Filmes ' + (b.use_movies ? (b.vod_cats||[]).length : 0)
       + ' · Series ' + (b.use_series ? (b.series_cats||[]).length : 0) + '</div>'
       + '<div class="meta">' + url + '</div>'
-      + '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">'
+      + '<label class="fld">Nome no app</label>'
+      + '<input id="bn-' + b.id + '" value="' + name + '" placeholder="Ex: Vexio" style="margin-bottom:8px"/>'
+      + '<div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">'
+      + '<button class="btn-gold" style="padding:6px 10px;font-size:.75rem" onclick="renameB(\'' + b.id + '\')">Salvar nome</button>'
       + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + url + '\');toast(\'URL copiada\')">Copiar JSON</button>'
       + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="rotateTok(\'' + b.id + '\')">Novo token</button>'
       + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'toggle\',{id:\'' + b.id + '\',is_active:' + (!b.is_active) + '}).then(loadList)">' + (b.is_active ? 'Pausar' : 'Ativar') + '</button>'
