@@ -1,17 +1,28 @@
 // api/live-epg.js
-// Grade agora/a seguir (XMLTV BR + PT). Nao bloqueia a lista de canais.
+// Grade agora/a seguir. Fontes:
+//   1) XMLTV dos painéis Xtream (ex.: /xmltv.php)
+//   2) LIVE_EPG_FEEDS no .env (urls separadas por vírgula)
+//   3) feeds públicos BR/PT
 const zlib = require('zlib');
 const { promisify } = require('util');
 const gunzip = promisify(zlib.gunzip);
 
 const EPG_TTL_MS = 30 * 60 * 1000;
+const MAX_FEED_BYTES = 45 * 1024 * 1024;
 let epgCache = { at: 0, programmes: [] };
 
-const FEEDS = [
+const DEFAULT_FEEDS = [
+  'http://diex.fun/xmltv.php?username=maria1234&password=maria1234',
   'https://epg.lat/files/br.xml.gz',
   'https://epg.lat/files/pt.xml.gz',
   'https://epgshare01.online/epgshare01/epg_ripper_BR1.xml.gz',
 ];
+
+function extraFeedsFromEnv() {
+  const raw = String(process.env.LIVE_EPG_FEEDS || '').trim();
+  if (!raw) return [];
+  return raw.split(/[\n,;]+/).map((s) => s.trim()).filter((s) => /^https?:\/\//i.test(s));
+}
 
 function normalize(s) {
   return String(s || '')
@@ -19,6 +30,9 @@ function normalize(s) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(hd|fhd|sd|4k|uhd|h264|h265|hevc|hdr|full hd|vip|premium)\b/g, ' ')
+    .replace(/\b(br|pt|us|uk|ar|mx|lat|latam)\b/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -30,11 +44,12 @@ function parseXmlTvTime(raw) {
 
 function decodeXml(s) {
   return String(s || '')
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
 }
 
 async function maybeGunzip(buf) {
@@ -46,18 +61,32 @@ async function maybeGunzip(buf) {
 
 async function fetchFeed(url) {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 15000);
+  const t = setTimeout(() => ctrl.abort(), 22000);
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { 'User-Agent': 'StreamFlixVIP/1.0', Accept: '*/*', 'Accept-Encoding': 'identity' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 StreamFlixVIP/1.0',
+        Accept: '*/*',
+        'Accept-Encoding': 'identity',
+      },
     });
-    if (!res.ok) throw new Error(`${url} HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
-    return await maybeGunzip(buf);
+    if (buf.length > MAX_FEED_BYTES) throw new Error(`feed grande demais ${buf.length}`);
+    const xml = await maybeGunzip(buf);
+    if (!xml.includes('<programme') && !xml.includes('<tv')) {
+      throw new Error('resposta nao e XMLTV');
+    }
+    return xml;
   } finally {
     clearTimeout(t);
   }
+}
+
+function attr(block, name) {
+  const m = String(block).match(new RegExp(`${name}="([^"]+)"`));
+  return m ? m[1] : '';
 }
 
 function parseFeed(xml) {
@@ -76,15 +105,17 @@ function parseFeed(xml) {
 
   const now = Date.now();
   const byKey = new Map();
-  const pRe =
-    /<programme\s+start="(\d{14})[^"]*"\s+stop="(\d{14})[^"]*"\s+channel="([^"]+)"[\s\S]*?<title[^>]*>([^<]*)<\/title>/g;
+
+  const pRe = /<programme\s+([^>]+)>([\s\S]*?)<\/programme>/g;
   while ((m = pRe.exec(xml))) {
-    const start = parseXmlTvTime(m[1]);
-    const stop = parseXmlTvTime(m[2]);
+    const start = parseXmlTvTime(attr(m[1], 'start'));
+    const stop = parseXmlTvTime(attr(m[1], 'stop'));
     if (!start || !stop) continue;
-    const title = decodeXml(m[4]).trim();
+    const chId = attr(m[1], 'channel');
+    const titleM = m[2].match(/<title[^>]*>([^<]*)<\/title>/);
+    const title = decodeXml(titleM ? titleM[1] : '').trim();
     if (!title) continue;
-    const labels = namesById.get(m[3]) || [m[3]];
+    const labels = namesById.get(chId) || [chId];
     for (const label of labels) {
       const key = normalize(label);
       if (!key || key.length < 2) continue;
@@ -101,11 +132,17 @@ function parseFeed(xml) {
 }
 
 async function buildEpg() {
+  const feeds = [...extraFeedsFromEnv(), ...DEFAULT_FEEDS];
+  const seenUrl = new Set();
   const merged = new Map();
-  for (const url of FEEDS) {
+  for (const url of feeds) {
+    if (seenUrl.has(url)) continue;
+    seenUrl.add(url);
     try {
       const xml = await fetchFeed(url);
-      for (const p of parseFeed(xml)) {
+      const parsed = parseFeed(xml);
+      console.log(`[live-epg] ${url.split('?')[0]} -> ${parsed.length} canais`);
+      for (const p of parsed) {
         const key = normalize(p.name);
         const prev = merged.get(key);
         if (!prev) merged.set(key, p);
@@ -115,7 +152,7 @@ async function buildEpg() {
         }
       }
     } catch (e) {
-      console.warn('[live-epg] feed falhou', url, e.message);
+      console.warn('[live-epg] feed falhou', url.split('?')[0], e.message);
     }
   }
   return Array.from(merged.values());
@@ -126,12 +163,14 @@ async function handler(req, res) {
     res.status(405).json({ error: 'Metodo nao permitido' });
     return;
   }
+  const force = String(req.query?.refresh || '') === '1';
   const now = Date.now();
-  if (epgCache.programmes.length && now - epgCache.at < EPG_TTL_MS) {
+  if (!force && epgCache.programmes.length && now - epgCache.at < EPG_TTL_MS) {
     res.setHeader('X-Cache', 'HIT');
     res.status(200).json({
       programmes: epgCache.programmes,
       cached: true,
+      count: epgCache.programmes.length,
       cacheAgeSec: Math.round((now - epgCache.at) / 1000),
     });
     return;
@@ -139,14 +178,14 @@ async function handler(req, res) {
   try {
     const programmes = await buildEpg();
     if (programmes.length) epgCache = { at: Date.now(), programmes };
-    res.setHeader('X-Cache', 'MISS');
-    res.status(200).json({ programmes, cached: false });
+    res.setHeader('X-Cache', force ? 'BYPASS' : 'MISS');
+    res.status(200).json({ programmes, cached: false, count: programmes.length });
   } catch (e) {
     if (epgCache.programmes.length) {
       res.status(200).json({ programmes: epgCache.programmes, cached: true, stale: true });
       return;
     }
-    res.status(200).json({ programmes: [], error: e.message || 'epg indisponivel' });
+    res.status(200).json({ programmes: [], error: e.message || 'epg indisponivel', count: 0 });
   }
 }
 
