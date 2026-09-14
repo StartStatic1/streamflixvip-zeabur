@@ -37,6 +37,7 @@
     #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;opacity:0;z-index:99}
     #toast.show{opacity:1}
     pre{background:var(--surface2);padding:12px;border-radius:10px;font-size:.72rem;overflow:auto;margin-top:12px}
+    label.fld{display:block;font-size:.72rem;color:var(--muted);margin:8px 0 4px}
   </style>
 </head>
 <body>
@@ -57,6 +58,7 @@
     <div class="row" style="margin:0">
       <a href="/admin-hub.html">Hub</a>
       <a href="/admin.html">Painel principal</a>
+      <a href="/admin-bridge.html">Bridge</a>
       <a href="/admin-api.html">API</a>
       <button class="btn-sec" onclick="doLogout()">Sair</button>
     </div>
@@ -64,9 +66,9 @@
   <main>
     <div class="panel">
       <h2>Novo add-on</h2>
-      <p class="hint">Cole o <b>manifest.json</b>. O nome é o que aparece no app. <b>Ordem</b>: menor número sobe. IPTV (Vulke) fica sempre acima. Ex.: tplay=2 · Pengu=5 · Fênix=20.</p>
+      <p class="hint">Cole o <b>manifest.json</b>. O <b>nome no app</b> é o que o usuário vê no card (Vexio, Fenix...). <b>Ordem</b>: menor número sobe. IPTV (Vulke) fica sempre acima.</p>
       <input type="url" id="aUrl" placeholder="https://…/manifest.json"/>
-      <input type="text" id="aName" placeholder="Nome no app — StreamFlix.Fenix"/>
+      <input type="text" id="aName" placeholder="Nome no app — ex: Fenix"/>
       <input type="number" id="aPriority" value="10" placeholder="Ordem (menor sobe)"/>
       <textarea id="aNotes" rows="2" placeholder="Notas (opcional)"></textarea>
       <div class="row">
@@ -77,7 +79,7 @@
     </div>
     <div class="panel">
       <h2>Add-ons ativos <button class="btn-sec" onclick="loadAddons()">Atualizar</button></h2>
-      <p class="hint"><b>Ordem</b> menor sobe no app. <b>Pausar</b> tira do play. <b>Excluir</b> apaga do painel.</p>
+      <p class="hint"><b>Nome no app</b> muda o card na hora (add-on). <b>Ordem</b> menor sobe. <b>Pausar</b> tira do play.</p>
       <div id="listWrap"><p class="hint">Carregando…</p></div>
     </div>
     <div class="panel">
@@ -104,7 +106,7 @@ const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{auth:{persistSession:true,autoRefreshToken:true,storageKey:'sfv-admin-auth-token'}});
 let _session=null;
 function toast(t){const el=document.getElementById('toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2800)}
-function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&','<':'<','>':'>','"':'"',"'":'&#39;'}[c]))}
 async function api(action,extra={}){const res=await fetch('/api/admin-addons',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+_session.access_token},body:JSON.stringify({action,...extra})});const text=await res.text();try{return JSON.parse(text)}catch(e){return{error:text||('HTTP '+res.status)}}}
 async function ensureAdmin(session){const {data}=await db.from('vip_panel_admins').select('id').eq('id',session.user.id).maybeSingle();return !!data}
 async function doLogin(){try{const {data,error}=await db.auth.signInWithPassword({email:document.getElementById('email').value.trim(),password:document.getElementById('pass').value});if(error)throw error;if(!(await ensureAdmin(data.session))){await db.auth.signOut();throw new Error('Sem permissão')}showApp(data.session)}catch(e){document.getElementById('loginMsg').textContent=e.message||'Erro'}}
@@ -112,7 +114,8 @@ function showApp(session){_session=session;document.getElementById('login').styl
 async function doLogout(){await db.auth.signOut();location.reload()}
 async function probeOnly(){const url=document.getElementById('aUrl').value.trim();if(!url){toast('Cole a URL');return}const d=await api('probe-addon',{manifest_url:url});const out=document.getElementById('probeOut');out.classList.remove('hide');out.textContent=JSON.stringify(d,null,2);if(d.name&&!document.getElementById('aName').value.trim())document.getElementById('aName').value=d.name;toast(d.error||'Manifest OK')}
 async function createAddon(){const url=document.getElementById('aUrl').value.trim();if(!url){toast('Cole a URL');return}const d=await api('create-addon',{manifest_url:url,name:document.getElementById('aName').value.trim(),priority:parseInt(document.getElementById('aPriority').value,10)||10,notes:document.getElementById('aNotes').value.trim()});if(d.error){toast(typeof d.error==='string'?d.error:JSON.stringify(d.error));return}toast('Add-on adicionado');loadAddons()}
-async function loadAddons(){const wrap=document.getElementById('listWrap');const data=await api('list-addons');if(data.error){wrap.innerHTML='<p class="hint">'+esc(data.error.message||data.error)+'</p>';return}const rows=(data.addons||[]).slice().sort((a,b)=>(Number(a.priority)||0)-(Number(b.priority)||0));if(!rows.length){wrap.innerHTML='<p class="hint">Nenhum add-on.</p>';return}wrap.innerHTML=rows.map(a=>{const id=esc(a.id),name=esc(a.name);return '<div class="addon-card"><div class="addon-head"><div class="ttl"><b>'+name+'</b><div class="meta">'+esc(a.manifest_url)+'</div></div><span class="pill '+(a.is_active?'on':'off')+'">'+(a.is_active?'Ativo':'Off')+'</span></div><div class="row"><span class="meta">Ordem</span><input type="number" id="prIn-'+id+'" value="'+(a.priority??0)+'" style="width:90px;margin:0"/><button class="btn-sec" onclick="savePriority(\''+id+'\')">Salvar ordem</button></div><div class="row"><button class="btn-sec" onclick="toggleA(\''+id+'\','+(!a.is_active)+')">'+(a.is_active?'Pausar':'Ativar')+'</button><button class="btn-danger" onclick="delA(\''+id+'\')">Excluir</button></div></div>'}).join('')}
+async function loadAddons(){const wrap=document.getElementById('listWrap');const data=await api('list-addons');if(data.error){wrap.innerHTML='<p class="hint">'+esc(data.error.message||data.error)+'</p>';return}const rows=(data.addons||[]).slice().sort((a,b)=>(Number(a.priority)||0)-(Number(b.priority)||0));if(!rows.length){wrap.innerHTML='<p class="hint">Nenhum add-on.</p>';return}wrap.innerHTML=rows.map(a=>{const id=esc(a.id),name=esc(a.name);return '<div class="addon-card"><div class="addon-head"><div class="ttl"><b>'+name+'</b><div class="meta">'+esc(a.manifest_url)+'</div></div><span class="pill '+(a.is_active?'on':'off')+'">'+(a.is_active?'Ativo':'Off')+'</span></div><label class="fld">Nome no app</label><input type="text" id="nmIn-'+id+'" value="'+name+'" placeholder="Ex: Fenix" style="margin-bottom:0"/><div class="row"><button class="btn-gold" onclick="saveName(\''+id+'\')">Salvar nome</button></div><div class="row"><span class="meta">Ordem</span><input type="number" id="prIn-'+id+'" value="'+(a.priority??0)+'" style="width:90px;margin:0"/><button class="btn-sec" onclick="savePriority(\''+id+'\')">Salvar ordem</button></div><div class="row"><button class="btn-sec" onclick="toggleA(\''+id+'\','+(!a.is_active)+')">'+(a.is_active?'Pausar':'Ativar')+'</button><button class="btn-danger" onclick="delA(\''+id+'\')">Excluir</button></div></div>'}).join('')}
+async function saveName(id){const inp=document.getElementById('nmIn-'+id);const name=(inp&&inp.value||'').trim();if(!name){toast('Digite um nome');return}const d=await api('update-addon',{id,name});if(d.error){toast(typeof d.error==='string'?d.error:JSON.stringify(d.error));return}toast('Nome no app: '+name);loadAddons()}
 async function savePriority(id){const inp=document.getElementById('prIn-'+id);const priority=parseInt(inp&&inp.value,10);if(!Number.isFinite(priority)){toast('Número inválido');return}const d=await api('update-addon',{id,priority});if(d.error){toast(typeof d.error==='string'?d.error:JSON.stringify(d.error));return}toast('Ordem '+priority);loadAddons()}
 async function toggleA(id,isActive){const d=await api('toggle-addon',{id,is_active:isActive});toast(d.error||(isActive?'Ativo':'Pausado'));if(!d.error)loadAddons()}
 async function delA(id){if(!confirm('Excluir este add-on?'))return;const d=await api('delete-addon',{id});toast(d.error||'Excluído');if(!d.error)loadAddons()}
