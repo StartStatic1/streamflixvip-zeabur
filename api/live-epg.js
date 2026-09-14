@@ -10,6 +10,7 @@ let epgCache = { at: 0, programmes: [] };
 const FEEDS = [
   'https://epg.lat/files/br.xml.gz',
   'https://epg.lat/files/pt.xml.gz',
+  'https://epgshare01.online/epgshare01/epg_ripper_BR1.xml.gz',
 ];
 
 function normalize(s) {
@@ -29,25 +30,31 @@ function parseXmlTvTime(raw) {
 
 function decodeXml(s) {
   return String(s || '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
     .replace(/&#39;/g, "'");
+}
+
+async function maybeGunzip(buf) {
+  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+    return (await gunzip(buf)).toString('utf8');
+  }
+  return buf.toString('utf8');
 }
 
 async function fetchFeed(url) {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 12000);
+  const t = setTimeout(() => ctrl.abort(), 15000);
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { 'User-Agent': 'StreamFlixVIP/1.0', Accept: '*/*' },
+      headers: { 'User-Agent': 'StreamFlixVIP/1.0', Accept: '*/*', 'Accept-Encoding': 'identity' },
     });
     if (!res.ok) throw new Error(`${url} HTTP ${res.status}`);
     const buf = Buffer.from(await res.arrayBuffer());
-    const xml = url.endsWith('.gz') ? (await gunzip(buf)).toString('utf8') : buf.toString('utf8');
-    return xml;
+    return await maybeGunzip(buf);
   } finally {
     clearTimeout(t);
   }
