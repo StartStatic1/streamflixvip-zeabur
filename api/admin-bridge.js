@@ -193,6 +193,32 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  if (action === 'rename') {
+    if (!body.id) { res.status(400).json({ error: 'Informe id' }); return; }
+    const name = String(body.name || '').trim();
+    if (!name) { res.status(400).json({ error: 'Informe o nome' }); return; }
+    const cur = await fetch(
+      SUPABASE_URL + '/rest/v1/iptv_bridges?id=eq.' + encodeURIComponent(body.id) + '&select=id,addon_id',
+      { headers: h },
+    ).then((r) => r.json());
+    const row = cur && cur[0];
+    if (!row) { res.status(404).json({ error: 'Ponte nao encontrada' }); return; }
+    await fetch(SUPABASE_URL + '/rest/v1/iptv_bridges?id=eq.' + encodeURIComponent(body.id), {
+      method: 'PATCH',
+      headers: h,
+      body: JSON.stringify({ name, updated_at: new Date().toISOString() }),
+    });
+    if (row.addon_id) {
+      await fetch(SUPABASE_URL + '/rest/v1/stremio_addons?id=eq.' + encodeURIComponent(row.addon_id), {
+        method: 'PATCH',
+        headers: h,
+        body: JSON.stringify({ name, updated_at: new Date().toISOString() }),
+      });
+    }
+    res.status(200).json({ ok: true, name });
+    return;
+  }
+
   if (action === 'save') {
     const name = String(body.name || '').trim() || 'StreamFlix.Bridge';
     const host = normHost(body.host || body.xtream_host);
@@ -352,6 +378,6 @@ module.exports = async function handler(req, res) {
 
   res.status(400).json({
     error: 'action invalida',
-    allowed: ['list', 'probe', 'save', 'toggle', 'delete', 'rotate-token'],
+    allowed: ['list', 'probe', 'save', 'rename', 'toggle', 'delete', 'rotate-token'],
   });
 };
