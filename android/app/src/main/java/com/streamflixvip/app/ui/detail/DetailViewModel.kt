@@ -128,12 +128,13 @@ class DetailViewModel(
                 }
 
                 if (mediaType == "tv") {
-                    val seasons = details.seasons.orEmpty().filter { it.season_number > 0 }
-                    val seasonToOpen = if (initialSeason > 0) initialSeason else seasons.firstOrNull()?.season_number
+                    // Inclui season 0 (Specials/OVAs do TMDB); antes era > 0 e sumia especial
+                    val seasons = details.seasons.orEmpty().filter { it.season_number >= 0 }
+                    val seasonToOpen = if (initialSeason >= 0) initialSeason else seasons.firstOrNull()?.season_number
                     if (seasonToOpen != null) {
                         expandSeason(seasonToOpen)
                     }
-                    if (initialSeason > 0) {
+                    if (initialSeason >= 0) {
                         preloadEpisodeSourcesSilently(initialSeason, initialEpisode.coerceAtLeast(1))
                     }
                 }
