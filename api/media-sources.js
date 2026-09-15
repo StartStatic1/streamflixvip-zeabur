@@ -274,6 +274,16 @@ async function lockedAddonStubs(serviceKey) {
   return out;
 }
 
+function pushUnique(list, seen, dest) {
+  for (const source of list || []) {
+    const url = String((source && source.source_url) || '').trim();
+    const key = url || ('label:' + String((source && source.source_label) || ''));
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    dest.push(source);
+  }
+}
+
 async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -353,36 +363,27 @@ async function handler(req, res) {
   try {
     const dbSources = await loadSources(serviceKey, tmdbId, mediaType, season, episode);
     const catalogSources = await loadR2Sources(tmdbId, mediaType, season, episode);
-    const dbR2Sources = dbSources.filter(isR2Source);
-    const ownSources = [...catalogSources, ...dbR2Sources];
+    const seen = new Set();
+    let sources = [];
+    pushUnique(catalogSources, seen, sources);
+    pushUnique(dbSources, seen, sources);
 
-    let sources = ownSources.length
-      ? ownSources.filter((source, index, all) =>
-          all.findIndex((candidate) => candidate.source_url === source.source_url) === index)
-      : dbSources;
     const pausedHosts = await loadPausedIptvHosts(serviceKey);
     sources = dropPausedHosts(sources, pausedHosts);
 
-    if (ownSources.length) {
-      console.info(`[media-sources] R2 próprio encontrado tmdb=${tmdbId}; addons ignorados`);
-    } else if (access.isVip) {
+    if (access.isVip) {
       try {
-        const addonSources = await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode);
-        if (addonSources.length) {
-          const existing = new Set(sources.map((s) => s.source_url));
-          for (const a of addonSources) {
-            if (!existing.has(a.source_url)) {
-              sources.push(a);
-              existing.add(a.source_url);
-            }
-          }
-        }
+        pushUnique(
+          await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode),
+          seen,
+          sources,
+        );
       } catch (addonErr) {
         console.warn('[media-sources] addons skip:', addonErr.message);
       }
     } else {
       try {
-        sources = sources.concat(await lockedAddonStubs(serviceKey));
+        pushUnique(await lockedAddonStubs(serviceKey), seen, sources);
       } catch (stubErr) {
         console.warn('[media-sources] addon stubs skip:', stubErr.message);
       }
