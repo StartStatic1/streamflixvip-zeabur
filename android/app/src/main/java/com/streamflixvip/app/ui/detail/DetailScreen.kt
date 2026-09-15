@@ -397,7 +397,10 @@ private fun DetailContent(
                 CommentsEntryButton(onClick = onOpenComments, modifier = Modifier.padding(16.dp))
             }
         } else {
-            val seasons = details.seasons.orEmpty().filter { it.season_number > 0 } // ignora "specials" (temporada 0)
+            // T1–Tn primeiro; season 0 = Especiais no fim
+            val seasons = details.seasons.orEmpty()
+                .filter { it.season_number >= 0 }
+                .sortedBy { if (it.season_number == 0) Int.MAX_VALUE else it.season_number }
             val currentSeason = seasons.firstOrNull { it.season_number == state.expandedSeason }
 
             item {
@@ -598,6 +601,16 @@ private fun DetailContent(
  * tela (que ficava grande demais em séries com muitas temporadas) pelo
  * mesmo padrão compacto do CineVerse.
  */
+
+/** Nome amigavel: season 0 = Especiais (OVAs); demais = nome TMDB ou Temporada N */
+private fun seasonDisplayName(season: TmdbSeason?): String {
+    if (season == null) return "Temporada"
+    if (season.season_number == 0) return "Especiais"
+    val n = season.name?.takeIf { it.isNotBlank() }
+    if (n != null && !n.equals("Specials", ignoreCase = true) && !n.equals("Especiais", ignoreCase = true)) return n
+    return "Temporada ${season.season_number}"
+}
+
 @Composable
 private fun SeasonPickerHeader(
     currentSeason: TmdbSeason?,
@@ -626,7 +639,7 @@ private fun SeasonPickerHeader(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    currentSeason?.name ?: "Temporada",
+                    seasonDisplayName(currentSeason),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -667,7 +680,7 @@ private fun SeasonPickerHeader(
                             ) {
                                 Column {
                                     Text(
-                                        season.name,
+                                        seasonDisplayName(season),
                                         fontSize = 14.sp,
                                         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
                                         color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
