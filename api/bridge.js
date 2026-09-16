@@ -1,5 +1,6 @@
 // api/bridge.js — add-on Stremio/Nuvio gerado pela aba Bridge.
-// Live TV: type "channel" (Nuvio/Stremio). Filmes/séries inalterados.
+// Live TV: type "channel", catálogos por categoria + busca.
+// Filmes/séries inalterados.
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
@@ -81,6 +82,26 @@ function catIds(arr) {
   return new Set((Array.isArray(arr) ? arr : []).map((c) => String(c.id || c)));
 }
 
+async function liveCategories(b) {
+  const selected = Array.isArray(b.live_cats) ? b.live_cats : [];
+  if (selected.length) {
+    return selected.map((c) => ({
+      id: String(c.id || c.category_id || c),
+      name: String(c.name || c.category_name || ('Cat ' + (c.id || c))),
+    })).filter((c) => c.id);
+  }
+  const k = 'livecats:' + b.id;
+  const hit = cache.get(k);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000) return hit.rows;
+  const raw = await xtream(b, 'get_live_categories').catch(() => []);
+  const rows = (Array.isArray(raw) ? raw : []).map((c) => ({
+    id: String(c.category_id),
+    name: String(c.category_name || 'Outros'),
+  })).filter((c) => c.id);
+  cache.set(k, { at: Date.now(), rows });
+  return rows;
+}
+
 async function vodList(b) {
   const k = 'vod:' + b.id;
   const hit = cache.get(k);
@@ -103,13 +124,18 @@ async function seriesList(b) {
   return rows;
 }
 
-async function liveList(b) {
-  const k = 'live:' + b.id;
+async function liveList(b, categoryId) {
+  const k = 'live:' + b.id + ':' + (categoryId || 'all');
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < 15 * 60 * 1000) return hit.rows;
   const raw = await xtream(b, 'get_live_streams').catch(() => []);
-  const allow = catIds(b.live_cats);
-  const rows = (Array.isArray(raw) ? raw : []).filter((x) => !allow.size || allow.has(String(x.category_id)));
+  const allowSelected = catIds(b.live_cats);
+  let rows = Array.isArray(raw) ? raw : [];
+  if (categoryId) {
+    rows = rows.filter((x) => String(x.category_id) === String(categoryId));
+  } else if (allowSelected.size) {
+    rows = rows.filter((x) => allowSelected.has(String(x.category_id)));
+  }
   cache.set(k, { at: Date.now(), rows });
   return rows;
 }
@@ -128,16 +154,13 @@ function scoreOne(itemName, queryTitle, queryYear) {
   const coverN = interN / nTok.length;
   const coverT = interT / tTok.length;
   const itemYear = yearOf(itemName);
-
   if (queryYear && itemYear && queryYear !== itemYear) return 0;
-
   let score = 0;
   if (t === n) score = 100;
   else if (coverN >= 0.99 && nTok.length >= 2) score = 88;
   else if (coverN >= 0.8 && coverT >= 0.7 && nTok.length >= 3) score = 80;
   else if (coverT >= 0.99 && tTok.length >= nTok.length && nTok.length >= 3) score = 78;
   else return 0;
-
   if (queryYear && itemYear && queryYear === itemYear) score += 12;
   return score;
 }
@@ -273,9 +296,11 @@ function posterOf(item) {
 
 function pageSlice(rows, extra) {
   const skip = Math.max(0, Number(extra.skip || 0) || 0);
-  const q = norm(extra.search || '');
   let list = rows;
-  if (q) list = rows.filter((x) => norm(x.name || x.title).includes(q));
+  if (extra.search) {
+    const qs = norm(extra.search);
+    list = rows.filter((x) => norm(x.name || x.title).includes(qs));
+  }
   const slice = list.slice(skip, skip + PAGE);
   return { slice, hasMore: skip + PAGE < list.length };
 }
@@ -283,6 +308,13 @@ function pageSlice(rows, extra) {
 function liveUrl(b, streamId, ext) {
   const e = (ext || 'ts').replace(/^\./, '');
   return hostOf(b) + '/live/' + b.xtream_user + '/' + b.xtream_pass + '/' + streamId + '.' + e;
+}
+
+function liveCatIdFromCatalogId(catalogId) {
+  const id = String(catalogId || '');
+  if (id === 'sf_live') return null;
+  const m = id.match(/^sf_live_(.+)$/);
+  return m ? m[1] : null;
 }
 
 module.exports = async function handler(req, res) {
@@ -336,14 +368,30 @@ module.exports = async function handler(req, res) {
     }
     if (b.use_live) {
       types.push('channel');
-      catalogs.push({ type: 'channel', id: 'sf_live', name: b.name + ' TV', extra: extras });
       resources.push('meta');
+      catalogs.push({
+        type: 'channel',
+        id: 'sf_live',
+        name: b.name + ' · Todos',
+        extra: extras,
+      });
+      try {
+        const cats = await liveCategories(b);
+        cats.slice(0, 40).forEach((c) => {
+          catalogs.push({
+            type: 'channel',
+            id: 'sf_live_' + c.id,
+            name: b.name + ' · ' + c.name,
+            extra: extras,
+          });
+        });
+      } catch (_) {}
     }
     res.status(200).json({
       id: 'streamflix.bridge.' + b.id.slice(0, 8),
       name: b.name,
-      version: '1.3.0',
-      description: 'Ponte Xtream StreamFlixVIP (filmes, series e TV ao vivo)',
+      version: '1.4.0',
+      description: 'Ponte Xtream StreamFlixVIP (filmes, series e TV por categoria + busca)',
       resources,
       types,
       catalogs,
@@ -355,7 +403,7 @@ module.exports = async function handler(req, res) {
   const metaReq = parseMeta(rest);
   if (metaReq) {
     if ((metaReq.type === 'channel' || metaReq.type === 'tv') && b.use_live) {
-      const list = await liveList(b);
+      const list = await liveList(b, null);
       const rawId = String(metaReq.id || '');
       const sid = rawId.replace(/^(live|channel|xtream):/i, '');
       const hit = list.find((x) => String(x.stream_id) === String(sid));
@@ -409,7 +457,8 @@ module.exports = async function handler(req, res) {
       });
     }
     if ((catReq.type === 'channel' || catReq.type === 'tv') && b.use_live) {
-      const list = await liveList(b);
+      const catId = liveCatIdFromCatalogId(catReq.id);
+      const list = await liveList(b, catId);
       const { slice } = pageSlice(list, catReq.extra);
       slice.forEach((item) => {
         const sid = item.stream_id;
@@ -429,9 +478,8 @@ module.exports = async function handler(req, res) {
   const streamReq = parseStreamPath(rest);
   if (streamReq) {
     const streams = [];
-
     if ((streamReq.type === 'channel' || streamReq.type === 'tv') && b.use_live) {
-      const list = await liveList(b);
+      const list = await liveList(b, null);
       let hit = null;
       const want = streamReq.liveId || streamReq.xtreamId || String(streamReq.id || '').replace(/^(live|channel|xtream):/i, '');
       if (want) hit = list.find((x) => String(x.stream_id) === String(want));
