@@ -56,8 +56,8 @@
   </header>
   <main>
     <div class="panel">
-      <h2>Nova ponte</h2>
-      <p class="hint">Host + usuario + senha Xtream. O <b>nome no app</b> é o que aparece no card (Vexio, Wova...).</p>
+      <h2 id="formTitle">Nova ponte</h2>
+      <p class="hint">Host + usuario + senha Xtream. O <b>nome no app</b> é o que aparece no card (Vexio, Wova...). Ao <b>editar</b>, deixe a senha em branco para manter a atual.</p>
       <input id="bName" placeholder="Nome no app — ex: Vexio"/>
       <input id="bHost" placeholder="http://servidor.com:80"/>
       <input id="bUser" placeholder="Usuario"/>
@@ -69,7 +69,8 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-sec" style="flex:1" onclick="probe()">Listar pastas</button>
-        <button class="btn-gold" style="flex:1" onclick="save()">Salvar e gerar</button>
+        <button class="btn-gold" style="flex:1" onclick="save()" id="btnSave">Salvar e gerar</button>
+        <button class="btn-sec" style="display:none" id="btnCancelEdit" onclick="cancelEdit()">Cancelar edição</button>
       </div>
       <div id="probeBox" style="display:none;margin-top:14px">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -78,7 +79,7 @@
         </div>
         <div class="cats" id="liveCats"></div>
         <div style="display:flex;justify-content:space-between"><b>Filmes</b>
-          <span><a href="#" onclick="togAll('mov',true);return false">Todas</a> · <a href="#" onclick="togAll('mov',false);return false">Nenhuma</a></span></div>
+          <span><a href="#" onclick="togAll('mov',true);return false">Todas</a> · <a href="#" onclick="togAll('ser',false);return false">Nenhuma</a></span></div>
         <div class="cats" id="movCats"></div>
         <div style="display:flex;justify-content:space-between"><b>Series</b>
           <span><a href="#" onclick="togAll('ser',true);return false">Todas</a> · <a href="#" onclick="togAll('ser',false);return false">Nenhuma</a></span></div>
@@ -100,6 +101,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
 });
 let _session = null;
 let _editId = null;
+let _bridges = [];
 async function checkSession() {
   const { data } = await db.auth.getSession();
   if (data && data.session && await isAdmin(data.session)) showApp(data.session);
@@ -144,11 +146,13 @@ function esc(s) {
     return ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' })[c];
   });
 }
-function renderCats(elId, rows, prefix) {
+function renderCats(elId, rows, prefix, selectedIds) {
   const el = document.getElementById(elId);
-  el.innerHTML = (rows || []).map((c) =>
-    '<label><input type="checkbox" class="c-' + prefix + '" data-id="' + c.id + '" data-name="' + String(c.name).replace(/"/g,'') + '" checked/> ' + c.name + '</label>'
-  ).join('') || '<span class="hint">Nenhuma pasta</span>';
+  const sel = selectedIds ? new Set(selectedIds.map(String)) : null;
+  el.innerHTML = (rows || []).map((c) => {
+    const on = !sel || sel.has(String(c.id));
+    return '<label><input type="checkbox" class="c-' + prefix + '" data-id="' + c.id + '" data-name="' + String(c.name).replace(/"/g,'') + '"' + (on ? ' checked' : '') + '/> ' + c.name + '</label>';
+  }).join('') || '<span class="hint">Nenhuma pasta</span>';
 }
 function selected(prefix) {
   return Array.from(document.querySelectorAll('.c-' + prefix + ':checked')).map((i) => ({ id: i.getAttribute('data-id'), name: i.getAttribute('data-name') }));
@@ -170,6 +174,57 @@ async function probe() {
   renderCats('serCats', d.series, 'ser');
   toast('Pastas ok · ' + ((d.live||[]).length + (d.movies||[]).length + (d.series||[]).length));
 }
+function idsOf(arr) {
+  return (arr || []).map((c) => String(c.id || c));
+}
+function cancelEdit() {
+  _editId = null;
+  document.getElementById('formTitle').textContent = 'Nova ponte';
+  document.getElementById('btnSave').textContent = 'Salvar e gerar';
+  document.getElementById('btnCancelEdit').style.display = 'none';
+  document.getElementById('bName').value = '';
+  document.getElementById('bHost').value = '';
+  document.getElementById('bUser').value = '';
+  document.getElementById('bPass').value = '';
+  document.getElementById('tLive').checked = false;
+  document.getElementById('tMov').checked = true;
+  document.getElementById('tSer').checked = true;
+  document.getElementById('probeBox').style.display = 'none';
+  toast('Edição cancelada');
+}
+async function editB(id) {
+  const b = (_bridges || []).find((x) => x.id === id);
+  if (!b) { toast('Ponte não encontrada'); return; }
+  _editId = id;
+  document.getElementById('formTitle').textContent = 'Editar ponte';
+  document.getElementById('btnSave').textContent = 'Salvar alterações';
+  document.getElementById('btnCancelEdit').style.display = 'inline-block';
+  document.getElementById('bName').value = b.name || '';
+  document.getElementById('bHost').value = b.xtream_host || '';
+  document.getElementById('bUser').value = b.xtream_user || '';
+  document.getElementById('bPass').value = '';
+  document.getElementById('bPass').placeholder = 'Deixe em branco para manter a senha';
+  document.getElementById('tLive').checked = !!b.use_live;
+  document.getElementById('tMov').checked = !!b.use_movies;
+  document.getElementById('tSer').checked = !!b.use_series;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  toast('Carregando pastas…');
+  const d = await api('probe', {
+    host: b.xtream_host,
+    user: b.xtream_user,
+    pass: b.xtream_pass,
+  });
+  if (d.error) {
+    toast('Preencha a senha e clique Listar pastas se precisar mudar categorias');
+    document.getElementById('probeBox').style.display = 'none';
+    return;
+  }
+  document.getElementById('probeBox').style.display = 'block';
+  renderCats('liveCats', d.live, 'live', idsOf(b.live_cats));
+  renderCats('movCats', d.movies, 'mov', idsOf(b.vod_cats));
+  renderCats('serCats', d.series, 'ser', idsOf(b.series_cats));
+  toast('Editando: ' + (b.name || id));
+}
 async function save() {
   const d = await api('save', {
     id: _editId || undefined,
@@ -185,8 +240,12 @@ async function save() {
     series_cats: selected('ser'),
   });
   if (d.error) { toast(typeof d.error === 'string' ? d.error : JSON.stringify(d.error)); return; }
-  toast('Salvo');
+  toast(_editId ? 'Alterações salvas' : 'Salvo');
   _editId = null;
+  document.getElementById('formTitle').textContent = 'Nova ponte';
+  document.getElementById('btnSave').textContent = 'Salvar e gerar';
+  document.getElementById('btnCancelEdit').style.display = 'none';
+  document.getElementById('bPass').placeholder = 'Senha';
   loadList();
 }
 async function renameB(id) {
@@ -208,6 +267,7 @@ async function loadList() {
   const wrap = document.getElementById('list');
   if (d.error) { wrap.innerHTML = '<p style="color:var(--red)">' + (d.error.message || d.error) + '</p>'; return; }
   const rows = d.bridges || [];
+  _bridges = rows;
   if (!rows.length) { wrap.innerHTML = '<p class="hint">Nenhuma ponte ainda.</p>'; return; }
   wrap.innerHTML = rows.map((b) => {
     const token = b.access_token || '';
@@ -230,6 +290,7 @@ async function loadList() {
       + '<button class="btn-gold" style="padding:6px 10px;font-size:.75rem" onclick="renameB(\'' + b.id + '\')">Salvar nome</button>'
       + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + url + '\');toast(\'URL copiada\')">Copiar JSON</button>'
       + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="rotateTok(\'' + b.id + '\')">Novo token</button>'
+      + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="editB(\'' + b.id + '\')">Editar</button>'
       + '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'toggle\',{id:\'' + b.id + '\',is_active:' + (!b.is_active) + '}).then(loadList)">' + (b.is_active ? 'Pausar' : 'Ativar') + '</button>'
       + '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="if(confirm(\'Excluir?\'))api(\'delete\',{id:\'' + b.id + '\'}).then(loadList)">Excluir</button>'
       + '</div></div>';
