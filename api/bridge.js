@@ -1,4 +1,5 @@
 // api/bridge.js — add-on Stremio/Nuvio gerado pela aba Bridge.
+// Live TV: type "channel" (Nuvio/Stremio). Filmes/séries inalterados.
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
@@ -97,6 +98,17 @@ async function seriesList(b) {
   if (hit && Date.now() - hit.at < 30 * 60 * 1000) return hit.rows;
   const raw = await xtream(b, 'get_series').catch(() => []);
   const allow = catIds(b.series_cats);
+  const rows = (Array.isArray(raw) ? raw : []).filter((x) => !allow.size || allow.has(String(x.category_id)));
+  cache.set(k, { at: Date.now(), rows });
+  return rows;
+}
+
+async function liveList(b) {
+  const k = 'live:' + b.id;
+  const hit = cache.get(k);
+  if (hit && Date.now() - hit.at < 15 * 60 * 1000) return hit.rows;
+  const raw = await xtream(b, 'get_live_streams').catch(() => []);
+  const allow = catIds(b.live_cats);
   const rows = (Array.isArray(raw) ? raw : []).filter((x) => !allow.size || allow.has(String(x.category_id)));
   cache.set(k, { at: Date.now(), rows });
   return rows;
@@ -204,9 +216,12 @@ function parseStreamPath(rest) {
   let tmdbId = null;
   let imdbId = null;
   let xtreamId = null;
+  let liveId = null;
   let season = null;
   let episode = null;
-  if (parts[0] === 'tmdb') {
+  if (parts[0] === 'live' || parts[0] === 'channel') {
+    liveId = parts[1] || parts[0];
+  } else if (parts[0] === 'tmdb') {
     tmdbId = parts[1];
     if (parts.length >= 4) {
       season = Number(parts[2]);
@@ -228,8 +243,10 @@ function parseStreamPath(rest) {
     tmdbId = parts[0];
     season = Number(parts[1]);
     episode = Number(parts[2]);
+  } else if (/^\d+$/.test(parts[0]) && (type === 'channel' || type === 'tv')) {
+    liveId = parts[0];
   }
-  return { type, id: raw, tmdbId, imdbId, xtreamId, season, episode };
+  return { type, id: raw, tmdbId, imdbId, xtreamId, liveId, season, episode };
 }
 
 function parseCatalog(rest) {
@@ -241,6 +258,12 @@ function parseCatalog(rest) {
     if (i > 0) extra[decodeURIComponent(p.slice(0, i))] = decodeURIComponent(p.slice(i + 1));
   });
   return { type: m[1].toLowerCase(), id: m[2], extra };
+}
+
+function parseMeta(rest) {
+  const m = String(rest || '').match(/^meta\/([^/]+)\/(.+)\.json$/i);
+  if (!m) return null;
+  return { type: m[1].toLowerCase(), id: decodeURIComponent(m[2]) };
 }
 
 function posterOf(item) {
@@ -255,6 +278,11 @@ function pageSlice(rows, extra) {
   if (q) list = rows.filter((x) => norm(x.name || x.title).includes(q));
   const slice = list.slice(skip, skip + PAGE);
   return { slice, hasMore: skip + PAGE < list.length };
+}
+
+function liveUrl(b, streamId, ext) {
+  const e = (ext || 'ts').replace(/^\./, '');
+  return hostOf(b) + '/live/' + b.xtream_user + '/' + b.xtream_pass + '/' + streamId + '.' + e;
 }
 
 module.exports = async function handler(req, res) {
@@ -297,6 +325,7 @@ module.exports = async function handler(req, res) {
     ];
     const types = [];
     const catalogs = [];
+    const resources = ['catalog', 'stream'];
     if (b.use_movies) {
       types.push('movie');
       catalogs.push({ type: 'movie', id: 'sf_movies', name: b.name + ' Filmes', extra: extras });
@@ -306,19 +335,45 @@ module.exports = async function handler(req, res) {
       catalogs.push({ type: 'series', id: 'sf_series', name: b.name + ' Series', extra: extras });
     }
     if (b.use_live) {
-      types.push('tv');
-      catalogs.push({ type: 'tv', id: 'sf_live', name: b.name + ' TV', extra: extras });
+      types.push('channel');
+      catalogs.push({ type: 'channel', id: 'sf_live', name: b.name + ' TV', extra: extras });
+      resources.push('meta');
     }
     res.status(200).json({
       id: 'streamflix.bridge.' + b.id.slice(0, 8),
       name: b.name,
-      version: '1.2.0',
-      description: 'Ponte Xtream StreamFlixVIP',
-      resources: ['catalog', 'stream'],
+      version: '1.3.0',
+      description: 'Ponte Xtream StreamFlixVIP (filmes, series e TV ao vivo)',
+      resources,
       types,
       catalogs,
-      idPrefixes: ['tt', 'tmdb', 'xtream', 'sf'],
+      idPrefixes: ['tt', 'tmdb', 'xtream', 'sf', 'live'],
     });
+    return;
+  }
+
+  const metaReq = parseMeta(rest);
+  if (metaReq) {
+    if ((metaReq.type === 'channel' || metaReq.type === 'tv') && b.use_live) {
+      const list = await liveList(b);
+      const rawId = String(metaReq.id || '');
+      const sid = rawId.replace(/^(live|channel|xtream):/i, '');
+      const hit = list.find((x) => String(x.stream_id) === String(sid));
+      if (hit) {
+        res.status(200).json({
+          meta: {
+            id: 'live:' + hit.stream_id,
+            type: 'channel',
+            name: hit.name || hit.title || 'Canal',
+            poster: posterOf(hit),
+            background: posterOf(hit),
+            description: hit.name || 'Canal ao vivo',
+          },
+        });
+        return;
+      }
+    }
+    res.status(200).json({ meta: null });
     return;
   }
 
@@ -339,7 +394,7 @@ module.exports = async function handler(req, res) {
         });
       });
     }
-    if ((catReq.type === 'series' || catReq.type === 'tv') && b.use_series) {
+    if (catReq.type === 'series' && b.use_series) {
       const list = await seriesList(b);
       const { slice } = pageSlice(list, catReq.extra);
       slice.forEach((item) => {
@@ -353,6 +408,20 @@ module.exports = async function handler(req, res) {
         });
       });
     }
+    if ((catReq.type === 'channel' || catReq.type === 'tv') && b.use_live) {
+      const list = await liveList(b);
+      const { slice } = pageSlice(list, catReq.extra);
+      slice.forEach((item) => {
+        const sid = item.stream_id;
+        if (!sid) return;
+        metas.push({
+          id: 'live:' + sid,
+          type: 'channel',
+          name: item.name || item.title || 'Canal',
+          poster: posterOf(item),
+        });
+      });
+    }
     res.status(200).json({ metas });
     return;
   }
@@ -360,6 +429,33 @@ module.exports = async function handler(req, res) {
   const streamReq = parseStreamPath(rest);
   if (streamReq) {
     const streams = [];
+
+    if ((streamReq.type === 'channel' || streamReq.type === 'tv') && b.use_live) {
+      const list = await liveList(b);
+      let hit = null;
+      const want = streamReq.liveId || streamReq.xtreamId || String(streamReq.id || '').replace(/^(live|channel|xtream):/i, '');
+      if (want) hit = list.find((x) => String(x.stream_id) === String(want));
+      if (hit && hit.stream_id) {
+        const ext = (hit.container_extension || 'ts').replace(/^\./, '');
+        streams.push({
+          name: b.name,
+          title: hit.name || 'Ao vivo',
+          url: liveUrl(b, hit.stream_id, ext),
+          behaviorHints: { notWebReady: true },
+        });
+        if (ext !== 'm3u8') {
+          streams.push({
+            name: b.name + ' HLS',
+            title: (hit.name || 'Ao vivo') + ' (m3u8)',
+            url: liveUrl(b, hit.stream_id, 'm3u8'),
+            behaviorHints: { notWebReady: true },
+          });
+        }
+      }
+      res.status(200).json({ streams });
+      return;
+    }
+
     const kind = streamReq.type === 'movie' ? 'movie' : 'tv';
     let meta = { titles: [], year: null };
     if (streamReq.imdbId) meta = await imdbTitles(streamReq.imdbId, kind);
@@ -384,7 +480,7 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    if ((streamReq.type === 'series' || streamReq.type === 'tv') && b.use_series) {
+    if (streamReq.type === 'series' && b.use_series) {
       const list = await seriesList(b);
       let hit = null;
       if (streamReq.xtreamId) {
