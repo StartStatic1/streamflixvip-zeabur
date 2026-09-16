@@ -148,7 +148,7 @@ module.exports = async function handler(req, res) {
 
   if (action === 'list') {
     const r = await fetch(
-      SUPABASE_URL + '/rest/v1/iptv_bridges?select=id,name,xtream_host,use_live,use_movies,use_series,live_cats,vod_cats,series_cats,is_active,addon_id,access_token,created_at&order=created_at.desc',
+      SUPABASE_URL + '/rest/v1/iptv_bridges?select=id,name,xtream_host,xtream_user,xtream_pass,use_live,use_movies,use_series,live_cats,vod_cats,series_cats,is_active,addon_id,access_token,created_at&order=created_at.desc',
       { headers: h },
     );
     const rows = await r.json();
@@ -224,7 +224,7 @@ module.exports = async function handler(req, res) {
     const host = normHost(body.host || body.xtream_host);
     const user = String(body.user || body.xtream_user || '').trim();
     const pass = String(body.pass || body.xtream_pass || '').trim();
-    if (!host || !user || !pass) {
+    if (!host || !user || (!pass && !body.id)) {
       res.status(400).json({ error: 'Informe host, usuario e senha' });
       return;
     }
@@ -242,6 +242,7 @@ module.exports = async function handler(req, res) {
       is_active: body.is_active !== false,
       updated_at: new Date().toISOString(),
     };
+    if (body.id && !pass) delete payload.xtream_pass;
     if (!body.id) payload.access_token = newToken();
     let row;
     if (body.id) {
