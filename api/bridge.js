@@ -1,6 +1,6 @@
 // api/bridge.js — add-on Stremio/Nuvio gerado pela aba Bridge.
 // Live TV: type "channel", catálogos por categoria + busca.
-// Filmes/séries inalterados.
+// Filmes/séries: meta básica para abrir no catálogo Nuvio.
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
@@ -358,6 +358,9 @@ module.exports = async function handler(req, res) {
     const types = [];
     const catalogs = [];
     const resources = ['catalog', 'stream'];
+    if (b.use_movies || b.use_series || b.use_live) {
+      resources.push('meta');
+    }
     if (b.use_movies) {
       types.push('movie');
       catalogs.push({ type: 'movie', id: 'sf_movies', name: b.name + ' Filmes', extra: extras });
@@ -368,7 +371,6 @@ module.exports = async function handler(req, res) {
     }
     if (b.use_live) {
       types.push('channel');
-      resources.push('meta');
       catalogs.push({
         type: 'channel',
         id: 'sf_live',
@@ -390,8 +392,8 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.bridge.' + b.id.slice(0, 8),
       name: b.name,
-      version: '1.4.0',
-      description: 'Ponte Xtream StreamFlixVIP (filmes, series e TV por categoria + busca)',
+      version: '1.5.0',
+      description: 'Ponte Xtream StreamFlixVIP (filmes, series, TV + meta basica para abrir no catalogo)',
       resources,
       types,
       catalogs,
@@ -402,10 +404,11 @@ module.exports = async function handler(req, res) {
 
   const metaReq = parseMeta(rest);
   if (metaReq) {
+    const rawId = String(metaReq.id || '');
+    const sid = rawId.replace(/^(live|channel|xtream|sf):/i, '');
+
     if ((metaReq.type === 'channel' || metaReq.type === 'tv') && b.use_live) {
       const list = await liveList(b, null);
-      const rawId = String(metaReq.id || '');
-      const sid = rawId.replace(/^(live|channel|xtream):/i, '');
       const hit = list.find((x) => String(x.stream_id) === String(sid));
       if (hit) {
         res.status(200).json({
@@ -421,6 +424,73 @@ module.exports = async function handler(req, res) {
         return;
       }
     }
+
+    if (metaReq.type === 'movie' && b.use_movies) {
+      const list = await vodList(b);
+      const hit = list.find((x) => String(x.stream_id) === String(sid));
+      if (hit) {
+        const name = hit.name || hit.title || 'Filme';
+        const y = yearOf(name);
+        res.status(200).json({
+          meta: {
+            id: 'xtream:' + hit.stream_id,
+            type: 'movie',
+            name,
+            poster: posterOf(hit),
+            background: posterOf(hit),
+            description: name,
+            releaseInfo: y ? String(y) : undefined,
+          },
+        });
+        return;
+      }
+    }
+
+    if (metaReq.type === 'series' && b.use_series) {
+      const list = await seriesList(b);
+      const hit = list.find((x) => String(x.series_id || x.stream_id) === String(sid));
+      if (hit) {
+        const seriesId = hit.series_id || hit.stream_id;
+        const name = hit.name || hit.title || 'Serie';
+        const y = yearOf(name);
+        const videos = [];
+        try {
+          const info = await xtream(b, 'get_series_info', { series_id: seriesId });
+          const eps = (info && info.episodes) || {};
+          Object.keys(eps).forEach((seasonKey) => {
+            const bag = Array.isArray(eps[seasonKey]) ? eps[seasonKey] : [];
+            bag.forEach((ep) => {
+              const sn = Number(ep.season || seasonKey) || Number(seasonKey) || 1;
+              const en = Number(ep.episode_num || ep.episode) || 0;
+              if (!en) return;
+              videos.push({
+                id: 'xtream:' + seriesId + ':' + sn + ':' + en,
+                title: ep.title || ('S' + sn + 'E' + en),
+                season: sn,
+                episode: en,
+                released: ep.releasedate || ep.added || undefined,
+                thumbnail: (ep.info && (ep.info.movie_image || ep.info.cover)) || posterOf(hit),
+              });
+            });
+          });
+          videos.sort((a, b) => a.season - b.season || a.episode - b.episode);
+        } catch (_) {}
+        res.status(200).json({
+          meta: {
+            id: 'xtream:' + seriesId,
+            type: 'series',
+            name,
+            poster: posterOf(hit),
+            background: posterOf(hit),
+            description: name,
+            releaseInfo: y ? String(y) : undefined,
+            videos: videos.length ? videos : undefined,
+          },
+        });
+        return;
+      }
+    }
+
     res.status(200).json({ meta: null });
     return;
   }
