@@ -4767,7 +4767,7 @@
       }
 
       resultsBox.innerHTML = data.results.slice(0, 6).map((item) => `
-        <button class="subtitle-result-item" onclick="downloadSubtitleAuto(${item.file_id}, '${item.release.replace(/'/g, "\\'").slice(0,60)}')">
+        <button class="subtitle-result-item" onclick="downloadSubtitleAuto(${item.file_id || 'null'}, ${JSON.stringify(item.release.slice(0,60))}, ${JSON.stringify(item.url || '')})">
           <span class="release">${item.release}</span>
           <span class="downloads">${item.downloads.toLocaleString('pt-BR')}⬇</span>
         </button>
@@ -4778,11 +4778,13 @@
     }
   }
 
-  async function downloadSubtitleAuto(fileId, releaseName) {
+  async function downloadSubtitleAuto(fileId, releaseName, directUrl = '') {
     const resultsBox = document.getElementById('subtitleSearchResults');
     resultsBox.innerHTML = '<div class="subtitle-search-status">Baixando legenda...</div>';
 
-    const params = new URLSearchParams({ action: 'download', file_id: fileId });
+    const params = new URLSearchParams({ action: 'download' });
+    if (directUrl) params.set('url', directUrl);
+    else params.set('file_id', fileId);
     if (currentItem?.id) {
       params.set('tmdb_id', currentItem.id);
       params.set('media_type', currentItemType || 'movie');

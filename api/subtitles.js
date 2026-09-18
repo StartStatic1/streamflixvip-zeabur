@@ -11,6 +11,78 @@
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const STREMIO_OS_BASE = 'https://opensubtitles-v3.strem.io';
 
+function sbHeaders(serviceKey) {
+  return { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` };
+}
+
+async function fetchJson(url, timeout = 5000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    const r = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json', 'User-Agent': 'StreamFlixVIP/1.0' },
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (_) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function loadSubtitleAddons(serviceKey) {
+  if (!serviceKey) return [];
+  try {
+    const url = `${SUPABASE_URL}/rest/v1/stremio_addons?is_active=eq.true&select=name,manifest_url,base_url,priority&order=priority.asc`;
+    const r = await fetch(url, { headers: sbHeaders(serviceKey) });
+    if (!r.ok) return [];
+    const rows = await r.json();
+    const candidates = Array.isArray(rows) ? rows : [];
+    const checked = await Promise.all(candidates.map(async (a) => {
+      const manifest = await fetchJson(a.manifest_url, 5000);
+      const resources = Array.isArray(manifest?.resources) ? manifest.resources : [];
+      const isSubtitle = resources.some((x) => String(typeof x === 'string' ? x : x?.name || '').toLowerCase() === 'subtitles')
+        || /subtitle|legenda|opensubtitle|caption|sub\b/i.test(String(a.name || ''));
+      return isSubtitle ? { ...a, manifest } : null;
+    }));
+    return checked.filter(Boolean);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function searchConfiguredAddons(serviceKey, imdbId, season, episode) {
+  if (!imdbId) return [];
+  const addons = await loadSubtitleAddons(serviceKey);
+  const isSeries = season != null && episode != null && Number(season) > 0;
+  const type = isSeries ? 'series' : 'movie';
+  const id = isSeries ? `${imdbId}:${season}:${episode}` : imdbId;
+  const preferred = new Set(['pob', 'por', 'pt', 'pt-br', 'pb']);
+  const results = [];
+  await Promise.all(addons.map(async (addon) => {
+    const base = String(addon.base_url || String(addon.manifest_url || '').replace(/\/?manifest\.json$/i, '')).replace(/\/+$/, '');
+    if (!base) return;
+    const data = await fetchJson(`${base}/subtitles/${type}/${encodeURIComponent(id)}.json`, 7000);
+    const list = Array.isArray(data?.subtitles) ? data.subtitles : [];
+    list.filter((s) => s && s.url && preferred.has(String(s.lang || '').toLowerCase())).forEach((s, i) => {
+      results.push({
+        id: `addon-${addon.name || 'subtitle'}-${s.id || i}`,
+        release: s.subtitleFileName || s.movieReleaseName || `${addon.name || 'Addon'} · Legenda PT-BR`,
+        downloads: Number(s.downloads || 0),
+        fps: s.fpsMilli ? s.fpsMilli / 1000 : (s.fps || null),
+        hd: false,
+        file_id: null,
+        url: s.url,
+        lang: s.lang || 'pob',
+        source: addon.name || 'addon-subtitles',
+      });
+    });
+  }));
+  return results;
+}
+
 // ════════════════════════════════════════════════════════════
 // BUSCA
 // ════════════════════════════════════════════════════════════
@@ -102,6 +174,7 @@ async function searchStremioFallback(imdbId, season, episode) {
 
 async function handleSearch(req, res) {
   const apiKey = process.env.OPENSUBTITLES_API_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const { tmdb_id, season, episode, imdb_id, media_type } = req.query;
   if (!tmdb_id) {
     res.status(400).json({ error: 'Parâmetro tmdb_id obrigatório.' });
@@ -117,13 +190,31 @@ async function handleSearch(req, res) {
     }
   }
 
+  // Addons Stremio de legendas cadastrados no painel têm prioridade sobre
+  // o fallback fixo: eles podem ter fontes PT-BR específicas para anime,
+  // releases e áudio original.
+  let imdb = imdb_id && String(imdb_id).startsWith('tt') ? String(imdb_id) : null;
+  if (!imdb) {
+    const mt = media_type === 'tv' || season ? 'tv' : 'movie';
+    imdb = await resolveImdbFromTmdb(tmdb_id, mt);
+  }
+  const configured = await searchConfiguredAddons(
+    serviceKey,
+    imdb,
+    season != null && season !== '' ? Number(season) : null,
+    episode != null && episode !== '' ? Number(episode) : null,
+  );
+  const seenConfigured = new Set(results.map((r) => `${r.release}|${r.lang}`));
+  configured.forEach((item) => {
+    const key = `${item.release}|${item.lang}`;
+    if (!seenConfigured.has(key)) {
+      results.push(item);
+      seenConfigured.add(key);
+    }
+  });
+
   // Fallback Stremio se vazio ou poucas opções PT
   if (results.length < 2) {
-    let imdb = imdb_id && String(imdb_id).startsWith('tt') ? String(imdb_id) : null;
-    if (!imdb) {
-      const mt = media_type === 'tv' || season ? 'tv' : 'movie';
-      imdb = await resolveImdbFromTmdb(tmdb_id, mt);
-    }
     const extra = await searchStremioFallback(
       imdb,
       season != null && season !== '' ? Number(season) : null,
