@@ -230,6 +230,83 @@ async function imdbTitles(imdbId, kind) {
   }
 }
 
+async function tmdbMatch(title, year, kind) {
+  const apiKey = tmdbKey();
+  if (!apiKey || !title) return null;
+  const cacheKey = 'match:' + kind + ':' + norm(title) + ':' + (year || '');
+  const hit = cache.get(cacheKey);
+  if (hit && Date.now() - hit.at < 12 * 60 * 60 * 1000) return hit.value;
+  try {
+    const path = kind === 'tv' ? '/search/tv' : '/search/movie';
+    const url = new URL('https://api.themoviedb.org/3' + path);
+    url.searchParams.set('api_key', apiKey);
+    url.searchParams.set('language', 'pt-BR');
+    url.searchParams.set('query', String(title).replace(/\b(?:19|20)\d{2}\b/g, ' ').trim());
+    if (year) url.searchParams.set(kind === 'tv' ? 'first_air_date_year' : 'year', String(year));
+    const r = await fetch(url.toString());
+    if (!r.ok) return null;
+    const j = await r.json();
+    const rows = Array.isArray(j.results) ? j.results : [];
+    const best = rows[0] || null;
+    const value = best ? { id: best.id, item: best } : null;
+    cache.set(cacheKey, { at: Date.now(), value });
+    return value;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function tmdbDetails(id, kind) {
+  const apiKey = tmdbKey();
+  if (!apiKey || !id) return null;
+  const cacheKey = 'details:' + kind + ':' + id;
+  const hit = cache.get(cacheKey);
+  if (hit && Date.now() - hit.at < 12 * 60 * 60 * 1000) return hit.value;
+  try {
+    const path = kind === 'tv' ? '/tv/' : '/movie/';
+    const url = new URL('https://api.themoviedb.org/3' + path + encodeURIComponent(id));
+    url.searchParams.set('api_key', apiKey);
+    url.searchParams.set('language', 'pt-BR');
+    url.searchParams.set('append_to_response', 'credits,external_ids');
+    const r = await fetch(url.toString());
+    if (!r.ok) return null;
+    const value = await r.json();
+    cache.set(cacheKey, { at: Date.now(), value });
+    return value;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function enrichedMeta(name, kind, poster, extra) {
+  const year = yearOf(name);
+  const match = await tmdbMatch(name, year, kind);
+  const full = match ? await tmdbDetails(match.id, kind) : null;
+  if (!full) return {
+    name,
+    poster: poster || null,
+    background: poster || null,
+    description: name,
+    releaseInfo: year ? String(year) : undefined,
+    ...(extra || {}),
+  };
+  const release = full.release_date || full.first_air_date || '';
+  return {
+    id: String(full.id),
+    type: kind === 'tv' ? 'series' : 'movie',
+    name: full.title || full.name || name,
+    poster: full.poster_path ? 'https://image.tmdb.org/t/p/w500' + full.poster_path : (poster || null),
+    background: full.backdrop_path ? 'https://image.tmdb.org/t/p/w1280' + full.backdrop_path : (poster || null),
+    description: full.overview || name,
+    releaseInfo: release ? release.slice(0, 4) : (year ? String(year) : undefined),
+    runtime: full.runtime || full.episode_run_time?.[0] || undefined,
+    genres: Array.isArray(full.genres) ? full.genres.map((g) => g.name) : undefined,
+    imdbRating: full.vote_average || undefined,
+    imdb_id: full.external_ids?.imdb_id || undefined,
+    ...(extra || {}),
+  };
+}
+
 function parseStreamPath(rest) {
   const m = String(rest || '').match(/^stream\/([^/]+)\/(.+)\.json$/i);
   if (!m) return null;
@@ -431,17 +508,11 @@ module.exports = async function handler(req, res) {
       if (hit) {
         const name = hit.name || hit.title || 'Filme';
         const y = yearOf(name);
-        res.status(200).json({
-          meta: {
-            id: 'xtream:' + hit.stream_id,
-            type: 'movie',
-            name,
-            poster: posterOf(hit),
-            background: posterOf(hit),
-            description: name,
-            releaseInfo: y ? String(y) : undefined,
-          },
+        const meta = await enrichedMeta(name, 'movie', posterOf(hit), {
+          id: 'xtream:' + hit.stream_id,
+          type: 'movie',
         });
+        res.status(200).json({ meta });
         return;
       }
     }
@@ -475,18 +546,12 @@ module.exports = async function handler(req, res) {
           });
           videos.sort((a, b) => a.season - b.season || a.episode - b.episode);
         } catch (_) {}
-        res.status(200).json({
-          meta: {
-            id: 'xtream:' + seriesId,
-            type: 'series',
-            name,
-            poster: posterOf(hit),
-            background: posterOf(hit),
-            description: name,
-            releaseInfo: y ? String(y) : undefined,
-            videos: videos.length ? videos : undefined,
-          },
+        const meta = await enrichedMeta(name, 'tv', posterOf(hit), {
+          id: 'xtream:' + seriesId,
+          type: 'series',
+          videos: videos.length ? videos : undefined,
         });
+        res.status(200).json({ meta });
         return;
       }
     }
