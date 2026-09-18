@@ -241,14 +241,28 @@ async function tmdbMatch(title, year, kind) {
     const url = new URL('https://api.themoviedb.org/3' + path);
     url.searchParams.set('api_key', apiKey);
     url.searchParams.set('language', 'pt-BR');
-    url.searchParams.set('query', String(title).replace(/\b(?:19|20)\d{2}\b/g, ' ').trim());
+    const cleanTitle = String(title)
+      .replace(/\[[^\]]*\]/g, ' ')
+      .replace(/\((?:dual|dub|dublado|legendado|leg|pt[- ]?br|4k|uhd|fhd|hd|sd)[^)]*\)/gi, ' ')
+      .replace(/\b(?:19|20)\d{2}\b/g, ' ')
+      .replace(/[._]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    url.searchParams.set('query', cleanTitle || String(title));
     if (year) url.searchParams.set(kind === 'tv' ? 'first_air_date_year' : 'year', String(year));
     const r = await fetch(url.toString());
     if (!r.ok) return null;
     const j = await r.json();
     const rows = Array.isArray(j.results) ? j.results : [];
-    const best = rows[0] || null;
-    const value = best ? { id: best.id, item: best } : null;
+    const best = rows
+      .map((row) => {
+        const names = [row.title, row.name, row.original_title, row.original_name].filter(Boolean);
+        const score = Math.max(...names.map((n) => scoreOne(n, cleanTitle || title, year)), 0);
+        return { row, score };
+      })
+      .sort((a, b) => b.score - a.score)[0];
+    const selected = best && (best.score >= 78 || rows.length === 1) ? best.row : null;
+    const value = selected ? { id: selected.id, item: selected } : null;
     cache.set(cacheKey, { at: Date.now(), value });
     return value;
   } catch (_) {
@@ -469,8 +483,8 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.bridge.' + b.id.slice(0, 8),
       name: b.name,
-      version: '1.5.0',
-      description: 'Ponte Xtream StreamFlixVIP (filmes, series, TV + meta basica para abrir no catalogo)',
+      version: '1.6.0',
+      description: 'Ponte Xtream StreamFlixVIP (filmes, series, TV + metadados TMDB em portugues)',
       resources,
       types,
       catalogs,
