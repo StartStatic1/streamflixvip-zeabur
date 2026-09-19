@@ -331,7 +331,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.1.3',
+      version: '1.1.4',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -374,9 +374,9 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.1.3',
+      version: '1.1.4',
       description:
-        'Agregador StreamFlixVIP — multiplos servidores em um add-on (estilo UnioFlix). Use com Nuvio Catalog / AIOMetadata.',
+        'Filmes e séries com várias fontes em um só lugar. Qualidade FULL HD, servidores rápidos e experiência estável — feito para quem curte conteúdo sem enrolação.',
       logo: 'https://www.streamflixvip.online/logo.png',
       background: 'https://www.streamflixvip.online/logo.png',
       resources: ['stream', 'meta'],
