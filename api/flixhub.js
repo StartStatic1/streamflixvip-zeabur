@@ -331,7 +331,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.1.2',
+      version: '1.1.3',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -374,7 +374,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.1.2',
+      version: '1.1.3',
       description:
         'Agregador StreamFlixVIP — multiplos servidores em um add-on (estilo UnioFlix). Use com Nuvio Catalog / AIOMetadata.',
       logo: 'https://www.streamflixvip.online/logo.png',
@@ -441,8 +441,8 @@ module.exports = async function handler(req, res) {
               const label = server.name || brand;
               const color = server.color || '⚡';
               streams.push({
-                name: brand + ' · ' + label,
-                title: color + ' ' + label + '\n🎬 ' + (hit.name || titles[0] || 'Filme') + '\n🎯 FULL HD 1080p',
+                name: brand,
+                title: '🎬 ' + (hit.name || titles[0] || 'Filme') + '\n' + color + ' ' + label + '\n🎯 FULL HD 1080p',
                 url: hostOf(server) + '/movie/' + server.user + '/' + server.pass + '/' + hit.stream_id + '.' + ext,
                 behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
               });
@@ -467,8 +467,8 @@ module.exports = async function handler(req, res) {
                 const label = server.name || brand;
                 const color = server.color || '⚡';
                 streams.push({
-                  name: brand + ' · ' + label,
-                  title: color + ' ' + label + '\n📺 ' + (hit.name || titles[0] || 'Serie') + ' S' + seasonKey + 'E' + wantEp + '\n🎯 FULL HD',
+                  name: brand,
+                  title: '📺 ' + (hit.name || titles[0] || 'Serie') + ' S' + seasonKey + 'E' + wantEp + '\n' + color + ' ' + label + '\n🎯 FULL HD',
                   url: hostOf(server) + '/series/' + server.user + '/' + server.pass + '/' + eid + '.' + ext,
                   behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
                 });
@@ -479,10 +479,10 @@ module.exports = async function handler(req, res) {
       }),
     );
 
-    const orderTitles = servers.map((s) => (s.color || '⚡') + ' ' + (s.name || brand));
+    const orderLabels = servers.map((s) => (s.color || '⚡') + ' ' + (s.name || brand));
     streams.sort((a, b) => {
-      const ia = orderTitles.findIndex((t) => (a.title || '').indexOf(t) === 0);
-      const ib = orderTitles.findIndex((t) => (b.title || '').indexOf(t) === 0);
+      const ia = orderLabels.findIndex((t) => (a.title || '').indexOf(t) >= 0);
+      const ib = orderLabels.findIndex((t) => (b.title || '').indexOf(t) >= 0);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
 
