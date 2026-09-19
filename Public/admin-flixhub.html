@@ -272,13 +272,15 @@ function readSrvsFromDom() {
   return _servers.map((s, i) => {
     const box = document.getElementById('srv-' + i);
     if (!box) return s;
+    const typedPass = box.querySelector('.p').value;
+    const pass = typedPass || s.pass || '';
     return {
       id: s.id,
       name: box.querySelector('.n').value.trim() || ('Servidor ' + (i + 1)),
       color: box.querySelector('.c').value.trim() || '🔴',
       host: box.querySelector('.h').value.trim(),
       user: box.querySelector('.u').value.trim(),
-      pass: box.querySelector('.p').value,
+      pass: pass,
       enabled: box.querySelector('.en').checked,
       priority: Number(box.querySelector('.pr').value) || i + 1,
       use_movies: box.querySelector('.mov').checked,
@@ -330,7 +332,7 @@ function editPack(id) {
   document.getElementById('formTitle').textContent = 'Editar pack';
   document.getElementById('btnSave').textContent = 'Salvar alteracoes';
   document.getElementById('btnCancel').style.display = 'inline-block';
-  _servers = (p.servers || []).map((s) => Object.assign({}, s, { pass: '' }));
+  _servers = (p.servers || []).map((s) => Object.assign({}, s, { pass: s.pass || '' }));
   if (!_servers.length) addSrv();
   else renderSrvs();
   window.scrollTo({ top: 0, behavior: 'smooth' });
