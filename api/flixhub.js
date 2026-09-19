@@ -287,11 +287,53 @@ module.exports = async function handler(req, res) {
   const brand = pack.name || 'FlixHub';
   const servers = enabledServers(pack);
 
+  if (rest === 'debug.json' || rest.startsWith('debug/')) {
+    const out = {
+      ok: true,
+      name: brand,
+      version: '1.0.2',
+      servers: servers.map((s) => ({
+        name: s.name,
+        host: hostOf(s),
+        user: s.user ? String(s.user).slice(0, 3) + '***' : null,
+        hasPass: !!s.pass,
+        enabled: s.enabled !== false,
+        use_movies: s.use_movies !== false,
+        use_series: s.use_series !== false,
+        priority: s.priority,
+      })),
+      tests: [],
+    };
+    const testId = (rest.split('/')[1] || 'tt0137523').replace(/\.json$/, '');
+    let meta = { titles: [], year: null };
+    if (/^tt\d+$/i.test(testId)) meta = await imdbTitles(testId, 'movie');
+    else if (/^tmdb/i.test(testId)) meta = await tmdbTitle(testId.replace(/^tmdb:?/i, ''), 'movie');
+    out.resolved = meta;
+    for (const server of servers) {
+      const row = { name: server.name, host: hostOf(server) };
+      try {
+        const list = await vodList(server);
+        row.vodCount = list.length;
+        row.sample = list.slice(0, 3).map((x) => x.name || x.title || '?');
+        if (meta.titles && meta.titles.length) {
+          const hit = pick(list, meta.titles, meta.year);
+          row.match = hit ? (hit.name || hit.title) : null;
+          row.matchId = hit ? hit.stream_id : null;
+        }
+      } catch (e) {
+        row.error = String(e && e.message ? e.message : e);
+      }
+      out.tests.push(row);
+    }
+    res.status(200).json(out);
+    return;
+  }
+
   if (rest === 'manifest.json') {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.0.1',
+      version: '1.0.2',
       description:
         'Agregador StreamFlixVIP — multiplos servidores em um add-on (estilo UnioFlix). Use com Nuvio Catalog / AIOMetadata.',
       resources: ['stream', 'meta'],
