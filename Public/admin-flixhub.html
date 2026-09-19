@@ -33,7 +33,7 @@
     .emojis button{padding:6px 10px;font-size:1.1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px}
     .bridge-list{max-height:180px;overflow:auto;margin-bottom:10px}
     .bridge-list button{display:block;width:100%;text-align:left;margin-bottom:6px;padding:10px 12px;font-size:.8rem}
-    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;opacity:0;transition:.25s;z-index:99}
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;opacity:0;transition:.25s;z-index:99;max-width:90%;text-align:center}
     #toast.show{opacity:1}
   </style>
 </head>
@@ -61,7 +61,7 @@
   <main>
     <div class="panel">
       <h2 id="formTitle">Novo pack</h2>
-      <p class="hint">Nome = marca no Nuvio. Ao colar get.php a senha preenche sozinha. Confira se o campo senha nao esta vazio antes de salvar.</p>
+      <p class="hint">Ao colar get.php a senha preenche. Use TESTAR: se der 403, o painel bloqueia o IP do VPS (no celular pode funcionar).</p>
       <input id="pName" placeholder="Nome no Nuvio — ex: FlixHub" value="FlixHub"/>
 
       <p class="hint" style="margin-top:8px"><b>Importar da Bridge</b> (host/user/senha ja salvos)</p>
@@ -146,11 +146,11 @@ function toast(t) {
   const el = document.getElementById('toast');
   el.textContent = t;
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2800);
+  setTimeout(() => el.classList.remove('show'), 4000);
 }
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, function (c) {
-    return ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' })[c];
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
   });
 }
 async function loadBridges() {
@@ -242,7 +242,7 @@ function parsePaste() {
     use_series: true,
   });
   document.getElementById('pasteLine').value = '';
-  toast('Servidor adicionado — confira se a senha apareceu');
+  toast('Servidor adicionado — confira senha e use Testar');
 }
 function addSrv(data) {
   _servers.push(data || {
@@ -310,6 +310,7 @@ function renderSrvs() {
       '<label class="chip"><input class="en" type="checkbox"' + (s.enabled !== false ? ' checked' : '') + '/> ON</label>' +
       '<label class="chip"><input class="mov" type="checkbox"' + (s.use_movies !== false ? ' checked' : '') + '/> Filmes</label>' +
       '<label class="chip"><input class="ser" type="checkbox"' + (s.use_series !== false ? ' checked' : '') + '/> Series</label>' +
+      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="testSrv(' + i + ')">Testar</button>' +
       '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="removeSrv(' + i + ')">Remover</button>' +
       '</div></div>';
   }).join('') || '<p class="hint">Nenhum servidor</p>';
@@ -336,6 +337,21 @@ function editPack(id) {
   if (!_servers.length) addSrv();
   else renderSrvs();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+async function testSrv(i) {
+  _servers = readSrvsFromDom();
+  const s = _servers[i];
+  if (!s || !s.host || !s.user || !s.pass) {
+    toast('Preencha host, usuario e senha antes de testar');
+    return;
+  }
+  toast('Testando do VPS…');
+  const d = await api('test-server', { host: s.host, user: s.user, pass: s.pass });
+  if (d.ok) {
+    toast('OK: ' + (d.vodCount || 0) + ' filmes no VPS');
+  } else {
+    toast(d.error || 'Falhou no VPS');
+  }
 }
 async function save() {
   _servers = readSrvsFromDom();
