@@ -56,10 +56,10 @@ module.exports = async function handler(req, res) {
   }
   const jwt = auth.slice(7);
   const authR = await fetch(SUPABASE_URL + '/auth/v1/user', {
-    headers: { Authorization: 'Bearer ' + jwt, apikey: process.env.SUPABASE_ANON_KEY || '' },
+    headers: { apikey: serviceKey, Authorization: 'Bearer ' + jwt },
   });
   if (!authR.ok) {
-    res.status(401).json({ error: 'Sessao invalida' });
+    res.status(401).json({ error: 'Sessao invalida — saia e entre de novo no painel' });
     return;
   }
   const user = await authR.json();
@@ -79,9 +79,9 @@ module.exports = async function handler(req, res) {
 
   if (action === 'test-server') {
     const host = String(body.host || '').replace(/\/+$/, '');
-    const user = String(body.user || '');
+    const userXt = String(body.user || '');
     const pass = String(body.pass || '');
-    if (!host || !user || !pass) {
+    if (!host || !userXt || !pass) {
       res.status(400).json({ ok: false, error: 'host, user e senha obrigatorios' });
       return;
     }
@@ -95,7 +95,7 @@ module.exports = async function handler(req, res) {
     for (const ua of UAS) {
       try {
         const url = new URL(host + '/player_api.php');
-        url.searchParams.set('username', user);
+        url.searchParams.set('username', userXt);
         url.searchParams.set('password', pass);
         url.searchParams.set('action', 'get_vod_streams');
         const ac = new AbortController();
