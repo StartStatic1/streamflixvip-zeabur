@@ -229,22 +229,11 @@ module.exports = async function handler(req, res) {
         : 'movie';
     const season = body.season != null ? Number(body.season) : type === 'movie' ? null : 1;
     const episode = body.episode != null ? Number(body.episode) : type === 'movie' ? null : 1;
-    const { collectAddonSources, resolveAnimeIds } = require('../lib/stremio-addons');
+    const { diagnoseAddonSources, resolveAnimeIds } = require('../lib/stremio-addons');
     try {
       const anime = await resolveAnimeIds(Number(tmdbId), type);
-      const all = await collectAddonSources(serviceKey, Number(tmdbId), type, season, episode);
-      let streams = all;
-      if (id) {
-        const one = await fetch(
-          `${SUPABASE_URL}/rest/v1/stremio_addons?id=eq.${encodeURIComponent(id)}&select=id,name`,
-          { headers: svcHeaders },
-        );
-        const rows = await one.json();
-        if (one.ok && rows.length) {
-          const filtered = all.filter((s) => String(s.source_label || '').includes(rows[0].name));
-          streams = filtered.length ? filtered : all.slice(0, 15);
-        }
-      }
+      const diagnostics = await diagnoseAddonSources(serviceKey, Number(tmdbId), type, season, episode, id);
+      const streams = diagnostics.flatMap((d) => d.accepted || []);
       res.status(200).json({
         ok: true,
         tmdb_id: Number(tmdbId),
@@ -254,6 +243,7 @@ module.exports = async function handler(req, res) {
         kitsu: anime,
         streams,
         count: streams.length,
+        diagnostics,
       });
     } catch (e) {
       res.status(500).json({ error: e.message || 'Falha no teste' });
