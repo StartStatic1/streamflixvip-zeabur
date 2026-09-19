@@ -115,6 +115,8 @@ function scoreOne(itemName, queryTitle, queryYear) {
   else if (coverN >= 0.99 && nTok.length >= 2) score = 88;
   else if (coverN >= 0.8 && coverT >= 0.7 && nTok.length >= 3) score = 80;
   else if (coverT >= 0.99 && tTok.length >= nTok.length && nTok.length >= 3) score = 78;
+  else if (coverN >= 0.75 && nTok.length >= 2 && interN >= 2) score = 72;
+  else if (t.includes(n) || n.includes(t)) score = 70;
   else return 0;
   if (queryYear && itemYear && queryYear === itemYear) score += 12;
   return score;
@@ -135,7 +137,7 @@ function pick(list, titles, queryYear) {
       }
     }
   }
-  return bestScore >= 78 ? best : null;
+  return bestScore >= 70 ? best : null;
 }
 
 function metaFromTmdb(j) {
@@ -155,13 +157,23 @@ async function tmdbTitle(tmdbId, kind) {
   if (!apiKey || !tmdbId) return { titles: [], year: null };
   const path = kind === 'tv' ? '/tv/' + tmdbId : '/movie/' + tmdbId;
   try {
-    const r = await fetch(
-      'https://api.themoviedb.org/3' + path +
-        '?api_key=' + encodeURIComponent(apiKey) +
-        '&language=pt-BR',
-    );
-    if (!r.ok) return { titles: [], year: null };
-    return metaFromTmdb(await r.json());
+    const [pt, en] = await Promise.all([
+      fetch('https://api.themoviedb.org/3' + path + '?api_key=' + encodeURIComponent(apiKey) + '&language=pt-BR').then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch('https://api.themoviedb.org/3' + path + '?api_key=' + encodeURIComponent(apiKey) + '&language=en-US').then((r) => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    const a = pt ? metaFromTmdb(pt) : { titles: [], year: null };
+    const b = en ? metaFromTmdb(en) : { titles: [], year: null };
+    const titles = [];
+    for (const t of (a.titles || []).concat(b.titles || [])) {
+      if (t && titles.indexOf(t) < 0) titles.push(t);
+    }
+    return {
+      titles,
+      year: a.year || b.year || null,
+      overview: a.overview || b.overview || '',
+      poster: a.poster || b.poster || null,
+      backdrop: a.backdrop || b.backdrop || null,
+    };
   } catch (_) {
     return { titles: [], year: null };
   }
@@ -174,16 +186,28 @@ async function imdbTitles(imdbId, kind) {
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < 12 * 60 * 60 * 1000) return hit.meta;
   try {
-    const r = await fetch(
-      'https://api.themoviedb.org/3/find/' + encodeURIComponent(imdbId) +
-        '?api_key=' + encodeURIComponent(apiKey) +
-        '&external_source=imdb_id&language=pt-BR',
-    );
-    if (!r.ok) return { titles: [], year: null };
-    const j = await r.json();
-    const rows = kind === 'tv' ? (j.tv_results || []) : (j.movie_results || []);
-    const row = rows[0] || (j.tv_results && j.tv_results[0]) || (j.movie_results && j.movie_results[0]);
-    const meta = row ? metaFromTmdb(row) : { titles: [], year: null };
+    const [pt, en] = await Promise.all([
+      fetch('https://api.themoviedb.org/3/find/' + encodeURIComponent(imdbId) + '?api_key=' + encodeURIComponent(apiKey) + '&external_source=imdb_id&language=pt-BR').then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch('https://api.themoviedb.org/3/find/' + encodeURIComponent(imdbId) + '?api_key=' + encodeURIComponent(apiKey) + '&external_source=imdb_id&language=en-US').then((r) => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    function pickRow(j) {
+      if (!j) return null;
+      const rows = kind === 'tv' ? (j.tv_results || []) : (j.movie_results || []);
+      return rows[0] || (j.tv_results && j.tv_results[0]) || (j.movie_results && j.movie_results[0]) || null;
+    }
+    const a = pickRow(pt) ? metaFromTmdb(pickRow(pt)) : { titles: [], year: null };
+    const b = pickRow(en) ? metaFromTmdb(pickRow(en)) : { titles: [], year: null };
+    const titles = [];
+    for (const t of (a.titles || []).concat(b.titles || [])) {
+      if (t && titles.indexOf(t) < 0) titles.push(t);
+    }
+    const meta = {
+      titles,
+      year: a.year || b.year || null,
+      overview: a.overview || b.overview || '',
+      poster: a.poster || b.poster || null,
+      backdrop: a.backdrop || b.backdrop || null,
+    };
     cache.set(k, { at: Date.now(), meta });
     return meta;
   } catch (_) {
@@ -267,7 +291,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.0.0',
+      version: '1.0.1',
       description:
         'Agregador StreamFlixVIP — multiplos servidores em um add-on (estilo UnioFlix). Use com Nuvio Catalog / AIOMetadata.',
       resources: ['stream', 'meta'],
