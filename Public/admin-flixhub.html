@@ -12,7 +12,7 @@
     body{font-family:Outfit,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
     #login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;width:100%;max-width:400px}
-    input,select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 14px;font:inherit;margin-bottom:10px}
+    input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 14px;font:inherit;margin-bottom:10px}
     button{font:inherit;cursor:pointer;border:none;border-radius:12px;padding:12px 18px;font-weight:700}
     .btn-gold{background:linear-gradient(135deg,var(--gold),#e6a800);color:#000}
     .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
@@ -27,8 +27,12 @@
     .meta{font-size:.75rem;color:var(--muted);word-break:break-all;margin-top:4px}
     .srv{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--surface2)}
     .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    .row input{flex:1;min-width:120px;margin-bottom:8px}
+    .row input{flex:1;min-width:100px;margin-bottom:8px}
     label.chip{display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)}
+    .emojis{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+    .emojis button{padding:6px 10px;font-size:1.1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px}
+    .bridge-list{max-height:180px;overflow:auto;margin-bottom:10px}
+    .bridge-list button{display:block;width:100%;text-align:left;margin-bottom:6px;padding:10px 12px;font-size:.8rem}
     #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;opacity:0;transition:.25s;z-index:99}
     #toast.show{opacity:1}
   </style>
@@ -37,17 +41,18 @@
 <div id="login">
   <div class="card">
     <h1>FlixHub</h1>
-    <p class="hint">Agregador Nuvio — varios servidores Xtream em <b>um</b> add-on (estilo UnioFlix). Separado do app StreamFlix.</p>
+    <p class="hint">Agregador Nuvio — varios servidores em um add-on. Separado do app StreamFlix.</p>
     <input type="email" id="email" placeholder="E-mail admin"/>
     <input type="password" id="pass" placeholder="Senha"/>
     <button class="btn-gold" style="width:100%" onclick="doLogin()">Entrar</button>
-    <p class="hint" style="margin-top:12px"><a href="/admin-bridge.html" style="color:var(--gold)">Bridge</a> · <a href="/admin.html" style="color:var(--gold)">Painel</a></p>
+    <p class="hint" style="margin-top:12px"><a href="/admin-hub.html" style="color:var(--gold)">Hub</a> · <a href="/admin-bridge.html" style="color:var(--gold)">Bridge</a></p>
   </div>
 </div>
 <div id="app">
   <header>
     <div><strong>Flix<em style="color:var(--gold);font-style:italic">Hub</em></strong> · agregador</div>
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <a href="/admin-hub.html">Hub</a>
       <a href="/admin-bridge.html">Bridge</a>
       <a href="/admin.html">Painel</a>
       <button class="btn-sec" style="padding:6px 12px;font-size:.8rem" onclick="doLogout()">Sair</button>
@@ -56,10 +61,18 @@
   <main>
     <div class="panel">
       <h2 id="formTitle">Novo pack</h2>
-      <p class="hint">Nome = marca no Nuvio. Cada servidor vira uma fonte. Deixe senha em branco na edicao para manter.</p>
+      <p class="hint">Nome = marca no Nuvio. Preencha na mao, cole linha Xtream, ou importe da Bridge.</p>
       <input id="pName" placeholder="Nome no Nuvio — ex: FlixHub" value="FlixHub"/>
+
+      <p class="hint" style="margin-top:8px"><b>Importar da Bridge</b> (host/user/senha ja salvos)</p>
+      <div class="bridge-list" id="bridgeList"><p class="hint">Carregando pontes…</p></div>
+
+      <p class="hint"><b>Ou colar linha</b> (host user senha / URL completa)</p>
+      <textarea id="pasteLine" rows="2" placeholder="http://servidor.com:80 usuario senha&#10;ou http://servidor.com:80/usuario/senha"></textarea>
+      <button class="btn-sec" style="margin-bottom:12px" onclick="parsePaste()">Separar e adicionar</button>
+
       <div id="srvBox"></div>
-      <button class="btn-sec" style="margin-bottom:12px" onclick="addSrv()">+ Adicionar servidor</button>
+      <button class="btn-sec" style="margin-bottom:12px" onclick="addSrv()">+ Servidor manual</button>
       <div class="row">
         <button class="btn-gold" style="flex:1" onclick="save()" id="btnSave">Salvar e gerar</button>
         <button class="btn-sec" style="display:none" id="btnCancel" onclick="cancelEdit()">Cancelar</button>
@@ -78,11 +91,12 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: 'sfv-admin-auth-token' },
 });
-const COLORS = ['🔴','🔵','🟢','🟣','🟠','🟡','⚪','🟤'];
+const QUICK = ['🔴','🔵','🟢','🟣','🟠','🟡','⚡','🔥','💎','🎬','📺','⭐','🚀','💜','🖤','🤍'];
 let _session = null;
 let _editId = null;
 let _packs = [];
 let _servers = [];
+let _bridges = [];
 
 async function checkSession() {
   const { data } = await db.auth.getSession();
@@ -107,10 +121,20 @@ function showApp(s) {
   document.getElementById('app').style.display = 'block';
   if (!_servers.length) addSrv();
   loadList();
+  loadBridges();
 }
 async function doLogout() { await db.auth.signOut(); location.reload(); }
 async function api(action, extra) {
   const res = await fetch('/api/admin-flixhub', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _session.access_token },
+    body: JSON.stringify(Object.assign({ action: action }, extra || {})),
+  });
+  const t = await res.text();
+  try { return JSON.parse(t); } catch (e) { return { error: t || ('HTTP ' + res.status) }; }
+}
+async function bridgeApi(action, extra) {
+  const res = await fetch('/api/admin-bridge', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _session.access_token },
     body: JSON.stringify(Object.assign({ action: action }, extra || {})),
@@ -129,11 +153,77 @@ function esc(s) {
     return ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' })[c];
   });
 }
+async function loadBridges() {
+  const box = document.getElementById('bridgeList');
+  const d = await bridgeApi('list');
+  if (d.error) {
+    box.innerHTML = '<p class="hint">Nao deu para listar Bridge</p>';
+    return;
+  }
+  _bridges = d.bridges || [];
+  if (!_bridges.length) {
+    box.innerHTML = '<p class="hint">Nenhuma ponte. Cadastre em Bridge ou preencha manual.</p>';
+    return;
+  }
+  box.innerHTML = _bridges.map((b, i) => {
+    const label = esc(b.name || 'Ponte') + ' · ' + esc(b.xtream_host || '');
+    return '<button class="btn-sec" type="button" onclick="importBridge(' + i + ')">' + label + '</button>';
+  }).join('');
+}
+function importBridge(i) {
+  const b = _bridges[i];
+  if (!b) return;
+  addSrv({
+    id: 's' + Date.now() + Math.random().toString(16).slice(2),
+    name: b.name || ('Servidor ' + (_servers.length + 1)),
+    color: QUICK[_servers.length % QUICK.length],
+    host: b.xtream_host || '',
+    user: b.xtream_user || '',
+    pass: b.xtream_pass || '',
+    enabled: true,
+    priority: _servers.length + 1,
+    use_movies: b.use_movies !== false,
+    use_series: b.use_series !== false,
+  });
+  toast('Importado: ' + (b.name || 'ponte'));
+}
+function parsePaste() {
+  const raw = document.getElementById('pasteLine').value.trim();
+  if (!raw) { toast('Cole host user senha'); return; }
+  let host = '', user = '', pass = '';
+  // path style: http://host:port/user/pass
+  const pathM = raw.match(/^(https?:\/\/[^\s\/]+)(?:\/([^\s\/]+)\/([^\s\/]+))?/i);
+  const parts = raw.split(/\s+/).filter(Boolean);
+  if (parts.length >= 3 && /^https?:\/\//i.test(parts[0])) {
+    host = parts[0]; user = parts[1]; pass = parts[2];
+  } else if (pathM && pathM[2] && pathM[3]) {
+    host = pathM[1]; user = pathM[2]; pass = pathM[3];
+  } else if (parts.length >= 3) {
+    host = parts[0]; user = parts[1]; pass = parts[2];
+  } else {
+    toast('Formato: host user senha'); return;
+  }
+  if (!/^https?:\/\//i.test(host)) host = 'http://' + host;
+  addSrv({
+    id: 's' + Date.now() + Math.random().toString(16).slice(2),
+    name: 'Servidor ' + (_servers.length + 1),
+    color: QUICK[_servers.length % QUICK.length],
+    host: host.replace(/\/+$/, ''),
+    user: user,
+    pass: pass,
+    enabled: true,
+    priority: _servers.length + 1,
+    use_movies: true,
+    use_series: true,
+  });
+  document.getElementById('pasteLine').value = '';
+  toast('Servidor adicionado');
+}
 function addSrv(data) {
   _servers.push(data || {
     id: 's' + Date.now() + Math.random().toString(16).slice(2),
     name: 'Servidor ' + (_servers.length + 1),
-    color: COLORS[_servers.length % COLORS.length],
+    color: QUICK[_servers.length % QUICK.length],
     host: '',
     user: '',
     pass: '',
@@ -148,6 +238,11 @@ function removeSrv(i) {
   _servers.splice(i, 1);
   renderSrvs();
 }
+function setEmoji(i, em) {
+  const box = document.getElementById('srv-' + i);
+  if (!box) return;
+  box.querySelector('.c').value = em;
+}
 function readSrvsFromDom() {
   return _servers.map((s, i) => {
     const box = document.getElementById('srv-' + i);
@@ -155,7 +250,7 @@ function readSrvsFromDom() {
     return {
       id: s.id,
       name: box.querySelector('.n').value.trim() || ('Servidor ' + (i + 1)),
-      color: box.querySelector('.c').value,
+      color: box.querySelector('.c').value.trim() || '🔴',
       host: box.querySelector('.h').value.trim(),
       user: box.querySelector('.u').value.trim(),
       pass: box.querySelector('.p').value,
@@ -169,12 +264,16 @@ function readSrvsFromDom() {
 function renderSrvs() {
   const wrap = document.getElementById('srvBox');
   wrap.innerHTML = _servers.map((s, i) => {
+    const chips = QUICK.map((e) =>
+      '<button type="button" onclick="setEmoji(' + i + ',\'' + e + '\')">' + e + '</button>'
+    ).join('');
     return '<div class="srv" id="srv-' + i + '">' +
       '<div class="row">' +
-      '<input class="n" placeholder="Nome" value="' + esc(s.name) + '"/>' +
-      '<select class="c">' + COLORS.map((c) => '<option' + (c === s.color ? ' selected' : '') + '>' + c + '</option>').join('') + '</select>' +
+      '<input class="n" placeholder="Nome no Nuvio" value="' + esc(s.name) + '"/>' +
+      '<input class="c" style="max-width:90px;text-align:center" placeholder="emoji" value="' + esc(s.color || '') + '" title="Qualquer emoji"/>' +
       '<input class="pr" type="number" style="max-width:70px" title="Prioridade" value="' + (s.priority || i + 1) + '"/>' +
       '</div>' +
+      '<div class="emojis">' + chips + '</div>' +
       '<input class="h" placeholder="http://servidor.com:80" value="' + esc(s.host) + '"/>' +
       '<div class="row">' +
       '<input class="u" placeholder="Usuario" value="' + esc(s.user) + '"/>' +
@@ -233,7 +332,7 @@ async function loadList() {
   const d = await api('list');
   const wrap = document.getElementById('list');
   if (d.error) {
-    wrap.innerHTML = '<p style="color:var(--red)">' + esc(d.error.message || d.error) + '</p><p class="hint">No Supabase SQL: rode sql/flixhub_packs.sql</p>';
+    wrap.innerHTML = '<p style="color:var(--red)">' + esc(d.error.message || d.error) + '</p><p class="hint">Supabase: rode sql/flixhub_packs.sql</p>';
     return;
   }
   _packs = d.packs || [];
