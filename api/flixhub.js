@@ -331,7 +331,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.0.3',
+      version: '1.1.0',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -374,9 +374,11 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.0.3',
+      version: '1.1.0',
       description:
         'Agregador StreamFlixVIP — multiplos servidores em um add-on (estilo UnioFlix). Use com Nuvio Catalog / AIOMetadata.',
+      logo: 'https://www.streamflixvip.online/favicon.ico',
+      background: 'https://www.streamflixvip.online/favicon.ico',
       resources: ['stream', 'meta'],
       types: ['movie', 'series'],
       catalogs: [],
@@ -436,10 +438,13 @@ module.exports = async function handler(req, res) {
             const hit = pick(list, titles, year);
             if (hit && hit.stream_id) {
               const ext = (hit.container_extension || 'mp4').replace(/^\./, '');
+              const label = server.name || brand;
+              const color = server.color || '⚡';
               streams.push({
-                name: (server.color ? server.color + ' ' : '') + (server.name || brand),
-                title: (hit.name || titles[0] || 'Filme') + ' · 1080p',
+                name: brand,
+                title: color + ' ' + label + '\n🎬 ' + (hit.name || titles[0] || 'Filme') + '\n🎯 FULL HD 1080p',
                 url: hostOf(server) + '/movie/' + server.user + '/' + server.pass + '/' + hit.stream_id + '.' + ext,
+                behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
               });
             }
           }
@@ -459,10 +464,13 @@ module.exports = async function handler(req, res) {
               if (ep && (ep.id || ep.stream_id)) {
                 const eid = ep.id || ep.stream_id;
                 const ext = (ep.container_extension || 'mp4').replace(/^\./, '');
+                const label = server.name || brand;
+                const color = server.color || '⚡';
                 streams.push({
-                  name: (server.color ? server.color + ' ' : '') + (server.name || brand),
-                  title: (hit.name || titles[0] || 'Serie') + ' S' + seasonKey + 'E' + wantEp,
+                  name: brand,
+                  title: color + ' ' + label + '\n📺 ' + (hit.name || titles[0] || 'Serie') + ' S' + seasonKey + 'E' + wantEp + '\n🎯 FULL HD',
                   url: hostOf(server) + '/series/' + server.user + '/' + server.pass + '/' + eid + '.' + ext,
+                  behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
                 });
               }
             }
@@ -471,8 +479,22 @@ module.exports = async function handler(req, res) {
       }),
     );
 
-    const order = servers.map((s) => (s.color ? s.color + ' ' : '') + (s.name || brand));
-    streams.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+    const orderTitles = servers.map((s) => (s.color || '⚡') + ' ' + (s.name || brand));
+    streams.sort((a, b) => {
+      const ia = orderTitles.findIndex((t) => (a.title || '').indexOf(t) === 0);
+      const ib = orderTitles.findIndex((t) => (b.title || '').indexOf(t) === 0);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+
+    if (streams.length) {
+      streams.push({
+        name: '❤️ APOIE O PROJETO',
+        title: 'Seu apoio mantém o FlixHub no ar 🙏\n💎 PIX / Infinity Pay — StreamFlixVIP\nToque para contribuir',
+        externalUrl: 'https://www.streamflixvip.online',
+        url: 'https://www.streamflixvip.online',
+        behaviorHints: { notWebReady: true },
+      });
+    }
 
     res.status(200).json({ streams });
     return;
