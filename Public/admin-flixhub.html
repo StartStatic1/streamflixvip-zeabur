@@ -61,7 +61,7 @@
   <main>
     <div class="panel">
       <h2 id="formTitle">Novo pack</h2>
-      <p class="hint">Nome = marca no Nuvio. Preencha na mao, cole linha Xtream, ou importe da Bridge. Filmes/Series: marque ON em cada servidor.</p>
+      <p class="hint">Nome = marca no Nuvio. Ao colar get.php a senha preenche sozinha. Confira se o campo senha nao esta vazio antes de salvar.</p>
       <input id="pName" placeholder="Nome no Nuvio — ex: FlixHub" value="FlixHub"/>
 
       <p class="hint" style="margin-top:8px"><b>Importar da Bridge</b> (host/user/senha ja salvos)</p>
@@ -242,7 +242,7 @@ function parsePaste() {
     use_series: true,
   });
   document.getElementById('pasteLine').value = '';
-  toast('Servidor adicionado');
+  toast('Servidor adicionado — confira se a senha apareceu');
 }
 function addSrv(data) {
   _servers.push(data || {
@@ -304,7 +304,7 @@ function renderSrvs() {
       '<input class="h" placeholder="http://servidor.com:80" value="' + esc(s.host) + '"/>' +
       '<div class="row">' +
       '<input class="u" placeholder="Usuario" value="' + esc(s.user) + '"/>' +
-      '<input class="p" type="password" placeholder="' + (s.pass ? '**** (vazio = manter)' : 'Senha') + '"/>' +
+      '<input class="p" type="password" value="' + esc(s.pass || '') + '" placeholder="' + (s.pass ? 'senha ok (pode deixar)' : 'Senha') + '"/>' +
       '</div>' +
       '<div class="row">' +
       '<label class="chip"><input class="en" type="checkbox"' + (s.enabled !== false ? ' checked' : '') + '/> ON</label>' +
@@ -339,6 +339,11 @@ function editPack(id) {
 }
 async function save() {
   _servers = readSrvsFromDom();
+  const missing = _servers.filter((s) => !s.host || !s.user || !s.pass);
+  if (missing.length) {
+    toast('Algum servidor sem host, usuario ou senha');
+    return;
+  }
   const d = await api('save', {
     id: _editId || undefined,
     name: document.getElementById('pName').value.trim() || 'FlixHub',
