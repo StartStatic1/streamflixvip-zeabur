@@ -61,14 +61,14 @@
   <main>
     <div class="panel">
       <h2 id="formTitle">Novo pack</h2>
-      <p class="hint">Nome = marca no Nuvio. Preencha na mao, cole linha Xtream, ou importe da Bridge.</p>
+      <p class="hint">Nome = marca no Nuvio. Preencha na mao, cole linha Xtream, ou importe da Bridge. Filmes/Series: marque ON em cada servidor.</p>
       <input id="pName" placeholder="Nome no Nuvio — ex: FlixHub" value="FlixHub"/>
 
       <p class="hint" style="margin-top:8px"><b>Importar da Bridge</b> (host/user/senha ja salvos)</p>
       <div class="bridge-list" id="bridgeList"><p class="hint">Carregando pontes…</p></div>
 
-      <p class="hint"><b>Ou colar linha</b> (host user senha / URL completa)</p>
-      <textarea id="pasteLine" rows="2" placeholder="http://servidor.com:80 usuario senha&#10;ou http://servidor.com:80/usuario/senha"></textarea>
+      <p class="hint"><b>Ou colar linha</b> (get.php, host user senha, ou URL)</p>
+      <textarea id="pasteLine" rows="2" placeholder="http://host/get.php?username=xx&password=yy&#10;ou host user senha"></textarea>
       <button class="btn-sec" style="margin-bottom:12px" onclick="parsePaste()">Separar e adicionar</button>
 
       <div id="srvBox"></div>
@@ -188,27 +188,52 @@ function importBridge(i) {
   toast('Importado: ' + (b.name || 'ponte'));
 }
 function parsePaste() {
-  const raw = document.getElementById('pasteLine').value.trim();
-  if (!raw) { toast('Cole host user senha'); return; }
+  const raw0 = document.getElementById('pasteLine').value.trim();
+  if (!raw0) { toast('Cole host user senha ou link get.php'); return; }
+  const raw = raw0.replace(/\s+/g, ' ');
   let host = '', user = '', pass = '';
-  // path style: http://host:port/user/pass
-  const pathM = raw.match(/^(https?:\/\/[^\s\/]+)(?:\/([^\s\/]+)\/([^\s\/]+))?/i);
-  const parts = raw.split(/\s+/).filter(Boolean);
-  if (parts.length >= 3 && /^https?:\/\//i.test(parts[0])) {
-    host = parts[0]; user = parts[1]; pass = parts[2];
-  } else if (pathM && pathM[2] && pathM[3]) {
-    host = pathM[1]; user = pathM[2]; pass = pathM[3];
-  } else if (parts.length >= 3) {
-    host = parts[0]; user = parts[1]; pass = parts[2];
-  } else {
-    toast('Formato: host user senha'); return;
+
+  try {
+    const first = raw.split(/\s+/)[0];
+    const u = new URL(/^https?:\/\//i.test(first) ? first : 'http://' + first);
+    const qUser = u.searchParams.get('username') || u.searchParams.get('user');
+    const qPass = u.searchParams.get('password') || u.searchParams.get('pass');
+    if (qUser && qPass) {
+      host = u.origin;
+      user = qUser;
+      pass = qPass;
+    }
+  } catch (_) {}
+
+  if (!user || !pass) {
+    const parts = raw.split(/\s+/).filter(Boolean);
+    const pathM = raw.match(/^(https?:\/\/[^\s\/]+)\/([^\s\/\?]+)\/([^\s\/\?]+)/i);
+    if (parts.length >= 3 && /^https?:\/\//i.test(parts[0]) && parts[0].indexOf('?') < 0 && parts[0].split('/').length <= 4) {
+      host = parts[0].replace(/\/+$/, '');
+      user = parts[1];
+      pass = parts[2];
+    } else if (pathM && pathM[2] && pathM[3] && pathM[2].toLowerCase() !== 'get.php' && pathM[2].toLowerCase() !== 'player_api.php') {
+      host = pathM[1];
+      user = pathM[2];
+      pass = pathM[3];
+    } else if (parts.length >= 3) {
+      host = parts[0];
+      user = parts[1];
+      pass = parts[2];
+    }
+  }
+
+  if (!host || !user || !pass) {
+    toast('Nao entendi. Ex: get.php?username=xx&password=yy  ou  host user senha');
+    return;
   }
   if (!/^https?:\/\//i.test(host)) host = 'http://' + host;
+  host = host.replace(/\/+$/, '');
   addSrv({
     id: 's' + Date.now() + Math.random().toString(16).slice(2),
     name: 'Servidor ' + (_servers.length + 1),
     color: QUICK[_servers.length % QUICK.length],
-    host: host.replace(/\/+$/, ''),
+    host: host,
     user: user,
     pass: pass,
     enabled: true,
