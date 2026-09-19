@@ -31,7 +31,15 @@ function hostOf(s) {
   return String(s.host || '').replace(/\/+$/, '');
 }
 
-async function xtream(server, action, extra) {
+const XTREAM_UAS = [
+  'IPTVSmartersPro/1.0',
+  'IPTVSmarters/1.0',
+  'okhttp/4.12.0',
+  'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/122.0.0.0 Mobile Safari/537.36',
+  'VLC/3.0.20 LibVLC/3.0.20',
+];
+
+async function xtreamOnce(server, action, extra, ua) {
   const url = new URL(hostOf(server) + '/player_api.php');
   url.searchParams.set('username', server.user);
   url.searchParams.set('password', server.pass);
@@ -40,17 +48,44 @@ async function xtream(server, action, extra) {
     if (v != null) url.searchParams.set(k, String(v));
   });
   const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 18000);
+  const t = setTimeout(() => ac.abort(), 20000);
   try {
     const r = await fetch(url.toString(), {
       signal: ac.signal,
-      headers: { 'User-Agent': 'IPTVSmarters/1.0', Accept: 'application/json' },
+      redirect: 'follow',
+      headers: {
+        'User-Agent': ua,
+        Accept: 'application/json,text/plain,*/*',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      },
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return await r.json();
+    const text = await r.text();
+    if (!r.ok) {
+      const err = new Error('HTTP ' + r.status + (text ? ' ' + text.slice(0, 80) : ''));
+      err.status = r.status;
+      throw err;
+    }
+    try {
+      return JSON.parse(text);
+    } catch (_) {
+      throw new Error('Resposta sem JSON: ' + text.slice(0, 80));
+    }
   } finally {
     clearTimeout(t);
   }
+}
+
+async function xtream(server, action, extra) {
+  let last = null;
+  for (const ua of XTREAM_UAS) {
+    try {
+      return await xtreamOnce(server, action, extra, ua);
+    } catch (e) {
+      last = e;
+      if (e && e.status && e.status !== 403 && e.status !== 401 && e.status !== 406) break;
+    }
+  }
+  throw last || new Error('Falha Xtream');
 }
 
 async function loadPack(id, token, key) {
@@ -75,14 +110,19 @@ function enabledServers(pack) {
     .sort((a, b) => (a.priority || 0) - (b.priority || 0));
 }
 
-async function vodList(server) {
+async function vodList(server, strict) {
   const k = 'fh:vod:' + server.host + ':' + server.user;
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < 25 * 60 * 1000) return hit.rows;
-  const raw = await xtream(server, 'get_vod_streams').catch(() => []);
-  const rows = Array.isArray(raw) ? raw : [];
-  cache.set(k, { at: Date.now(), rows });
-  return rows;
+  try {
+    const raw = await xtream(server, 'get_vod_streams');
+    const rows = Array.isArray(raw) ? raw : [];
+    cache.set(k, { at: Date.now(), rows });
+    return rows;
+  } catch (e) {
+    if (strict) throw e;
+    return [];
+  }
 }
 
 async function seriesList(server) {
@@ -291,7 +331,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.0.2',
+      version: '1.0.3',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -312,7 +352,7 @@ module.exports = async function handler(req, res) {
     for (const server of servers) {
       const row = { name: server.name, host: hostOf(server) };
       try {
-        const list = await vodList(server);
+        const list = await vodList(server, true);
         row.vodCount = list.length;
         row.sample = list.slice(0, 3).map((x) => x.name || x.title || '?');
         if (meta.titles && meta.titles.length) {
@@ -322,6 +362,7 @@ module.exports = async function handler(req, res) {
         }
       } catch (e) {
         row.error = String(e && e.message ? e.message : e);
+        row.vodCount = 0;
       }
       out.tests.push(row);
     }
@@ -333,7 +374,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.0.2',
+      version: '1.0.3',
       description:
         'Agregador StreamFlixVIP — multiplos servidores em um add-on (estilo UnioFlix). Use com Nuvio Catalog / AIOMetadata.',
       resources: ['stream', 'meta'],
