@@ -331,7 +331,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.1.0',
+      version: '1.1.1',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -374,7 +374,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.1.0',
+      version: '1.1.1',
       description:
         'Agregador StreamFlixVIP — multiplos servidores em um add-on (estilo UnioFlix). Use com Nuvio Catalog / AIOMetadata.',
       logo: 'https://www.streamflixvip.online/favicon.ico',
@@ -487,11 +487,12 @@ module.exports = async function handler(req, res) {
     });
 
     if (streams.length) {
+      const supportUrl = process.env.FLIXHUB_SUPPORT_URL || 'https://pay.infinitepay.io/streamflixvip';
       streams.push({
         name: '❤️ APOIE O PROJETO',
-        title: 'Seu apoio mantém o FlixHub no ar 🙏\n💎 PIX / Infinity Pay — StreamFlixVIP\nToque para contribuir',
-        externalUrl: 'https://www.streamflixvip.online',
-        url: 'https://www.streamflixvip.online',
+        title: 'Seu apoio mantém o FlixHub no ar 🙏\n💎 PIX ou cartão via InfinitePay\nToque para contribuir — StreamFlixVIP',
+        externalUrl: supportUrl,
+        url: supportUrl,
         behaviorHints: { notWebReady: true },
       });
     }
