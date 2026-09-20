@@ -49,7 +49,7 @@
       <input id="pName" placeholder="Nome no Nuvio — ex: FlixHub" value="FlixHub"/>
 
       <p class="hint" style="margin-top:8px"><b>Importar da Bridge</b> (host/user/senha ja salvos)</p>
-      <div class="bridge-list" id="bridgeList"></div>
+      <div id="bridgeList" class="hint">Abra a Bridge se quiser copiar listas de la.</div>
 
       <p class="hint"><b>Colar link get.php / M3U</b></p>
       <textarea id="pasteBox" rows="2" placeholder="http://host/get.php?username=xx&password=yy"></textarea>
@@ -74,8 +74,8 @@
   <div id="toast" class="toast" style="display:none"></div>
   <script>
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
-const SUPABASE_ANON = window.SFV_ANON || localStorage.getItem('sfv-anon') || '';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ5NzYwMDAsImV4cCI6MjA1MDU1MjAwMH0.placeholder', {
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: 'sfv-admin-auth-token' },
 });
 let _session = null;
@@ -94,13 +94,19 @@ function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 async function api(action, body) {
-  if (!_session) return { error: 'Sessao invalida' };
-  const r = await fetch('/api/admin-flixhub', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _session.access_token },
-    body: JSON.stringify(Object.assign({ action }, body || {})),
-  });
-  return r.json().catch(() => ({ error: 'JSON invalido' }));
+  if (!_session || !_session.access_token) return { error: 'Sessao invalida' };
+  try {
+    const r = await fetch('/api/admin-flixhub', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _session.access_token },
+      body: JSON.stringify(Object.assign({ action }, body || {})),
+    });
+    const j = await r.json().catch(() => ({ error: 'JSON invalido HTTP ' + r.status }));
+    if (!r.ok && !j.error) j.error = 'HTTP ' + r.status;
+    return j;
+  } catch (e) {
+    return { error: String(e && e.message ? e.message : e) };
+  }
 }
 async function doLogout() {
   await sb.auth.signOut();
@@ -121,7 +127,9 @@ function parsePaste() {
       host = u.origin;
     }
     if (host) {
-      _servers.push({ id: 's' + Date.now(), name: 'Servidor ' + (_servers.length + 1), color: '⚡', host, user, pass, enabled: true, priority: _servers.length + 1, use_movies: true, use_series: true });
+      let label = 'Servidor ' + (_servers.length + 1);
+      try { label = new URL(host).hostname.replace(/^www\./,'') || label; } catch(_) {}
+      _servers.push({ id: 's' + Date.now(), name: label, color: '⚡', host, user, pass, enabled: true, priority: _servers.length + 1, use_movies: true, use_series: true });
       renderSrvs();
       document.getElementById('pasteBox').value = '';
       toast('Servidor adicionado');
@@ -135,7 +143,7 @@ function addSrv() {
 function renderSrvs() {
   const box = document.getElementById('srvBox');
   box.innerHTML = _servers.map((s, i) => {
-    const chips = EMOJIS.map((e) => '<button type="button" class="chip' + (s.color === e ? ' on' : '') + '" onclick="_servers[' + i + '].color=\\' + e + '\\';renderSrvs()">' + e + '</button>').join('');
+    const chips = EMOJIS.map((e) => '<button type="button" class="chip' + (s.color === e ? ' on' : '') + '" onclick="_servers[' + i + '].color=\'' + e + '\';renderSrvs()">' + e + '</button>').join('');
     return '<div class="srv">' +
       '<div class="row"><input style="flex:1" value="' + esc(s.name) + '" onchange="_servers[' + i + '].name=this.value" placeholder="Nome"/>' +
       '<input style="width:70px" type="number" value="' + (s.priority || i + 1) + '" onchange="_servers[' + i + '].priority=+this.value" title="Prioridade"/></div>' +
@@ -167,6 +175,8 @@ async function save() {
   _servers = readSrvsFromDom();
   const missing = _servers.filter((s) => !s.host || !s.user || !s.pass);
   if (missing.length) { toast('Algum servidor sem host, usuario ou senha'); return; }
+  if (!_servers.length) { toast('Adicione pelo menos 1 servidor'); return; }
+  toast('Salvando…');
   const d = await api('save', {
     id: _editId || undefined,
     name: document.getElementById('pName').value.trim() || 'FlixHub',
@@ -182,6 +192,8 @@ async function save() {
   document.getElementById('btnSave').textContent = 'Salvar e gerar';
   document.getElementById('btnCancel').style.display = 'none';
   document.getElementById('pPublic').checked = false;
+  _servers = [];
+  renderSrvs();
   loadList();
 }
 function editPack(id) {
@@ -194,7 +206,6 @@ function editPack(id) {
   document.getElementById('btnSave').textContent = 'Salvar alteracoes';
   document.getElementById('btnCancel').style.display = 'inline-block';
   _servers = (p.servers || []).map((s) => Object.assign({}, s, { pass: s.pass || '' }));
-  if (!_servers.length) _servers = [];
   renderSrvs();
   window.scrollTo(0, 0);
 }
@@ -209,41 +220,49 @@ function cancelEdit() {
   renderSrvs();
 }
 async function loadList() {
-  const d = await api('list');
   const wrap = document.getElementById('list');
-  if (d.error) {
-    wrap.innerHTML = '<p style="color:var(--red)">' + esc(d.error.message || d.error) + '</p><p class="hint">Supabase: rode sql/flixhub_packs.sql e sql/flixhub_packs_public.sql</p>';
-    return;
+  try {
+    const d = await api('list');
+    if (d.error) {
+      wrap.innerHTML = '<p style="color:var(--red)">' + esc(d.error.message || d.error) + '</p><p class="hint">Se falhou por coluna publica: rode sql/flixhub_packs_public.sql no Supabase</p>';
+      return;
+    }
+    _packs = d.packs || [];
+    if (!_packs.length) { wrap.innerHTML = '<p class="hint">Nenhum pack ainda.</p>'; return; }
+    wrap.innerHTML = _packs.map((p) => {
+      const url = p.manifest_url || '';
+      const pub = p.public_url || '';
+      const srvs = (p.servers || []).map((s) => (s.color || '') + ' ' + (s.name || '') + (s.enabled === false ? ' OFF' : '')).join(' · ');
+      return '<div class="item"><b>' + esc(p.name) + '</b> ' +
+        (p.is_active ? '<span style="color:var(--green)">ativo</span>' : '<span style="color:var(--muted)">off</span>') +
+        (p.public_enabled ? ' <span style="color:#7dd3fc">publico</span>' : '') +
+        '<div class="meta">' + esc(srvs) + '</div>' +
+        '<div class="meta"><b>Privado:</b> ' + esc(url) + '</div>' +
+        (pub ? '<div class="meta"><b>Publico:</b> ' + esc(pub) + '</div>' : '') +
+        '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">' +
+        '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + url.replace(/'/g, '') + '\');toast(\'Privado copiado\')">Copiar privado</button>' +
+        (pub ? '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + pub.replace(/'/g, '') + '\');toast(\'Publico copiado\')">Copiar publico</button>' : '') +
+        '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="editPack(\'' + p.id + '\')">Editar</button>' +
+        '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'set-public\',{id:\'' + p.id + '\',enabled:' + (!p.public_enabled) + '}).then(function(r){toast(r.error?(r.hint||r.error):(r.public_url?\'Publico ON\':\'Publico OFF\'));loadList()})">' + (p.public_enabled ? 'Desligar publico' : 'Ligar publico') + '</button>' +
+        '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'rotate-token\',{id:\'' + p.id + '\'}).then(function(r){toast(r.error?r.error:\'Token novo\');loadList()})">Novo token</button>' +
+        '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'toggle\',{id:\'' + p.id + '\',is_active:' + (!p.is_active) + '}).then(loadList)">' + (p.is_active ? 'Pausar' : 'Ativar') + '</button>' +
+        '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="if(confirm(\'Excluir pack?\'))api(\'delete\',{id:\'' + p.id + '\'}).then(loadList)">Excluir</button>' +
+        '</div></div>';
+    }).join('');
+  } catch (e) {
+    wrap.innerHTML = '<p style="color:var(--red)">Erro: ' + esc(String(e)) + '</p>';
   }
-  _packs = d.packs || [];
-  if (!_packs.length) { wrap.innerHTML = '<p class="hint">Nenhum pack ainda.</p>'; return; }
-  wrap.innerHTML = _packs.map((p) => {
-    const url = p.manifest_url || '';
-    const pub = p.public_url || '';
-    const srvs = (p.servers || []).map((s) => (s.color || '') + ' ' + (s.name || '') + (s.enabled === false ? ' OFF' : '')).join(' · ');
-    return '<div class="item"><b>' + esc(p.name) + '</b> ' +
-      (p.is_active ? '<span style="color:var(--green)">ativo</span>' : '<span style="color:var(--muted)">off</span>') +
-      (p.public_enabled ? ' <span style="color:#7dd3fc">publico</span>' : '') +
-      '<div class="meta">' + esc(srvs) + '</div>' +
-      '<div class="meta"><b>Privado:</b> ' + esc(url) + '</div>' +
-      (pub ? '<div class="meta"><b>Publico:</b> ' + esc(pub) + '</div>' : '') +
-      '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">' +
-      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + url.replace(/'/g, '') + '\');toast(\'Privado copiado\')">Copiar privado</button>' +
-      (pub ? '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + pub.replace(/'/g, '') + '\');toast(\'Publico copiado\')">Copiar publico</button>' : '') +
-      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="editPack(\'' + p.id + '\')">Editar</button>' +
-      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'set-public\',{id:\'' + p.id + '\',enabled:' + (!p.public_enabled) + '}).then(function(r){toast(r.error?(r.hint||r.error):(r.public_url?\'Publico ON\':\'Publico OFF\'));loadList()})">' + (p.public_enabled ? 'Desligar publico' : 'Ligar publico') + '</button>' +
-      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'rotate-token\',{id:\'' + p.id + '\'}).then(function(r){toast(r.error?r.error:\'Token novo\');loadList()})">Novo token</button>' +
-      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'toggle\',{id:\'' + p.id + '\',is_active:' + (!p.is_active) + '}).then(loadList)">' + (p.is_active ? 'Pausar' : 'Ativar') + '</button>' +
-      '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="if(confirm(\'Excluir pack?\'))api(\'delete\',{id:\'' + p.id + '\'}).then(loadList)">Excluir</button>' +
-      '</div></div>';
-  }).join('');
 }
 async function checkSession() {
-  const { data } = await sb.auth.getSession();
-  _session = data.session;
-  if (!_session) { location.href = '/admin.html'; return; }
-  renderSrvs();
-  loadList();
+  try {
+    const { data } = await sb.auth.getSession();
+    _session = data.session;
+    if (!_session) { location.href = '/admin.html'; return; }
+    renderSrvs();
+    await loadList();
+  } catch (e) {
+    document.getElementById('list').innerHTML = '<p style="color:var(--red)">Erro sessao: ' + esc(String(e)) + '</p>';
+  }
 }
 checkSession();
   </script>
