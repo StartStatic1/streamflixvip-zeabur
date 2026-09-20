@@ -16,9 +16,20 @@ function newToken() {
   return crypto.randomBytes(24).toString('hex');
 }
 
+function newSlug() {
+  return crypto.randomBytes(6).toString('hex');
+}
+
+function baseUrl() {
+  return (process.env.PUBLIC_BASE_URL || 'https://www.streamflixvip.online').replace(/\/+$/, '');
+}
+
 function manifestOf(id, token) {
-  const base = process.env.PUBLIC_BASE_URL || 'https://www.streamflixvip.online';
-  return base.replace(/\/+$/, '') + '/api/flixhub/' + id + '/' + token + '/manifest.json';
+  return baseUrl() + '/api/flixhub/' + id + '/' + token + '/manifest.json';
+}
+
+function publicManifestOf(slug) {
+  return baseUrl() + '/api/flixhub/p/' + slug + '/manifest.json';
 }
 
 function normalizeServers(list) {
@@ -37,6 +48,16 @@ function normalizeServers(list) {
       use_series: s.use_series !== false,
     }))
     .filter((s) => s.host && s.user && s.pass);
+}
+
+function packOut(p) {
+  if (!p) return p;
+  return {
+    ...p,
+    manifest_url: p.access_token ? manifestOf(p.id, p.access_token) : null,
+    public_url:
+      p.public_enabled && p.public_slug ? publicManifestOf(p.public_slug) : null,
+  };
 }
 
 module.exports = async function handler(req, res) {
@@ -145,22 +166,28 @@ module.exports = async function handler(req, res) {
   if (action === 'list') {
     const r = await fetch(
       SUPABASE_URL +
-        '/rest/v1/flixhub_packs?select=id,name,access_token,is_active,servers,created_at,updated_at&order=created_at.desc',
+        '/rest/v1/flixhub_packs?select=id,name,access_token,is_active,servers,public_slug,public_enabled,created_at,updated_at&order=created_at.desc',
       { headers: h },
     );
     const rows = await r.json();
     if (!r.ok) {
-      res.status(502).json({
-        error: 'Rode sql/flixhub_packs.sql no Supabase',
-        detail: rows,
-      });
+      const r2 = await fetch(
+        SUPABASE_URL +
+          '/rest/v1/flixhub_packs?select=id,name,access_token,is_active,servers,created_at,updated_at&order=created_at.desc',
+        { headers: h },
+      );
+      const rows2 = await r2.json();
+      if (!r2.ok) {
+        res.status(502).json({
+          error: 'Rode sql/flixhub_packs.sql e sql/flixhub_packs_public.sql no Supabase',
+          detail: rows,
+        });
+        return;
+      }
+      res.status(200).json({ packs: (Array.isArray(rows2) ? rows2 : []).map(packOut) });
       return;
     }
-    const packs = (Array.isArray(rows) ? rows : []).map((p) => ({
-      ...p,
-      manifest_url: p.access_token ? manifestOf(p.id, p.access_token) : null,
-    }));
-    res.status(200).json({ packs });
+    res.status(200).json({ packs: (Array.isArray(rows) ? rows : []).map(packOut) });
     return;
   }
 
@@ -171,64 +198,135 @@ module.exports = async function handler(req, res) {
       return;
     }
     const name = String(body.name || 'FlixHub').slice(0, 80);
+    const wantPublic = !!body.public_enabled;
+
     if (body.id) {
       const cur = await fetch(
-        SUPABASE_URL + '/rest/v1/flixhub_packs?id=eq.' + encodeURIComponent(body.id) + '&select=servers',
+        SUPABASE_URL +
+          '/rest/v1/flixhub_packs?id=eq.' +
+          encodeURIComponent(body.id) +
+          '&select=servers,public_slug,public_enabled',
         { headers: h },
       );
       const curRows = await cur.json();
       const old = (Array.isArray(curRows) && curRows[0] && curRows[0].servers) || [];
+      const prev = Array.isArray(curRows) && curRows[0] ? curRows[0] : {};
       servers = servers.map((s) => {
         if (s.pass) return s;
-        const prev = old.find((o) => o.id === s.id || (o.host === s.host && o.user === s.user));
-        return prev && prev.pass ? { ...s, pass: prev.pass } : s;
+        const p = old.find((o) => o.id === s.id || (o.host === s.host && o.user === s.user));
+        return p && p.pass ? { ...s, pass: p.pass } : s;
       });
       servers = servers.filter((s) => s.pass);
       if (!servers.length) {
         res.status(400).json({ error: 'Servidores sem senha' });
         return;
       }
+
+      const patch = { name, servers, updated_at: new Date().toISOString() };
+      if (wantPublic) {
+        patch.public_enabled = true;
+        patch.public_slug = prev.public_slug || newSlug();
+      } else if (body.public_enabled === false) {
+        patch.public_enabled = false;
+      }
+
       const r = await fetch(
         SUPABASE_URL + '/rest/v1/flixhub_packs?id=eq.' + encodeURIComponent(body.id),
-        {
-          method: 'PATCH',
-          headers: h,
-          body: JSON.stringify({ name, servers, updated_at: new Date().toISOString() }),
-        },
+        { method: 'PATCH', headers: h, body: JSON.stringify(patch) },
       );
       const rows = await r.json();
       if (!r.ok) {
-        res.status(502).json({ error: rows });
+        res.status(502).json({
+          error: rows,
+          hint: 'Se falhou por public_slug, rode sql/flixhub_packs_public.sql',
+        });
         return;
       }
       const p = Array.isArray(rows) ? rows[0] : rows;
-      res.status(200).json({
-        pack: p,
-        manifest_url: p && p.access_token ? manifestOf(p.id, p.access_token) : null,
-      });
+      res.status(200).json({ pack: packOut(p), manifest_url: packOut(p).manifest_url, public_url: packOut(p).public_url });
       return;
     }
+
     const token = newToken();
+    const insert = {
+      name,
+      access_token: token,
+      servers,
+      is_active: true,
+    };
+    if (wantPublic) {
+      insert.public_enabled = true;
+      insert.public_slug = newSlug();
+    }
+
     const r = await fetch(SUPABASE_URL + '/rest/v1/flixhub_packs', {
       method: 'POST',
       headers: h,
-      body: JSON.stringify({
-        name,
-        access_token: token,
-        servers,
-        is_active: true,
-      }),
+      body: JSON.stringify(insert),
     });
     const rows = await r.json();
     if (!r.ok) {
-      res.status(502).json({ error: rows });
+      res.status(502).json({
+        error: rows,
+        hint: 'Se falhou por public_slug, rode sql/flixhub_packs_public.sql',
+      });
       return;
     }
     const p = Array.isArray(rows) ? rows[0] : rows;
-    res.status(200).json({
-      pack: p,
-      manifest_url: p ? manifestOf(p.id, token) : null,
-    });
+    res.status(200).json({ pack: packOut(p), manifest_url: packOut(p).manifest_url, public_url: packOut(p).public_url });
+    return;
+  }
+
+  if (action === 'set-public') {
+    const enabled = !!body.enabled;
+    const patch = {
+      public_enabled: enabled,
+      updated_at: new Date().toISOString(),
+    };
+    if (enabled) {
+      const cur = await fetch(
+        SUPABASE_URL + '/rest/v1/flixhub_packs?id=eq.' + encodeURIComponent(body.id) + '&select=public_slug',
+        { headers: h },
+      );
+      const curRows = await cur.json();
+      const prev = Array.isArray(curRows) && curRows[0] ? curRows[0] : {};
+      patch.public_slug = prev.public_slug || newSlug();
+    }
+    const r = await fetch(
+      SUPABASE_URL + '/rest/v1/flixhub_packs?id=eq.' + encodeURIComponent(body.id),
+      { method: 'PATCH', headers: h, body: JSON.stringify(patch) },
+    );
+    const rows = await r.json();
+    if (!r.ok) {
+      res.status(502).json({ error: rows, hint: 'Rode sql/flixhub_packs_public.sql' });
+      return;
+    }
+    const p = Array.isArray(rows) ? rows[0] : rows;
+    res.status(200).json({ ok: true, pack: packOut(p), public_url: packOut(p).public_url });
+    return;
+  }
+
+  if (action === 'rotate-public-slug') {
+    const slug = newSlug();
+    const r = await fetch(
+      SUPABASE_URL + '/rest/v1/flixhub_packs?id=eq.' + encodeURIComponent(body.id),
+      {
+        method: 'PATCH',
+        headers: h,
+        body: JSON.stringify({
+          public_slug: slug,
+          public_enabled: true,
+          updated_at: new Date().toISOString(),
+        }),
+      },
+    );
+    const rows = await r.json();
+    if (!r.ok) {
+      res.status(502).json({ error: rows, hint: 'Rode sql/flixhub_packs_public.sql' });
+      return;
+    }
+    const p = Array.isArray(rows) ? rows[0] : rows;
+    res.status(200).json({ ok: true, public_slug: slug, public_url: publicManifestOf(slug), pack: packOut(p) });
     return;
   }
 
