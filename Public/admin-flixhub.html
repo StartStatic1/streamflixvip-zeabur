@@ -3,55 +3,39 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>FlixHub — StreamFlixVIP</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <title>FlixHub · agregador</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    :root{--bg:#08080f;--surface:#111119;--surface2:#1a1a26;--border:rgba(255,255,255,.08);--text:#f0f0f8;--muted:#8888aa;--gold:#f5c518;--green:#22c55e;--red:#ef4444}
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Outfit,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
-    #login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
-    .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:28px;width:100%;max-width:400px}
-    input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px 14px;font:inherit;margin-bottom:10px}
-    button{font:inherit;cursor:pointer;border:none;border-radius:12px;padding:12px 18px;font-weight:700}
-    .btn-gold{background:linear-gradient(135deg,var(--gold),#e6a800);color:#000}
-    .btn-sec{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
-    .btn-danger{background:rgba(239,68,68,.16);color:#fca5a5}
-    #app{display:none}
-    header{position:sticky;top:0;z-index:10;background:rgba(8,8,15,.92);border-bottom:1px solid var(--border);padding:14px 16px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
-    header a{color:var(--muted);font-size:.85rem;text-decoration:none}
-    main{max-width:920px;margin:0 auto;padding:20px 14px 48px;display:flex;flex-direction:column;gap:16px}
-    .panel{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px}
-    .hint{font-size:.8rem;color:var(--muted);margin-bottom:12px;line-height:1.45}
-    .item{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
-    .meta{font-size:.75rem;color:var(--muted);word-break:break-all;margin-top:4px}
-    .srv{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--surface2)}
-    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    .row input{flex:1;min-width:100px;margin-bottom:8px}
-    label.chip{display:flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted)}
-    .emojis{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-    .emojis button{padding:6px 10px;font-size:1.1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px}
-    .bridge-list{max-height:180px;overflow:auto;margin-bottom:10px}
-    .bridge-list button{display:block;width:100%;text-align:left;margin-bottom:6px;padding:10px 12px;font-size:.8rem}
-    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface);border:1px solid var(--border);padding:10px 18px;border-radius:10px;opacity:0;transition:.25s;z-index:99;max-width:90%;text-align:center}
-    #toast.show{opacity:1}
+    :root { --bg:#0b0f1a; --card:#12182a; --border:#1e2a45; --text:#e8eefc; --muted:#8b9bb8; --gold:#f5c518; --green:#3ddc97; --red:#ff6b6b; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--text); }
+    header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:8px; }
+    header a { color:var(--muted); text-decoration:none; margin-right:10px; font-size:.85rem; }
+    header a:hover { color:var(--gold); }
+    .logo { font-weight:700; } .logo span { color:var(--gold); }
+    main { max-width:720px; margin:0 auto; padding:16px; }
+    .panel { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:16px; }
+    h2 { margin:0 0 10px; font-size:1.1rem; }
+    .hint { color:var(--muted); font-size:.8rem; margin:6px 0 10px; }
+    input, textarea, select { width:100%; background:#0a1020; border:1px solid var(--border); color:var(--text); border-radius:10px; padding:10px 12px; margin:4px 0 8px; font-size:.9rem; }
+    .btn-gold { background:var(--gold); color:#111; border:none; border-radius:10px; padding:12px 16px; font-weight:700; cursor:pointer; }
+    .btn-sec { background:transparent; border:1px solid var(--border); color:var(--text); border-radius:10px; padding:10px 12px; cursor:pointer; }
+    .btn-danger { background:transparent; border:1px solid var(--red); color:var(--red); border-radius:10px; padding:8px 12px; cursor:pointer; }
+    .row { display:flex; gap:8px; flex-wrap:wrap; }
+    .srv { border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:10px; background:#0d1424; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+    .chip { width:36px; height:36px; border-radius:8px; border:1px solid var(--border); background:#0a1020; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:1.1rem; }
+    .chip.on { border-color:var(--gold); }
+    .item { border:1px solid var(--border); border-radius:12px; padding:12px; margin-bottom:10px; }
+    .meta { color:var(--muted); font-size:.75rem; word-break:break-all; margin-top:4px; }
+    .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1a2338; border:1px solid var(--border); padding:10px 16px; border-radius:10px; z-index:99; font-size:.85rem; }
+    label.chk { display:inline-flex; align-items:center; gap:6px; margin-right:12px; font-size:.85rem; color:var(--muted); }
   </style>
 </head>
 <body>
-<div id="login">
-  <div class="card">
-    <h1>FlixHub</h1>
-    <p class="hint">Agregador Nuvio — varios servidores em um add-on. Separado do app StreamFlix.</p>
-    <input type="email" id="email" placeholder="E-mail admin"/>
-    <input type="password" id="pass" placeholder="Senha"/>
-    <button class="btn-gold" style="width:100%" onclick="doLogin()">Entrar</button>
-    <p class="hint" style="margin-top:12px"><a href="/admin-hub.html" style="color:var(--gold)">Hub</a> · <a href="/admin-bridge.html" style="color:var(--gold)">Bridge</a></p>
-  </div>
-</div>
-<div id="app">
   <header>
-    <div><strong>Flix<em style="color:var(--gold);font-style:italic">Hub</em></strong> · agregador</div>
-    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <div class="logo">Flix<span>Hub</span> · agregador</div>
+    <div>
       <a href="/admin-hub.html">Hub</a>
       <a href="/admin-bridge.html">Bridge</a>
       <a href="/admin.html">Painel</a>
@@ -65,343 +49,203 @@
       <input id="pName" placeholder="Nome no Nuvio — ex: FlixHub" value="FlixHub"/>
 
       <p class="hint" style="margin-top:8px"><b>Importar da Bridge</b> (host/user/senha ja salvos)</p>
-      <div class="bridge-list" id="bridgeList"><p class="hint">Carregando pontes…</p></div>
+      <div class="bridge-list" id="bridgeList"></div>
 
-      <p class="hint"><b>Ou colar linha</b> (get.php, host user senha, ou URL)</p>
-      <textarea id="pasteLine" rows="2" placeholder="http://host/get.php?username=xx&password=yy&#10;ou host user senha"></textarea>
-      <button class="btn-sec" style="margin-bottom:12px" onclick="parsePaste()">Separar e adicionar</button>
+      <p class="hint"><b>Colar link get.php / M3U</b></p>
+      <textarea id="pasteBox" rows="2" placeholder="http://host/get.php?username=xx&password=yy"></textarea>
+      <button class="btn-sec" style="margin-bottom:10px" onclick="parsePaste()">Separar e adicionar</button>
 
       <div id="srvBox"></div>
       <button class="btn-sec" style="margin-bottom:12px" onclick="addSrv()">+ Servidor manual</button>
+      <label class="hint" style="display:flex;align-items:center;gap:8px;margin:10px 0;cursor:pointer">
+        <input type="checkbox" id="pPublic" style="width:18px;height:18px"/>
+        <span><b>Também link público</b> (sem token na URL — estilo UnioFlix)</span>
+      </label>
       <div class="row">
         <button class="btn-gold" style="flex:1" onclick="save()" id="btnSave">Salvar e gerar</button>
         <button class="btn-sec" style="display:none" id="btnCancel" onclick="cancelEdit()">Cancelar</button>
       </div>
     </div>
     <div class="panel">
-      <h2>Packs <button class="btn-sec" style="padding:4px 10px;font-size:.75rem" onclick="loadList()">Atualizar</button></h2>
+      <h2>Packs <button class="btn-sec" style="padding:4px 10px;font-size:.75rem;margin-left:8px" onclick="loadList()">Atualizar</button></h2>
       <div id="list"><p class="hint">Carregando…</p></div>
     </div>
   </main>
-</div>
-<div id="toast"></div>
-<script>
+  <div id="toast" class="toast" style="display:none"></div>
+  <script>
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+const SUPABASE_ANON = window.SFV_ANON || localStorage.getItem('sfv-anon') || '';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzQ5NzYwMDAsImV4cCI6MjA1MDU1MjAwMH0.placeholder', {
   auth: { persistSession: true, autoRefreshToken: true, storageKey: 'sfv-admin-auth-token' },
 });
-const QUICK = ['🔴','🔵','🟢','🟣','🟠','🟡','⚡','🔥','💎','🎬','📺','⭐','🚀','💜','🖤','🤍'];
 let _session = null;
+let _servers = [];
 let _editId = null;
 let _packs = [];
-let _servers = [];
-let _bridges = [];
+const EMOJIS = ['🔴','🔵','🟢','🟣','🟠','🟡','⚡','🔥','💎','🎬','📺','⭐','🚀','💜','🖤','🤍'];
 
-async function checkSession() {
-  const { data } = await db.auth.getSession();
-  if (data && data.session && await isAdmin(data.session)) showApp(data.session);
-}
-async function isAdmin(s) {
-  const { data } = await db.from('vip_panel_admins').select('id').eq('id', s.user.id).maybeSingle();
-  return !!data;
-}
-async function doLogin() {
-  const { data, error } = await db.auth.signInWithPassword({
-    email: document.getElementById('email').value.trim(),
-    password: document.getElementById('pass').value,
-  });
-  if (error) { toast(error.message); return; }
-  if (!(await isAdmin(data.session))) { await db.auth.signOut(); toast('Sem permissao'); return; }
-  showApp(data.session);
-}
-function showApp(s) {
-  _session = s;
-  document.getElementById('login').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  if (!_servers.length) addSrv();
-  loadList();
-  loadBridges();
-}
-async function doLogout() { await db.auth.signOut(); location.reload(); }
-async function api(action, extra) {
-  const res = await fetch('/api/admin-flixhub', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _session.access_token },
-    body: JSON.stringify(Object.assign({ action: action }, extra || {})),
-  });
-  const t = await res.text();
-  try { return JSON.parse(t); } catch (e) { return { error: t || ('HTTP ' + res.status) }; }
-}
-async function bridgeApi(action, extra) {
-  const res = await fetch('/api/admin-bridge', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _session.access_token },
-    body: JSON.stringify(Object.assign({ action: action }, extra || {})),
-  });
-  const t = await res.text();
-  try { return JSON.parse(t); } catch (e) { return { error: t || ('HTTP ' + res.status) }; }
-}
-function toast(t) {
+function toast(m) {
   const el = document.getElementById('toast');
-  el.textContent = t;
-  el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 4000);
+  el.textContent = m;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 2800);
 }
 function esc(s) {
-  return String(s || '').replace(/[&<>"']/g, function (c) {
-    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
-  });
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-async function loadBridges() {
-  const box = document.getElementById('bridgeList');
-  const d = await bridgeApi('list');
-  if (d.error) {
-    box.innerHTML = '<p class="hint">Nao deu para listar Bridge</p>';
-    return;
-  }
-  _bridges = d.bridges || [];
-  if (!_bridges.length) {
-    box.innerHTML = '<p class="hint">Nenhuma ponte. Cadastre em Bridge ou preencha manual.</p>';
-    return;
-  }
-  box.innerHTML = _bridges.map((b, i) => {
-    const label = esc(b.name || 'Ponte') + ' · ' + esc(b.xtream_host || '');
-    return '<button class="btn-sec" type="button" onclick="importBridge(' + i + ')">' + label + '</button>';
-  }).join('');
-}
-function importBridge(i) {
-  const b = _bridges[i];
-  if (!b) return;
-  addSrv({
-    id: 's' + Date.now() + Math.random().toString(16).slice(2),
-    name: b.name || ('Servidor ' + (_servers.length + 1)),
-    color: QUICK[_servers.length % QUICK.length],
-    host: b.xtream_host || '',
-    user: b.xtream_user || '',
-    pass: b.xtream_pass || '',
-    enabled: true,
-    priority: _servers.length + 1,
-    use_movies: b.use_movies !== false,
-    use_series: b.use_series !== false,
+async function api(action, body) {
+  if (!_session) return { error: 'Sessao invalida' };
+  const r = await fetch('/api/admin-flixhub', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + _session.access_token },
+    body: JSON.stringify(Object.assign({ action }, body || {})),
   });
-  toast('Importado: ' + (b.name || 'ponte'));
+  return r.json().catch(() => ({ error: 'JSON invalido' }));
+}
+async function doLogout() {
+  await sb.auth.signOut();
+  location.href = '/admin.html';
 }
 function parsePaste() {
-  const raw0 = document.getElementById('pasteLine').value.trim();
-  if (!raw0) { toast('Cole host user senha ou link get.php'); return; }
-  const raw = raw0.replace(/\s+/g, ' ');
-  let host = '', user = '', pass = '';
-
+  const raw = document.getElementById('pasteBox').value.trim();
+  if (!raw) return;
   try {
-    const first = raw.split(/\s+/)[0];
-    const u = new URL(/^https?:\/\//i.test(first) ? first : 'http://' + first);
-    const qUser = u.searchParams.get('username') || u.searchParams.get('user');
-    const qPass = u.searchParams.get('password') || u.searchParams.get('pass');
-    if (qUser && qPass) {
+    let host = '', user = '', pass = '';
+    if (raw.includes('get.php') || raw.includes('username=')) {
+      const u = new URL(raw.startsWith('http') ? raw : 'http://x/?' + raw);
       host = u.origin;
-      user = qUser;
-      pass = qPass;
+      user = u.searchParams.get('username') || '';
+      pass = u.searchParams.get('password') || '';
+    } else if (raw.includes('://')) {
+      const u = new URL(raw);
+      host = u.origin;
     }
-  } catch (_) {}
-
-  if (!user || !pass) {
-    const parts = raw.split(/\s+/).filter(Boolean);
-    const pathM = raw.match(/^(https?:\/\/[^\s\/]+)\/([^\s\/\?]+)\/([^\s\/\?]+)/i);
-    if (parts.length >= 3 && /^https?:\/\//i.test(parts[0]) && parts[0].indexOf('?') < 0 && parts[0].split('/').length <= 4) {
-      host = parts[0].replace(/\/+$/, '');
-      user = parts[1];
-      pass = parts[2];
-    } else if (pathM && pathM[2] && pathM[3] && pathM[2].toLowerCase() !== 'get.php' && pathM[2].toLowerCase() !== 'player_api.php') {
-      host = pathM[1];
-      user = pathM[2];
-      pass = pathM[3];
-    } else if (parts.length >= 3) {
-      host = parts[0];
-      user = parts[1];
-      pass = parts[2];
-    }
-  }
-
-  if (!host || !user || !pass) {
-    toast('Nao entendi. Ex: get.php?username=xx&password=yy  ou  host user senha');
-    return;
-  }
-  if (!/^https?:\/\//i.test(host)) host = 'http://' + host;
-  host = host.replace(/\/+$/, '');
-  addSrv({
-    id: 's' + Date.now() + Math.random().toString(16).slice(2),
-    name: 'Servidor ' + (_servers.length + 1),
-    color: QUICK[_servers.length % QUICK.length],
-    host: host,
-    user: user,
-    pass: pass,
-    enabled: true,
-    priority: _servers.length + 1,
-    use_movies: true,
-    use_series: true,
-  });
-  document.getElementById('pasteLine').value = '';
-  toast('Servidor adicionado — confira senha e use Testar');
+    if (host) {
+      _servers.push({ id: 's' + Date.now(), name: 'Servidor ' + (_servers.length + 1), color: '⚡', host, user, pass, enabled: true, priority: _servers.length + 1, use_movies: true, use_series: true });
+      renderSrvs();
+      document.getElementById('pasteBox').value = '';
+      toast('Servidor adicionado');
+    } else toast('Nao reconheci o link');
+  } catch (e) { toast('Erro ao parsear'); }
 }
-function addSrv(data) {
-  _servers.push(data || {
-    id: 's' + Date.now() + Math.random().toString(16).slice(2),
-    name: 'Servidor ' + (_servers.length + 1),
-    color: QUICK[_servers.length % QUICK.length],
-    host: '',
-    user: '',
-    pass: '',
-    enabled: true,
-    priority: _servers.length + 1,
-    use_movies: true,
-    use_series: true,
-  });
+function addSrv() {
+  _servers.push({ id: 's' + Date.now(), name: 'Servidor ' + (_servers.length + 1), color: '⚡', host: '', user: '', pass: '', enabled: true, priority: _servers.length + 1, use_movies: true, use_series: true });
   renderSrvs();
-}
-function removeSrv(i) {
-  _servers.splice(i, 1);
-  renderSrvs();
-}
-function setEmoji(i, em) {
-  const box = document.getElementById('srv-' + i);
-  if (!box) return;
-  box.querySelector('.c').value = em;
-}
-function readSrvsFromDom() {
-  return _servers.map((s, i) => {
-    const box = document.getElementById('srv-' + i);
-    if (!box) return s;
-    const typedPass = box.querySelector('.p').value;
-    const pass = typedPass || s.pass || '';
-    return {
-      id: s.id,
-      name: box.querySelector('.n').value.trim() || ('Servidor ' + (i + 1)),
-      color: box.querySelector('.c').value.trim() || '🔴',
-      host: box.querySelector('.h').value.trim(),
-      user: box.querySelector('.u').value.trim(),
-      pass: pass,
-      enabled: box.querySelector('.en').checked,
-      priority: Number(box.querySelector('.pr').value) || i + 1,
-      use_movies: box.querySelector('.mov').checked,
-      use_series: box.querySelector('.ser').checked,
-    };
-  });
 }
 function renderSrvs() {
-  const wrap = document.getElementById('srvBox');
-  wrap.innerHTML = _servers.map((s, i) => {
-    const chips = QUICK.map((e) =>
-      '<button type="button" onclick="setEmoji(' + i + ',\'' + e + '\')">' + e + '</button>'
-    ).join('');
-    return '<div class="srv" id="srv-' + i + '">' +
-      '<div class="row">' +
-      '<input class="n" placeholder="Nome no Nuvio" value="' + esc(s.name) + '"/>' +
-      '<input class="c" style="max-width:90px;text-align:center" placeholder="emoji" value="' + esc(s.color || '') + '" title="Qualquer emoji"/>' +
-      '<input class="pr" type="number" style="max-width:70px" title="Prioridade" value="' + (s.priority || i + 1) + '"/>' +
-      '</div>' +
-      '<div class="emojis">' + chips + '</div>' +
-      '<input class="h" placeholder="http://servidor.com:80" value="' + esc(s.host) + '"/>' +
-      '<div class="row">' +
-      '<input class="u" placeholder="Usuario" value="' + esc(s.user) + '"/>' +
-      '<input class="p" type="password" value="' + esc(s.pass || '') + '" placeholder="' + (s.pass ? 'senha ok (pode deixar)' : 'Senha') + '"/>' +
-      '</div>' +
-      '<div class="row">' +
-      '<label class="chip"><input class="en" type="checkbox"' + (s.enabled !== false ? ' checked' : '') + '/> ON</label>' +
-      '<label class="chip"><input class="mov" type="checkbox"' + (s.use_movies !== false ? ' checked' : '') + '/> Filmes</label>' +
-      '<label class="chip"><input class="ser" type="checkbox"' + (s.use_series !== false ? ' checked' : '') + '/> Series</label>' +
+  const box = document.getElementById('srvBox');
+  box.innerHTML = _servers.map((s, i) => {
+    const chips = EMOJIS.map((e) => '<button type="button" class="chip' + (s.color === e ? ' on' : '') + '" onclick="_servers[' + i + '].color=\\' + e + '\\';renderSrvs()">' + e + '</button>').join('');
+    return '<div class="srv">' +
+      '<div class="row"><input style="flex:1" value="' + esc(s.name) + '" onchange="_servers[' + i + '].name=this.value" placeholder="Nome"/>' +
+      '<input style="width:70px" type="number" value="' + (s.priority || i + 1) + '" onchange="_servers[' + i + '].priority=+this.value" title="Prioridade"/></div>' +
+      '<div class="chips">' + chips + '</div>' +
+      '<input value="' + esc(s.host) + '" onchange="_servers[' + i + '].host=this.value" placeholder="http://host:porta"/>' +
+      '<div class="row"><input style="flex:1" value="' + esc(s.user) + '" onchange="_servers[' + i + '].user=this.value" placeholder="Usuario"/>' +
+      '<input style="flex:1" type="password" value="' + esc(s.pass || '') + '" onchange="_servers[' + i + '].pass=this.value" placeholder="Senha"/></div>' +
+      '<div class="row" style="align-items:center;margin-top:6px">' +
+      '<label class="chk"><input type="checkbox" ' + (s.enabled !== false ? 'checked' : '') + ' onchange="_servers[' + i + '].enabled=this.checked"/> ON</label>' +
+      '<label class="chk"><input type="checkbox" ' + (s.use_movies !== false ? 'checked' : '') + ' onchange="_servers[' + i + '].use_movies=this.checked"/> Filmes</label>' +
+      '<label class="chk"><input type="checkbox" ' + (s.use_series !== false ? 'checked' : '') + ' onchange="_servers[' + i + '].use_series=this.checked"/> Series</label>' +
       '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="testSrv(' + i + ')">Testar</button>' +
-      '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="removeSrv(' + i + ')">Remover</button>' +
+      '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="_servers.splice(' + i + ',1);renderSrvs()">Remover</button>' +
       '</div></div>';
-  }).join('') || '<p class="hint">Nenhum servidor</p>';
+  }).join('');
 }
-function cancelEdit() {
+function readSrvsFromDom() {
+  return _servers.map((s) => Object.assign({}, s));
+}
+async function testSrv(i) {
+  const s = _servers[i];
+  if (!s || !s.host || !s.user || !s.pass) { toast('Preencha host, user e senha'); return; }
+  toast('Testando…');
+  const d = await api('test-server', { host: s.host, user: s.user, pass: s.pass });
+  if (d.ok) toast('OK: ' + d.vodCount + ' filmes no VPS');
+  else toast(d.error || 'Falha');
+}
+async function save() {
+  _servers = readSrvsFromDom();
+  const missing = _servers.filter((s) => !s.host || !s.user || !s.pass);
+  if (missing.length) { toast('Algum servidor sem host, usuario ou senha'); return; }
+  const d = await api('save', {
+    id: _editId || undefined,
+    name: document.getElementById('pName').value.trim() || 'FlixHub',
+    servers: _servers,
+    public_enabled: !!document.getElementById('pPublic').checked,
+  });
+  if (d.error) { toast(typeof d.error === 'string' ? d.error : (d.hint || JSON.stringify(d.error))); return; }
+  toast(_editId ? 'Salvo' : 'Pack criado');
+  if (d.manifest_url) { try { await navigator.clipboard.writeText(d.manifest_url); toast('Privado copiado'); } catch (_) {} }
+  if (d.public_url) { try { await navigator.clipboard.writeText(d.public_url); toast('Publico copiado'); } catch (_) {} }
   _editId = null;
-  _servers = [];
-  addSrv();
-  document.getElementById('pName').value = 'FlixHub';
   document.getElementById('formTitle').textContent = 'Novo pack';
   document.getElementById('btnSave').textContent = 'Salvar e gerar';
   document.getElementById('btnCancel').style.display = 'none';
-  toast('Cancelado');
+  document.getElementById('pPublic').checked = false;
+  loadList();
 }
 function editPack(id) {
   const p = (_packs || []).find((x) => x.id === id);
   if (!p) return;
   _editId = id;
   document.getElementById('pName').value = p.name || 'FlixHub';
+  document.getElementById('pPublic').checked = !!p.public_enabled;
   document.getElementById('formTitle').textContent = 'Editar pack';
   document.getElementById('btnSave').textContent = 'Salvar alteracoes';
   document.getElementById('btnCancel').style.display = 'inline-block';
   _servers = (p.servers || []).map((s) => Object.assign({}, s, { pass: s.pass || '' }));
-  if (!_servers.length) addSrv();
-  else renderSrvs();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (!_servers.length) _servers = [];
+  renderSrvs();
+  window.scrollTo(0, 0);
 }
-async function testSrv(i) {
-  _servers = readSrvsFromDom();
-  const s = _servers[i];
-  if (!s || !s.host || !s.user || !s.pass) {
-    toast('Preencha host, usuario e senha antes de testar');
-    return;
-  }
-  toast('Testando do VPS…');
-  const d = await api('test-server', { host: s.host, user: s.user, pass: s.pass });
-  if (d.ok) {
-    toast('OK: ' + (d.vodCount || 0) + ' filmes no VPS');
-  } else {
-    toast(d.error || 'Falhou no VPS');
-  }
-}
-async function save() {
-  _servers = readSrvsFromDom();
-  const missing = _servers.filter((s) => !s.host || !s.user || !s.pass);
-  if (missing.length) {
-    toast('Algum servidor sem host, usuario ou senha');
-    return;
-  }
-  const d = await api('save', {
-    id: _editId || undefined,
-    name: document.getElementById('pName').value.trim() || 'FlixHub',
-    servers: _servers,
-  });
-  if (d.error) { toast(typeof d.error === 'string' ? d.error : JSON.stringify(d.error)); return; }
-  toast(_editId ? 'Salvo' : 'Pack criado');
-  if (d.manifest_url) {
-    try { await navigator.clipboard.writeText(d.manifest_url); toast('Manifest copiado'); } catch (_) {}
-  }
+function cancelEdit() {
   _editId = null;
   document.getElementById('formTitle').textContent = 'Novo pack';
   document.getElementById('btnSave').textContent = 'Salvar e gerar';
   document.getElementById('btnCancel').style.display = 'none';
-  loadList();
+  document.getElementById('pName').value = 'FlixHub';
+  document.getElementById('pPublic').checked = false;
+  _servers = [];
+  renderSrvs();
 }
 async function loadList() {
   const d = await api('list');
   const wrap = document.getElementById('list');
   if (d.error) {
-    wrap.innerHTML = '<p style="color:var(--red)">' + esc(d.error.message || d.error) + '</p><p class="hint">Supabase: rode sql/flixhub_packs.sql</p>';
+    wrap.innerHTML = '<p style="color:var(--red)">' + esc(d.error.message || d.error) + '</p><p class="hint">Supabase: rode sql/flixhub_packs.sql e sql/flixhub_packs_public.sql</p>';
     return;
   }
   _packs = d.packs || [];
   if (!_packs.length) { wrap.innerHTML = '<p class="hint">Nenhum pack ainda.</p>'; return; }
   wrap.innerHTML = _packs.map((p) => {
     const url = p.manifest_url || '';
+    const pub = p.public_url || '';
     const srvs = (p.servers || []).map((s) => (s.color || '') + ' ' + (s.name || '') + (s.enabled === false ? ' OFF' : '')).join(' · ');
     return '<div class="item"><b>' + esc(p.name) + '</b> ' +
       (p.is_active ? '<span style="color:var(--green)">ativo</span>' : '<span style="color:var(--muted)">off</span>') +
+      (p.public_enabled ? ' <span style="color:#7dd3fc">publico</span>' : '') +
       '<div class="meta">' + esc(srvs) + '</div>' +
-      '<div class="meta">' + esc(url) + '</div>' +
+      '<div class="meta"><b>Privado:</b> ' + esc(url) + '</div>' +
+      (pub ? '<div class="meta"><b>Publico:</b> ' + esc(pub) + '</div>' : '') +
       '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">' +
-      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + url.replace(/'/g, '') + '\');toast(\'URL copiada\')">Copiar JSON</button>' +
+      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + url.replace(/'/g, '') + '\');toast(\'Privado copiado\')">Copiar privado</button>' +
+      (pub ? '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="navigator.clipboard.writeText(\'' + pub.replace(/'/g, '') + '\');toast(\'Publico copiado\')">Copiar publico</button>' : '') +
       '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="editPack(\'' + p.id + '\')">Editar</button>' +
+      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'set-public\',{id:\'' + p.id + '\',enabled:' + (!p.public_enabled) + '}).then(function(r){toast(r.error?(r.hint||r.error):(r.public_url?\'Publico ON\':\'Publico OFF\'));loadList()})">' + (p.public_enabled ? 'Desligar publico' : 'Ligar publico') + '</button>' +
       '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'rotate-token\',{id:\'' + p.id + '\'}).then(function(r){toast(r.error?r.error:\'Token novo\');loadList()})">Novo token</button>' +
       '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="api(\'toggle\',{id:\'' + p.id + '\',is_active:' + (!p.is_active) + '}).then(loadList)">' + (p.is_active ? 'Pausar' : 'Ativar') + '</button>' +
       '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="if(confirm(\'Excluir pack?\'))api(\'delete\',{id:\'' + p.id + '\'}).then(loadList)">Excluir</button>' +
       '</div></div>';
   }).join('');
 }
+async function checkSession() {
+  const { data } = await sb.auth.getSession();
+  _session = data.session;
+  if (!_session) { location.href = '/admin.html'; return; }
+  renderSrvs();
+  loadList();
+}
 checkSession();
-</script>
+  </script>
 </body>
 </html>
