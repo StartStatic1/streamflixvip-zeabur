@@ -1,4 +1,4 @@
-// api/flixhub.js — add-on agregador estilo UnioFlix (stream + meta, 0 catalogos)
+// api/flixhub.js — agregador so FONTES (stream), sem meta — evita bug temporadas no Nuvio
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
@@ -104,6 +104,19 @@ async function loadPack(id, token, key) {
   return row;
 }
 
+async function loadPackBySlug(slug, key) {
+  if (!slug) return null;
+  const r = await fetch(
+    SUPABASE_URL +
+      '/rest/v1/flixhub_packs?public_slug=eq.' +
+      encodeURIComponent(slug) +
+      '&public_enabled=eq.true&is_active=eq.true&select=*',
+    { headers: svc(key) },
+  );
+  const rows = await r.json();
+  return Array.isArray(rows) && rows[0] ? rows[0] : null;
+}
+
 function enabledServers(pack) {
   return (Array.isArray(pack.servers) ? pack.servers : [])
     .filter((s) => s && s.enabled !== false && s.host && s.user && s.pass)
@@ -198,8 +211,8 @@ async function tmdbTitle(tmdbId, kind) {
   const path = kind === 'tv' ? '/tv/' + tmdbId : '/movie/' + tmdbId;
   try {
     const [pt, en] = await Promise.all([
-      fetch('https://api.themoviedb.org/3' + path + '?api_key=' + encodeURIComponent(apiKey) + '&language=pt-BR').then((r) => r.ok ? r.json() : null).catch(() => null),
-      fetch('https://api.themoviedb.org/3' + path + '?api_key=' + encodeURIComponent(apiKey) + '&language=en-US').then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch('https://api.themoviedb.org/3' + path + '?api_key=' + encodeURIComponent(apiKey) + '&language=pt-BR').then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch('https://api.themoviedb.org/3' + path + '?api_key=' + encodeURIComponent(apiKey) + '&language=en-US').then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     const a = pt ? metaFromTmdb(pt) : { titles: [], year: null };
     const b = en ? metaFromTmdb(en) : { titles: [], year: null };
@@ -227,12 +240,28 @@ async function imdbTitles(imdbId, kind) {
   if (hit && Date.now() - hit.at < 12 * 60 * 60 * 1000) return hit.meta;
   try {
     const [pt, en] = await Promise.all([
-      fetch('https://api.themoviedb.org/3/find/' + encodeURIComponent(imdbId) + '?api_key=' + encodeURIComponent(apiKey) + '&external_source=imdb_id&language=pt-BR').then((r) => r.ok ? r.json() : null).catch(() => null),
-      fetch('https://api.themoviedb.org/3/find/' + encodeURIComponent(imdbId) + '?api_key=' + encodeURIComponent(apiKey) + '&external_source=imdb_id&language=en-US').then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch(
+        'https://api.themoviedb.org/3/find/' +
+          encodeURIComponent(imdbId) +
+          '?api_key=' +
+          encodeURIComponent(apiKey) +
+          '&external_source=imdb_id&language=pt-BR',
+      )
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
+      fetch(
+        'https://api.themoviedb.org/3/find/' +
+          encodeURIComponent(imdbId) +
+          '?api_key=' +
+          encodeURIComponent(apiKey) +
+          '&external_source=imdb_id&language=en-US',
+      )
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
     ]);
     function pickRow(j) {
       if (!j) return null;
-      const rows = kind === 'tv' ? (j.tv_results || []) : (j.movie_results || []);
+      const rows = kind === 'tv' ? j.tv_results || [] : j.movie_results || [];
       return rows[0] || (j.tv_results && j.tv_results[0]) || (j.movie_results && j.movie_results[0]) || null;
     }
     const a = pickRow(pt) ? metaFromTmdb(pickRow(pt)) : { titles: [], year: null };
@@ -285,43 +314,54 @@ function parseStreamPath(rest) {
   return { type, id: raw, tmdbId, imdbId, season, episode };
 }
 
-function parseMeta(rest) {
-  const m = String(rest || '').match(/^meta\/([^/]+)\/(.+)\.json$/i);
-  if (!m) return null;
-  return { type: m[1].toLowerCase(), id: decodeURIComponent(m[2]) };
-}
-
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
-  if (req.method !== 'GET') { res.status(405).json({ error: 'GET only' }); return; }
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  if (req.method !== 'GET') {
+    res.status(405).json({ error: 'GET only' });
+    return;
+  }
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const path = String(req.path || req.url || '').split('?')[0];
-  const m = path.match(/\/api\/flixhub\/([^/]+)\/([^/]+)\/(.+)$/);
-  if (!m) {
-    res.status(401).json({ error: 'Use /api/flixhub/ID/TOKEN/manifest.json' });
-    return;
-  }
-  const id = m[1];
-  const token = m[2];
-  const rest = m[3];
 
-  let pack;
+  let pack = null;
+  let rest = null;
+  const pub = path.match(/\/api\/flixhub\/p\/([^/]+)\/(.+)$/);
+  const priv = path.match(/\/api\/flixhub\/([^/]+)\/([^/]+)\/(.+)$/);
+
   try {
-    pack = await loadPack(id, token, serviceKey);
+    if (pub) {
+      rest = pub[2];
+      pack = await loadPackBySlug(pub[1], serviceKey);
+      if (!pack) {
+        res.status(404).json({ error: 'Pack publico inativo ou inexistente' });
+        return;
+      }
+    } else if (priv && priv[1] !== 'p') {
+      rest = priv[3];
+      pack = await loadPack(priv[1], priv[2], serviceKey);
+      if (!pack) {
+        res.status(404).json({ error: 'Pack inativo ou inexistente' });
+        return;
+      }
+    } else {
+      res.status(401).json({
+        error: 'Use /api/flixhub/ID/TOKEN/manifest.json ou /api/flixhub/p/SLUG/manifest.json',
+      });
+      return;
+    }
   } catch (e) {
     if (e && e.code === 401) {
       res.status(401).json({ error: 'Token invalido' });
       return;
     }
     throw e;
-  }
-  if (!pack) {
-    res.status(404).json({ error: 'Pack inativo ou inexistente' });
-    return;
   }
 
   const brand = pack.name || 'FlixHub';
@@ -331,7 +371,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.1.4',
+      version: '1.2.0',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -357,7 +397,7 @@ module.exports = async function handler(req, res) {
         row.sample = list.slice(0, 3).map((x) => x.name || x.title || '?');
         if (meta.titles && meta.titles.length) {
           const hit = pick(list, meta.titles, meta.year);
-          row.match = hit ? (hit.name || hit.title) : null;
+          row.match = hit ? hit.name || hit.title : null;
           row.matchId = hit ? hit.stream_id : null;
         }
       } catch (e) {
@@ -374,44 +414,23 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.1.4',
+      version: '1.2.0',
       description:
-        'Filmes e séries com várias fontes em um só lugar. Qualidade FULL HD, servidores rápidos e experiência estável — feito para quem curte conteúdo sem enrolação.',
+        'So fontes de filmes e series (FULL HD). Use com catalogo Nuvio / AIOMetadata — o FlixHub nao altera capas nem temporadas.',
       logo: 'https://www.streamflixvip.online/logo.png',
       background: 'https://www.streamflixvip.online/logo.png',
-      resources: ['stream', 'meta'],
+      resources: ['stream'],
       types: ['movie', 'series'],
       catalogs: [],
       idPrefixes: ['tt', 'tmdb'],
+      behaviorHints: { configurable: false, configurationRequired: false },
     });
     return;
   }
 
-  const metaReq = parseMeta(rest);
-  if (metaReq) {
-    const kind = metaReq.type === 'movie' ? 'movie' : 'tv';
-    const raw = String(metaReq.id || '');
-    const parts = raw.split(':');
-    let meta = { titles: [], year: null };
-    if (/^tt\d+$/i.test(parts[0])) meta = await imdbTitles(parts[0], kind);
-    else if (parts[0] === 'tmdb' && parts[1]) meta = await tmdbTitle(parts[1], kind);
-    else if (/^\d+$/.test(parts[0])) meta = await tmdbTitle(parts[0], kind);
-
-    if (!meta.titles || !meta.titles.length) {
-      res.status(200).json({ meta: null });
-      return;
-    }
-    res.status(200).json({
-      meta: {
-        id: raw,
-        type: metaReq.type === 'movie' ? 'movie' : 'series',
-        name: meta.titles[0],
-        poster: meta.poster || undefined,
-        background: meta.backdrop || undefined,
-        description: meta.overview || meta.titles[0],
-        releaseInfo: meta.year ? String(meta.year) : undefined,
-      },
-    });
+  // meta NAO declarado no manifest — se alguem chamar, responde vazio
+  if (/^meta\//i.test(rest)) {
+    res.status(200).json({ meta: null });
     return;
   }
 
@@ -442,8 +461,24 @@ module.exports = async function handler(req, res) {
               const color = server.color || '⚡';
               streams.push({
                 name: brand,
-                title: '🎬 ' + (hit.name || titles[0] || 'Filme') + '\n' + color + ' ' + label + '\n🎯 FULL HD 1080p',
-                url: hostOf(server) + '/movie/' + server.user + '/' + server.pass + '/' + hit.stream_id + '.' + ext,
+                title:
+                  '🎬 ' +
+                  (hit.name || titles[0] || 'Filme') +
+                  '\n' +
+                  color +
+                  ' ' +
+                  label +
+                  '\n🎯 FULL HD 1080p',
+                url:
+                  hostOf(server) +
+                  '/movie/' +
+                  server.user +
+                  '/' +
+                  server.pass +
+                  '/' +
+                  hit.stream_id +
+                  '.' +
+                  ext,
                 behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
               });
             }
@@ -468,8 +503,28 @@ module.exports = async function handler(req, res) {
                 const color = server.color || '⚡';
                 streams.push({
                   name: brand,
-                  title: '📺 ' + (hit.name || titles[0] || 'Serie') + ' S' + seasonKey + 'E' + wantEp + '\n' + color + ' ' + label + '\n🎯 FULL HD',
-                  url: hostOf(server) + '/series/' + server.user + '/' + server.pass + '/' + eid + '.' + ext,
+                  title:
+                    '📺 ' +
+                    (hit.name || titles[0] || 'Serie') +
+                    ' S' +
+                    seasonKey +
+                    'E' +
+                    wantEp +
+                    '\n' +
+                    color +
+                    ' ' +
+                    label +
+                    '\n🎯 FULL HD',
+                  url:
+                    hostOf(server) +
+                    '/series/' +
+                    server.user +
+                    '/' +
+                    server.pass +
+                    '/' +
+                    eid +
+                    '.' +
+                    ext,
                   behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
                 });
               }
@@ -490,7 +545,8 @@ module.exports = async function handler(req, res) {
       const supportUrl = process.env.FLIXHUB_SUPPORT_URL || 'https://pay.infinitepay.io/streamflixvip';
       streams.push({
         name: '❤️ APOIE O PROJETO',
-        title: 'Seu apoio mantém o FlixHub no ar 🙏\n💎 PIX ou cartão via InfinitePay\nToque para abrir o pagamento',
+        title:
+          'Seu apoio mantém o FlixHub no ar 🙏\n💎 PIX ou cartão via InfinitePay\nToque para abrir o pagamento',
         externalUrl: supportUrl,
         behaviorHints: { notWebReady: true },
       });
