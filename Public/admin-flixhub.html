@@ -45,21 +45,16 @@
   <main>
     <div class="panel">
       <h2 id="formTitle">Novo pack</h2>
-      <p class="hint">Ao colar get.php a senha preenche. Use TESTAR: se der 403, o painel bloqueia o IP do VPS (no celular pode funcionar).</p>
+      <p class="hint">Cole get.php → Separar. Use <b>Pastas</b> para filtrar categorias Xtream (Cinema, Lancamentos…). Vazio = todas.</p>
       <input id="pName" placeholder="Nome no Nuvio — ex: FlixHub" value="FlixHub"/>
-
-      <p class="hint" style="margin-top:8px"><b>Importar da Bridge</b> (host/user/senha ja salvos)</p>
-      <div id="bridgeList" class="hint">Abra a Bridge se quiser copiar listas de la.</div>
-
       <p class="hint"><b>Colar link get.php / M3U</b></p>
       <textarea id="pasteBox" rows="2" placeholder="http://host/get.php?username=xx&password=yy"></textarea>
       <button class="btn-sec" style="margin-bottom:10px" onclick="parsePaste()">Separar e adicionar</button>
-
       <div id="srvBox"></div>
       <button class="btn-sec" style="margin-bottom:12px" onclick="addSrv()">+ Servidor manual</button>
       <label class="hint" style="display:flex;align-items:center;gap:8px;margin:10px 0;cursor:pointer">
         <input type="checkbox" id="pPublic" style="width:18px;height:18px"/>
-        <span><b>Também link público</b> (sem token na URL — estilo UnioFlix)</span>
+        <span><b>Também link público</b> (sem token na URL)</span>
       </label>
       <div class="row">
         <button class="btn-gold" style="flex:1" onclick="save()" id="btnSave">Salvar e gerar</button>
@@ -123,13 +118,12 @@ function parsePaste() {
       user = u.searchParams.get('username') || '';
       pass = u.searchParams.get('password') || '';
     } else if (raw.includes('://')) {
-      const u = new URL(raw);
-      host = u.origin;
+      host = new URL(raw).origin;
     }
     if (host) {
       let label = 'Servidor ' + (_servers.length + 1);
       try { label = new URL(host).hostname.replace(/^www\./,'') || label; } catch(_) {}
-      _servers.push({ id: 's' + Date.now(), name: label, color: '⚡', host, user, pass, enabled: true, priority: _servers.length + 1, use_movies: true, use_series: true });
+      _servers.push({ id: 's' + Date.now(), name: label, color: '⚡', host, user, pass, enabled: true, priority: _servers.length + 1, use_movies: true, use_series: true, vod_category_ids: [], series_category_ids: [] });
       renderSrvs();
       document.getElementById('pasteBox').value = '';
       toast('Servidor adicionado');
@@ -137,8 +131,14 @@ function parsePaste() {
   } catch (e) { toast('Erro ao parsear'); }
 }
 function addSrv() {
-  _servers.push({ id: 's' + Date.now(), name: 'Servidor ' + (_servers.length + 1), color: '⚡', host: '', user: '', pass: '', enabled: true, priority: _servers.length + 1, use_movies: true, use_series: true });
+  _servers.push({ id: 's' + Date.now(), name: 'Servidor ' + (_servers.length + 1), color: '⚡', host: '', user: '', pass: '', enabled: true, priority: _servers.length + 1, use_movies: true, use_series: true, vod_category_ids: [], series_category_ids: [] });
   renderSrvs();
+}
+function catSummary(s, i) {
+  const v = (s.vod_category_ids || []).length;
+  const se = (s.series_category_ids || []).length;
+  if (!v && !se) return '<div class="meta" id="catBox' + i + '">Pastas: todas (sem filtro)</div>';
+  return '<div class="meta" id="catBox' + i + '">Filtro: ' + v + ' pasta(s) filme · ' + se + ' serie</div>';
 }
 function renderSrvs() {
   const box = document.getElementById('srvBox');
@@ -156,12 +156,61 @@ function renderSrvs() {
       '<label class="chk"><input type="checkbox" ' + (s.use_movies !== false ? 'checked' : '') + ' onchange="_servers[' + i + '].use_movies=this.checked"/> Filmes</label>' +
       '<label class="chk"><input type="checkbox" ' + (s.use_series !== false ? 'checked' : '') + ' onchange="_servers[' + i + '].use_series=this.checked"/> Series</label>' +
       '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="testSrv(' + i + ')">Testar</button>' +
+      '<button class="btn-sec" style="padding:6px 10px;font-size:.75rem" onclick="loadCats(' + i + ')">Pastas</button>' +
       '<button class="btn-danger" style="padding:6px 10px;font-size:.75rem" onclick="_servers.splice(' + i + ',1);renderSrvs()">Remover</button>' +
-      '</div></div>';
+      '</div>' + catSummary(s, i) + '</div>';
   }).join('');
 }
-function readSrvsFromDom() {
-  return _servers.map((s) => Object.assign({}, s));
+async function loadCats(i) {
+  const s = _servers[i];
+  if (!s || !s.host || !s.user || !s.pass) { toast('Preencha host, user e senha'); return; }
+  toast('Carregando pastas…');
+  const d = await api('list-categories', { host: s.host, user: s.user, pass: s.pass });
+  if (!d.ok) { toast(d.error || 'Falha pastas'); return; }
+  const vod = d.vod || [];
+  const series = d.series || [];
+  const selV = new Set((s.vod_category_ids || []).map(String));
+  const selS = new Set((s.series_category_ids || []).map(String));
+  let html = '<div style="margin-top:8px;padding:10px;border:1px solid var(--border);border-radius:10px;background:#0a1020">';
+  html += '<div class="row" style="margin-bottom:6px"><b style="font-size:.85rem">Pastas FILMES</b>';
+  html += '<button class="btn-sec" style="padding:4px 8px;font-size:.7rem" type="button" onclick="toggleAllCats(' + i + ',\'vod\',true)">Todas</button>';
+  html += '<button class="btn-sec" style="padding:4px 8px;font-size:.7rem" type="button" onclick="toggleAllCats(' + i + ',\'vod\',false)">Nenhuma</button></div>';
+  if (!vod.length) html += '<div class="meta">Nenhuma categoria de filme</div>';
+  vod.forEach(function(c) {
+    const on = selV.has(String(c.id));
+    html += '<label class="chk" style="display:flex;margin:4px 0"><input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="toggleCat(' + i + ',\'vod\',\'' + String(c.id).replace(/'/g,'') + '\',this.checked)"/> ' + esc(c.name) + ' <span class="meta">#' + esc(c.id) + '</span></label>';
+  });
+  html += '<div class="row" style="margin:10px 0 6px"><b style="font-size:.85rem">Pastas SERIES</b>';
+  html += '<button class="btn-sec" style="padding:4px 8px;font-size:.7rem" type="button" onclick="toggleAllCats(' + i + ',\'series\',true)">Todas</button>';
+  html += '<button class="btn-sec" style="padding:4px 8px;font-size:.7rem" type="button" onclick="toggleAllCats(' + i + ',\'series\',false)">Nenhuma</button></div>';
+  if (!series.length) html += '<div class="meta">Nenhuma categoria de serie</div>';
+  series.forEach(function(c) {
+    const on = selS.has(String(c.id));
+    html += '<label class="chk" style="display:flex;margin:4px 0"><input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="toggleCat(' + i + ',\'series\',\'' + String(c.id).replace(/'/g,'') + '\',this.checked)"/> ' + esc(c.name) + ' <span class="meta">#' + esc(c.id) + '</span></label>';
+  });
+  html += '<p class="hint" style="margin-top:8px">Nenhuma marcada = usa todas. Depois clique Salvar.</p></div>';
+  const box = document.getElementById('catBox' + i);
+  if (box) box.outerHTML = '<div id="catBox' + i + '">' + html + '</div>';
+  s._vodCats = vod;
+  s._seriesCats = series;
+  toast('Pastas carregadas');
+}
+function toggleCat(i, kind, id, on) {
+  const s = _servers[i];
+  if (!s) return;
+  const key = kind === 'vod' ? 'vod_category_ids' : 'series_category_ids';
+  if (!Array.isArray(s[key])) s[key] = [];
+  const set = new Set(s[key].map(String));
+  if (on) set.add(String(id)); else set.delete(String(id));
+  s[key] = Array.from(set);
+}
+function toggleAllCats(i, kind, all) {
+  const s = _servers[i];
+  if (!s) return;
+  const key = kind === 'vod' ? 'vod_category_ids' : 'series_category_ids';
+  const list = kind === 'vod' ? (s._vodCats || []) : (s._seriesCats || []);
+  s[key] = all ? list.map(function(c) { return String(c.id); }) : [];
+  loadCats(i);
 }
 async function testSrv(i) {
   const s = _servers[i];
@@ -170,6 +219,9 @@ async function testSrv(i) {
   const d = await api('test-server', { host: s.host, user: s.user, pass: s.pass });
   if (d.ok) toast('OK: ' + d.vodCount + ' filmes no VPS');
   else toast(d.error || 'Falha');
+}
+function readSrvsFromDom() {
+  return _servers.map((s) => Object.assign({}, s));
 }
 async function save() {
   _servers = readSrvsFromDom();
@@ -205,7 +257,11 @@ function editPack(id) {
   document.getElementById('formTitle').textContent = 'Editar pack';
   document.getElementById('btnSave').textContent = 'Salvar alteracoes';
   document.getElementById('btnCancel').style.display = 'inline-block';
-  _servers = (p.servers || []).map((s) => Object.assign({}, s, { pass: s.pass || '' }));
+  _servers = (p.servers || []).map((s) => Object.assign({}, s, {
+    pass: s.pass || '',
+    vod_category_ids: s.vod_category_ids || [],
+    series_category_ids: s.series_category_ids || [],
+  }));
   renderSrvs();
   window.scrollTo(0, 0);
 }
@@ -224,7 +280,7 @@ async function loadList() {
   try {
     const d = await api('list');
     if (d.error) {
-      wrap.innerHTML = '<p style="color:var(--red)">' + esc(d.error.message || d.error) + '</p><p class="hint">Se falhou por coluna publica: rode sql/flixhub_packs_public.sql no Supabase</p>';
+      wrap.innerHTML = '<p style="color:var(--red)">' + esc(d.error.message || d.error) + '</p>';
       return;
     }
     _packs = d.packs || [];
