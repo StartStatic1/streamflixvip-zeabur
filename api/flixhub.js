@@ -442,7 +442,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.3.5',
+      version: '1.3.6',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -490,7 +490,7 @@ module.exports = async function handler(req, res) {
         ? 'com.streamflixvip.flixhub.' + String(pack.public_slug).slice(0, 12)
         : 'com.streamflixvip.flixhub.' + String(pack.id).replace(/-/g, '').slice(0, 12),
       name: brand,
-      version: '1.3.5',
+      version: '1.3.6',
       description:
         'Varias fontes em HD para filmes e series. Simples, rapido e estavel no Stremio.',
       logo: 'https://www.streamflixvip.online/logo.png',
@@ -559,6 +559,7 @@ module.exports = async function handler(req, res) {
                   '.' +
                   ext,
                 behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
+                _priority: Number(server.priority) || 0,
               });
             }
           }
@@ -605,6 +606,7 @@ module.exports = async function handler(req, res) {
                     '.' +
                     ext,
                   behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
+                  _priority: Number(server.priority) || 0,
                 });
               }
             }
@@ -617,8 +619,9 @@ module.exports = async function handler(req, res) {
       const la = /CAM|CINEMA/i.test(a.title || '') ? 1 : 0;
       const lb = /CAM|CINEMA/i.test(b.title || '') ? 1 : 0;
       if (la !== lb) return la - lb;
-      return 0;
+      return (a._priority || 0) - (b._priority || 0);
     });
+    for (const s of streams) delete s._priority;
 
     if (streams.length) {
       const supportUrl = process.env.FLIXHUB_SUPPORT_URL || 'https://pay.infinitepay.io/streamflixvip';
