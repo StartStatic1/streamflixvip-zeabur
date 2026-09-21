@@ -1,4 +1,4 @@
-// api/flixhub.js — so FONTES + filtro pastas + evita CAM + id catalogo
+// api/flixhub.js — fontes HD, indice rapido, evita CAM
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
@@ -48,7 +48,7 @@ async function xtreamOnce(server, action, extra, ua) {
     if (v != null) url.searchParams.set(k, String(v));
   });
   const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 20000);
+  const t = setTimeout(() => ac.abort(), 12000);
   try {
     const r = await fetch(url.toString(), {
       signal: ac.signal,
@@ -129,20 +129,32 @@ function filterByCats(rows, ids) {
   return rows.filter((r) => set.has(String(r.category_id)));
 }
 
+function buildIndex(rows) {
+  const byNorm = new Map();
+  for (const item of rows) {
+    const key = norm(item.name || item.title || '');
+    if (!key) continue;
+    if (!byNorm.has(key)) byNorm.set(key, []);
+    byNorm.get(key).push(item);
+  }
+  return byNorm;
+}
+
 async function vodList(server, strict) {
   const catKey = (server.vod_category_ids || []).slice().sort().join(',');
   const k = 'fh:vod:' + hostOf(server) + ':' + server.user + ':' + catKey;
   const hit = cache.get(k);
-  if (hit && Date.now() - hit.at < 25 * 60 * 1000) return hit.rows;
+  if (hit && Date.now() - hit.at < 45 * 60 * 1000) return hit;
   try {
     const raw = await xtream(server, 'get_vod_streams');
     let rows = Array.isArray(raw) ? raw : [];
     rows = filterByCats(rows, server.vod_category_ids);
-    cache.set(k, { at: Date.now(), rows });
-    return rows;
+    const pack = { at: Date.now(), rows, byNorm: buildIndex(rows) };
+    cache.set(k, pack);
+    return pack;
   } catch (e) {
     if (strict) throw e;
-    return [];
+    return { at: Date.now(), rows: [], byNorm: new Map() };
   }
 }
 
@@ -150,12 +162,13 @@ async function seriesList(server) {
   const catKey = (server.series_category_ids || []).slice().sort().join(',');
   const k = 'fh:ser:' + hostOf(server) + ':' + server.user + ':' + catKey;
   const hit = cache.get(k);
-  if (hit && Date.now() - hit.at < 25 * 60 * 1000) return hit.rows;
+  if (hit && Date.now() - hit.at < 45 * 60 * 1000) return hit;
   const raw = await xtream(server, 'get_series').catch(() => []);
   let rows = Array.isArray(raw) ? raw : [];
   rows = filterByCats(rows, server.series_category_ids);
-  cache.set(k, { at: Date.now(), rows });
-  return rows;
+  const pack = { at: Date.now(), rows, byNorm: buildIndex(rows) };
+  cache.set(k, pack);
+  return pack;
 }
 
 const LOW_Q = /\b(cinema|cam|hdcam|hqcam|telesync|telecine|ts\b|tc\b|r5|scr|screener|camrip|hdts|hd-ts)\b/i;
@@ -191,14 +204,42 @@ function scoreOne(itemName, queryTitle, queryYear) {
   return score;
 }
 
-function pick(list, titles, queryYear) {
+function pickFromPack(pack, titles, queryYear) {
+  const list = (pack && pack.rows) || (Array.isArray(pack) ? pack : []);
+  const byNorm = pack && pack.byNorm;
   const bag = (Array.isArray(titles) ? titles : [titles]).filter(Boolean);
-  if (!bag.length) return null;
+  if (!bag.length || !list.length) return null;
+
+  if (byNorm && byNorm.size) {
+    for (const q of bag) {
+      const key = norm(q);
+      const exact = byNorm.get(key);
+      if (exact && exact.length) {
+        const good = exact.find((it) => !isLowQuality(it.name || it.title || ''));
+        if (good) return good;
+        if (exact[0]) return exact[0];
+      }
+    }
+  }
+
+  const qToks = new Set();
+  for (const q of bag) tokens(q).forEach((t) => qToks.add(t));
+  const candidates = [];
+  for (const item of list) {
+    const name = item.name || item.title || '';
+    const tTok = tokens(name);
+    let shared = 0;
+    for (const t of tTok) if (qToks.has(t)) shared++;
+    if (shared >= 2 || (shared >= 1 && tTok.length <= 3)) candidates.push(item);
+    if (candidates.length > 800) break;
+  }
+  const pool = candidates.length ? candidates : list.slice(0, 2000);
+
   let best = null;
   let bestScore = 0;
   let bestLow = null;
   let bestLowScore = 0;
-  for (const item of list) {
+  for (const item of pool) {
     const name = item.name || item.title || '';
     const low = isLowQuality(name);
     for (const q of bag) {
@@ -217,6 +258,10 @@ function pick(list, titles, queryYear) {
   if (best && bestScore >= 70) return best;
   if (bestLow && bestLowScore >= 70) return bestLow;
   return null;
+}
+
+function pick(listOrPack, titles, queryYear) {
+  return pickFromPack(listOrPack, titles, queryYear);
 }
 
 function metaFromTmdb(j) {
@@ -397,7 +442,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.3.4',
+      version: '1.3.5',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -420,11 +465,12 @@ module.exports = async function handler(req, res) {
     for (const server of servers) {
       const row = { name: server.name, host: hostOf(server) };
       try {
-        const list = await vodList(server, true);
+        const packV = await vodList(server, true);
+        const list = packV.rows || [];
         row.vodCount = list.length;
         row.sample = list.slice(0, 3).map((x) => x.name || x.title || '?');
         if (meta.titles && meta.titles.length) {
-          const hit = pick(list, meta.titles, meta.year);
+          const hit = pick(packV, meta.titles, meta.year);
           row.match = hit ? hit.name || hit.title : null;
           row.matchId = hit ? hit.stream_id : null;
         }
@@ -444,7 +490,7 @@ module.exports = async function handler(req, res) {
         ? 'com.streamflixvip.flixhub.' + String(pack.public_slug).slice(0, 12)
         : 'com.streamflixvip.flixhub.' + String(pack.id).replace(/-/g, '').slice(0, 12),
       name: brand,
-      version: '1.3.4',
+      version: '1.3.5',
       description:
         'Varias fontes em HD para filmes e series. Simples, rapido e estavel no Stremio.',
       logo: 'https://www.streamflixvip.online/logo.png',
@@ -482,8 +528,8 @@ module.exports = async function handler(req, res) {
       servers.map(async (server) => {
         try {
           if (streamReq.type === 'movie' && server.use_movies !== false) {
-            const list = await vodList(server);
-            const hit = pick(list, titles, year);
+            const packV = await vodList(server);
+            const hit = pick(packV, titles, year);
             if (hit && hit.stream_id) {
               const ext = (hit.container_extension || 'mp4').replace(/^\./, '');
               const label = server.name || brand;
@@ -517,8 +563,8 @@ module.exports = async function handler(req, res) {
             }
           }
           if (streamReq.type === 'series' && server.use_series !== false) {
-            const list = await seriesList(server);
-            const hit = pick(list, titles, year);
+            const packS = await seriesList(server);
+            const hit = pick(packS, titles, year);
             if (hit && (hit.series_id || hit.stream_id)) {
               const sid = hit.series_id || hit.stream_id;
               const info = await xtream(server, 'get_series_info', { series_id: sid }).catch(() => null);
