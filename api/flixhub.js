@@ -1,4 +1,4 @@
-// api/flixhub.js — agregador so FONTES (stream), sem meta — evita bug temporadas no Nuvio
+// api/flixhub.js — so FONTES (stream) + filtro pastas Xtream
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
@@ -123,13 +123,21 @@ function enabledServers(pack) {
     .sort((a, b) => (a.priority || 0) - (b.priority || 0));
 }
 
+function filterByCats(rows, ids) {
+  if (!Array.isArray(ids) || !ids.length) return rows;
+  const set = new Set(ids.map(String));
+  return rows.filter((r) => set.has(String(r.category_id)));
+}
+
 async function vodList(server, strict) {
-  const k = 'fh:vod:' + server.host + ':' + server.user;
+  const catKey = (server.vod_category_ids || []).slice().sort().join(',');
+  const k = 'fh:vod:' + hostOf(server) + ':' + server.user + ':' + catKey;
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < 25 * 60 * 1000) return hit.rows;
   try {
     const raw = await xtream(server, 'get_vod_streams');
-    const rows = Array.isArray(raw) ? raw : [];
+    let rows = Array.isArray(raw) ? raw : [];
+    rows = filterByCats(rows, server.vod_category_ids);
     cache.set(k, { at: Date.now(), rows });
     return rows;
   } catch (e) {
@@ -139,11 +147,13 @@ async function vodList(server, strict) {
 }
 
 async function seriesList(server) {
-  const k = 'fh:ser:' + server.host + ':' + server.user;
+  const catKey = (server.series_category_ids || []).slice().sort().join(',');
+  const k = 'fh:ser:' + hostOf(server) + ':' + server.user + ':' + catKey;
   const hit = cache.get(k);
   if (hit && Date.now() - hit.at < 25 * 60 * 1000) return hit.rows;
   const raw = await xtream(server, 'get_series').catch(() => []);
-  const rows = Array.isArray(raw) ? raw : [];
+  let rows = Array.isArray(raw) ? raw : [];
+  rows = filterByCats(rows, server.series_category_ids);
   cache.set(k, { at: Date.now(), rows });
   return rows;
 }
@@ -371,7 +381,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.2.0',
+      version: '1.3.0',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -381,6 +391,8 @@ module.exports = async function handler(req, res) {
         use_movies: s.use_movies !== false,
         use_series: s.use_series !== false,
         priority: s.priority,
+        vod_cats: (s.vod_category_ids || []).length,
+        series_cats: (s.series_category_ids || []).length,
       })),
       tests: [],
     };
@@ -414,9 +426,9 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.2.0',
+      version: '1.3.0',
       description:
-        'So fontes de filmes e series (FULL HD). Use com catalogo Nuvio / AIOMetadata — o FlixHub nao altera capas nem temporadas.',
+        'So fontes (FULL HD). Filtro por pastas/categorias Xtream. Use com Nuvio / AIOMetadata — nao altera capas nem temporadas.',
       logo: 'https://www.streamflixvip.online/logo.png',
       background: 'https://www.streamflixvip.online/logo.png',
       resources: ['stream'],
@@ -428,7 +440,6 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  // meta NAO declarado no manifest — se alguem chamar, responde vazio
   if (/^meta\//i.test(rest)) {
     res.status(200).json({ meta: null });
     return;
