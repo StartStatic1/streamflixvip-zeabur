@@ -1,4 +1,4 @@
-// api/flixhub.js — so FONTES + filtro pastas + evita CAM/CINEMA
+// api/flixhub.js — so FONTES + filtro pastas + evita CAM + novo id catalogo
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
@@ -397,7 +397,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.3.1',
+      version: '1.3.2',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -440,9 +440,11 @@ module.exports = async function handler(req, res) {
 
   if (rest === 'manifest.json') {
     res.status(200).json({
-      id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
+      id: pack.public_slug
+        ? 'com.streamflixvip.flixhub.' + String(pack.public_slug).slice(0, 12)
+        : 'com.streamflixvip.flixhub.' + String(pack.id).replace(/-/g, '').slice(0, 12),
       name: brand,
-      version: '1.3.1',
+      version: '1.3.2',
       description:
         'So fontes HD. Evita CAM/CINEMA quando ha alternativa. Use com Nuvio / AIOMetadata.',
       logo: 'https://www.streamflixvip.online/logo.png',
@@ -565,7 +567,6 @@ module.exports = async function handler(req, res) {
       }),
     );
 
-    // ordena: HD primeiro, CAM por ultimo
     streams.sort((a, b) => {
       const la = /CAM|CINEMA/i.test(a.title || '') ? 1 : 0;
       const lb = /CAM|CINEMA/i.test(b.title || '') ? 1 : 0;
