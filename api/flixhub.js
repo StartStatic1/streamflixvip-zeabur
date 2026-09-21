@@ -1,4 +1,4 @@
-// api/flixhub.js — so FONTES (stream) + filtro pastas Xtream
+// api/flixhub.js — so FONTES + filtro pastas + evita CAM/CINEMA
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
@@ -158,6 +158,12 @@ async function seriesList(server) {
   return rows;
 }
 
+const LOW_Q = /\b(cinema|cam|hdcam|hqcam|telesync|telecine|ts\b|tc\b|r5|scr|screener|camrip|hdts|hd-ts)\b/i;
+
+function isLowQuality(name) {
+  return LOW_Q.test(String(name || ''));
+}
+
 function scoreOne(itemName, queryTitle, queryYear) {
   const t = norm(itemName);
   const n = norm(queryTitle);
@@ -190,17 +196,27 @@ function pick(list, titles, queryYear) {
   if (!bag.length) return null;
   let best = null;
   let bestScore = 0;
+  let bestLow = null;
+  let bestLowScore = 0;
   for (const item of list) {
     const name = item.name || item.title || '';
+    const low = isLowQuality(name);
     for (const q of bag) {
-      const score = scoreOne(name, q, queryYear);
-      if (score > bestScore) {
+      let score = scoreOne(name, q, queryYear);
+      if (score < 70) continue;
+      if (low) score -= 40;
+      if (!low && score > bestScore) {
         bestScore = score;
         best = item;
+      } else if (low && score > bestLowScore) {
+        bestLowScore = score;
+        bestLow = item;
       }
     }
   }
-  return bestScore >= 70 ? best : null;
+  if (best && bestScore >= 70) return best;
+  if (bestLow && bestLowScore >= 70) return bestLow;
+  return null;
 }
 
 function metaFromTmdb(j) {
@@ -381,7 +397,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.3.0',
+      version: '1.3.1',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -426,9 +442,9 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       id: 'streamflix.flixhub.' + String(pack.id).slice(0, 8),
       name: brand,
-      version: '1.3.0',
+      version: '1.3.1',
       description:
-        'So fontes (FULL HD). Filtro por pastas/categorias Xtream. Use com Nuvio / AIOMetadata — nao altera capas nem temporadas.',
+        'So fontes HD. Evita CAM/CINEMA quando ha alternativa. Use com Nuvio / AIOMetadata.',
       logo: 'https://www.streamflixvip.online/logo.png',
       background: 'https://www.streamflixvip.online/logo.png',
       resources: ['stream'],
@@ -470,6 +486,9 @@ module.exports = async function handler(req, res) {
               const ext = (hit.container_extension || 'mp4').replace(/^\./, '');
               const label = server.name || brand;
               const color = server.color || '⚡';
+              const qLabel = isLowQuality(hit.name || '')
+                ? '⚠️ CAM / CINEMA (qualidade baixa)'
+                : '🎯 FULL HD 1080p';
               streams.push({
                 name: brand,
                 title:
@@ -479,7 +498,8 @@ module.exports = async function handler(req, res) {
                   color +
                   ' ' +
                   label +
-                  '\n🎯 FULL HD 1080p',
+                  '\n' +
+                  qLabel,
                 url:
                   hostOf(server) +
                   '/movie/' +
@@ -545,11 +565,12 @@ module.exports = async function handler(req, res) {
       }),
     );
 
-    const orderLabels = servers.map((s) => (s.color || '⚡') + ' ' + (s.name || brand));
+    // ordena: HD primeiro, CAM por ultimo
     streams.sort((a, b) => {
-      const ia = orderLabels.findIndex((t) => (a.title || '').indexOf(t) >= 0);
-      const ib = orderLabels.findIndex((t) => (b.title || '').indexOf(t) >= 0);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      const la = /CAM|CINEMA/i.test(a.title || '') ? 1 : 0;
+      const lb = /CAM|CINEMA/i.test(b.title || '') ? 1 : 0;
+      if (la !== lb) return la - lb;
+      return 0;
     });
 
     if (streams.length) {
