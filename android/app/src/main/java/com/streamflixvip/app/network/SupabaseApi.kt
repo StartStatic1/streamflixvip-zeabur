@@ -119,3 +119,178 @@ fun requiresVip(config: VipTitleConfig?, episodeNumber: Int?): Boolean {
     }
     return false
 }
+
+interface WatchProgressApi {
+
+    @retrofit2.http.Headers("Content-Type: application/json", "Prefer: resolution=merge-duplicates,return=minimal")
+    @POST("rest/v1/watch_progress")
+    suspend fun upsertProgress(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("on_conflict") onConflict: String = "user_id,tmdb_id,media_type,season,episode",
+        @retrofit2.http.Body body: WatchProgressUpsert,
+    )
+
+    @GET("rest/v1/watch_progress")
+    suspend fun getContinueWatching(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("order") order: String = "updated_at.desc",
+        @Query("limit") limit: Int = 20,
+    ): List<WatchProgressEntry>
+
+    @retrofit2.http.DELETE("rest/v1/watch_progress")
+    suspend fun deleteProgress(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
+        @Query("season") seasonFilter: String,
+        @Query("episode") episodeFilter: String,
+    )
+
+    @retrofit2.http.DELETE("rest/v1/watch_progress")
+    suspend fun deleteProgressByTitle(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
+    )
+}
+
+@JsonClass(generateAdapter = true)
+data class WatchProgressUpsert(
+    val user_id: String,
+    val tmdb_id: Int,
+    val media_type: String,
+    val season: Int,
+    val episode: Int,
+    val title: String,
+    val poster_path: String?,
+    val position_seconds: Int,
+    val duration_seconds: Int,
+)
+
+@JsonClass(generateAdapter = true)
+data class WatchProgressEntry(
+    val tmdb_id: Int,
+    val media_type: String,
+    val season: Int,
+    val episode: Int,
+    val title: String?,
+    val poster_path: String?,
+    val position_seconds: Int,
+    val duration_seconds: Int,
+) {
+    val progressFraction: Float
+        get() = if (duration_seconds > 0) (position_seconds.toFloat() / duration_seconds).coerceIn(0f, 1f) else 0f
+
+    val displayTitle: String get() = title ?: "Sem título"
+}
+
+interface FavoritesApi {
+
+    @retrofit2.http.Headers("Content-Type: application/json", "Prefer: resolution=merge-duplicates,return=minimal")
+    @POST("rest/v1/favorites")
+    suspend fun addFavorite(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("on_conflict") onConflict: String = "user_id,tmdb_id,media_type",
+        @retrofit2.http.Body body: FavoriteUpsert,
+    )
+
+    @GET("rest/v1/favorites")
+    suspend fun getFavorites(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("order") order: String = "created_at.desc",
+        @Query("limit") limit: Int = 100,
+    ): List<FavoriteEntry>
+
+    @GET("rest/v1/favorites")
+    suspend fun getFavoriteByTitle(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
+    ): List<FavoriteEntry>
+
+    @retrofit2.http.DELETE("rest/v1/favorites")
+    suspend fun removeFavorite(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
+    )
+}
+
+@JsonClass(generateAdapter = true)
+data class FavoriteUpsert(
+    val user_id: String,
+    val tmdb_id: Int,
+    val media_type: String,
+    val title: String?,
+    val poster_path: String?,
+    val original_language: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class FavoriteEntry(
+    val tmdb_id: Int,
+    val media_type: String,
+    val title: String?,
+    val poster_path: String?,
+    val original_language: String? = null,
+) {
+    val displayTitle: String get() = title ?: "Sem título"
+    val isAnime: Boolean get() = media_type == "tv" && original_language == "ja"
+    val isDorama: Boolean get() = media_type == "tv" && original_language == "ko"
+}
+
+interface CommentsApi {
+
+    @GET("rest/v1/title_comments")
+    suspend fun getComments(
+        @Header("apikey") apiKey: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("media_type") mediaTypeFilter: String,
+        @Query("select") select: String = "id,user_display_name,is_vip_author,comment_text,created_at",
+        @Query("order") order: String = "created_at.desc",
+        @Query("limit") limit: Int = 100,
+    ): List<TitleComment>
+
+    @retrofit2.http.Headers("Content-Type: application/json", "Prefer: return=minimal")
+    @POST("rest/v1/title_comments")
+    suspend fun postComment(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @retrofit2.http.Body body: TitleCommentInsert,
+    )
+}
+
+@JsonClass(generateAdapter = true)
+data class TitleComment(
+    val id: Long,
+    val user_display_name: String?,
+    val is_vip_author: Boolean = false,
+    val comment_text: String,
+    val created_at: String,
+) {
+    val displayAuthor: String get() = user_display_name?.takeIf { it.isNotBlank() } ?: "Usuário"
+}
+
+@JsonClass(generateAdapter = true)
+data class TitleCommentInsert(
+    val tmdb_id: Int,
+    val media_type: String,
+    val user_id: String,
+    val user_display_name: String?,
+    val is_vip_author: Boolean,
+    val comment_text: String,
+)
