@@ -1,4 +1,4 @@
-// api/flixhub.js — so FONTES + filtro pastas + evita CAM + novo id catalogo
+// api/flixhub.js — so FONTES + filtro pastas + evita CAM + id catalogo
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
@@ -397,7 +397,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.3.2',
+      version: '1.3.3',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -444,9 +444,9 @@ module.exports = async function handler(req, res) {
         ? 'com.streamflixvip.flixhub.' + String(pack.public_slug).slice(0, 12)
         : 'com.streamflixvip.flixhub.' + String(pack.id).replace(/-/g, '').slice(0, 12),
       name: brand,
-      version: '1.3.2',
+      version: '1.3.3',
       description:
-        'So fontes HD. Evita CAM/CINEMA quando ha alternativa. Use com Nuvio / AIOMetadata.',
+        'Filmes e series com varias fontes em HD. Rapido, estavel e simples de usar no Stremio e no Nuvio.',
       logo: 'https://www.streamflixvip.online/logo.png',
       background: 'https://www.streamflixvip.online/logo.png',
       resources: ['stream'],
