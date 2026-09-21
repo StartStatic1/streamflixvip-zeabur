@@ -397,7 +397,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.3.3',
+      version: '1.3.4',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -444,9 +444,9 @@ module.exports = async function handler(req, res) {
         ? 'com.streamflixvip.flixhub.' + String(pack.public_slug).slice(0, 12)
         : 'com.streamflixvip.flixhub.' + String(pack.id).replace(/-/g, '').slice(0, 12),
       name: brand,
-      version: '1.3.3',
+      version: '1.3.4',
       description:
-        'Filmes e series com varias fontes em HD. Rapido, estavel e simples de usar no Stremio e no Nuvio.',
+        'Varias fontes em HD para filmes e series. Simples, rapido e estavel no Stremio.',
       logo: 'https://www.streamflixvip.online/logo.png',
       background: 'https://www.streamflixvip.online/logo.png',
       resources: ['stream'],
