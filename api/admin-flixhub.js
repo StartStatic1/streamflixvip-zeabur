@@ -46,6 +46,12 @@ function normalizeServers(list) {
       priority: Number(s.priority) || i + 1,
       use_movies: s.use_movies !== false,
       use_series: s.use_series !== false,
+      vod_category_ids: Array.isArray(s.vod_category_ids)
+        ? s.vod_category_ids.map(String).filter(Boolean).slice(0, 80)
+        : [],
+      series_category_ids: Array.isArray(s.series_category_ids)
+        ? s.series_category_ids.map(String).filter(Boolean).slice(0, 80)
+        : [],
     }))
     .filter((s) => s.host && s.user && s.pass);
 }
@@ -97,6 +103,70 @@ module.exports = async function handler(req, res) {
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
   const action = body && body.action;
   const h = svc(serviceKey);
+
+  if (action === 'list-categories') {
+    const host = String(body.host || '').replace(/\/+$/, '');
+    const userXt = String(body.user || '');
+    const pass = String(body.pass || '');
+    if (!host || !userXt || !pass) {
+      res.status(400).json({ ok: false, error: 'host, user e senha obrigatorios' });
+      return;
+    }
+    const UAS = [
+      'IPTVSmartersPro/1.0',
+      'okhttp/4.12.0',
+      'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/122.0.0.0 Mobile Safari/537.36',
+    ];
+    async function pull(actionName) {
+      let last = null;
+      for (const ua of UAS) {
+        try {
+          const url = new URL(host + '/player_api.php');
+          url.searchParams.set('username', userXt);
+          url.searchParams.set('password', pass);
+          url.searchParams.set('action', actionName);
+          const ac = new AbortController();
+          const t = setTimeout(() => ac.abort(), 18000);
+          const r = await fetch(url.toString(), {
+            signal: ac.signal,
+            headers: { 'User-Agent': ua, Accept: 'application/json' },
+          });
+          clearTimeout(t);
+          if (!r.ok) {
+            last = 'HTTP ' + r.status;
+            if (r.status === 403) throw new Error('HTTP 403 — IP do VPS bloqueado');
+            continue;
+          }
+          const data = await r.json();
+          return Array.isArray(data) ? data : [];
+        } catch (e) {
+          last = String(e && e.message ? e.message : e);
+          if (String(last).includes('403')) throw e;
+        }
+      }
+      throw new Error(last || 'Falha categorias');
+    }
+    try {
+      const [vodCats, seriesCats] = await Promise.all([
+        pull('get_vod_categories').catch(() => []),
+        pull('get_series_categories').catch(() => []),
+      ]);
+      res.status(200).json({
+        ok: true,
+        vod: vodCats.map((c) => ({
+          id: String(c.category_id),
+          name: String(c.category_name || c.category_id),
+        })),
+        series: seriesCats.map((c) => ({
+          id: String(c.category_id),
+          name: String(c.category_name || c.category_id),
+        })),
+      });
+    } catch (e) {
+      res.status(200).json({ ok: false, error: String(e && e.message ? e.message : e) });
+    }
+    return;
+  }
 
   if (action === 'test-server') {
     const host = String(body.host || '').replace(/\/+$/, '');
