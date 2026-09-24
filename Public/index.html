@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>StreamFlixVIP — App de filmes e séries</title>
-  <meta name="description" content="Baixe o app StreamFlixVIP: filmes, séries e TV no celular e na TV. Atualização fácil, multi-fonte e comunidade no Telegram." />
+  <meta name="description" content="Baixe o app StreamFlixVIP: filmes, séries e TV no celular. Ative no mobile e use também na TV. Comunidade no Telegram e WhatsApp." />
   <meta name="theme-color" content="#05080c" />
   <meta name="monetag" content="f464b97ca874b4ae3a06b21b7b7408b0" />
   <link rel="icon" href="/icons/icon-192x192.png" />
@@ -22,7 +22,6 @@
   <style>
     :root {
       --bg: #05080c;
-      --surface: #0c1218;
       --card: rgba(14, 22, 32, 0.9);
       --border: rgba(46, 230, 214, 0.14);
       --text: #f0f7fa;
@@ -48,8 +47,6 @@
       line-height: 1.5;
     }
     a { color: inherit; text-decoration: none; }
-    img { max-width: 100%; display: block; }
-
     .wrap { width: min(1080px, 100% - 2rem); margin: 0 auto; }
 
     header {
@@ -57,7 +54,6 @@
       backdrop-filter: blur(16px);
       background: rgba(5,8,12,0.75);
       border-bottom: 1px solid transparent;
-      transition: border-color .2s;
     }
     header.scrolled { border-bottom-color: var(--border); }
     .nav {
@@ -82,11 +78,11 @@
       -webkit-background-clip: text; background-clip: text;
       -webkit-text-fill-color: transparent;
     }
-    .nav-actions { display: flex; gap: 10px; align-items: center; }
+    .nav-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      border-radius: 999px; padding: 12px 20px;
-      font-weight: 700; font-size: 0.95rem;
+      border-radius: 999px; padding: 11px 18px;
+      font-weight: 700; font-size: 0.92rem;
       border: 1px solid transparent;
       transition: transform .15s, box-shadow .15s, background .15s;
       cursor: pointer;
@@ -97,7 +93,6 @@
       color: #041018;
       box-shadow: 0 8px 28px rgba(14,165,233,0.35);
     }
-    .btn-primary:hover { box-shadow: 0 10px 32px rgba(46,230,214,0.4); }
     .btn-ghost {
       background: rgba(255,255,255,0.04);
       border-color: var(--border);
@@ -107,14 +102,10 @@
     .btn-lg { padding: 16px 28px; font-size: 1.05rem; }
 
     .hero {
-      padding: 48px 0 32px;
-      display: grid;
-      gap: 36px;
-      align-items: center;
+      padding: 48px 0 40px;
+      max-width: 720px;
     }
-    @media (min-width: 900px) {
-      .hero { grid-template-columns: 1.1fr 0.9fr; padding: 72px 0 48px; gap: 48px; }
-    }
+    @media (min-width: 900px) { .hero { padding: 72px 0 48px; } }
     .eyebrow {
       display: inline-flex; align-items: center; gap: 8px;
       font-size: 0.8rem; font-weight: 600; color: var(--cyan);
@@ -127,7 +118,7 @@
     }
     h1 {
       font-family: var(--display);
-      font-size: clamp(2.1rem, 5vw, 3.4rem);
+      font-size: clamp(2.1rem, 5vw, 3.2rem);
       line-height: 1.12;
       letter-spacing: -0.03em;
       margin-bottom: 16px;
@@ -140,7 +131,7 @@
     .lead {
       color: var(--muted);
       font-size: 1.1rem;
-      max-width: 36ch;
+      max-width: 40ch;
       margin-bottom: 28px;
     }
     .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
@@ -150,45 +141,15 @@
     }
     .meta strong { color: var(--text); font-weight: 600; }
 
-    .phone {
-      position: relative;
-      margin: 0 auto;
-      width: min(280px, 100%);
-      aspect-ratio: 9/18.5;
-      border-radius: 36px;
-      padding: 10px;
-      background: linear-gradient(160deg, rgba(46,230,214,0.35), rgba(14,165,233,0.15), rgba(0,0,0,0.6));
-      box-shadow:
-        0 0 0 1px rgba(46,230,214,0.25),
-        0 30px 60px rgba(0,0,0,0.55),
-        0 0 80px rgba(14,165,233,0.15);
-    }
-    .phone-inner {
-      width: 100%; height: 100%;
-      border-radius: 28px;
-      overflow: hidden;
-      background: #0a1016;
-      position: relative;
-    }
-    .phone-inner img {
-      width: 100%; height: 100%;
-      object-fit: cover;
-    }
-    .phone-notch {
-      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-      width: 38%; height: 18px; border-radius: 20px;
-      background: #05080c; z-index: 2;
-    }
-
-    section { padding: 56px 0; }
+    section { padding: 52px 0; }
     .section-title {
       font-family: var(--display);
-      font-size: clamp(1.6rem, 3vw, 2.1rem);
+      font-size: clamp(1.55rem, 3vw, 2rem);
       letter-spacing: -0.02em;
       margin-bottom: 10px;
     }
     .section-sub {
-      color: var(--muted); margin-bottom: 28px; max-width: 50ch;
+      color: var(--muted); margin-bottom: 28px; max-width: 52ch;
     }
 
     .grid-3 {
@@ -229,12 +190,27 @@
       font-family: var(--display);
       font-size: 2rem;
       color: var(--cyan);
-      opacity: 0.9;
       line-height: 1;
       margin-bottom: 10px;
     }
     .step h3 { margin-bottom: 6px; }
     .step p { color: var(--muted); font-size: 0.92rem; }
+
+    .tv-box {
+      background:
+        linear-gradient(135deg, rgba(14,165,233,0.1), rgba(46,230,214,0.05)),
+        var(--card);
+      border: 1px solid rgba(46,230,214,0.25);
+      border-radius: 24px;
+      padding: 26px;
+    }
+    .tv-box h2 { font-family: var(--display); font-size: 1.55rem; margin-bottom: 10px; }
+    .tv-box p { color: var(--muted); margin-bottom: 10px; }
+    .tv-box .soft-note {
+      font-size: 0.92rem; color: var(--muted);
+      border-left: 3px solid var(--cyan);
+      padding-left: 14px; margin-top: 14px;
+    }
 
     .vip-box {
       background:
@@ -268,6 +244,7 @@
       border-left: 3px solid var(--cyan);
       padding-left: 14px; margin-top: 8px;
     }
+    .link-stack { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
 
     details {
       background: var(--card);
@@ -299,20 +276,6 @@
     }
     .footer-links { display: flex; flex-wrap: wrap; gap: 14px; }
     .footer-links a:hover { color: var(--cyan); }
-
-    .shot-row {
-      display: grid; gap: 12px;
-      grid-template-columns: 1fr 1fr;
-      margin-top: 8px;
-    }
-    .shot-row img {
-      border-radius: 16px;
-      border: 1px solid var(--border);
-      width: 100%;
-      aspect-ratio: 9/16;
-      object-fit: cover;
-      background: #0a1016;
-    }
   </style>
 </head>
 <body>
@@ -331,30 +294,20 @@
 
   <main>
     <section class="wrap hero">
-      <div>
-        <div class="eyebrow">App Android · atualização direta</div>
-        <h1>Seu catálogo de <span>filmes e séries</span> no bolso</h1>
-        <p class="lead">
-          StreamFlixVIP reúne fontes em um app limpo, rápido e feito para o dia a dia —
-          no celular e na TV Android.
-        </p>
-        <div class="hero-cta">
-          <a class="btn btn-primary btn-lg" href="/downloads/app-latest.apk">
-            ⬇ Baixar APK
-          </a>
-          <a class="btn btn-ghost btn-lg" href="#como-instalar">Como instalar</a>
-        </div>
-        <div class="meta">
-          <span><strong>Android</strong> 7+</span>
-          <span><strong>TV</strong> compatível</span>
-          <span><strong>Atualize</strong> pelo próprio app</span>
-        </div>
+      <div class="eyebrow">App Android · atualização direta</div>
+      <h1>Seu catálogo de <span>filmes e séries</span> no bolso</h1>
+      <p class="lead">
+        StreamFlixVIP reúne fontes em um app limpo e rápido — no celular primeiro,
+        e na TV depois da ativação no mobile.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="/downloads/app-latest.apk">⬇ Baixar APK</a>
+        <a class="btn btn-ghost btn-lg" href="#como-instalar">Como instalar</a>
       </div>
-      <div class="phone" aria-hidden="true">
-        <div class="phone-inner">
-          <div class="phone-notch"></div>
-          <img src="/screenshots/screenshot1.png" alt="Tela do app StreamFlixVIP" loading="lazy" onerror="this.style.display='none'" />
-        </div>
+      <div class="meta">
+        <span><strong>Android</strong> 7+</span>
+        <span><strong>TV</strong> após ativar no celular</span>
+        <span><strong>Atualize</strong> pelo próprio app</span>
       </div>
     </section>
 
@@ -368,15 +321,36 @@
           <p>Catálogo organizado, busca rápida e várias opções de fonte por título.</p>
         </article>
         <article class="card">
-          <div class="card-icon">📺</div>
-          <h3>TV e celular</h3>
-          <p>Interface pensada para celular e experiência confortável na TV Android.</p>
+          <div class="card-icon">📱</div>
+          <h3>Começa no celular</h3>
+          <p>Instale e ative no mobile. É a base da conta e do acesso VIP.</p>
         </article>
         <article class="card">
           <div class="card-icon">⚡</div>
           <h3>Multi-fonte</h3>
           <p>Se uma fonte falhar, troque de servidor sem sair do player.</p>
         </article>
+      </div>
+    </section>
+
+    <section class="wrap" id="tv">
+      <div class="tv-box">
+        <h2>App para TV</h2>
+        <p>
+          A versão de TV é <strong>outro aplicativo</strong>, pensado para controle remoto e tela grande.
+          Ela só libera depois que você <strong>ativa a conta no app do celular</strong>.
+        </p>
+        <p>
+          Fluxo simples: baixe e entre no mobile → ative (login / VIP se for o caso) →
+          use a mesma conta no app de TV.
+        </p>
+        <p class="soft-note">
+          Sem ativação no celular, o app de TV permanece bloqueado. Isso protege a conta e evita uso sem vínculo.
+        </p>
+        <div class="link-stack">
+          <a class="btn btn-primary" href="/downloads/app-latest.apk">1º passo: app mobile</a>
+          <a class="btn btn-ghost" href="https://t.me/streamflixofc" target="_blank" rel="noopener">Dúvidas no Telegram</a>
+        </div>
       </div>
     </section>
 
@@ -405,50 +379,57 @@
       </div>
     </section>
 
-    <section class="wrap" id="galeria">
-      <h2 class="section-title">Visual do app</h2>
-      <p class="section-sub">Telas reais do StreamFlixVIP.</p>
-      <div class="shot-row">
-        <img src="/screenshots/screenshot1.png" alt="Screenshot 1" loading="lazy" />
-        <img src="/screenshots/screenshot2.png" alt="Screenshot 2" loading="lazy" />
-      </div>
-    </section>
-
     <section class="wrap" id="vip">
       <div class="vip-box">
         <div>
           <h2>VIP no app</h2>
           <p>Quem apoia o projeto libera benefícios no aplicativo — planos e pagamento ficam dentro do próprio StreamFlixVIP.</p>
           <ul class="vip-list">
-            <li>Ativação pela conta no app</li>
+            <li>Ativação pela conta no app mobile</li>
             <li>Pix e cartão quando disponíveis no app</li>
             <li>Ajuda a manter servidores e atualizações</li>
           </ul>
         </div>
         <div style="text-align:center">
           <a class="btn btn-primary btn-lg" href="/downloads/app-latest.apk">Baixar e ver planos</a>
-          <p style="margin-top:12px;color:var(--muted);font-size:0.85rem">Os valores e opções aparecem na área VIP do app.</p>
+          <p style="margin-top:12px;color:var(--muted);font-size:0.85rem">Valores e opções aparecem na área VIP do app.</p>
         </div>
       </div>
     </section>
 
     <section class="wrap" id="comunidade">
       <h2 class="section-title">Comunidade e suporte</h2>
-      <p class="section-sub">Dúvidas, avisos de versão e conversa com quem usa o app.</p>
+      <p class="section-sub">Novidades, APK e conversa com quem usa o app.</p>
       <div class="community">
         <article class="card">
           <div class="card-icon">💬</div>
           <h3>Telegram oficial</h3>
-          <p>Canal com novidades, APK e avisos importantes. É o melhor lugar para falar com a equipe.</p>
-          <div style="margin-top:16px">
-            <a class="btn btn-primary" href="https://t.me/streamflixofc" target="_blank" rel="noopener">Abrir Telegram</a>
+          <p>Canal principal com avisos e suporte da equipe StreamFlixVIP.</p>
+          <div class="link-stack">
+            <a class="btn btn-primary" href="https://t.me/streamflixofc" target="_blank" rel="noopener">@streamflixofc</a>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-icon">🎬</div>
+          <h3>Canal cinema</h3>
+          <p>Indicações, postagens de filmes e séries e botões para baixar o app.</p>
+          <div class="link-stack">
+            <a class="btn btn-primary" href="https://t.me/+jPjv75TOACplMmYx" target="_blank" rel="noopener">Entrar no canal</a>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-icon">🟢</div>
+          <h3>WhatsApp oficial</h3>
+          <p>Grupo oficial para avisos e conversa rápida com a comunidade.</p>
+          <div class="link-stack">
+            <a class="btn btn-primary" href="https://chat.whatsapp.com/HwROmfEeCgk3IqDfeB5iEm" target="_blank" rel="noopener">Entrar no WhatsApp</a>
           </div>
         </article>
         <article class="card">
           <div class="card-icon">🧩</div>
           <h3>Outros apps e setups</h3>
-          <p>Usa Nuvio, Stremio ou outra tela em casa? A gente conversa no Telegram e orienta o que faz sentido para o seu caso — sem link público de add-on neste site.</p>
-          <p class="soft-note">Preferimos atender quem já faz parte da comunidade, com calma e no privado.</p>
+          <p>Usa Nuvio, Stremio ou outra tela em casa? Fale no Telegram — orientamos no privado, sem link público de add-on neste site.</p>
+          <p class="soft-note">Preferimos atender quem já faz parte da comunidade.</p>
         </article>
       </div>
     </section>
@@ -460,20 +441,16 @@
         <p>Sim, você pode baixar e usar. O VIP é opcional e libera benefícios descritos dentro do aplicativo.</p>
       </details>
       <details>
+        <summary>Como funciona o app de TV?</summary>
+        <p>É outro aplicativo. Só libera depois da ativação no app do celular, com a mesma conta.</p>
+      </details>
+      <details>
         <summary>Onde baixo a versão mais nova?</summary>
-        <p>Sempre neste site, no botão <strong>Baixar APK</strong>, ou pelo aviso de atualização dentro do próprio app.</p>
-      </details>
-      <details>
-        <summary>Funciona na TV?</summary>
-        <p>Sim, em TVs e boxes Android. Instale o APK como no celular (pode precisar de um gerenciador de arquivos na TV).</p>
-      </details>
-      <details>
-        <summary>Preciso de conta?</summary>
-        <p>Para recursos de conta e VIP, o app pede login. O essencial do catálogo segue o fluxo mostrado no aplicativo.</p>
+        <p>Neste site, no botão <strong>Baixar APK</strong>, ou pelo aviso de atualização dentro do próprio app.</p>
       </details>
       <details>
         <summary>Como falo com o suporte?</summary>
-        <p>Pelo Telegram oficial. É o canal mais rápido para instalação, atualização e dúvidas gerais.</p>
+        <p>Telegram oficial, canal cinema ou WhatsApp oficial — links na seção Comunidade.</p>
       </details>
     </section>
   </main>
@@ -487,6 +464,8 @@
         <a href="/contato.html">Contato</a>
         <a href="/dmca.html">DMCA</a>
         <a href="https://t.me/streamflixofc" target="_blank" rel="noopener">Telegram</a>
+        <a href="https://t.me/+jPjv75TOACplMmYx" target="_blank" rel="noopener">Canal cinema</a>
+        <a href="https://chat.whatsapp.com/HwROmfEeCgk3IqDfeB5iEm" target="_blank" rel="noopener">WhatsApp</a>
       </div>
     </div>
   </footer>
