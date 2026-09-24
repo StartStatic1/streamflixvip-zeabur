@@ -216,9 +216,20 @@ function pickFromPack(pack, titles, queryYear) {
       const key = norm(q);
       const exact = byNorm.get(key);
       if (exact && exact.length) {
-        const good = exact.find((it) => !isLowQuality(it.name || it.title || ''));
+        let pool = exact;
+        if (queryYear) {
+          const sameYear = exact.filter((it) => {
+            const y = yearOf(it.name || it.title || '');
+            return !y || y === queryYear;
+          });
+          const preferYear = exact.filter((it) => yearOf(it.name || it.title || '') === queryYear);
+          if (preferYear.length) pool = preferYear;
+          else if (sameYear.length) pool = sameYear;
+          else continue;
+        }
+        const good = pool.find((it) => !isLowQuality(it.name || it.title || ''));
         if (good) return good;
-        if (exact[0]) return exact[0];
+        if (pool[0]) return pool[0];
       }
     }
   }
@@ -449,7 +460,7 @@ module.exports = async function handler(req, res) {
     const out = {
       ok: true,
       name: brand,
-      version: '1.3.9',
+      version: '1.4.0',
       servers: servers.map((s) => ({
         name: s.name,
         host: hostOf(s),
@@ -497,7 +508,7 @@ module.exports = async function handler(req, res) {
         ? 'com.streamflixvip.flixhub.' + String(pack.public_slug).slice(0, 12)
         : 'com.streamflixvip.flixhub.' + String(pack.id).replace(/-/g, '').slice(0, 12),
       name: brand,
-      version: '1.3.9',
+      version: '1.4.0',
       description:
         'Varias fontes em HD para filmes e series. Simples, rapido e estavel no Stremio.',
       logo: 'https://www.streamflixvip.online/logo.png',
