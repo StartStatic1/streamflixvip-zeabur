@@ -47,10 +47,19 @@ data class VipTitleConfig(
 )
 
 @JsonClass(generateAdapter = true)
+data class SourceMeta(
+    val quality: String? = null,
+    val audio: String? = null,
+    val origin: String? = null,
+    val size: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
 data class VipSource(
     val source_url: String,
     val source_label: String?,
     val priority: Int?,
+    val meta: SourceMeta? = null,
 ) {
     val displayName: String get() = source_label ?: "Servidor"
 
