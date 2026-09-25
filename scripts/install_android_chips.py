@@ -9,6 +9,9 @@ for i in range(20):
     parts.append(f.read_text().strip())
 if not parts:
     raise SystemExit("missing android_chips_p*.b64")
+s = "".join(parts).strip()
+s += "=" * ((4 - len(s) % 4) % 4)
 script = ROOT / "scripts" / "_apply_android_chips.py"
-script.write_bytes(gzip.decompress(base64.b64decode("".join(parts))))
+script.write_bytes(gzip.decompress(base64.b64decode(s)))
 subprocess.check_call([sys.executable, str(script)])
+print("android chips applied")
