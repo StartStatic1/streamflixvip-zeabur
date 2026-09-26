@@ -176,7 +176,7 @@ internal fun serversAvailableLabel(count: Int, loading: Boolean = false): String
 
 @Composable
 fun ServerSheetTitle(title: String, subtitle: String) {
-    Column(modifier.padding(bottom = 12.dp)) {
+    Column(Modifier.padding(bottom = 12.dp)) {
         Text(
             title,
             fontSize = 22.sp,
