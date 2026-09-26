@@ -222,7 +222,11 @@ fun ServerSectionLabel(text: String, accent: Color) {
 
 @Composable
 private fun MetaPill(text: String, fg: Color, bg: Color) {
-    Surface(shape = RoundedCornerShape(8.dp), color = bg) {
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = bg,
+        border = BorderStroke(0.6.dp, fg.copy(alpha = 0.35f)),
+    ) {
         Text(
             text,
             fontSize = 10.sp,
@@ -231,6 +235,22 @@ private fun MetaPill(text: String, fg: Color, bg: Color) {
             maxLines = 1,
             modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
         )
+    }
+}
+
+private fun chipColors(kind: String, text: String): Pair<Color, Color> {
+    return when {
+        kind == "vip" || text == "VIP" -> GoldVip to GoldVip.copy(alpha = 0.20f)
+        kind == "q" && (text == "4K" || text == "1080p") -> Color(0xFFE0F2FF) to Color(0xFF3B82F6).copy(alpha = 0.42f)
+        kind == "q" && text == "720p" -> Color(0xFFFFF0D6) to Amber.copy(alpha = 0.28f)
+        kind == "q" -> Color(0xFFE8EEF7) to Color(0xFF64748B).copy(alpha = 0.35f)
+        kind == "a" && text == "Original" -> Color(0xFFFFE8F0) to Color(0xFFFB7185).copy(alpha = 0.32f)
+        kind == "a" && text == "Dublado" -> Color(0xFFD1FAE5) to Color(0xFF34D399).copy(alpha = 0.28f)
+        kind == "a" && text == "Legendado" -> Color(0xFFE8E4FF) to PurpleLeg.copy(alpha = 0.32f)
+        kind == "a" -> Color(0xFFFFE4F0) to Color(0xFFF472B6).copy(alpha = 0.28f)
+        kind == "o" -> Color(0xFFE0FFFA) to Color(0xFF2DD4BF).copy(alpha = 0.30f)
+        kind == "s" -> Color(0xFFFFF4D6) to Color(0xFFFBBF24).copy(alpha = 0.28f)
+        else -> Color(0xFFE2E8F0) to Color(0xFF475569).copy(alpha = 0.30f)
     }
 }
 
@@ -249,38 +269,18 @@ fun ServerSourceCard(
     val size = sizeFromSource(source)
     val title = hostTitleFromLabel(source.source_label)
     val accent = PlayAccents[index.coerceAtLeast(0) % PlayAccents.size]
-    val pillText = when {
-        isLockedForFree -> "VIP"
-        badge != null -> badge
-        audio != null -> audio
-        origin != null -> origin
-        size != null -> size
-        else -> null
-    }
-    val pillFg = when {
-        pillText == "VIP" -> GoldVip
-        pillText in listOf("4K", "1080p") -> Color(0xFFDCEBFF)
-        pillText == "720p" -> Amber
-        pillText == "Dublado" -> Color(0xFFD1FAE5)
-        pillText == "Legendado" -> Color(0xFFE8E4FF)
-        pillText == "Original" -> Color(0xFFFFE8F0)
-        origin != null && pillText == origin -> Color(0xFFE0FFFA)
-        size != null && pillText == size -> Color(0xFFFFF4D6)
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
-    val pillBg = when {
-        pillText == "VIP" -> GoldVip.copy(alpha = 0.18f)
-        pillText in listOf("4K", "1080p") -> BlueBadge.copy(alpha = 0.34f)
-        pillText == "720p" -> Amber.copy(alpha = 0.18f)
-        pillText == "Dublado" -> Color(0xFF34D399).copy(alpha = 0.18f)
-        pillText == "Legendado" -> PurpleLeg.copy(alpha = 0.28f)
-        pillText == "Original" -> Color(0xFFFB7185).copy(alpha = 0.28f)
-        origin != null && pillText == origin -> Color(0xFF2DD4BF).copy(alpha = 0.28f)
-        size != null && pillText == size -> Color(0xFFFBBF24).copy(alpha = 0.28f)
-        else -> MaterialTheme.colorScheme.surfaceVariant
+    val chips = buildList {
+        if (isLockedForFree) add("VIP" to "vip")
+        else {
+            badge?.let { add(it to "q") }
+            audio?.let { add(it to "a") }
+            origin?.let { add(it to "o") }
+            size?.let { add(it to "s") }
+        }
     }
     val highlight = isRecommended && !isLockedForFree
     val number = (index + 1).toString().padStart(2, '0')
+    val hasChipRow = chips.isNotEmpty()
 
     Surface(
         onClick = if (isLockedForFree) onLockedClick else onClick,
@@ -311,7 +311,7 @@ fun ServerSourceCard(
                         Brush.horizontalGradient(listOf(CardNavyHi, CardNavy))
                     },
                 )
-                .height(58.dp),
+                .height(if (hasChipRow) 68.dp else 58.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -362,14 +362,10 @@ fun ServerSourceCard(
                     }
                 }
                 Spacer(Modifier.width(12.dp))
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         title,
-                        fontSize = 16.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = if (isLockedForFree) {
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
@@ -378,9 +374,16 @@ fun ServerSourceCard(
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
                     )
-                    if (pillText != null) MetaPill(pillText, pillFg, pillBg)
+                    if (hasChipRow) {
+                        Spacer(Modifier.height(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            chips.take(4).forEach { (text, kind) ->
+                                val (fg, bg) = chipColors(kind, text)
+                                MetaPill(text, fg, bg)
+                            }
+                        }
+                    }
                 }
                 if (highlight) {
                     Icon(
