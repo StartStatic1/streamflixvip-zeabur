@@ -1,0 +1,23 @@
+name: apply-player-ui
+on:
+  workflow_dispatch:
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Apply player UI patch
+        run: |
+          python3 scripts/patch_player_ui.py
+          wc -l android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          grep -n "formatPlayerTime\|SettingsPanel.SOURCES\|ArrowBack\|Preencher" android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt | head
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          git diff --cached --quiet && echo "nothing to commit" && exit 0
+          git commit -m "feat(player): setinha voltar, timeline, fontes submenu, sync legenda"
+          git push
