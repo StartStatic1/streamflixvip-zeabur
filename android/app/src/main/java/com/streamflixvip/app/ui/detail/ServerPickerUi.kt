@@ -2,7 +2,6 @@ package com.streamflixvip.app.ui.detail
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -92,7 +90,6 @@ private fun titleCaseWord(word: String): String {
     val known = mapOf(
         "fenix" to "Fenix",
         "frost" to "Frost",
-        "froststream" to "Frost",
         "tordb" to "Tordb",
         "aniscrap" to "Aniscrap",
         "animsub" to "Animsub",
@@ -120,7 +117,9 @@ internal fun hostTitleFromLabel(label: String?): String {
 }
 
 internal fun qualityFromSource(source: VipSource): String? {
-    source.meta?.quality?.takeIf { it.isNotBlank() }?.let { return it }
+    source.meta?.quality?.takeIf { it.isNotBlank() }?.let { q ->
+        return q.replace(Regex("(?i)1080n"), "1080p").replace(Regex("(?i)720n"), "720p")
+    }
     val t = source.source_label.orEmpty().lowercase()
     return when {
         Regex("\\b(2160p?|4k|uhd)\\b").containsMatchIn(t) -> "4K"
@@ -131,7 +130,6 @@ internal fun qualityFromSource(source: VipSource): String? {
     }
 }
 
-/** Dublado so PT-BR; nao marca "dub" ingles sozinho. */
 internal fun audioFromSource(source: VipSource): String? {
     source.meta?.audio?.takeIf { it.isNotBlank() }?.let { return it }
     val t = source.source_label.orEmpty().lowercase()
@@ -147,15 +145,20 @@ internal fun audioFromSource(source: VipSource): String? {
     }
 }
 
+/** Origem so se for util (ex. Nyaa). Nunca TB / AnimeSub / nome do addon. */
 internal fun originFromSource(source: VipSource): String? {
     val o = source.meta?.origin?.takeIf { it.isNotBlank() } ?: return null
-    val title = hostTitleFromLabel(source.source_label).lowercase().replace(Regex("[^a-z0-9]"), "")
-    val ol = o.lowercase().replace(Regex("[^a-z0-9]"), "")
-    if (ol.isBlank()) return null
-    if (title.isNotBlank() && (ol == title || ol.contains(title) || title.contains(ol))) return null
-    if (ol in setOf("aniscrap", "aniscraper", "animsub", "animesub", "tordb", "torrent")) return null
+    val ol = o.lowercase()
+    if (ol.contains("tb") || ol.contains("torbox") || ol.contains("animesub") ||
+        ol.contains("animsub") || ol.contains("aniscrap") || ol.contains("torrent")
+    ) return null
     if (o.startsWith("-s", ignoreCase = true)) return null
-    return o.take(14)
+    val title = hostTitleFromLabel(source.source_label).lowercase().replace(Regex("[^a-z0-9]"), "")
+    val oc = ol.replace(Regex("[^a-z0-9]"), "")
+    if (title.isNotBlank() && (oc == title || oc.contains(title) || title.contains(oc))) return null
+    // so nomes curtos e limpos (Nyaa, YTS…)
+    if (oc.length !in 2..12) return null
+    return o.take(12)
 }
 
 internal fun sizeFromSource(source: VipSource): String? {
@@ -164,9 +167,9 @@ internal fun sizeFromSource(source: VipSource): String? {
     if (m != null) {
         val num = m.groupValues[1].trimEnd('.')
         val unit = m.groupValues.getOrNull(2)?.uppercase()?.replace("GIB", "GB")?.replace("MIB", "MB")
-        return if (!unit.isNullOrBlank()) "$num $unit" else num
+        return if (!unit.isNullOrBlank()) "$num $unit" else null
     }
-    return s.take(12)
+    return s.take(10)
 }
 
 internal fun sourceDisplayRank(source: VipSource): Int {
@@ -241,7 +244,7 @@ private fun MetaChip(text: String, fg: Color, bg: Color) {
     Surface(
         shape = RoundedCornerShape(50),
         color = bg,
-        modifier = Modifier.height(18.dp),
+        modifier = Modifier.height(17.dp),
     ) {
         Text(
             text,
@@ -250,13 +253,14 @@ private fun MetaChip(text: String, fg: Color, bg: Color) {
             color = fg,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
         )
     }
 }
 
 private data class ChipSpec(val text: String, val fg: Color, val bg: Color)
 
+/** Max 3: qualidade → áudio → tamanho. Origem so se sobrar e for limpa. */
 @Composable
 private fun chipList(
     isLockedForFree: Boolean,
@@ -272,12 +276,12 @@ private fun chipList(
     fun add(text: String?, fg: Color, bg: Color) {
         val t = text?.takeIf { it.isNotBlank() } ?: return
         if (out.any { it.text.equals(t, ignoreCase = true) }) return
-        if (out.size >= 4) return
+        if (out.size >= 3) return
         out += ChipSpec(t, fg, bg)
     }
     when (quality) {
         "4K", "1080p" -> add(quality, Color(0xFFDCEBFF), BlueBadge.copy(alpha = 0.34f))
-        "720p" -> add(quality, Amber, Amber.copy(alpha = 0.18f))
+        "720p" -> add(quality, Amber, Amber.copy(alpha = 0.20f))
         "SD" -> add(quality, MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
         else -> add(quality, MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
     }
@@ -288,8 +292,9 @@ private fun chipList(
         "EN" -> add(audio, Color(0xFFE0E7FF), Color(0xFF6366F1).copy(alpha = 0.28f))
         else -> add(audio, MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
     }
-    add(origin, Color(0xFFE0FFFA), Color(0xFF2DD4BF).copy(alpha = 0.22f))
     add(size, Color(0xFFFFF4D6), Color(0xFFFBBF24).copy(alpha = 0.22f))
+    // origem por ultimo e so se ainda couber
+    add(origin, Color(0xFFE0FFFA), Color(0xFF2DD4BF).copy(alpha = 0.22f))
     return out
 }
 
@@ -341,7 +346,7 @@ fun ServerSourceCard(
                         Brush.horizontalGradient(listOf(CardNavyHi, CardNavy))
                     },
                 )
-                .height(56.dp),
+                .height(54.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -407,12 +412,7 @@ fun ServerSourceCard(
                     )
                     if (chips.isNotEmpty()) {
                         Spacer(Modifier.height(3.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                        ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             chips.forEach { chip ->
                                 MetaChip(chip.text, chip.fg, chip.bg)
                             }
