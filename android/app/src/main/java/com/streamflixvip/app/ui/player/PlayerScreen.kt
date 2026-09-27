@@ -374,17 +374,6 @@ private fun NativePlayer(
     var currentTitle by remember { mutableStateOf(title) }
     var isLoadingNext by remember { mutableStateOf(false) }
 
-    LaunchedEffect(exoPlayer) {
-        while (true) {
-            if (!isScrubbing) {
-                scrubPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
-                val d = exoPlayer.duration
-                if (d > 0) scrubDuration = d
-            }
-            delay(400)
-        }
-    }
-
     var showNextPrompt by remember { mutableStateOf(false) }
 
     // Gestos: esquerda = brilho, direita = volume
@@ -859,6 +848,17 @@ private fun NativePlayer(
             accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,
             currentTitle, posterPath, positionSeconds, durationSeconds,
         )
+    }
+
+    LaunchedEffect(exoPlayer) {
+        while (true) {
+            if (!isScrubbing) {
+                scrubPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
+                val d = exoPlayer.duration
+                if (d > 0) scrubDuration = d
+            }
+            delay(400)
+        }
     }
 
     LaunchedEffect(exoPlayer) {
