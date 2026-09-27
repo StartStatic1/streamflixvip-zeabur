@@ -1,7 +1,7 @@
 {
-  "versionCode": 130400,
-  "versionName": "13.4.0",
+  "versionCode": 130500,
+  "versionName": "13.5.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Adicionado novo servidor focado em áudio original tordb"
+  "releaseNotes": "Melhorias e correcoes"
 }
