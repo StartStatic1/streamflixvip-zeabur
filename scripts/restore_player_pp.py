@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import base64, zlib
+ROOT = Path(__file__).resolve().parents[1]
+DEST = ROOT / "android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt"
+parts = []
+for i in range(5):
+    p = ROOT / "scripts" / f"pp{i}.b64"
+    if not p.exists():
+        raise SystemExit(f"missing {p}")
+    parts.append(p.read_text().strip())
+text = zlib.decompress(base64.b64decode("".join(parts))).decode("utf-8")
+assert "package com.streamflixvip.app.ui.player" in text
+assert "NativePlayer" in text
+DEST.parent.mkdir(parents=True, exist_ok=True)
+DEST.write_text(text, encoding="utf-8")
+print("ok restored PlayerScreen", len(text))
