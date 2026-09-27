@@ -48,6 +48,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Icon
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
@@ -66,6 +69,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -109,9 +113,9 @@ import kotlinx.coroutines.launch
 private const val PROGRESS_SAVE_INTERVAL_MS = 15_000L
 
 private enum class AspectMode(val label: String, val resizeMode: Int) {
-    FIT("16:9", AspectRatioFrameLayout.RESIZE_MODE_FIT),
+    FIT("Ajustar", AspectRatioFrameLayout.RESIZE_MODE_FIT),
     ZOOM("Zoom", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
-    FILL("Esticar", AspectRatioFrameLayout.RESIZE_MODE_FILL),
+    FILL("Preencher", AspectRatioFrameLayout.RESIZE_MODE_FILL),
 }
 
 private val PLAYBACK_SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
@@ -347,6 +351,13 @@ private fun NativePlayer(
     var onlineSubtitlesLoading by remember { mutableStateOf(false) }
     var onlineSubtitlesError by remember { mutableStateOf<String?>(null) }
     var onlineSubtitleApplied by remember { mutableStateOf(false) }
+    var subtitleOffsetMs by remember {
+        mutableStateOf(loadSeriesPref(context, tmdbId, "sub_offset", "0").toLongOrNull() ?: 0L)
+    }
+    var onlineSubtitleRaw by remember { mutableStateOf<String?>(null) }
+    var scrubPosition by remember { mutableStateOf(0L) }
+    var scrubDuration by remember { mutableStateOf(0L) }
+    var isScrubbing by remember { mutableStateOf(false) }
     var selectedAudioLabel by remember { mutableStateOf("Padrao") }
     var selectedQualityLabel by remember { mutableStateOf("Automatico") }
     var playbackSpeed by remember { mutableStateOf(1f) }
@@ -362,6 +373,18 @@ private fun NativePlayer(
     var currentEpisode by remember { mutableStateOf(episode) }
     var currentTitle by remember { mutableStateOf(title) }
     var isLoadingNext by remember { mutableStateOf(false) }
+
+    LaunchedEffect(exoPlayer) {
+        while (true) {
+            if (!isScrubbing) {
+                scrubPosition = exoPlayer.currentPosition.coerceAtLeast(0L)
+                val d = exoPlayer.duration
+                if (d > 0) scrubDuration = d
+            }
+            delay(400)
+        }
+    }
+
     var showNextPrompt by remember { mutableStateOf(false) }
 
     // Gestos: esquerda = brilho, direita = volume
@@ -616,6 +639,62 @@ private fun NativePlayer(
         }
     }
 
+
+    fun reapplySubtitleOffset(newOffset: Long) {
+        subtitleOffsetMs = newOffset
+        saveSeriesPref(context, tmdbId, "sub_offset", newOffset.toString())
+        val raw = onlineSubtitleRaw
+        if (raw.isNullOrBlank() || !onlineSubtitleApplied) {
+            Toast.makeText(context, "Sync só para legenda online", Toast.LENGTH_SHORT).show()
+            return
+        }
+        MainScope().launch {
+            try {
+                val shifted = shiftSrtContent(raw, newOffset)
+                val body = if (shifted.trimStart().startsWith("WEBVTT", ignoreCase = true)) {
+                    shifted
+                } else {
+                    val srt = shifted.replace("\r", "")
+                    val sb = StringBuilder()
+                    sb.append("WEBVTT\n\n")
+                    for (line in srt.lineSequence()) {
+                        if (line.contains("-->")) sb.append(line.replace(',', '.')).append('\n')
+                        else sb.append(line).append('\n')
+                    }
+                    sb.toString()
+                }
+                val file = File(context.cacheDir, "os_${tmdbId}_${currentSeason}_${currentEpisode}.vtt")
+                file.writeText(body)
+                val pos = exoPlayer.currentPosition
+                val wasPlaying = exoPlayer.playWhenReady
+                val httpDs = playbackHttpFactory(activeUrl)
+                val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
+                val videoItem = MediaItem.fromUri(activeUrl)
+                val videoSource = if (isLikelyHls(activeUrl)) {
+                    HlsMediaSource.Factory(httpDs).createMediaSource(videoItem)
+                } else {
+                    ProgressiveMediaSource.Factory(httpDs, extractors).createMediaSource(videoItem)
+                }
+                val subCfg = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
+                    .setMimeType(MimeTypes.TEXT_VTT)
+                    .setLanguage("pt")
+                    .setLabel("ONLINE (INTERNET)")
+                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                    .build()
+                val subSource = SingleSampleMediaSource.Factory(DefaultDataSource.Factory(context))
+                    .createMediaSource(subCfg, C.TIME_UNSET)
+                val merged = MergingMediaSource(videoSource, subSource)
+                pendingReapplyTracks = true
+                exoPlayer.setMediaSource(merged)
+                exoPlayer.prepare()
+                if (pos > 1000L) exoPlayer.seekTo(pos)
+                exoPlayer.playWhenReady = wasPlaying
+            } catch (_: Exception) {
+                Toast.makeText(context, "Falha no sync", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     fun selectSubtitle(option: TrackOption?) {
         onlineSubtitleApplied = false
         trackSelector.parameters = if (option == null) {
@@ -682,10 +761,12 @@ private fun NativePlayer(
                 onlineSubtitlesError = resp.error ?: "Legenda vazia"
                 return
             }
-            val body = if (content.trimStart().startsWith("WEBVTT", ignoreCase = true)) {
-                content
+            onlineSubtitleRaw = content
+            val shifted = shiftSrtContent(content, subtitleOffsetMs)
+            val body = if (shifted.trimStart().startsWith("WEBVTT", ignoreCase = true)) {
+                shifted
             } else {
-                val srt = content.replace("\r", "")
+                val srt = shifted.replace("\r", "")
                 val sb = StringBuilder()
                 sb.append("WEBVTT\n\n")
                 for (line in srt.lineSequence()) {
@@ -1024,13 +1105,16 @@ private fun NativePlayer(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Surface(
-                    color = Color.White.copy(alpha = 0.16f),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                    modifier = Modifier.clickable { onBack() },
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(36.dp),
                 ) {
-                    Text("Voltar", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Voltar",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp),
+                    )
                 }
                 Column {
                     Text(currentTitle, color = Color.White, fontSize = 15.sp, maxLines = 1)
@@ -1055,10 +1139,35 @@ private fun NativePlayer(
                 shape = RoundedCornerShape(22.dp),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
             ) {
+                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(formatPlayerTime(scrubPosition), color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp)
+                        Text(formatPlayerTime(scrubDuration), color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+                    }
+                    Slider(
+                        value = if (scrubDuration > 0) (scrubPosition.toFloat() / scrubDuration.toFloat()).coerceIn(0f, 1f) else 0f,
+                        onValueChange = { v ->
+                            isScrubbing = true
+                            scrubPosition = (v * scrubDuration).toLong()
+                        },
+                        onValueChangeFinished = {
+                            exoPlayer.seekTo(scrubPosition)
+                            isScrubbing = false
+                        },
+                        modifier = Modifier.fillMaxWidth().height(20.dp),
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color.White,
+                            activeTrackColor = Color(0xFFFFB547),
+                            inactiveTrackColor = Color.White.copy(alpha = 0.22f),
+                        ),
+                    )
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
                         aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
@@ -1088,10 +1197,7 @@ private fun NativePlayer(
                             if (alternateSources.isEmpty()) {
                                 Toast.makeText(context, "Sem outra fonte", Toast.LENGTH_SHORT).show()
                             } else {
-                                val next = alternateSources[alternateIndex % alternateSources.size]
-                                alternateIndex += 1
-                                reloadWithUrl(next)
-                                Toast.makeText(context, "Trocando fonte…", Toast.LENGTH_SHORT).show()
+                                settingsPanel = SettingsPanel.SOURCES
                             }
                         }
                     }) {
@@ -1117,6 +1223,7 @@ private fun NativePlayer(
                     }) {
                         Text("Mais", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                     }
+                }
                 }
             }
         }
@@ -1160,26 +1267,59 @@ private fun NativePlayer(
                     .navigationBarsPadding()
                     .padding(end = 8.dp, bottom = 48.dp)
                     .width(280.dp)
-                    .heightIn(max = 260.dp)
+                    .heightIn(max = 320.dp)
                     .background(Color.Black.copy(alpha = 0.92f), RoundedCornerShape(12.dp))
                     .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
             ) {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp)) {
                     when (settingsPanel) {
                         SettingsPanel.MAIN -> {
-                            SettingsRow("Proporcao", aspectMode.label) {
+                            SettingsRow("Tela", aspectMode.label) {
                                 aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
                             }
                             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                             SettingsRow("Legenda", selectedSubtitleLabel) { settingsPanel = SettingsPanel.SUBTITLE }
                             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("Sync legenda", color = Color.White, fontSize = 14.sp)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Surface(color = Color.White.copy(alpha = 0.12f), shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.clickable { reapplySubtitleOffset(subtitleOffsetMs - 500L) }) {
+                                        Text("−0.5s", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                                    }
+                                    Text(
+                                        when {
+                                            subtitleOffsetMs > 0 -> "+${subtitleOffsetMs / 1000.0}s"
+                                            else -> "${subtitleOffsetMs / 1000.0}s"
+                                        }.replace(".0s", "s"),
+                                        color = Color(0xFFFFB547),
+                                        fontSize = 13.sp,
+                                    )
+                                    Surface(color = Color.White.copy(alpha = 0.12f), shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.clickable { reapplySubtitleOffset(subtitleOffsetMs + 500L) }) {
+                                        Text("+0.5s", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                                    }
+                                }
+                            }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                             if (audioOptions.isNotEmpty()) {
-                                SettingsRow("Audio", selectedAudioLabel) { settingsPanel = SettingsPanel.AUDIO }
+                                SettingsRow("Áudio", selectedAudioLabel) { settingsPanel = SettingsPanel.AUDIO }
                                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                             }
                             SettingsRow("Qualidade", selectedQualityLabel) { settingsPanel = SettingsPanel.QUALITY }
                             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                             SettingsRow("Velocidade", "${playbackSpeed}x") { settingsPanel = SettingsPanel.SPEED }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                            SettingsRow("Fontes", "${alternateSources.size} opções") {
+                                MainScope().launch {
+                                    if (alternateSources.isEmpty()) loadAlternateSources()
+                                    settingsPanel = SettingsPanel.SOURCES
+                                }
+                            }
                             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                             SettingsRow("Abrir no VLC / player externo", "") {
                                 settingsPanel = SettingsPanel.NONE
@@ -1193,7 +1333,7 @@ private fun NativePlayer(
                             }
                             if (subtitleOptions.isNotEmpty()) {
                                 Text(
-                                    "Do stream",
+                                    "DO VÍDEO / ADDON",
                                     color = Color.White.copy(alpha = 0.55f),
                                     fontSize = 11.sp,
                                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
@@ -1264,6 +1404,32 @@ private fun NativePlayer(
                                 }
                             }
                         }
+                        SettingsPanel.SOURCES -> {
+                            SubmenuHeader("Fontes") { settingsPanel = SettingsPanel.NONE }
+                            if (alternateSources.isEmpty()) {
+                                Text(
+                                    "Nenhuma outra fonte",
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(vertical = 12.dp),
+                                )
+                            } else {
+                                alternateSources.forEachIndexed { i, src ->
+                                    val label = try {
+                                        val host = java.net.URI(src).host ?: "Fonte ${i + 1}"
+                                        host.removePrefix("www.").take(28)
+                                    } catch (_: Exception) {
+                                        "Fonte ${i + 1}"
+                                    }
+                                    SubmenuItem("${i + 1}. $label", false) {
+                                        alternateIndex = i + 1
+                                        reloadWithUrl(src)
+                                        settingsPanel = SettingsPanel.NONE
+                                        Toast.makeText(context, "Fonte ${i + 1}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        }
                         SettingsPanel.NONE -> {}
                     }
                 }
@@ -1272,7 +1438,43 @@ private fun NativePlayer(
     }
 }
 
-private enum class SettingsPanel { NONE, MAIN, SUBTITLE, AUDIO, QUALITY, SPEED }
+private enum class SettingsPanel { NONE, MAIN, SUBTITLE, AUDIO, QUALITY, SPEED, SOURCES }
+
+private fun formatPlayerTime(ms: Long): String {
+    if (ms <= 0L) return "0:00"
+    val totalSec = (ms / 1000).toInt()
+    val h = totalSec / 3600
+    val m = (totalSec % 3600) / 60
+    val s = totalSec % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+private fun shiftSrtContent(content: String, offsetMs: Long): String {
+    if (offsetMs == 0L) return content
+    fun shiftTs(ts: String): String {
+        val clean = ts.trim().replace('.', ',')
+        val parts = clean.split(",", limit = 2)
+        val hms = parts[0].split(":")
+        if (hms.size < 3) return ts
+        val mill = parts.getOrNull(1)?.padEnd(3, '0')?.take(3)?.toLongOrNull() ?: 0L
+        var total = hms[0].toLongOrNull()?.times(3600000) ?: return ts
+        total += (hms[1].toLongOrNull() ?: 0L) * 60000
+        total += (hms[2].toLongOrNull() ?: 0L) * 1000
+        total += mill
+        total = (total + offsetMs).coerceAtLeast(0L)
+        val nh = total / 3600000
+        val nm = (total % 3600000) / 60000
+        val ns = (total % 60000) / 1000
+        val nms = total % 1000
+        return "%02d:%02d:%02d,%03d".format(nh, nm, ns, nms)
+    }
+    val re = Regex("""(\\d{1,2}:\\d{2}:\\d{2}[,.]\\d{1,3})\\s*-->\\s*(\\d{1,2}:\\d{2}:\\d{2}[,.]\\d{1,3})""")
+    return re.replace(content) { m ->
+        "${shiftTs(m.groupValues[1])} --> ${shiftTs(m.groupValues[2])}"
+    }
+}
+
+
 
 @Composable
 private fun SubmenuHeader(title: String, onBack: () -> Unit) {
