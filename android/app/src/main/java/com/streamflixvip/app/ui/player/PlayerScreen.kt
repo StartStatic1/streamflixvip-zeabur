@@ -667,7 +667,7 @@ private fun NativePlayer(
                 val subCfg = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
                     .setMimeType(MimeTypes.TEXT_VTT)
                     .setLanguage("pt")
-                    .setLabel("ONLINE (INTERNET)")
+                    .setLabel("ONLINE · PT-BR")
                     .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                     .build()
                 val subSource = SingleSampleMediaSource.Factory(DefaultDataSource.Factory(context))
@@ -792,7 +792,7 @@ private fun NativePlayer(
             val subCfg = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
                 .setMimeType(MimeTypes.TEXT_VTT)
                 .setLanguage("pt")
-                .setLabel(item.release ?: "Online PT-BR")
+                .setLabel(item.release ?: "ONLINE · PT-BR")
                 .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
                 .build()
             val subSource = SingleSampleMediaSource.Factory(DefaultDataSource.Factory(context))
@@ -848,6 +848,16 @@ private fun NativePlayer(
             accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,
             currentTitle, posterPath, positionSeconds, durationSeconds,
         )
+    }
+
+    // Ao abrir menu Legendas, busca PT-BR online automaticamente se lista vazia
+    LaunchedEffect(settingsPanel) {
+        if (settingsPanel == SettingsPanel.SUBTITLE &&
+            onlineSubtitleResults.isEmpty() &&
+            !onlineSubtitlesLoading
+        ) {
+            searchOnlineSubtitles()
+        }
     }
 
     LaunchedEffect(exoPlayer) {
@@ -1139,35 +1149,10 @@ private fun NativePlayer(
                 shape = RoundedCornerShape(22.dp),
                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
             ) {
-                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(formatPlayerTime(scrubPosition), color = Color.White.copy(alpha = 0.9f), fontSize = 11.sp)
-                        Text(formatPlayerTime(scrubDuration), color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
-                    }
-                    Slider(
-                        value = if (scrubDuration > 0) (scrubPosition.toFloat() / scrubDuration.toFloat()).coerceIn(0f, 1f) else 0f,
-                        onValueChange = { v ->
-                            isScrubbing = true
-                            scrubPosition = (v * scrubDuration).toLong()
-                        },
-                        onValueChangeFinished = {
-                            exoPlayer.seekTo(scrubPosition)
-                            isScrubbing = false
-                        },
-                        modifier = Modifier.fillMaxWidth().height(20.dp),
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color(0xFFFFB547),
-                            inactiveTrackColor = Color.White.copy(alpha = 0.22f),
-                        ),
-                    )
                 Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
                         aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
@@ -1223,7 +1208,6 @@ private fun NativePlayer(
                     }) {
                         Text("Mais", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                     }
-                }
                 }
             }
         }
