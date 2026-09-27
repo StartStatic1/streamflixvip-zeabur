@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -161,7 +160,6 @@ internal fun originFromSource(source: VipSource): String? {
 
 internal fun sizeFromSource(source: VipSource): String? {
     val s = source.meta?.size?.takeIf { it.isNotBlank() } ?: return null
-    // normaliza "50." / "5.4" sem unidade
     val m = Regex("^([\\d.,]+)\\s*(GB|MB|GiB|MiB)?$", RegexOption.IGNORE_CASE).matchEntire(s.trim())
     if (m != null) {
         val num = m.groupValues[1].trimEnd('.')
@@ -258,40 +256,6 @@ private fun MetaChip(text: String, fg: Color, bg: Color) {
 }
 
 private data class ChipSpec(val text: String, val fg: Color, val bg: Color)
-
-private fun buildChips(
-    isLockedForFree: Boolean,
-    quality: String?,
-    audio: String?,
-    origin: String?,
-    size: String?,
-): List<ChipSpec> {
-    if (isLockedForFree) {
-        return listOf(ChipSpec("VIP", GoldVip, GoldVip.copy(alpha = 0.18f)))
-    }
-    val out = mutableListOf<ChipSpec>()
-    fun add(text: String?, fg: Color, bg: Color) {
-        val t = text?.takeIf { it.isNotBlank() } ?: return
-        if (out.any { it.text.equals(t, ignoreCase = true) }) return
-        if (out.size >= 4) return
-        out += ChipSpec(t, fg, bg)
-    }
-    add(
-        quality,
-        when (quality) {
-            "4K", "1080p" -> Color(0xFFDCEBFF)
-            "720p" -> Amber
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
-        }.let { it },
-        when (quality) {
-            "4K", "1080p" -> BlueBadge.copy(alpha = 0.34f)
-            "720p" -> Amber.copy(alpha = 0.18f)
-            else -> MaterialTheme.colorScheme.surfaceVariant
-        },
-    )
-    // quality colors without MaterialTheme in non-composable — fix below
-    return out
-}
 
 @Composable
 private fun chipList(
