@@ -1,0 +1,25 @@
+name: restore-player-screen
+on:
+  workflow_dispatch:
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore PlayerScreen from good commit
+        run: |
+          git fetch origin 3010eed8df787d4c42a3ede29ad24afda32d1415
+          git checkout 3010eed8df787d4c42a3ede29ad24afda32d1415 -- android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          wc -l android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          head -3 android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add android/app/src/main/java/com/streamflixvip/app/ui/player/PlayerScreen.kt
+          git diff --cached --quiet && echo "nothing to commit" && exit 0
+          git commit -m "fix: restaurar PlayerScreen do commit bom"
+          git push
