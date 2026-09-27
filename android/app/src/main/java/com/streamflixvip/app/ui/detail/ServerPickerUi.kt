@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -145,7 +147,6 @@ internal fun audioFromSource(source: VipSource): String? {
     }
 }
 
-/** Origem so se for util (ex. Nyaa). Nunca TB / AnimeSub / nome do addon. */
 internal fun originFromSource(source: VipSource): String? {
     val o = source.meta?.origin?.takeIf { it.isNotBlank() } ?: return null
     val ol = o.lowercase()
@@ -156,7 +157,6 @@ internal fun originFromSource(source: VipSource): String? {
     val title = hostTitleFromLabel(source.source_label).lowercase().replace(Regex("[^a-z0-9]"), "")
     val oc = ol.replace(Regex("[^a-z0-9]"), "")
     if (title.isNotBlank() && (oc == title || oc.contains(title) || title.contains(oc))) return null
-    // so nomes curtos e limpos (Nyaa, YTS…)
     if (oc.length !in 2..12) return null
     return o.take(12)
 }
@@ -239,12 +239,16 @@ fun ServerSectionLabel(text: String, accent: Color) {
     }
 }
 
+/** Chip com texto centralizado vertical e horizontal. */
 @Composable
 private fun MetaChip(text: String, fg: Color, bg: Color) {
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = bg,
-        modifier = Modifier.height(17.dp),
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .height(18.dp)
+            .clip(RoundedCornerShape(9.dp))
+            .background(bg)
+            .padding(horizontal = 7.dp),
     ) {
         Text(
             text,
@@ -253,14 +257,14 @@ private fun MetaChip(text: String, fg: Color, bg: Color) {
             color = fg,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+            textAlign = TextAlign.Center,
+            lineHeight = 11.sp,
         )
     }
 }
 
 private data class ChipSpec(val text: String, val fg: Color, val bg: Color)
 
-/** Max 3: qualidade → áudio → tamanho. Origem so se sobrar e for limpa. */
 @Composable
 private fun chipList(
     isLockedForFree: Boolean,
@@ -280,21 +284,20 @@ private fun chipList(
         out += ChipSpec(t, fg, bg)
     }
     when (quality) {
-        "4K", "1080p" -> add(quality, Color(0xFFDCEBFF), BlueBadge.copy(alpha = 0.34f))
-        "720p" -> add(quality, Amber, Amber.copy(alpha = 0.20f))
-        "SD" -> add(quality, MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
-        else -> add(quality, MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
+        "4K", "1080p" -> add(quality, Color(0xFFE8F1FF), BlueBadge.copy(alpha = 0.40f))
+        "720p" -> add(quality, Color(0xFFFFF0D6), Amber.copy(alpha = 0.28f))
+        "SD" -> add(quality, Color(0xFFD1D5DB), Color.White.copy(alpha = 0.10f))
+        else -> add(quality, Color(0xFFD1D5DB), Color.White.copy(alpha = 0.10f))
     }
     when (audio) {
-        "Dublado" -> add(audio, Color(0xFFD1FAE5), Color(0xFF34D399).copy(alpha = 0.22f))
-        "Legendado" -> add(audio, Color(0xFFE8E4FF), PurpleLeg.copy(alpha = 0.28f))
-        "Original" -> add(audio, Color(0xFFFFE8F0), Color(0xFFFB7185).copy(alpha = 0.28f))
+        "Dublado" -> add(audio, Color(0xFFD1FAE5), Color(0xFF34D399).copy(alpha = 0.28f))
+        "Legendado" -> add(audio, Color(0xFFEDE9FE), PurpleLeg.copy(alpha = 0.32f))
+        "Original" -> add(audio, Color(0xFFFFE4EC), Color(0xFFFB7185).copy(alpha = 0.28f))
         "EN" -> add(audio, Color(0xFFE0E7FF), Color(0xFF6366F1).copy(alpha = 0.28f))
-        else -> add(audio, MaterialTheme.colorScheme.onSurfaceVariant, MaterialTheme.colorScheme.surfaceVariant)
+        else -> add(audio, Color(0xFFD1D5DB), Color.White.copy(alpha = 0.10f))
     }
-    add(size, Color(0xFFFFF4D6), Color(0xFFFBBF24).copy(alpha = 0.22f))
-    // origem por ultimo e so se ainda couber
-    add(origin, Color(0xFFE0FFFA), Color(0xFF2DD4BF).copy(alpha = 0.22f))
+    add(size, Color(0xFFFFF3C4), Color(0xFFFBBF24).copy(alpha = 0.28f))
+    add(origin, Color(0xFFCCFBF1), Color(0xFF2DD4BF).copy(alpha = 0.28f))
     return out
 }
 
@@ -316,6 +319,7 @@ fun ServerSourceCard(
     val chips = chipList(isLockedForFree, quality, audio, origin, size)
     val highlight = isRecommended && !isLockedForFree
     val number = (index + 1).toString().padStart(2, '0')
+    val hasChips = chips.isNotEmpty()
 
     Surface(
         onClick = if (isLockedForFree) onLockedClick else onClick,
@@ -346,7 +350,7 @@ fun ServerSourceCard(
                         Brush.horizontalGradient(listOf(CardNavyHi, CardNavy))
                     },
                 )
-                .height(54.dp),
+                .height(if (hasChips) 58.dp else 52.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -361,17 +365,18 @@ fun ServerSourceCard(
                     fontWeight = FontWeight.Bold,
                     color = if (highlight) Amber else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                     modifier = Modifier.width(20.dp),
+                    textAlign = TextAlign.Center,
                 )
                 Box(
                     modifier = Modifier
                         .padding(end = 8.dp)
                         .width(1.dp)
-                        .height(16.dp)
+                        .height(18.dp)
                         .background(Color.White.copy(alpha = if (highlight) 0.18f else 0.08f)),
                 )
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(30.dp)
                         .clip(CircleShape)
                         .background(
                             Brush.linearGradient(
@@ -397,7 +402,14 @@ fun ServerSourceCard(
                     }
                 }
                 Spacer(Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                // Bloco titulo + chips centralizado na altura do card
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .wrapContentHeight(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.Start,
+                ) {
                     Text(
                         title,
                         fontSize = 14.sp,
@@ -410,9 +422,12 @@ fun ServerSourceCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (chips.isNotEmpty()) {
-                        Spacer(Modifier.height(3.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (hasChips) {
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             chips.forEach { chip ->
                                 MetaChip(chip.text, chip.fg, chip.bg)
                             }
