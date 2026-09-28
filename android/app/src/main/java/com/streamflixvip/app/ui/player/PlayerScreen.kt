@@ -1427,7 +1427,6 @@ private fun formatPlayerTime(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
-private 
 private fun parseTsToMs(ts: String): Long {
     val clean = ts.trim().replace('.', ',')
     val parts = clean.split(",", limit = 2)
@@ -1470,7 +1469,7 @@ private fun parseSubtitleCues(content: String): List<SubtitleCue> {
     return cues
 }
 
-fun shiftSrtContent(content: String, offsetMs: Long): String {
+private fun shiftSrtContent(content: String, offsetMs: Long): String {
     if (offsetMs == 0L) return content
     fun shiftTs(ts: String): String {
         val clean = ts.trim().replace('.', ',')
