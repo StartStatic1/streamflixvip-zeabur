@@ -147,6 +147,7 @@ function scoreOne(itemName, queryTitle, queryYear) {
   const tTok = tokens(itemName);
   const nTok = tokens(queryTitle);
   if (!tTok.length || !nTok.length) return 0;
+  const GENERIC = new Set(['the','and','motel','hotel','house','night','day','man','girl','last','new','love','dead','dark','city','war','story','filme','movie','part','vol']);
   const tSet = new Set(tTok);
   const nSet = new Set(nTok);
   const interN = nTok.filter((w) => tSet.has(w)).length;
@@ -154,14 +155,19 @@ function scoreOne(itemName, queryTitle, queryYear) {
   const coverN = interN / nTok.length;
   const coverT = interT / tTok.length;
   const itemYear = yearOf(itemName);
-  if (queryYear && itemYear && queryYear !== itemYear) return 0;
+  if (queryYear && itemYear && Number(queryYear) !== Number(itemYear)) return 0;
   let score = 0;
   if (t === n) score = 100;
   else if (coverN >= 0.99 && nTok.length >= 2) score = 88;
   else if (coverN >= 0.8 && coverT >= 0.7 && nTok.length >= 3) score = 80;
   else if (coverT >= 0.99 && tTok.length >= nTok.length && nTok.length >= 3) score = 78;
+  else if (t.includes(n) && nTok.length >= 2 && tTok.length >= nTok.length) score = 70;
   else return 0;
-  if (queryYear && itemYear && queryYear === itemYear) score += 12;
+  if (n.includes(t) && tTok.length < nTok.length && score < 88) return 0;
+  const shared = nTok.filter((w) => tSet.has(w));
+  if (shared.length === 1 && nTok.length >= 2 && GENERIC.has(shared[0])) return 0;
+  if (queryYear && itemYear && Number(queryYear) === Number(itemYear)) score += 20;
+  if (queryYear && !itemYear && score < 88) return 0;
   return score;
 }
 
@@ -180,7 +186,7 @@ function pick(list, titles, queryYear) {
       }
     }
   }
-  return bestScore >= 78 ? best : null;
+  return bestScore >= 80 ? best : null;
 }
 
 function metaFromTmdb(j) {
