@@ -371,6 +371,7 @@ private fun NativePlayer(
     var isRecovering by remember { mutableStateOf(false) }
     var activeUrl by remember { mutableStateOf(url) }
     var alternateSources by remember { mutableStateOf(emptyList<String>()) }
+    var alternateLabels by remember { mutableStateOf(mapOf<String, String>()) }
     var alternateIndex by remember { mutableStateOf(0) }
     var currentSeason by remember { mutableStateOf(season) }
     var currentEpisode by remember { mutableStateOf(episode) }
@@ -571,9 +572,17 @@ private fun NativePlayer(
             } else {
                 NetworkModule.mediaSourcesApi.getMovieSources(tmdbId, mediaType)
             }
-            alternateSources = resp.sources.filter { it.isDirectPlayable }
-                .flatMap { it.candidatePlaybackUrls(BuildConfig.API_BASE_URL, NetworkModule.ZEABUR_BASE_URL) }
-                .distinct().filter { it.isNotBlank() && it != activeUrl }
+            val labeled = mutableListOf<Pair<String, String>>()
+            for (src in resp.sources.filter { it.isDirectPlayable }) {
+                val nome = src.displayName.ifBlank { "Servidor" }
+                for (u in src.candidatePlaybackUrls(BuildConfig.API_BASE_URL, NetworkModule.ZEABUR_BASE_URL)) {
+                    if (u.isNotBlank() && u != activeUrl && labeled.none { it.first == u }) {
+                        labeled += u to nome
+                    }
+                }
+            }
+            alternateSources = labeled.map { it.first }
+            alternateLabels = labeled.associate { it.first to it.second }
             alternateIndex = 0
         } catch (_: Exception) {
             alternateSources = emptyList()
@@ -1415,17 +1424,12 @@ private fun NativePlayer(
                                 )
                             } else {
                                 alternateSources.forEachIndexed { i, src ->
-                                    val label = try {
-                                        val host = java.net.URI(src).host ?: "Fonte ${i + 1}"
-                                        host.removePrefix("www.").take(28)
-                                    } catch (_: Exception) {
-                                        "Fonte ${i + 1}"
-                                    }
+                                    val label = alternateLabels[src] ?: prettyFonteLabel(src, i)
                                     SubmenuItem("${i + 1}. $label", false) {
                                         alternateIndex = i + 1
                                         reloadWithUrl(src)
                                         settingsPanel = SettingsPanel.NONE
-                                        Toast.makeText(context, "Fonte ${i + 1}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -1435,6 +1439,19 @@ private fun NativePlayer(
                 }
             }
         }
+    }
+}
+
+
+private fun prettyFonteLabel(url: String, index: Int): String {
+    val host = try { java.net.URI(url).host.orEmpty().lowercase() } catch (_: Exception) { "" }
+    return when {
+        host.contains("streamflixvip") || host.contains("hakunaymatata") -> "Hyper"
+        host.contains("goldvip") || host.contains("sventank") || host.contains("cineduo") || host.contains("kraps") -> "Goldvip"
+        host.contains("guindex") -> "Guindex"
+        host.contains("flixhub") -> "FlixHub"
+        host.isNotBlank() -> host.removePrefix("www.").substringBefore(".").replaceFirstChar { it.uppercase() }
+        else -> "Fonte ${index + 1}"
     }
 }
 
