@@ -204,6 +204,8 @@ private fun saveSeriesPref(context: android.content.Context, tmdbId: Int, key: S
 
 private data class TrackOption(val label: String, val group: TrackGroup, val trackIndex: Int)
 
+data class SubtitleCue(val startMs: Long, val endMs: Long, val text: String)
+
 private fun humanTrackLabel(label: String?, language: String?, index: Int): String {
     val raw = (label ?: language ?: "").trim()
     val low = raw.lowercase()
@@ -358,6 +360,8 @@ private fun NativePlayer(
         mutableStateOf(loadSeriesPref(context, tmdbId, "sub_offset", "0").toLongOrNull() ?: 0L)
     }
     var onlineSubtitleRaw by remember { mutableStateOf<String?>(null) }
+    var overlayCues by remember { mutableStateOf(listOf<SubtitleCue>()) }
+    var overlaySubText by remember { mutableStateOf<String?>(null) }
     var scrubPosition by remember { mutableStateOf(0L) }
     var scrubDuration by remember { mutableStateOf(0L) }
     var isScrubbing by remember { mutableStateOf(false) }
@@ -664,45 +668,9 @@ private fun NativePlayer(
         }
         MainScope().launch {
             try {
-                val shifted = shiftSrtContent(raw, newOffset)
-                val body = if (shifted.trimStart().startsWith("WEBVTT", ignoreCase = true)) {
-                    shifted
-                } else {
-                    val srt = shifted.replace("\r", "")
-                    val sb = StringBuilder()
-                    sb.append("WEBVTT\n\n")
-                    for (line in srt.lineSequence()) {
-                        if (line.contains("-->")) sb.append(line.replace(',', '.')).append('\n')
-                        else sb.append(line).append('\n')
-                    }
-                    sb.toString()
-                }
-                val file = File(context.cacheDir, "os_${tmdbId}_${currentSeason}_${currentEpisode}.vtt")
-                file.writeText(body)
-                val pos = exoPlayer.currentPosition
-                val wasPlaying = exoPlayer.playWhenReady
-                val httpDs = playbackHttpFactory(activeUrl)
-                val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
-                val videoItem = MediaItem.fromUri(activeUrl)
-                val videoSource = if (isLikelyHls(activeUrl)) {
-                    HlsMediaSource.Factory(httpDs).createMediaSource(videoItem)
-                } else {
-                    ProgressiveMediaSource.Factory(httpDs, extractors).createMediaSource(videoItem)
-                }
-                val subCfg = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
-                    .setMimeType(MimeTypes.TEXT_VTT)
-                    .setLanguage("pt")
-                    .setLabel("ONLINE · PT-BR")
-                    .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                    .build()
-                val subSource = SingleSampleMediaSource.Factory(DefaultDataSource.Factory(context))
-                    .createMediaSource(subCfg, C.TIME_UNSET)
-                val merged = MergingMediaSource(videoSource, subSource)
-                pendingReapplyTracks = true
-                exoPlayer.setMediaSource(merged)
-                exoPlayer.prepare()
-                if (pos > 1000L) exoPlayer.seekTo(pos)
-                exoPlayer.playWhenReady = wasPlaying
+                overlayCues = parseSubtitleCues(shiftSrtContent(raw, newOffset))
+                val sign = if (newOffset >= 0) "+" else ""
+                Toast.makeText(context, "Sync ${sign}${newOffset / 1000.0}s", Toast.LENGTH_SHORT).show()
             } catch (_: Exception) {
                 Toast.makeText(context, "Falha no sync", Toast.LENGTH_SHORT).show()
             }
@@ -711,6 +679,8 @@ private fun NativePlayer(
 
     fun selectSubtitle(option: TrackOption?) {
         onlineSubtitleApplied = false
+        overlayCues = emptyList()
+        overlaySubText = null
         trackSelector.parameters = if (option == null) {
             selectedSubtitleLabel = "Desligada"
             persistSubtitleKey("off")
@@ -776,63 +746,15 @@ private fun NativePlayer(
                 return
             }
             onlineSubtitleRaw = content
-            val shifted = shiftSrtContent(content, subtitleOffsetMs)
-            val body = if (shifted.trimStart().startsWith("WEBVTT", ignoreCase = true)) {
-                shifted
-            } else {
-                val srt = shifted.replace("\r", "")
-                val sb = StringBuilder()
-                sb.append("WEBVTT\n\n")
-                for (line in srt.lineSequence()) {
-                    if (line.contains("-->")) {
-                        sb.append(line.replace(',', '.')).append('\n')
-                    } else {
-                        sb.append(line).append('\n')
-                    }
-                }
-                sb.toString()
-            }
-            val file = File(context.cacheDir, "os_${tmdbId}_${currentSeason}_${currentEpisode}.vtt")
-            file.writeText(body)
-            val pos = exoPlayer.currentPosition
-            val wasPlaying = exoPlayer.playWhenReady
+            // Overlay: nao remonta o video (evita tela preta)
+            overlayCues = parseSubtitleCues(shiftSrtContent(content, subtitleOffsetMs))
             onlineSubtitleApplied = true
             persistSubtitleKey("online")
             val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "…" else it }
             selectedSubtitleLabel = "Online: $short"
             trackSelector.parameters = trackSelector.parameters.buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                .setPreferredTextLanguage("pt")
-                .setSelectUndeterminedTextLanguage(true)
-                .build()
-            val httpDs = playbackHttpFactory(activeUrl)
-            val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
-            val videoItem = MediaItem.fromUri(activeUrl)
-            val videoSource = if (isLikelyHls(activeUrl)) {
-                HlsMediaSource.Factory(httpDs).createMediaSource(videoItem)
-            } else {
-                ProgressiveMediaSource.Factory(httpDs, extractors).createMediaSource(videoItem)
-            }
-            val subCfg = MediaItem.SubtitleConfiguration.Builder(Uri.fromFile(file))
-                .setMimeType(MimeTypes.TEXT_VTT)
-                .setLanguage("pt")
-                .setLabel(item.release ?: "ONLINE · PT-BR")
-                .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                .build()
-            val subSource = SingleSampleMediaSource.Factory(DefaultDataSource.Factory(context))
-                .createMediaSource(subCfg, C.TIME_UNSET)
-            val merged = MergingMediaSource(videoSource, subSource)
-            pendingReapplyTracks = true
-            exoPlayer.setMediaSource(merged)
-            exoPlayer.prepare()
-            if (pos > 1000L) exoPlayer.seekTo(pos)
-            exoPlayer.playWhenReady = wasPlaying
-            trackSelector.parameters = trackSelector.parameters.buildUpon()
-                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                .setPreferredTextLanguage("pt")
-                .setSelectUndeterminedTextLanguage(true)
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                 .build()
             settingsPanel = SettingsPanel.MAIN
         } catch (e: Exception) {
@@ -882,6 +804,19 @@ private fun NativePlayer(
             !onlineSubtitlesLoading
         ) {
             searchOnlineSubtitles()
+        }
+    }
+
+    LaunchedEffect(exoPlayer, overlayCues, onlineSubtitleApplied) {
+        while (true) {
+            if (onlineSubtitleApplied && overlayCues.isNotEmpty()) {
+                val pos = exoPlayer.currentPosition
+                val cue = overlayCues.firstOrNull { pos >= it.startMs && pos < it.endMs }
+                overlaySubText = cue?.text
+            } else if (overlaySubText != null) {
+                overlaySubText = null
+            }
+            delay(200)
         }
     }
 
@@ -979,6 +914,32 @@ private fun NativePlayer(
             },
             update = { v -> v.resizeMode = aspectMode.resizeMode },
         )
+
+        // Legenda online em overlay (sem remount / sem tela preta)
+        val subLine = overlaySubText
+        if (!subLine.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 72.dp)
+                    .navigationBarsPadding(),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                ) {
+                    Text(
+                        text = subLine,
+                        color = Color.White,
+                        fontSize = 17.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
+        }
 
 
 
@@ -1466,7 +1427,50 @@ private fun formatPlayerTime(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
-private fun shiftSrtContent(content: String, offsetMs: Long): String {
+private 
+private fun parseTsToMs(ts: String): Long {
+    val clean = ts.trim().replace('.', ',')
+    val parts = clean.split(",", limit = 2)
+    val hms = parts[0].split(":")
+    if (hms.size < 3) return 0L
+    val mill = parts.getOrNull(1)?.padEnd(3, '0')?.take(3)?.toLongOrNull() ?: 0L
+    var total = (hms[0].toLongOrNull() ?: 0L) * 3_600_000L
+    total += (hms[1].toLongOrNull() ?: 0L) * 60_000L
+    total += (hms[2].toLongOrNull() ?: 0L) * 1_000L
+    total += mill
+    return total.coerceAtLeast(0L)
+}
+
+private fun parseSubtitleCues(content: String): List<SubtitleCue> {
+    val text = content.replace("\r", "")
+    val cues = mutableListOf<SubtitleCue>()
+    val re = Regex("""(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})""")
+    val lines = text.lineSequence().toList()
+    var i = 0
+    while (i < lines.size) {
+        val line = lines[i]
+        val m = re.find(line)
+        if (m != null) {
+            val start = parseTsToMs(m.groupValues[1])
+            val end = parseTsToMs(m.groupValues[2])
+            val buf = mutableListOf<String>()
+            i++
+            while (i < lines.size && lines[i].isNotBlank() && re.find(lines[i]) == null) {
+                val l = lines[i].trim()
+                if (l.isNotEmpty() && !l.all { it.isDigit() }) buf.add(l)
+                i++
+            }
+            if (buf.isNotEmpty() && end > start) {
+                cues.add(SubtitleCue(start, end, buf.joinToString("\n")))
+            }
+            continue
+        }
+        i++
+    }
+    return cues
+}
+
+fun shiftSrtContent(content: String, offsetMs: Long): String {
     if (offsetMs == 0L) return content
     fun shiftTs(ts: String): String {
         val clean = ts.trim().replace('.', ',')
