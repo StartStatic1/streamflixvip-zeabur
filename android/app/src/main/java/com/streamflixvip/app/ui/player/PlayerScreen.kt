@@ -132,6 +132,9 @@ private fun playbackHeaders(url: String): Map<String, String> {
     val host = try { java.net.URI(url).host.orEmpty() } catch (_: Exception) { "" }
     val origin = when {
         host.contains("pengu.uk", ignoreCase = true) -> "https://pengu.uk/"
+        host.contains("hakunaymatata", ignoreCase = true) -> "https://mzfi.me/"
+        host.contains("mzfi.me", ignoreCase = true) -> "https://mzfi.me/"
+        host.contains("streamflixvip", ignoreCase = true) -> "https://mzfi.me/"
         host.isNotBlank() -> "https://$host/"
         else -> url
     }

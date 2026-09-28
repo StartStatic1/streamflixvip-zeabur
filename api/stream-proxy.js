@@ -16,6 +16,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Hosts extras sempre liberados, mesmo que não estejam em vip_sources ainda.
 // Útil pra testes antes de cadastrar no painel.
 const EXTRA_ALLOWED_HOSTS = [
+  'hakunaymatata.com',
+  'bcdnxw.hakunaymatata.com',
+  'mzfi.me',
   'unitvlite.xyz',
   'sventank.com',
   'cdnbr02.com',
@@ -211,6 +214,8 @@ async function handler(req, res) {
   // permitido e devolvemos 200 vazio — suficiente pro probe decidir qual
   // backend está de pé, sem gastar o token da fonte real.
   if (req.method === 'HEAD') {
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Accept-Ranges', 'bytes');
     res.status(200).end();
     return;
   }
@@ -224,7 +229,11 @@ async function handler(req, res) {
     // Muitos provedores Xtream redirecionam (302) para uma CDN de entrega
     // real com token temporário na URL (ex: sventank.com -> algumcdn.com).
     forwardHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
-    forwardHeaders['Referer'] = target.origin + '/';
+    const refOverride = String(req.query.referer || req.query.Referer || '').trim();
+    forwardHeaders['Referer'] = refOverride || (target.origin + '/');
+    if (refOverride) {
+      try { forwardHeaders['Origin'] = new URL(refOverride).origin; } catch (_) {}
+    }
 
     // Timeout de conexão: 15s é generoso pro handshake inicial
     const controller = new AbortController();
