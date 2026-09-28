@@ -566,17 +566,26 @@ private fun NativePlayer(
 
     LaunchedEffect(errorMessage) {
         if (errorMessage == null || isRecovering) return@LaunchedEffect
+        isRecovering = true
+        if (alternateSources.isEmpty()) {
+            try { loadAlternateSources() } catch (_: Exception) {}
+        }
+        val next = alternateSources.firstOrNull { it != activeUrl && it.isNotBlank() }
+        if (next != null) {
+            retryAttempt = 0
+            errorMessage = null
+            reloadWithUrl(next)
+            isRecovering = false
+            return@LaunchedEffect
+        }
         if (retryAttempt < 2) {
             retryAttempt += 1
-            isRecovering = true
-            delay(1200L * retryAttempt)
-            val candidates = VipSource(source_url = url, source_label = null, priority = null)
-                .candidatePlaybackUrls(BuildConfig.API_BASE_URL, NetworkModule.ZEABUR_BASE_URL)
-            reloadWithUrl(StreamUrlResolver.resolveFastest(candidates).ifBlank { activeUrl })
-            delay(800)
+            delay(800L * retryAttempt)
+            reloadWithUrl(activeUrl)
+            delay(600)
             if (exoPlayer.playerError == null) errorMessage = null
-            isRecovering = false
         }
+        isRecovering = false
     }
 
     suspend fun loadAlternateSources() {
