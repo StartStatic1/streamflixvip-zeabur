@@ -70,6 +70,9 @@ data class VipSource(
         if (source_url.contains("/stream-proxy")) {
             return source_url
         }
+        if (needsRefererProxy(source_url)) {
+            return wrapRefererProxy(apiBaseUrl, source_url)
+        }
         val isIptv = source_url.contains("/movie/") ||
                      source_url.contains("/series/") ||
                      source_url.contains("/live/")
@@ -85,6 +88,9 @@ data class VipSource(
         if (source_url.contains("/stream-proxy")) {
             return listOf(source_url)
         }
+        if (needsRefererProxy(source_url)) {
+            return listOf(wrapRefererProxy(koyebBaseUrl, source_url))
+        }
         val isIptv = source_url.contains("/movie/") ||
                      source_url.contains("/series/") ||
                      source_url.contains("/live/")
@@ -98,6 +104,19 @@ data class VipSource(
             "${zeaburBaseUrl}api/stream-proxy?url=$encoded",
         )
     }
+}
+
+
+fun needsRefererProxy(url: String): Boolean {
+    val h = url.lowercase()
+    return h.contains("hakunaymatata") || h.contains("mzfi.me")
+}
+
+fun wrapRefererProxy(apiBaseUrl: String, rawUrl: String): String {
+    val encoded = java.net.URLEncoder.encode(rawUrl, "UTF-8")
+    val referer = java.net.URLEncoder.encode("https://mzfi.me/", "UTF-8")
+    val base = if (apiBaseUrl.endsWith("/")) apiBaseUrl else "$apiBaseUrl/"
+    return "${base}api/stream-proxy?url=$encoded&referer=$referer"
 }
 
 fun urlLooksDirectPlayable(url: String): Boolean {
