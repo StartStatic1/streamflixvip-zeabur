@@ -580,6 +580,10 @@ private fun NativePlayer(
         }
     }
 
+    LaunchedEffect(url, tmdbId) {
+        try { loadAlternateSources() } catch (_: Exception) {}
+    }
+
     LaunchedEffect(errorMessage) {
         if (errorMessage == null || isRecovering) return@LaunchedEffect
         isRecovering = true
@@ -1086,7 +1090,7 @@ private fun NativePlayer(
         if (errorMessage != null || isRecovering) {
             Surface(color = Color.Black.copy(alpha = 0.88f), shape = RoundedCornerShape(12.dp), modifier = Modifier.padding(16.dp)) {
                 Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (isRecovering && retryAttempt in 1..2) {
+                    if (isRecovering) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.padding(bottom = 12.dp))
                         Text("Tentando novamente ($retryAttempt/2)...", color = Color.White, textAlign = TextAlign.Center)
                     } else {
