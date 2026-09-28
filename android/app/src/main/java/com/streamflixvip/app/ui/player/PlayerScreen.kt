@@ -564,6 +564,22 @@ private fun NativePlayer(
         }
     }
 
+    suspend fun loadAlternateSources() {
+        try {
+            val resp = if (mediaType == "tv" && currentSeason > 0) {
+                NetworkModule.mediaSourcesApi.getEpisodeSources(tmdbId, "tv", currentSeason, currentEpisode)
+            } else {
+                NetworkModule.mediaSourcesApi.getMovieSources(tmdbId, mediaType)
+            }
+            alternateSources = resp.sources.filter { it.isDirectPlayable }
+                .flatMap { it.candidatePlaybackUrls(BuildConfig.API_BASE_URL, NetworkModule.ZEABUR_BASE_URL) }
+                .distinct().filter { it.isNotBlank() && it != activeUrl }
+            alternateIndex = 0
+        } catch (_: Exception) {
+            alternateSources = emptyList()
+        }
+    }
+
     LaunchedEffect(errorMessage) {
         if (errorMessage == null || isRecovering) return@LaunchedEffect
         isRecovering = true
@@ -586,22 +602,6 @@ private fun NativePlayer(
             if (exoPlayer.playerError == null) errorMessage = null
         }
         isRecovering = false
-    }
-
-    suspend fun loadAlternateSources() {
-        try {
-            val resp = if (mediaType == "tv" && currentSeason > 0) {
-                NetworkModule.mediaSourcesApi.getEpisodeSources(tmdbId, "tv", currentSeason, currentEpisode)
-            } else {
-                NetworkModule.mediaSourcesApi.getMovieSources(tmdbId, mediaType)
-            }
-            alternateSources = resp.sources.filter { it.isDirectPlayable }
-                .flatMap { it.candidatePlaybackUrls(BuildConfig.API_BASE_URL, NetworkModule.ZEABUR_BASE_URL) }
-                .distinct().filter { it.isNotBlank() && it != activeUrl }
-            alternateIndex = 0
-        } catch (_: Exception) {
-            alternateSources = emptyList()
-        }
     }
 
     suspend fun playNextEpisode() {
