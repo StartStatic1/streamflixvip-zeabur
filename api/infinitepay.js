@@ -5,6 +5,7 @@
 // POST /api/infinitepay/webhook      (chamado pela InfinitePay quando paga)
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+const vipMem = require('../lib/vip-status-cache');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -30,18 +31,24 @@ async function createLink(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const handle = (process.env.INFINITEPAY_HANDLE || 'streamflixvip').replace(/^\$/, '');
-  const { userId, amount, planLabel, durationHours } = req.body || {};
+  const { userId, amount, planLabel, durationHours, type, tmdbId, mediaType } = req.body || {};
   if (!userId || amount == null) {
     return res.status(400).json({ error: 'userId e amount são obrigatórios' });
   }
 
-  const hours = Number(durationHours) > 0 ? Number(durationHours) : 720;
-  const label = planLabel || 'VIP';
+  const kind = String(type || 'vip').toLowerCase() === 'ticket' ? 'ticket' : 'vip';
+  if (kind === 'ticket' && !tmdbId) {
+    return res.status(400).json({ error: 'tmdbId obrigatório para ingresso' });
+  }
+
+  const hours = Number(durationHours) > 0 ? Number(durationHours) : (kind === 'ticket' ? 24 : 720);
+  const label = planLabel || (kind === 'ticket' ? 'Ingresso' : 'VIP');
   const cents = Math.round(Number(amount) * 100);
   if (!(cents > 0)) return res.status(400).json({ error: 'amount inválido' });
 
-  // order_nsu carrega dados para o webhook (sem depender de metadata externa)
-  const orderNsu = ['vip', userId, String(hours), encodeURIComponent(label), Date.now()].join('__');
+  const orderNsu = kind === 'ticket'
+    ? ['ticket', userId, String(tmdbId), String(hours), String(mediaType || 'movie'), Date.now()].join('__')
+    : ['vip', userId, String(hours), encodeURIComponent(label), Date.now()].join('__');
 
   const payload = {
     handle,
@@ -89,6 +96,25 @@ async function createLink(req, res) {
  * POST /api/infinitepay/webhook
  * Body típico: order_nsu, amount, paid_amount, capture_method, transaction_nsu, ...
  */
+
+async function grantTicket(serviceKey, parts, body, res) {
+  const userId = parts[1];
+  const tmdbId = parts[2];
+  const hours = Number(parts[3]) || 24;
+  const mediaType = parts[4] === 'tv' ? 'tv' : 'movie';
+  if (!userId || !tmdbId) return res.status(200).json({ success: true, message: 'ticket ignored' });
+  const headers = { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey, 'Content-Type': 'application/json' };
+  const now = new Date();
+  const expires = new Date(now.getTime() + hours * 60 * 60 * 1000);
+  const tx = body.transaction_nsu || body.invoice_slug || 'ip';
+  const row = { user_id: userId, tmdb_id: String(tmdbId), media_type: mediaType, expires_at: expires.toISOString(), paid_at: now.toISOString(), provider_tx: String(tx).slice(0, 80), amount_cents: Number(body.paid_amount || body.amount || 0) || null };
+  const r = await fetch(SUPABASE_URL + '/rest/v1/movie_tickets', { method: 'POST', headers: { ...headers, Prefer: 'return=minimal' }, body: JSON.stringify(row) });
+  if (!r.ok) { const txt = await r.text(); console.error('[infinitepay] ticket upsert', r.status, txt.slice(0, 200)); return res.status(500).json({ success: false, message: 'ticket table' }); }
+  try { require('../lib/vip-status-cache').invalidate(userId); } catch (_) {}
+  console.log('[infinitepay] TICKET ok user=' + userId + ' tmdb=' + tmdbId);
+  return res.status(200).json({ success: true, message: 'ticket' });
+}
+
 async function handleWebhook(req, res) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
@@ -101,10 +127,11 @@ async function handleWebhook(req, res) {
     const orderNsu = String(body.order_nsu || '');
     console.log('[infinitepay] webhook', JSON.stringify(body).slice(0, 400));
 
-    // order_nsu = vip__userId__hours__labelEnc__ts
     const parts = orderNsu.split('__');
+    if (parts[0] === 'ticket') {
+      return grantTicket(serviceKey, parts, body, res);
+    }
     if (parts[0] !== 'vip' || parts.length < 4) {
-      // responde 200 para não ficar em loop; ignora pedido estranho
       return res.status(200).json({ success: true, message: 'ignored' });
     }
     const userId = parts[1];
@@ -171,6 +198,7 @@ async function handleWebhook(req, res) {
       body: JSON.stringify(upsertBody),
     });
 
+    try { vipMem.invalidate(userId); } catch (_) {}
     console.log(`[infinitepay] VIP ok user=${userId} until=${newExpiry.toISOString()}`);
     return res.status(200).json({ success: true, message: null });
   } catch (e) {

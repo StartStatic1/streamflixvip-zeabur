@@ -16,6 +16,7 @@
 //   (a SUPABASE_URL já é pública e está hardcoded no front-end também)
 
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+const vipMem = require('../lib/vip-status-cache');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -151,6 +152,7 @@ module.exports = async function handler(req, res) {
       console.warn('vip_redemptions log error (non-fatal):', logErr);
     }
 
+    try { vipMem.invalidate(userId); } catch (_) {}
     res.status(200).json({
       success: true,
       expiresAt: newExpiry.toISOString(),

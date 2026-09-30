@@ -164,6 +164,18 @@ function sourceRank(row) {
   return { q: qualityRank(label), p };
 }
 
+
+async function hasValidTicket(serviceKey, userId, tmdbId) {
+  if (!serviceKey || !userId || !tmdbId) return false;
+  try {
+    const url = SUPABASE_URL + '/rest/v1/movie_tickets?user_id=eq.' + encodeURIComponent(userId) + '&tmdb_id=eq.' + encodeURIComponent(String(tmdbId)) + '&expires_at=gt.' + encodeURIComponent(new Date().toISOString()) + '&select=id,expires_at&limit=1';
+    const r = await fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } });
+    if (!r.ok) return false;
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (e) { console.warn('[media-sources] ticket', e.message); return false; }
+}
+
 async function loadVipTitleConfig(serviceKey, tmdbId, mediaType) {
   try {
     const url =
@@ -340,6 +352,11 @@ async function handler(req, res) {
 
   const vipConfig = await loadVipTitleConfig(serviceKey, tmdbId, mediaType);
   const needsVip = titleRequiresVip(vipConfig, mediaType === 'tv' ? episode : null);
+
+  if (needsVip && !access.isVip) {
+    const ticketOk = await hasValidTicket(serviceKey, access.userId, tmdbId);
+    if (ticketOk) { access.isVip = true; access.source = access.source || 'ticket'; }
+  }
 
   if (needsVip && !access.isVip) {
     res.status(200).json({

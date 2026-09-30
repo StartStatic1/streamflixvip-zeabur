@@ -6,6 +6,7 @@
 
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
+const vipMem = require('../lib/vip-status-cache');
 const VIP_CACHE_TTL_MS = Math.max(
   30_000,
   Number(process.env.VIP_STATUS_CACHE_TTL_MS || 2 * 60 * 1000) || 2 * 60 * 1000,
@@ -15,21 +16,11 @@ const vipCache = new Map();
 const VIP_CACHE_MAX = 2000;
 
 function cacheGet(userId) {
-  const hit = vipCache.get(userId);
-  if (!hit) return null;
-  if (Date.now() - hit.at > VIP_CACHE_TTL_MS) {
-    vipCache.delete(userId);
-    return null;
-  }
-  return hit.body;
+  return vipMem.get(userId);
 }
 
 function cacheSet(userId, body) {
-  if (vipCache.size >= VIP_CACHE_MAX) {
-    const first = vipCache.keys().next().value;
-    if (first) vipCache.delete(first);
-  }
-  vipCache.set(userId, { at: Date.now(), body });
+  vipMem.set(userId, body);
 }
 
 module.exports = async function handler(req, res) {
