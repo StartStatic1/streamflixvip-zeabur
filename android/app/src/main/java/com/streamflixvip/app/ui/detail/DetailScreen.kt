@@ -189,6 +189,9 @@ fun DetailScreen(
                 onDismissComments = viewModel::closeComments,
                 onPostComment = { text, onResult -> viewModel.postComment(text, isVip = com.streamflixvip.app.data.VipStatusHolder.isVip.value, onResult = onResult) },
                 onToggleFavorite = viewModel::toggleFavorite,
+                onTicketClick = {
+                    if (!userId.isNullOrBlank()) showTicketPay = true
+                },
             )
 
             if (showMovieServerPicker) {
@@ -303,6 +306,7 @@ private fun DetailContent(
     onDismissComments: () -> Unit,
     onPostComment: (text: String, onResult: (Boolean) -> Unit) -> Unit,
     onToggleFavorite: () -> Unit,
+    onTicketClick: () -> Unit = {},
     skipHeroLoading: Boolean = false,
 ) {
     val details = state.details
@@ -398,7 +402,7 @@ private fun DetailContent(
             if (state.movieIsLocked(isVip)) {
                 item {
                     Column(Modifier.padding(16.dp)) {
-                        VipLockCard(onUpgradeClick = onUpgradeClick, onTicketClick = { if (!userId.isNullOrBlank()) showTicketPay = true })
+                        VipLockCard(onUpgradeClick = onUpgradeClick, onTicketClick = onTicketClick)
                     }
                 }
             } else if (state.isLoadingMovieSources) {
@@ -1664,7 +1668,7 @@ private fun SimpleEpisodeRow(
  * vermelho — cadeado comunica "exclusivo", não "erro".
  */
 @Composable
-private fun VipLockCard(onUpgradeClick: () -> Unit) {
+private fun VipLockCard(onUpgradeClick: () -> Unit, onTicketClick: () -> Unit = {}) {
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
@@ -1693,6 +1697,13 @@ private fun VipLockCard(onUpgradeClick: () -> Unit) {
             Spacer(Modifier.height(14.dp))
             Button(onClick = onUpgradeClick, modifier = Modifier.fillMaxWidth()) {
                 Text("Seja VIP agora")
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onTicketClick,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Ingresso R$ 2,50 · 24h só este título")
             }
         }
     }
