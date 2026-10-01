@@ -1,14 +1,23 @@
 /**
  * GET /api/free-catalog
- * Lista filmes marcados is_free na Area Free (para faixa da Home).
- * Query: limit (default 50, max 80)
+ * Lista filmes marcados is_free na Area Free (Home).
  */
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const SUPABASE_URL =
+  process.env.SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  'https://gkujbjpvphuvrejpvvtz.supabase.co';
+
 const SUPABASE_SERVICE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_SERVICE_KEY ||
+  process.env.SUPABASE_KEY ||
   '';
-const TMDB_KEY = process.env.TMDB_API_KEY || process.env.TMDB_KEY || '';
+
+const TMDB_KEY =
+  process.env.TMDB_API_KEY ||
+  process.env.TMDB_KEY ||
+  process.env.NEXT_PUBLIC_TMDB_API_KEY ||
+  '';
 
 function sbHeaders() {
   return {
@@ -26,8 +35,11 @@ async function handler(req, res) {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    res.status(500).json({ error: 'Supabase nao configurado', items: [] });
+  if (!SUPABASE_SERVICE_KEY) {
+    res.status(500).json({
+      error: 'SUPABASE_SERVICE_ROLE_KEY nao configurada',
+      items: [],
+    });
     return;
   }
 
@@ -44,8 +56,9 @@ async function handler(req, res) {
       console.warn('[free-catalog]', r.status, rows);
       res.status(200).json({
         items: [],
-        error: 'Coluna is_free ausente? Rode o SQL scripts/sql_free_area.sql no Supabase.',
+        error: 'Falha ao ler vip_titles (coluna is_free existe?)',
         needsMigration: true,
+        detail: rows,
       });
       return;
     }
@@ -63,9 +76,16 @@ async function handler(req, res) {
       for (const id of ids.slice(0, limit)) {
         try {
           const tr = await fetch(
-            'https://api.themoviedb.org/3/movie/' + id + '?api_key=' + TMDB_KEY + '&language=pt-BR',
+            'https://api.themoviedb.org/3/movie/' +
+              id +
+              '?api_key=' +
+              TMDB_KEY +
+              '&language=pt-BR',
           );
-          if (!tr.ok) continue;
+          if (!tr.ok) {
+            items.push({ id: id, title: 'Filme ' + id, media_type: 'movie' });
+            continue;
+          }
           const m = await tr.json();
           items.push({
             id: m.id,
@@ -76,7 +96,9 @@ async function handler(req, res) {
             release_date: m.release_date,
             media_type: 'movie',
           });
-        } catch (_) {}
+        } catch (_) {
+          items.push({ id: id, title: 'Filme ' + id, media_type: 'movie' });
+        }
       }
     } else {
       for (const id of ids) {
