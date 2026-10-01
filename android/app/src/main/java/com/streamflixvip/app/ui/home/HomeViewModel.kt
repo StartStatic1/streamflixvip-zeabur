@@ -90,7 +90,7 @@ class HomeViewModel(
                     repository.exploreCatalog(category = GenreCategory.MOVIES, genreId = 27, year = trashYear)
                 }.getOrElse { emptyList() }
 
-                val freeArea = runCatching {
+                val freeArea: List<TmdbItem> = runCatching {
                     repository.getFreeCatalog(50)
                 }.getOrElse { emptyList() }
 
