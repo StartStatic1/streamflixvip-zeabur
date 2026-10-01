@@ -1,27 +1,32 @@
+#!/usr/bin/env python3
+"""Liga elenco na ficha + onPersonClick (compativel com ingresso/ticket)."""
 from pathlib import Path
 
-p = Path('android/app/src/main/java/com/streamflixvip/app/ui/detail/DetailScreen.kt')
+ROOT = Path(__file__).resolve().parents[1]
+p = ROOT / "android/app/src/main/java/com/streamflixvip/app/ui/detail/DetailScreen.kt"
 if not p.exists():
-    raise SystemExit('DetailScreen.kt nao achado')
-t = p.read_text()
+    raise SystemExit("DetailScreen.kt nao achado")
+t = p.read_text(encoding="utf-8")
 
 def once(old, new, label):
     global t
     if new.strip() in t:
-        print('ok', label)
-        return
+        print("ok", label)
+        return True
     if old not in t:
-        print('aviso: faltou bloco', label)
-        return
+        print("aviso: faltou bloco", label)
+        return False
     t = t.replace(old, new, 1)
-    print('aplicou', label)
+    print("aplicou", label)
+    return True
 
+# --- elenco antes da sinopse ---
 once(
-'''        item {
+    """        item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 details.overview?.let { overview ->
-''',
-'''        item {
+""",
+    """        item {
             DetailGenreAndCast(
                 cast = details.credits?.cast,
                 crew = details.credits?.crew,
@@ -32,171 +37,177 @@ once(
         item {
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 details.overview?.let { overview ->
-''',
-'elenco')
+""",
+    "elenco",
+)
 
+# legado
 t = t.replace(
-'''            DetailGenreAndCast(
+    """            DetailGenreAndCast(
                 genres = details.genres,
                 cast = details.credits?.cast,
-            )''',
-'''            DetailGenreAndCast(
+            )""",
+    """            DetailGenreAndCast(
                 cast = details.credits?.cast,
                 crew = details.credits?.crew,
                 onPersonClick = onPersonClick,
-            )'''
+            )""",
 )
 
-once(
-'''    onUpgradeClick: () -> Unit,
-    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
-) {''',
-'''    onUpgradeClick: () -> Unit,
-    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
+# --- param DetailScreen (com userId do ingresso) ---
+if "onPersonClick: (Int) -> Unit" not in t[t.find("fun DetailScreen"):t.find("fun DetailScreen") + 900]:
+    once(
+        """    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
+    userId: String? = null,
+) {""",
+        """    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
+    userId: String? = null,
     onPersonClick: (Int) -> Unit = {},
-) {''',
-'param DetailScreen')
-
-once(
-'''    onPostComment: (text: String, onResult: (Boolean) -> Unit) -> Unit,
-    onToggleFavorite: () -> Unit,
-    skipHeroLoading: Boolean = false,
-) {''',
-'''    onPostComment: (text: String, onResult: (Boolean) -> Unit) -> Unit,
-    onToggleFavorite: () -> Unit,
+) {""",
+        "param DetailScreen+userId",
+    ) or once(
+        """    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
+) {""",
+        """    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
     onPersonClick: (Int) -> Unit = {},
-    skipHeroLoading: Boolean = false,
-) {''',
-'param DetailContent')
-
-once(
-'''    year: String?,
-    runtimeLabel: String?,
-    isFavorite: Boolean,''',
-'''    year: String?,
-    runtimeLabel: String?,
-    genreNames: List<String> = emptyList(),
-    isFavorite: Boolean,''',
-'param header')
-
-once(
-'''                year = (details.release_date ?: details.first_air_date)?.take(4),
-                runtimeLabel = details.displayRuntime,
-                isFavorite = state.isFavorite,''',
-'''                year = (details.release_date ?: details.first_air_date)?.take(4),
-                runtimeLabel = details.displayRuntime,
-                genreNames = details.genres.orEmpty().mapNotNull { it.name.takeIf { n -> n.isNotBlank() } }.take(4),
-                isFavorite = state.isFavorite,''',
-'passa generos')
-
-star_line = '                rating?.let { MetaChip("\u2b50 ${\"%.1f\".format(it)}") }'
-# match real source star chip without relying on escaped star
-import re
-pat = r'([ \t]*year\?\.let \{ MetaChip\(it\) \}\n[ \t]*runtimeLabel\?\.let \{ MetaChip\(it\) \}\n[ \t]*rating\?\.let \{ MetaChip\(".*"\) \}\n[ \t]*\})'
-mchip = re.search(pat, t)
-if mchip and 'genreNames.isNotEmpty()' not in t:
-    chips = mchip.group(0) + '''
-            if (genreNames.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                ) {
-                    genreNames.forEach { name ->
-                        Text(
-                            text = name,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = StreamFlixColors.Amber,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(StreamFlixColors.SurfaceHigh)
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
-                        )
-                    }
-                }
-            }'''
-    t = t[:mchip.start()] + chips + t[mchip.end():]
-    print('aplicou chips no hero')
-elif 'genreNames.isNotEmpty()' in t:
-    print('ok chips no hero')
+) {""",
+        "param DetailScreen",
+    )
 else:
-    print('aviso: chips no hero nao aplicados')
+    print("ok param DetailScreen")
 
-old_pass = '''                onToggleFavorite = viewModel::toggleFavorite,
-            )
+# --- param DetailContent (com onTicketClick) ---
+idx_dc = t.find("private fun DetailContent")
+chunk = t[idx_dc : idx_dc + 1200] if idx_dc >= 0 else ""
+if "onPersonClick: (Int) -> Unit" not in chunk:
+    once(
+        """    onToggleFavorite: () -> Unit,
+    onTicketClick: () -> Unit = {},
+    skipHeroLoading: Boolean = false,
+) {""",
+        """    onToggleFavorite: () -> Unit,
+    onTicketClick: () -> Unit = {},
+    onPersonClick: (Int) -> Unit = {},
+    skipHeroLoading: Boolean = false,
+) {""",
+        "param DetailContent+ticket",
+    ) or once(
+        """    onToggleFavorite: () -> Unit,
+    skipHeroLoading: Boolean = false,
+) {""",
+        """    onToggleFavorite: () -> Unit,
+    onPersonClick: (Int) -> Unit = {},
+    skipHeroLoading: Boolean = false,
+) {""",
+        "param DetailContent",
+    )
+else:
+    print("ok param DetailContent")
 
-            if (showMovieServerPicker) {'''
-new_pass = '''                onToggleFavorite = viewModel::toggleFavorite,
+# --- passar onPersonClick na chamada DetailContent ---
+if "onPersonClick = onPersonClick" not in t[t.find("DetailContent(") : t.find("DetailContent(") + 1200]:
+    once(
+        """                onTicketClick = {
+                    if (!userId.isNullOrBlank()) showTicketPay = true
+                },
+            )""",
+        """                onTicketClick = {
+                    if (!userId.isNullOrBlank()) showTicketPay = true
+                },
                 onPersonClick = onPersonClick,
-            )
-
-            if (showMovieServerPicker) {'''
-if old_pass in t:
-    t = t.replace(old_pass, new_pass, 1)
-    print('aplicou passa clique')
-
-if 'import com.streamflixvip.app.ui.theme.StreamFlixColors' not in t:
-    t = t.replace(
-        'import com.streamflixvip.app.ads.AdsHelper\n',
-        'import com.streamflixvip.app.ads.AdsHelper\nimport com.streamflixvip.app.ui.theme.StreamFlixColors\n',
+            )""",
+        "call DetailContent+ticket",
+    ) or once(
+        """                onToggleFavorite = viewModel::toggleFavorite,
+            )""",
+        """                onToggleFavorite = viewModel::toggleFavorite,
+                onPersonClick = onPersonClick,
+            )""",
+        "call DetailContent",
     )
+else:
+    print("ok call DetailContent")
 
-p.write_text(t)
-print('pronto', p.stat().st_size)
+p.write_text(t, encoding="utf-8")
+print("DetailScreen escrito")
 
-m = Path('android/app/src/main/java/com/streamflixvip/app/MainActivity.kt')
+# --- MainActivity: onPersonClick + rota person ---
+m = ROOT / "android/app/src/main/java/com/streamflixvip/app/MainActivity.kt"
 if m.exists():
-    mt = m.read_text()
-    if 'import com.streamflixvip.app.ui.person.PersonScreen' not in mt:
+    mt = m.read_text(encoding="utf-8")
+    if "PersonScreen" not in mt:
         mt = mt.replace(
-            'import com.streamflixvip.app.ui.detail.DetailViewModel\n',
-            'import com.streamflixvip.app.ui.detail.DetailViewModel\nimport com.streamflixvip.app.ui.person.PersonScreen\nimport com.streamflixvip.app.ui.person.PersonViewModel\n',
+            "import com.streamflixvip.app.ui.detail.DetailViewModel\n",
+            "import com.streamflixvip.app.ui.detail.DetailViewModel\n"
+            "import com.streamflixvip.app.ui.person.PersonScreen\n"
+            "import com.streamflixvip.app.ui.person.PersonViewModel\n",
         )
-    needle = (
-        '                    onOpenTitle = { openTmdbId, openMediaType ->\n'
-        '                        navController.navigate("detail/$openTmdbId/$openMediaType")\n'
-        '                    },\n'
-        '                )\n'
-        '            }\n\n'
-        '            composable(\n'
-        '                route = "player/'
-    )
-    insert = (
-        '                    onOpenTitle = { openTmdbId, openMediaType ->\n'
-        '                        navController.navigate("detail/$openTmdbId/$openMediaType")\n'
-        '                    },\n'
-        '                    onPersonClick = { personId ->\n'
-        '                        navController.navigate("person/$personId")\n'
-        '                    },\n'
-        '                )\n'
-        '            }\n\n'
-        '            composable(\n'
-        '                route = "person/{personId}",\n'
-        '                arguments = listOf(\n'
-        '                    navArgument("personId") { type = NavType.IntType },\n'
-        '                ),\n'
-        '            ) { entry ->\n'
-        '                val personId = entry.arguments?.getInt("personId") ?: return@composable\n'
-        '                val personVm: PersonViewModel = viewModel(\n'
-        '                    factory = viewModelFactory { PersonViewModel(personId) },\n'
-        '                )\n'
-        '                PersonScreen(\n'
-        '                    viewModel = personVm,\n'
-        '                    onBack = { navController.popBackStack() },\n'
-        '                    onOpenTitle = { openTmdbId, openMediaType ->\n'
-        '                        navController.navigate("detail/$openTmdbId/$openMediaType")\n'
-        '                    },\n'
-        '                )\n'
-        '            }\n\n'
-        '            composable(\n'
-        '                route = "player/'
-    )
-    if needle in mt:
-        mt = mt.replace(needle, insert, 1)
-        print('aplicou rota person')
-    elif 'route = "person/{personId}"' in mt:
-        print('ok rota person')
+        print("import Person*")
+
+    # callback no DetailScreen
+    if "onPersonClick = { personId" not in mt:
+        old = (
+            "                    onOpenTitle = { openTmdbId, openMediaType ->\n"
+            "                        navController.navigate(\"detail/$openTmdbId/$openMediaType\")\n"
+            "                    },\n"
+            "                )\n"
+        )
+        new = (
+            "                    onOpenTitle = { openTmdbId, openMediaType ->\n"
+            "                        navController.navigate(\"detail/$openTmdbId/$openMediaType\")\n"
+            "                    },\n"
+            "                    onPersonClick = { personId ->\n"
+            "                        navController.navigate(\"person/$personId\")\n"
+            "                    },\n"
+            "                )\n"
+        )
+        if old in mt:
+            mt = mt.replace(old, new, 1)
+            print("aplicou onPersonClick no DetailScreen call")
+        else:
+            print("aviso: call DetailScreen person")
+
+    if 'route = "person/{personId}"' not in mt:
+        needle = (
+            "            composable(\n"
+            "                route = \"player/"
+        )
+        insert = (
+            "            composable(\n"
+            "                route = \"person/{personId}\",\n"
+            "                arguments = listOf(\n"
+            "                    navArgument(\"personId\") { type = NavType.IntType },\n"
+            "                ),\n"
+            "            ) { entry ->\n"
+            "                val personId = entry.arguments?.getInt(\"personId\") ?: return@composable\n"
+            "                val personVm: PersonViewModel = viewModel(\n"
+            "                    factory = viewModelFactory { PersonViewModel(personId) },\n"
+            "                )\n"
+            "                PersonScreen(\n"
+            "                    viewModel = personVm,\n"
+            "                    onBack = { navController.popBackStack() },\n"
+            "                    onOpenTitle = { openTmdbId, openMediaType ->\n"
+            "                        navController.navigate(\"detail/$openTmdbId/$openMediaType\")\n"
+            "                    },\n"
+            "                )\n"
+            "            }\n\n"
+            "            composable(\n"
+            "                route = \"player/"
+        )
+        if needle in mt:
+            mt = mt.replace(needle, insert, 1)
+            print("aplicou rota person")
+        else:
+            print("aviso: rota person")
     else:
-        print('aviso: rota person nao aplicada')
-    m.write_text(mt)
+        print("ok rota person")
+
+    m.write_text(mt, encoding="utf-8")
+
+# PersonScreen existe?
+ps = list((ROOT / "android/app/src/main/java/com/streamflixvip/app/ui").rglob("Person*.kt"))
+print("Person files:", [str(x.relative_to(ROOT)) for x in ps])
+if not ps:
+    print("AVISO: PersonScreen.kt nao existe — onPersonClick vira no-op no default")
+
+print("done patch_detail_cast")
