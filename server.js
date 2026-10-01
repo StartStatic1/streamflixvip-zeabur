@@ -95,6 +95,7 @@ const r2Presign = require('./api/r2-presign.js');
 const liveTv = require('./api/live-tv.js');
 const liveEpg = require('./api/live-epg.js');
 const mediaSources = require('./api/media-sources.js');
+const freeCatalog = require('./api/free-catalog.js');
 const reels = require('./api/reels.js');
 
 const wrap = (handler) => (req, res) => {
@@ -136,6 +137,7 @@ app.all('/api/r2-presign', wrap(r2Presign));
 app.all('/api/live-tv', wrap(liveTv));
 app.all('/api/live-epg', wrap(liveEpg));
 app.all('/api/media-sources', wrap(mediaSources));
+app.all('/api/free-catalog', wrap(freeCatalog));
 app.all('/api/reels', wrap(reels));
 
 app.use(

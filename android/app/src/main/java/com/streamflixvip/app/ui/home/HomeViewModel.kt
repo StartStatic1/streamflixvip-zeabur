@@ -90,6 +90,10 @@ class HomeViewModel(
                     repository.exploreCatalog(category = GenreCategory.MOVIES, genreId = 27, year = trashYear)
                 }.getOrElse { emptyList() }
 
+                val freeArea = runCatching {
+                    repository.getFreeCatalog(50)
+                }.getOrElse { emptyList() }
+
                 prefetchContinueSources(continueWatching)
                 _uiState.value = HomeUiState.Success(
                     continueWatching = continueWatching,
@@ -98,6 +102,9 @@ class HomeViewModel(
                             .ifEmpty { nowPlaying }
                     ).take(6),
                     rows = listOfNotNull(
+                        freeArea.takeIf { it.isNotEmpty() }?.let {
+                            HomeRow("Area Free", it, "movie")
+                        },
                         trending.takeIf { it.isNotEmpty() }?.let {
                             HomeRow("Top 10 da Semana", it.take(10), "movie", isRanked = true)
                         },

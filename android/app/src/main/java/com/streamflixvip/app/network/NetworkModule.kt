@@ -136,6 +136,15 @@ object NetworkModule {
             .create(MediaSourcesApi::class.java)
     }
 
+    val freeCatalogApi: FreeCatalogApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(FreeCatalogApi::class.java)
+    }
+
     val supabaseApi: SupabaseApi by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.SUPABASE_URL + "/")

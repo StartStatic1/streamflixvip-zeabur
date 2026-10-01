@@ -210,6 +210,16 @@ enum class GenreCategory(val label: String, val mediaType: String?, val original
     DORAMA("Doramas", "tv", "ko"),
     ;
     val mediaTypeOrDefault: String get() = mediaType ?: "movie"
+
+    /** Area Free — filmes is_free no painel. */
+    suspend fun getFreeCatalog(limit: Int = 50): List<TmdbItem> {
+        return try {
+            NetworkModule.freeCatalogApi.getFreeCatalog(limit).items
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
 }
 
 val TMDB_GENRES = listOf(

@@ -36,7 +36,7 @@ interface SupabaseApi {
         @Header("apikey") apiKey: String,
         @Query("tmdb_id") tmdbIdFilter: String,
         @Query("media_type") mediaTypeFilter: String,
-        @Query("select") select: String = "vip_lock,vip_free_episode_limit",
+        @Query("select") select: String = "vip_lock,vip_free_episode_limit,is_free",
     ): List<VipTitleConfig>
 }
 
@@ -44,6 +44,7 @@ interface SupabaseApi {
 data class VipTitleConfig(
     val vip_lock: Boolean? = null,
     val vip_free_episode_limit: Int? = null,
+    val is_free: Boolean? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -150,13 +151,14 @@ object PostgrestFilter {
 }
 
 fun requiresVip(config: VipTitleConfig?, episodeNumber: Int?): Boolean {
-    if (config == null) return false
+    if (config?.is_free == true) return false
+    if (config == null) return true
     if (config.vip_lock == true) return true
     val limit = config.vip_free_episode_limit
     if (limit != null && episodeNumber != null) {
         return episodeNumber > limit
     }
-    return false
+    return true
 }
 
 interface WatchProgressApi {

@@ -1331,6 +1331,10 @@
           <input type="checkbox" id="vipTitleLockInput" style="width:auto;margin:0" onchange="onVipTitleLockChange()"/>
           <span>🔒 Exclusivo VIP (bloqueia este título inteiro pra quem não é VIP)</span>
         </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:10px 0 0 0">
+          <input type="checkbox" id="vipTitleIsFreeInput" style="width:auto;margin:0" onchange="onVipTitleIsFreeChange()"/>
+          <span>🎁 Area Free (só filme) — free assiste; não precisa VIP</span>
+        </label>
         <div id="vipTitleFreeLimitField" style="margin-top:10px;display:none">
           <label>Episódios grátis até (deixe em branco = sem limite parcial)</label>
           <input type="number" id="vipTitleFreeLimitInput" min="1" placeholder="ex: 5 → episódios 1-5 grátis, 6+ exige VIP"/>
@@ -2459,8 +2463,10 @@
     document.getElementById('vipTitleLoading').style.display = 'none';
     document.getElementById('vipTitleForm').style.display = 'block';
 
-    const config = result.config || { vip_lock: false, vip_free_episode_limit: null };
+    const config = result.config || { vip_lock: false, vip_free_episode_limit: null, is_free: false };
     document.getElementById('vipTitleLockInput').checked = !!config.vip_lock;
+    const freeEl = document.getElementById('vipTitleIsFreeInput');
+    if (freeEl) freeEl.checked = !!config.is_free;
     document.getElementById('vipTitleFreeLimitInput').value = config.vip_free_episode_limit || '';
     document.getElementById('vipTitleFreeLimitField').style.display = config.vip_lock ? 'none' : 'block';
   }
@@ -2471,10 +2477,19 @@
   }
 
   function onVipTitleLockChange() {
-    // Exclusivo VIP total e limite parcial de episódios são mutuamente
-    // exclusivos — marcar um esconde o outro (não apaga, só oculta).
     const locked = document.getElementById('vipTitleLockInput').checked;
+    if (locked) {
+      const freeEl = document.getElementById('vipTitleIsFreeInput');
+      if (freeEl) freeEl.checked = false;
+    }
     document.getElementById('vipTitleFreeLimitField').style.display = locked ? 'none' : 'block';
+  }
+  function onVipTitleIsFreeChange() {
+    const freeEl = document.getElementById('vipTitleIsFreeInput');
+    if (freeEl && freeEl.checked) {
+      document.getElementById('vipTitleLockInput').checked = false;
+      document.getElementById('vipTitleFreeLimitField').style.display = 'block';
+    }
   }
 
   async function saveVipTitle() {
@@ -2497,6 +2512,7 @@
         media_type: mediaType,
         vip_lock: vipLock,
         vip_free_episode_limit: freeLimit,
+        is_free: !!(document.getElementById('vipTitleIsFreeInput') && document.getElementById('vipTitleIsFreeInput').checked),
       })
     }).then(r => r.json()).catch(e => ({ error: e.message }));
 

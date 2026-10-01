@@ -1,0 +1,16 @@
+2026-08-03T19:23:33+00:00 [start_downloader] iniciando supervisor
+[downloader-termux] 2026-08-03T19:23:33.476636 downloader (Termux) iniciado (verifica fila a cada 60s, minimo 1.0GB livres)
+[downloader-termux] 2026-08-03T19:23:33.476636 downloader (Termux) iniciado (verifica fila a cada 60s, minimo 1.0GB livres)
+[downloader-termux] 2026-08-03T19:23:33.476734 pasta temporaria: /root/storage/downloads/movie-fetcher-tmp
+[downloader-termux] 2026-08-03T19:23:33.476734 pasta temporaria: /root/storage/downloads/movie-fetcher-tmp
+[downloader-termux] 2026-08-03T19:25:27.145771 interrompido pelo usuario. Total da sessao: 0 processados, 0 com erro
+[downloader-termux] 2026-08-03T19:25:27.145771 interrompido pelo usuario. Total da sessao: 0 processados, 0 com erro
+2026-08-03T19:25:27+00:00 [start_downloader] downloader encerrou (codigo 0), reiniciando em 10s...
+2026-08-03T19:25:28+00:00 [start_downloader] iniciando supervisor
+[downloader-termux] 2026-08-03T19:25:29.175773 downloader (Termux) iniciado (verifica fila a cada 60s, minimo 1.0GB livres)
+[downloader-termux] 2026-08-03T19:25:29.175773 downloader (Termux) iniciado (verifica fila a cada 60s, minimo 1.0GB livres)
+[downloader-termux] 2026-08-03T19:25:29.175857 pasta temporaria: /root/storage/downloads/movie-fetcher-tmp
+[downloader-termux] 2026-08-03T19:25:29.175857 pasta temporaria: /root/storage/downloads/movie-fetcher-tmp
+[downloader-termux] 2026-08-03T21:37:09.075724 interrompido pelo usuario. Total da sessao: 0 processados, 0 com erro
+[downloader-termux] 2026-08-03T21:37:09.075724 interrompido pelo usuario. Total da sessao: 0 processados, 0 com erro
+2026-08-03T21:37:10+00:00 [start_downloader] downloader encerrou (codigo 0), reiniciando em 10s...

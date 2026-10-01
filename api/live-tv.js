@@ -60,7 +60,7 @@ async function xtreamFetch(baseUrl, username, password, action, params = {}) {
   });
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
   try {
     const res = await fetch(url.toString(), {
       signal: controller.signal,
@@ -140,6 +140,37 @@ function buildLiveUrl(host, user, pass, streamId, extension) {
   return `${base}/live/${user}/${pass}/${streamId}.${useExt}`;
 }
 
+
+function settleWithBudget(promises, budgetMs) {
+  if (!promises.length) return Promise.resolve([]);
+  return new Promise((resolve) => {
+    const collected = new Array(promises.length);
+    let done = 0;
+    const finish = () => resolve(collected.filter(Boolean));
+    const timer = setTimeout(finish, budgetMs);
+    promises.forEach((p, i) => {
+      Promise.resolve(p)
+        .then((v) => { collected[i] = v; })
+        .catch((err) => {
+          collected[i] = {
+            sourceName: 'fonte',
+            priority: 100,
+            categories: [],
+            streams: [],
+            skipReason: (err && err.message) || 'timeout',
+          };
+        })
+        .finally(() => {
+          done += 1;
+          if (done >= promises.length) {
+            clearTimeout(timer);
+            finish();
+          }
+        });
+    });
+  });
+}
+
 function hasXtreamCreds(source) {
   return !!(source.xtream_host && source.xtream_user && source.xtream_pass);
 }
@@ -183,6 +214,39 @@ async function loadFromSource(source) {
       sourceLabel: source.name || 'Fonte',
     })),
   };
+}
+
+async function loadBridgeRows(serviceKey) {
+  try {
+    const rows = await sbSelect(
+      serviceKey,
+      'iptv_bridges',
+      'is_active=eq.true&use_live=eq.true&select=id,name,xtream_host,xtream_user,xtream_pass,live_cats&order=created_at.desc&limit=8',
+    );
+    return Array.isArray(rows) ? rows : [];
+  } catch (e) {
+    console.warn('[live-tv] iptv_bridges:', e.message);
+    return [];
+  }
+}
+
+function filterBridgeLive(loaded, liveCats) {
+  const allow = new Set((Array.isArray(liveCats) ? liveCats : []).map((c) => String(c && c.id != null ? c.id : c)));
+  if (!allow.size) return loaded;
+  loaded.categories = (loaded.categories || []).filter((c) => allow.has(String(c.id)));
+  loaded.streams = (loaded.streams || []).filter((s) => allow.has(String(s.categoryId)));
+  return loaded;
+}
+
+async function loadFromBridge(bridge) {
+  const loaded = await loadFromSource({
+    name: bridge.name || 'Bridge',
+    xtream_host: bridge.xtream_host,
+    xtream_user: bridge.xtream_user,
+    xtream_pass: bridge.xtream_pass,
+    priority: 80,
+  });
+  return filterBridgeLive(loaded, bridge.live_cats);
 }
 
 async function loadManualChannels(serviceKey) {
@@ -279,8 +343,8 @@ async function handler(req, res) {
     const { rows: sources, origin } = await loadSourceRows(serviceKey);
     const withCreds = sources.filter(hasXtreamCreds).slice(0, MAX_SOURCES);
 
-    const results = withCreds.length
-      ? await Promise.all(
+    let results = withCreds.length
+      ? await settleWithBudget(
           withCreds.map((s) =>
             loadFromSource(s).catch((err) => {
               console.error('[live-tv] fonte falhou', s.name, err.message);
@@ -293,11 +357,32 @@ async function handler(req, res) {
               };
             }),
           ),
+          10000,
         )
       : [];
 
+    const bridges = await loadBridgeRows(serviceKey);
+    if (bridges.length) {
+      const br = await Promise.all(
+        bridges.map((b) =>
+          loadFromBridge(b).catch((err) => {
+            console.error('[live-tv] bridge falhou', b.name, err.message);
+            return {
+              sourceName: b.name || 'Bridge',
+              priority: 80,
+              categories: [],
+              streams: [],
+              skipReason: err.message,
+            };
+          }),
+        ),
+      );
+      results = results.concat(br);
+      console.log('[live-tv] pontes live:', bridges.map((b) => b.name).join(', '));
+    }
+
     const manuals = await loadManualChannels(serviceKey);
-    if (!withCreds.length && !manuals.length) {
+    if (!withCreds.length && !bridges.length && !manuals.length) {
       res.status(200).json({
         categories: [],
         channels: [],
@@ -430,7 +515,7 @@ async function handler(req, res) {
       return {
         ...ch,
         name: baseName,
-        streams: streams.map(({ url, label, priority, quality, leg }) => ({
+        streams: streams.slice(0, 4).map(({ url, label, priority, quality, leg }) => ({
           url,
           label,
           priority,
@@ -523,3 +608,16 @@ async function handler(req, res) {
 }
 
 module.exports = handler;
+
+try {
+  setTimeout(() => {
+    const fakeReq = { method: 'GET', query: {}, headers: {} };
+    const fakeRes = {
+      headersSent: false,
+      setHeader() {},
+      status() { return this; },
+      json() {},
+    };
+    handler(fakeReq, fakeRes).catch((e) => console.warn('[live-tv] warmup', e && e.message));
+  }, 1200);
+} catch (_) {}

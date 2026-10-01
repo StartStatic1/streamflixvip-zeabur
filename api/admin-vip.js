@@ -884,7 +884,7 @@ module.exports = async function handler(req, res) {
     const mediaType = body.media_type || 'movie';
     if (tmdbId == null) { res.status(400).json({ error: 'Informe tmdb_id' }); return; }
     const r = await fetch(
-      `\( {SUPABASE_URL}/rest/v1/vip_titles?tmdb_id=eq. \){encodeURIComponent(tmdbId)}&media_type=eq.${encodeURIComponent(mediaType)}&select=tmdb_id,media_type,vip_lock,vip_free_episode_limit&limit=1`,
+      `\( {SUPABASE_URL}/rest/v1/vip_titles?tmdb_id=eq. \){encodeURIComponent(tmdbId)}&media_type=eq.${encodeURIComponent(mediaType)}&select=tmdb_id,media_type,vip_lock,vip_free_episode_limit,is_free&limit=1`,
       { headers: svcHeaders },
     );
     const rows = await r.json();
@@ -892,8 +892,8 @@ module.exports = async function handler(req, res) {
     const row = Array.isArray(rows) && rows[0] ? rows[0] : null;
     res.status(200).json({
       config: row
-        ? { vip_lock: !!row.vip_lock, vip_free_episode_limit: row.vip_free_episode_limit ?? null }
-        : { vip_lock: false, vip_free_episode_limit: null },
+        ? { vip_lock: !!row.vip_lock, vip_free_episode_limit: row.vip_free_episode_limit ?? null, is_free: !!row.is_free }
+        : { vip_lock: false, vip_free_episode_limit: null, is_free: false },
     });
     return;
   }
@@ -901,12 +901,14 @@ module.exports = async function handler(req, res) {
   if (action === 'set-vip-title') {
     const tmdbId = body.tmdb_id;
     const mediaType = body.media_type || 'movie';
-    const vipLock = !!body.vip_lock;
+    let vipLock = !!body.vip_lock;
+    let isFree = !!body.is_free;
     let freeLimit = body.vip_free_episode_limit;
     if (freeLimit === '' || freeLimit === undefined) freeLimit = null;
     if (freeLimit != null) freeLimit = parseInt(freeLimit, 10);
     if (freeLimit != null && (isNaN(freeLimit) || freeLimit < 1)) freeLimit = null;
-    if (vipLock) freeLimit = null;
+    if (isFree) { vipLock = false; freeLimit = null; }
+    if (vipLock) { freeLimit = null; isFree = false; }
     if (tmdbId == null) { res.status(400).json({ error: 'Informe tmdb_id' }); return; }
 
     const payload = {
@@ -914,6 +916,7 @@ module.exports = async function handler(req, res) {
       media_type: mediaType,
       vip_lock: vipLock,
       vip_free_episode_limit: freeLimit,
+      is_free: isFree,
     };
     const r = await fetch(
       `${SUPABASE_URL}/rest/v1/vip_titles?on_conflict=tmdb_id,media_type`,
@@ -933,7 +936,7 @@ module.exports = async function handler(req, res) {
     const items = Array.isArray(body.items) ? body.items : [];
     if (!items.length) { res.status(200).json({ configs: [] }); return; }
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/vip_titles?select=tmdb_id,media_type,vip_lock,vip_free_episode_limit&limit=5000`,
+      `${SUPABASE_URL}/rest/v1/vip_titles?select=tmdb_id,media_type,vip_lock,vip_free_episode_limit,is_free&limit=5000`,
       { headers: svcHeaders },
     );
     const rows = await r.json();

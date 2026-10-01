@@ -49,8 +49,9 @@ sealed interface DetailUiState {
         val episodesWithSources: Set<Int>? = null,
     ) : DetailUiState {
         val trailerKey: String? get() = details.trailerKey
-        fun movieIsLocked(isVip: Boolean): Boolean = !isVip && requiresVip(vipConfig, episodeNumber = null)
-        fun episodeIsLocked(episodeNumber: Int, isVip: Boolean): Boolean = !isVip && requiresVip(vipConfig, episodeNumber)
+        fun movieIsLocked(isVip: Boolean): Boolean = !isVip && vipConfig?.is_free != true
+        /** Series: free sempre bloqueado (Area Free so filmes). */
+        fun episodeIsLocked(episodeNumber: Int, isVip: Boolean): Boolean = !isVip
     }
 }
 
