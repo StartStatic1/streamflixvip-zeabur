@@ -106,15 +106,46 @@ class DetailViewModel(
 
                 if (mediaType == "movie") {
                     launch {
-                        val sources = try {
-                            repository.getSourcesForMovie(tmdbId)
+                        var sources = emptyList<com.streamflixvip.app.network.VipSource>()
+                        var fromApiConfig: VipTitleConfig? = null
+                        var requiredByApi = false
+                        try {
+                            val res = NetworkModule.mediaSourcesApi.getMovieSources(tmdbId)
+                            if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED" || res.requiresVip) {
+                                requiredByApi = true
+                                fromApiConfig = res.vipConfig
+                                sources = emptyList()
+                            } else if (res.sources.isNotEmpty()) {
+                                sources = res.sources
+                                fromApiConfig = res.vipConfig
+                            } else {
+                                // API vazia: tenta repo (respeita VIP no fallback)
+                                sources = try {
+                                    repository.getSourcesForMovie(tmdbId)
+                                } catch (_: Exception) {
+                                    emptyList()
+                                }
+                            }
                         } catch (_: Exception) {
-                            emptyList()
+                            sources = try {
+                                repository.getSourcesForMovie(tmdbId)
+                            } catch (_: Exception) {
+                                emptyList()
+                            }
                         }
                         val still = _uiState.value as? DetailUiState.Success ?: return@launch
+                        val mergedConfig = when {
+                            fromApiConfig != null -> fromApiConfig
+                            requiredByApi && still.vipConfig == null ->
+                                VipTitleConfig(vip_lock = true, vip_free_episode_limit = null)
+                            requiredByApi && still.vipConfig != null && still.vipConfig.vip_lock != true ->
+                                still.vipConfig.copy(vip_lock = true)
+                            else -> still.vipConfig
+                        }
                         _uiState.value = still.copy(
                             movieSources = sources,
                             isLoadingMovieSources = false,
+                            vipConfig = mergedConfig,
                         )
                     }
                 }
