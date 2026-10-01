@@ -34,7 +34,10 @@ data class PixRequest(
     val userId: String,
     val amount: Double,
     val planLabel: String,
-    val durationHours: Int
+    val durationHours: Int,
+    val type: String? = null,
+    val tmdbId: String? = null,
+    val mediaType: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

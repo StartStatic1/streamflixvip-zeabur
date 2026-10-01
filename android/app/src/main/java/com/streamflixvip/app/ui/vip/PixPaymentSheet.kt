@@ -77,6 +77,9 @@ fun PixPaymentSheet(
     planLabel: String,
     durationHours: Int,
     onDismiss: () -> Unit,
+    type: String? = null,
+    tmdbId: String? = null,
+    mediaType: String? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -106,6 +109,9 @@ fun PixPaymentSheet(
                         amount = amount,
                         planLabel = planLabel,
                         durationHours = durationHours,
+                        type = type,
+                        tmdbId = tmdbId,
+                        mediaType = mediaType,
                     ),
                 )
                 paymentData = response

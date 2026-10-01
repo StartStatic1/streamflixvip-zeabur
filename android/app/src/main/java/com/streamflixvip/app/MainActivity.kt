@@ -520,6 +520,7 @@ private fun MainAppScaffold(
                     resumeSeconds = resumeSeconds,
                     initialSeason = initialSeason,
                     initialEpisode = initialEpisode,
+                    userId = userId,
                     onPlaySource = { source, season, episode, title, posterPath ->
                         val encodedUrl = URLEncoder.encode(
                             source.resolvedPlaybackUrl(BuildConfig.API_BASE_URL),

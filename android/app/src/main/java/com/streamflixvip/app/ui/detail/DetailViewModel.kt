@@ -70,6 +70,9 @@ class DetailViewModel(
     private val _uiState = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
     val uiState: StateFlow<DetailUiState> = _uiState
 
+    fun tmdbIdForTicket(): String = tmdbId.toString()
+    fun mediaTypeForTicket(): String = mediaType
+
     init {
         loadDetails()
     }

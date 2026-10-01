@@ -1,6 +1,7 @@
 package com.streamflixvip.app.ui.detail
 
 import com.streamflixvip.app.network.TmdbImages
+import com.streamflixvip.app.ui.vip.PixPaymentSheet
 
 import android.view.ViewGroup
 import android.webkit.WebSettings
@@ -74,9 +75,23 @@ fun DetailScreen(
     onBack: () -> Unit,
     onUpgradeClick: () -> Unit,
     onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
+    userId: String? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
+    var showTicketPay by remember { mutableStateOf(false) }
+    if (showTicketPay && !userId.isNullOrBlank()) {
+        PixPaymentSheet(
+            userId = userId,
+            amount = 2.50,
+            planLabel = "Ingresso 24h",
+            durationHours = 24,
+            onDismiss = { showTicketPay = false },
+            type = "ticket",
+            tmdbId = viewModel.tmdbIdForTicket(),
+            mediaType = viewModel.mediaTypeForTicket(),
+        )
+    }
 
     // Fonte já decidida (única disponível, ou escolhida no sheet de
     // servidor) aguardando a pessoa decidir COMO assistir — player
@@ -383,7 +398,7 @@ private fun DetailContent(
             if (state.movieIsLocked(isVip)) {
                 item {
                     Column(Modifier.padding(16.dp)) {
-                        VipLockCard(onUpgradeClick = onUpgradeClick)
+                        VipLockCard(onUpgradeClick = onUpgradeClick, onTicketClick = { if (!userId.isNullOrBlank()) showTicketPay = true })
                     }
                 }
             } else if (state.isLoadingMovieSources) {
