@@ -62,18 +62,13 @@ class CatalogRepository {
         tmdb.request(path = "/tv/$tmdbId", appendToResponse = "videos,credits")
 
     suspend fun getSimilarTitles(tmdbId: Int, mediaType: String): List<TmdbItem> =
-        try {
-            tmdb.request(path = "/$mediaType/$tmdbId/similar").results.orEmpty()
-        } catch (e: Exception) {
-            emptyList()
-        }
+        tmdb.request(
+            path = if (mediaType == "tv") "/tv/$tmdbId/similar" else "/movie/$tmdbId/similar",
+            page = 1,
+        ).results.orEmpty().filter { it.poster_path != null }.take(12)
 
     suspend fun getSeasonEpisodes(tmdbId: Int, season: Int): List<TmdbEpisode> =
-        try {
-            tmdb.requestSeasonDetail(path = "/tv/$tmdbId/season/$season").episodes.orEmpty()
-        } catch (e: Exception) {
-            emptyList()
-        }
+        tmdb.request(path = "/tv/$tmdbId/season/$season").episodes.orEmpty()
 
     suspend fun getSourcesForMovie(tmdbId: Int): List<VipSource> {
         try {
@@ -117,15 +112,13 @@ class CatalogRepository {
                     tmdbIdFilter = PostgrestFilter.eq(tmdbId),
                     seasonFilter = PostgrestFilter.eq(season),
                     episodeFilter = PostgrestFilter.eq(episode),
+                    mediaTypeFilter = PostgrestFilter.eq("tv"),
                 ),
             )
         } catch (_: Exception) {
             emptyList()
         }
     }
-
-    private fun prioritize(sources: List<VipSource>): List<VipSource> =
-        sources.sortedByDescending { it.source_label == "MegaEmbed VIP" }
 
     suspend fun probeVipConfigFromApi(tmdbId: Int, mediaType: String): com.streamflixvip.app.network.VipTitleConfig? {
         return try {
@@ -141,7 +134,7 @@ class CatalogRepository {
     }
 
     suspend fun getVipTitleConfig(tmdbId: Int, mediaType: String): com.streamflixvip.app.network.VipTitleConfig? {
-        val fromDb = try {
+        return try {
             supabase.getVipTitleConfig(
                 apiKey = anonKey,
                 tmdbIdFilter = PostgrestFilter.eq(tmdbId),
@@ -150,18 +143,10 @@ class CatalogRepository {
         } catch (_: Exception) {
             null
         }
-        if (fromDb != null) return fromDb
-        return probeVipConfigFromApi(tmdbId, mediaType)
     }
 
     suspend fun getTitlesByGenre(genreId: Int, category: GenreCategory, page: Int = 1): List<TmdbItem> {
-        val mediaType = category.mediaTypeOrDefault
-        return tmdb.request(
-            path = "/discover/$mediaType",
-            page = page,
-            withGenres = genreId.toString(),
-            withOriginalLanguage = category.originalLanguage,
-        ).results.orEmpty()
+        return exploreCatalog(category = category, genreId = genreId, year = null, page = page)
     }
 
     suspend fun exploreCatalog(
@@ -198,18 +183,6 @@ class CatalogRepository {
             primaryReleaseYear = if (mediaType == "movie") year else null,
             firstAirDateYear = if (mediaType == "tv") year else null,
         ).results.orEmpty()
-}
-
-data class GenreDefinition(val id: Int, val displayName: String)
-
-enum class GenreCategory(val label: String, val mediaType: String?, val originalLanguage: String?) {
-    ALL("Tudo", null, null),
-    MOVIES("Filmes", "movie", null),
-    SERIES("Séries", "tv", null),
-    ANIME("Animes", "tv", "ja"),
-    DORAMA("Doramas", "tv", "ko"),
-    ;
-    val mediaTypeOrDefault: String get() = mediaType ?: "movie"
 
     /** Area Free — filmes is_free no painel. */
     suspend fun getFreeCatalog(limit: Int = 50): List<TmdbItem> {
@@ -219,6 +192,18 @@ enum class GenreCategory(val label: String, val mediaType: String?, val original
             emptyList()
         }
     }
+}
+
+data class GenreDefinition(val id: Int, val displayName: String)
+
+enum class GenreCategory(val label: String, val mediaType: String?, val originalLanguage: String?) {
+    ALL("Tudo", null, null),
+    MOVIES("Filmes", "movie", null),
+    SERIES("S\u00e9ries", "tv", null),
+    ANIME("Animes", "tv", "ja"),
+    DORAMA("Doramas", "tv", "ko"),
+    ;
+    val mediaTypeOrDefault: String get() = mediaType ?: "movie"
 
 }
 
@@ -226,14 +211,14 @@ val TMDB_GENRES = listOf(
     GenreDefinition(80, "Crime"),
     GenreDefinition(27, "Terror"),
     GenreDefinition(18, "Drama"),
-    GenreDefinition(35, "Comédia"),
-    GenreDefinition(28, "Ação e Aventura"),
-    GenreDefinition(14, "Ficção e Fantasia"),
+    GenreDefinition(35, "Com\u00e9dia"),
+    GenreDefinition(28, "A\u00e7\u00e3o e Aventura"),
+    GenreDefinition(14, "Fic\u00e7\u00e3o e Fantasia"),
     GenreDefinition(53, "Suspense"),
-    GenreDefinition(9648, "Mistério"),
-    GenreDefinition(10751, "Família"),
-    GenreDefinition(16, "Animação"),
+    GenreDefinition(9648, "Mist\u00e9rio"),
+    GenreDefinition(10751, "Fam\u00edlia"),
+    GenreDefinition(16, "Anima\u00e7\u00e3o"),
     GenreDefinition(10749, "Romance"),
-    GenreDefinition(10752, "Guerra e Política"),
+    GenreDefinition(10752, "Guerra e Pol\u00edtica"),
     GenreDefinition(37, "Faroeste"),
 )
