@@ -53,4 +53,3 @@ elif old in t:
 else:
     print("block not found - check media-sources.js")
     raise SystemExit(1)
-"""
