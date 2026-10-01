@@ -385,7 +385,9 @@ async function handler(req, res) {
     const pausedHosts = await loadPausedIptvHosts(serviceKey);
     sources = dropPausedHosts(sources, pausedHosts);
 
-    if (access.isVip) {
+    // Area Free: is_free libera addons reais (nao so R2/DB)
+    const allowAddons = access.isVip || (vipConfig && vipConfig.is_free === true);
+    if (allowAddons) {
       try {
         pushUnique(
           await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode),
