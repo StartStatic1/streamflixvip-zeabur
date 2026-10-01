@@ -9,7 +9,7 @@ const vipMem = require('../lib/vip-status-cache');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
@@ -18,6 +18,7 @@ module.exports = async function handler(req, res) {
   }
 
   const path = req.url || '';
+  if (path.includes('/ticket-status')) return ticketStatus(req, res);
   if (path.includes('/create-link')) return createLink(req, res);
   if (path.includes('/webhook')) return handleWebhook(req, res);
   res.status(404).json({ error: 'Rota não encontrada' });
@@ -27,6 +28,25 @@ module.exports = async function handler(req, res) {
  * POST /api/infinitepay/create-link
  * Body: { userId, amount: 19.90, planLabel?: "VIP 30 Dias", durationHours?: 720 }
  */
+
+async function ticketStatus(req, res) {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) return res.status(500).json({ active: false, error: 'config' });
+  const userId = String((req.query && (req.query.userId || req.query.user_id)) || '').trim();
+  const tmdbId = String((req.query && (req.query.tmdbId || req.query.tmdb_id)) || '').trim();
+  if (!userId || !tmdbId) return res.status(400).json({ active: false, error: 'userId e tmdbId' });
+  const url = SUPABASE_URL + '/rest/v1/movie_tickets?user_id=eq.' + encodeURIComponent(userId)
+    + '&tmdb_id=eq.' + encodeURIComponent(tmdbId)
+    + '&expires_at=gt.' + encodeURIComponent(new Date().toISOString())
+    + '&select=expires_at,paid_at&order=expires_at.desc&limit=1';
+  const r = await fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } });
+  if (!r.ok) return res.status(200).json({ active: false });
+  const rows = await r.json();
+  const row = Array.isArray(rows) && rows[0];
+  if (!row) return res.status(200).json({ active: false, tmdbId });
+  return res.status(200).json({ active: true, tmdbId, expiresAt: row.expires_at });
+}
+
 async function createLink(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
