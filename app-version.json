@@ -1,7 +1,7 @@
 {
-  "versionCode": 140000,
-  "versionName": "14.0.0",
+  "versionCode": 140100,
+  "versionName": "14.1.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias, novidades, modo Free"
+  "releaseNotes": "Melhorias e correcoes"
 }
