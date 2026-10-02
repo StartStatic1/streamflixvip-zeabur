@@ -399,7 +399,9 @@ private fun DetailContent(
             // existe fonte, o botão do header já resolve o play; não repete
             // a lista de servidores aqui embaixo pra não duplicar a mesma
             // ação em dois lugares da tela.
-            if (state.movieIsLocked(isVip) || (!isVip && state.movieSources.isEmpty() && state.vipConfig?.vip_lock == true)) {
+            val waitingSources = state.isLoadingMovieSources && state.movieSources.isEmpty()
+            val freeTitle = state.vipConfig?.is_free == true
+            if (!waitingSources && !freeTitle && (state.movieIsLocked(isVip) || (!isVip && state.movieSources.isEmpty() && state.vipConfig?.vip_lock == true))) {
                 item {
                     Column(Modifier.padding(16.dp)) {
                         VipLockCard(onUpgradeClick = onUpgradeClick, onTicketClick = onTicketClick)

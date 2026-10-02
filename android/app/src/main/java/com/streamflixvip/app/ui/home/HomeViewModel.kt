@@ -2,6 +2,7 @@ package com.streamflixvip.app.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.streamflixvip.app.data.VipStatusHolder
 import com.streamflixvip.app.data.CatalogRepository
 import com.streamflixvip.app.data.GenreCategory
 import com.streamflixvip.app.data.ProgressRepository
@@ -102,7 +103,7 @@ class HomeViewModel(
                             .ifEmpty { nowPlaying }
                     ).take(6),
                     rows = listOfNotNull(
-                        freeArea.takeIf { it.isNotEmpty() }?.let {
+                        freeArea.takeIf { it.isNotEmpty() && !VipStatusHolder.isVipNow() }?.let {
                             HomeRow("Area Free", it, "movie")
                         },
                         trending.takeIf { it.isNotEmpty() }?.let {
