@@ -390,7 +390,7 @@ async function handler(req, res) {
     if (allowAddons) {
       try {
         pushUnique(
-          await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode),
+          await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode, (vipConfig && vipConfig.is_free === true) ? 2500 : undefined),
           seen,
           sources,
         );
