@@ -112,7 +112,7 @@ class DetailViewModel(
                         var requiredByApi = false
                         try {
                             val res = NetworkModule.mediaSourcesApi.getMovieSources(tmdbId)
-                            if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED" || res.requiresVip) {
+                            if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED") {
                                 requiredByApi = true
                                 fromApiConfig = res.vipConfig
                                 sources = emptyList()
