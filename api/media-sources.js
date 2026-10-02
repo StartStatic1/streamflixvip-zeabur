@@ -389,11 +389,14 @@ async function handler(req, res) {
     const allowAddons = access.isVip || (vipConfig && vipConfig.is_free === true);
     if (allowAddons) {
       try {
-        pushUnique(
-          await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode, (vipConfig && vipConfig.is_free === true) ? 2500 : undefined),
-          seen,
-          sources,
-        );
+        const freeFast = vipConfig && vipConfig.is_free === true;
+        if (!(freeFast && sources.length)) {
+          pushUnique(
+            await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode, freeFast ? 1200 : undefined),
+            seen,
+            sources,
+          );
+        }
       } catch (addonErr) {
         console.warn('[media-sources] addons skip:', addonErr.message);
       }
