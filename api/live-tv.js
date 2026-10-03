@@ -15,7 +15,7 @@
 const { enforceVipOrReject } = require('../lib/vip-gate');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
-const MAX_SOURCES = 5;
+const MAX_SOURCES = 8;
 const ADULT_CATEGORY_ID = '000';
 const ADULT_CATEGORY_NAME = '000';
 
@@ -60,7 +60,7 @@ async function xtreamFetch(baseUrl, username, password, action, params = {}) {
   });
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 14000);
   try {
     const res = await fetch(url.toString(), {
       signal: controller.signal,
@@ -357,9 +357,24 @@ async function handler(req, res) {
               };
             }),
           ),
-          10000,
+          28000,
         )
       : [];
+
+    // Relatorio: fontes mortas (0 streams) nao entram no merge
+    const report = results.map((r) => ({
+      name: r.sourceName,
+      streams: (r.streams && r.streams.length) || 0,
+      cats: (r.categories && r.categories.length) || 0,
+      skip: r.skipReason || null,
+    }));
+    console.log('[live-tv] scan fontes:', JSON.stringify(report));
+    const withStreams = results.filter((r) => r.streams && r.streams.length > 0);
+    if (withStreams.length) {
+      results = withStreams;
+    } else {
+      console.warn('[live-tv] NENHUMA fonte retornou streams — confira live_tv_sources');
+    }
 
     const bridges = await loadBridgeRows(serviceKey);
     if (bridges.length) {
