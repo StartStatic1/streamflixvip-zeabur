@@ -2,6 +2,7 @@ package com.streamflixvip.app.ui.nav
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,11 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.streamflixvip.app.ui.theme.StreamFlixColors
 
-private val Accent = StreamFlixColors.Amber
-
-/**
- * Header: logo à esquerda · Favoritos + Busca à direita.
- */
 @Composable
 fun AppTopBar(
     onSearchClick: () -> Unit,
@@ -45,18 +41,29 @@ fun AppTopBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Column {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = "STREAM",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.5.sp,
+                    color = Color.White,
+                )
+                Text(
+                    text = "FLIX",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.5.sp,
+                    color = Color(0xFFA3A3A3),
+                )
+            }
             Text(
-                text = "Stream",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = StreamFlixColors.Text,
-            )
-            Text(
-                text = "Flix",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Accent,
+                text = "VIP",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 4.sp,
+                color = Color(0xFF737373),
             )
         }
 
@@ -73,7 +80,7 @@ fun AppTopBar(
                         imageVector = Icons.Filled.Favorite,
                         contentDescription = "Minha Lista",
                         modifier = Modifier.size(22.dp),
-                        tint = Accent,
+                        tint = Color.White,
                     )
                 }
                 Spacer(Modifier.width(6.dp))
@@ -89,7 +96,7 @@ fun AppTopBar(
                     imageVector = Icons.Filled.Search,
                     contentDescription = "Buscar",
                     modifier = Modifier.size(22.dp),
-                    tint = StreamFlixColors.Text,
+                    tint = Color.White,
                 )
             }
         }
