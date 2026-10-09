@@ -1048,7 +1048,7 @@ private fun DetailHeader(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(340.dp),
+                .height(430.dp),
         ) {
             LivingBackdrop(backdropUrl = backdropUrl)
             // Gradiente duplo: escurece o topo o suficiente pra status bar
@@ -1278,7 +1278,52 @@ private fun DetailHeader(
                     modifier = Modifier.weight(1f),
                 )
             }
+            if (trailerKey != null) {
+                Spacer(Modifier.height(8.dp))
+                TrailerWindow(
+                    trailerKey = trailerKey,
+                    onClick = onTrailerClick,
+                )
+            }
             Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun TrailerWindow(trailerKey: String, onClick: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+        Text(
+            "Trailer",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.Black)
+                .clickable(onClick = onClick),
+        ) {
+            AsyncImage(
+                model = "https://img.youtube.com/vi/$trailerKey/hqdefault.jpg",
+                contentDescription = "Trailer",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f)))
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(54.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(Color.White),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = "Assistir trailer", tint = Color.Black, modifier = Modifier.size(32.dp))
+            }
         }
     }
 }
