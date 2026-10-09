@@ -7,7 +7,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -27,6 +26,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -249,8 +249,8 @@ private fun ContentRow(row: HomeRow, onItemClick: (tmdbId: Int, mediaType: Strin
             }
         }
         LazyRow(
-            contentPadding = PaddingValues(start = 8.dp, end = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Top,
         ) {
             itemsIndexed(row.items) { index, item ->
@@ -268,26 +268,36 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
     val yearNum = item.displayYear?.toIntOrNull()
     val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
     val isNew = yearNum != null && yearNum >= currentYear - 1
+    val posterWidth = 118.dp
+    val posterHeight = posterWidth * 3f / 2f
+    val rankGutter = when {
+        rank == null -> 0.dp
+        rank >= 10 -> 86.dp
+        else -> 48.dp
+    }
     Row(
-        modifier = Modifier.height(232.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.height(232.dp).clickable(onClick = onClick),
+        verticalAlignment = Alignment.Top,
     ) {
-        Box(modifier = Modifier.width(if (rank != null) 156.dp else 118.dp).clickable(onClick = onClick)) {
-            if (rank != null) {
+        if (rank != null) {
+            Box(
+                modifier = Modifier.width(rankGutter).height(posterHeight).clipToBounds(),
+                contentAlignment = Alignment.CenterStart,
+            ) {
                 Text(
-                    "$rank",
-                    modifier = Modifier.align(Alignment.CenterStart).offset(x = (-6).dp),
-                    fontSize = if (rank >= 10) 78.sp else 92.sp,
+                    text = rank.toString(),
+                    fontSize = if (rank >= 10) 52.sp else 68.sp,
                     fontWeight = FontWeight.Black,
-                    color = Color.White.copy(alpha = 0.22f),
+                    color = Color.White.copy(alpha = 0.34f),
                     maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
                 )
             }
-            Column(
-                modifier = Modifier.width(118.dp).align(Alignment.CenterEnd),
-            ) {
+        }
+        Column(modifier = Modifier.width(posterWidth)) {
             Box(
-                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(StreamFlixColors.SurfaceRaised),
+                modifier = Modifier.fillMaxWidth().height(posterHeight).clip(RoundedCornerShape(10.dp)).background(StreamFlixColors.SurfaceRaised),
             ) {
                 AsyncImage(model = posterUrl, contentDescription = item.displayTitle, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (isNew) {
@@ -301,10 +311,17 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
                 }
             }
             Column(modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 6.dp)) {
-                Text(item.displayTitle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp, color = StreamFlixColors.Text)
+                Text(
+                    item.displayTitle.ifBlank { "Sem título" },
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 15.sp,
+                    color = StreamFlixColors.Text,
+                )
                 Text(listOfNotNull(kind, item.displayYear).joinToString(" · "), fontSize = 10.sp, color = StreamFlixColors.TextDim, maxLines = 1)
             }
-        }
         }
     }
 }
