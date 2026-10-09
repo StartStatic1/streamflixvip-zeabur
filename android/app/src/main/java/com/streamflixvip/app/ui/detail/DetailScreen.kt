@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -389,6 +391,14 @@ private fun DetailContent(
                 details.overview?.let { overview ->
                     Text(overview, fontSize = 14.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f))
                 }
+            }
+        }
+        if (state.trailerKey != null) {
+            item {
+                TrailerWindow(trailerKey = state.trailerKey!!, onClick = {
+                    if (!isVip) AdsHelper.showInterstitial(context)
+                    showTrailerModal = true
+                })
             }
         }
 
@@ -1049,7 +1059,7 @@ private fun DetailHeader(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(430.dp),
+                .height(540.dp),
         ) {
             LivingBackdrop(backdropUrl = backdropUrl)
             // Gradiente duplo: escurece o topo o suficiente pra status bar
@@ -1116,7 +1126,7 @@ private fun DetailHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 250.dp),
+                .padding(top = 310.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -1181,12 +1191,16 @@ private fun DetailHeader(
                     label = "shimmerX",
                 )
 
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                 Button(
                     onClick = onWatchNowClick,
                     modifier = Modifier
-                        .padding(horizontal = 28.dp)
-                        .height(44.dp)
-                        .widthIn(max = 240.dp)
+                        .weight(1f)
+                        .height(48.dp)
                         .clip(RoundedCornerShape(50)),
                     shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
@@ -1220,34 +1234,44 @@ private fun DetailHeader(
                         }
                     }
                 }
+                SideActions(isFavorite = isFavorite, onToggleFavorite = onToggleFavorite)
+                }
             }
 
-            // Barra de ações secundárias: favorito, trailer (se existir) e
-            // compartilhar — alinhados horizontalmente abaixo do CTA principal,
-            // fáceis de alcançar com o polegar e sem poluir o backdrop.
-            Spacer(Modifier.height(if (showWatchNowButton || showServersLoading) 12.dp else 20.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            ) {
-                // Botão Favorito
-                ActionButton(
-                    icon = if (isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-                    label = if (isFavorite) "Salvo" else "Salvar",
-                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    onClick = onToggleFavorite,
-                )
-            }
-            if (trailerKey != null) {
-                Spacer(Modifier.height(8.dp))
-                TrailerWindow(
-                    trailerKey = trailerKey,
-                    onClick = onTrailerClick,
-                )
-            }
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+}
+
+
+@Composable
+private fun SideActions(isFavorite: Boolean, onToggleFavorite: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(Color(0xFF2A2A2A))
+                .clickable { open = true },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Outlined.MoreVert, contentDescription = "Mais", tint = Color.White)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(
+                text = { Text(if (isFavorite) "Salvo" else "Salvar") },
+                leadingIcon = {
+                    Icon(
+                        if (isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = null,
+                    )
+                },
+                onClick = {
+                    open = false
+                    onToggleFavorite()
+                },
+            )
         }
     }
 }
@@ -1505,7 +1529,7 @@ private fun TrailerModal(
                         <meta name="referrer" content="strict-origin-when-cross-origin">
                         <style>
                             html, body { margin:0; padding:0; background:#000; height:100%; overflow:hidden; }
-                            iframe { position:absolute; top:-22%; left:0; width:100%; height:148%; border:0; }
+                            iframe { position:absolute; top:-34%; left:0; width:100%; height:172%; border:0; }
                         </style>
                     </head>
                     <body>
