@@ -1095,7 +1095,8 @@ private fun DetailHeader(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 44.dp)
+                .statusBarsPadding()
+                .padding(top = 8.dp)
                 .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.Start,
         ) {
@@ -1115,32 +1116,9 @@ private fun DetailHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 130.dp),
+                .padding(top = 250.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Poster reduzido (110dp, era 150dp) — no tamanho anterior ele
-            // ocupava quase 2/3 da altura do backdrop, competindo com a
-            // própria cena de fundo em vez de complementá-la. Agora fica
-            // mais discreto/decorativo, deixando o backdrop ser o elemento
-            // visual principal do header, como na referência do CineVerse.
-            // Poster com sombra colorida e profundidade (efeito card flutuante)
-            Surface(
-                modifier = Modifier
-                    .width(115.dp)
-                    .aspectRatio(2f / 3f),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shadowElevation = 12.dp,
-                tonalElevation = 4.dp,
-            ) {
-                AsyncImage(
-                    model = posterUrl,
-                    contentDescription = title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-            Spacer(Modifier.height(14.dp))
             Text(
                 title,
                 fontSize = 26.sp,
@@ -1260,25 +1238,6 @@ private fun DetailHeader(
                     label = if (isFavorite) "Salvo" else "Salvar",
                     tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     onClick = onToggleFavorite,
-                    modifier = Modifier.weight(1f),
-                )
-                // Botão Trailer — só aparece quando a TMDB retornou uma key
-                if (trailerKey != null) {
-                    ActionButton(
-                        icon = Icons.Outlined.Videocam,
-                        label = "Trailer",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        onClick = onTrailerClick,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                // Botão Compartilhar
-                ActionButton(
-                    icon = Icons.Outlined.IosShare,
-                    label = "Compartilhar",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    onClick = onShare,
-                    modifier = Modifier.weight(1f),
                 )
             }
             if (trailerKey != null) {
@@ -1295,7 +1254,7 @@ private fun DetailHeader(
 
 @Composable
 private fun TrailerWindow(trailerKey: String, onClick: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.Start) {
         Text(
             "Trailer",
             fontSize = 16.sp,
@@ -1304,9 +1263,9 @@ private fun TrailerWindow(trailerKey: String, onClick: () -> Unit) {
         )
         Box(
             modifier = Modifier
-                .fillMaxWidth()
+                .width(210.dp)
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(Color.Black)
                 .clickable(onClick = onClick),
         ) {
@@ -1496,13 +1455,32 @@ private fun TrailerModal(
         Column(Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
             Box(
                 modifier = Modifier
-                    .padding(top = 10.dp, bottom = 10.dp)
+                    .padding(top = 10.dp)
                     .align(Alignment.CenterHorizontally)
                     .width(42.dp)
                     .height(4.dp)
                     .clip(RoundedCornerShape(50))
                     .background(Color.White.copy(alpha = 0.35f)),
             )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Trailer", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(title, color = Color(0xFFB5B5B5), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Fechar", tint = Color.White)
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1527,7 +1505,7 @@ private fun TrailerModal(
                         <meta name="referrer" content="strict-origin-when-cross-origin">
                         <style>
                             html, body { margin:0; padding:0; background:#000; height:100%; overflow:hidden; }
-                            iframe { position:absolute; top:-12%; left:-8%; width:116%; height:124%; border:0; pointer-events:auto; }
+                            iframe { position:absolute; top:-22%; left:0; width:100%; height:148%; border:0; }
                         </style>
                     </head>
                     <body>
@@ -1542,18 +1520,6 @@ private fun TrailerModal(
                     """.trimIndent()
                 }
 
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .size(32.dp)
-                        .clip(androidx.compose.foundation.shape.CircleShape)
-                        .background(Color.Black.copy(alpha = 0.55f))
-                        .clickable(onClick = onDismiss),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Fechar", tint = Color.White, modifier = Modifier.size(20.dp))
-                }
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->

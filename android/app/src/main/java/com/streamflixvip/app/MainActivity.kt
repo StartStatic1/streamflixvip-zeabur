@@ -18,8 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Surface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -246,7 +248,9 @@ private fun MainAppScaffold(
         }
     }
 
+    val detailEdge = currentRoute?.startsWith("detail") == true
     Scaffold(
+        contentWindowInsets = if (detailEdge) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets,
         topBar = {
             if (showTopBar) {
                 com.streamflixvip.app.ui.nav.AppTopBar(
