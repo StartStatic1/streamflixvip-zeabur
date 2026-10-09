@@ -65,15 +65,18 @@ fun HomeScreen(
     when (val s = state) {
         is HomeUiState.Loading -> {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = StreamFlixColors.Amber)
+                CircularProgressIndicator(color = Color.White)
             }
         }
         is HomeUiState.Error -> {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Não foi possível carregar o catálogo.")
+                    Text("Não foi possível carregar o catálogo.", color = Color.White)
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { viewModel.loadHome() }) { Text("Tentar de novo") }
+                    Button(
+                        onClick = { viewModel.loadHome() },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+                    ) { Text("Tentar de novo", color = Color.Black, fontWeight = FontWeight.Bold) }
                 }
             }
         }
@@ -139,7 +142,7 @@ private fun HeroBanner(items: List<TmdbItem>, onClick: (TmdbItem) -> Unit) {
                 Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Black.copy(alpha = 0.05f), Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.92f)), startY = 60f)))
                 Column(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 18.dp, vertical = 22.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("EM ALTA", modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(StreamFlixColors.BadgeNew).padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("EM ALTA", modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFFE50914)).padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         Text(item.displayMediaLabel.uppercase(), modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = 0.16f)).padding(horizontal = 8.dp, vertical = 4.dp), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(Modifier.height(10.dp))
@@ -149,16 +152,26 @@ private fun HeroBanner(items: List<TmdbItem>, onClick: (TmdbItem) -> Unit) {
                         item.displayYear?.let { year -> Text(year, color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp) }
                         if (item.displayYear != null && item.displayRating != null) Text(" • ", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
                         item.displayRating?.let { rating ->
-                            Icon(Icons.Filled.Star, null, modifier = Modifier.size(14.dp), tint = StreamFlixColors.Amber)
+                            Icon(Icons.Filled.Star, null, modifier = Modifier.size(14.dp), tint = Color.White)
                             Spacer(Modifier.width(3.dp))
                             Text(rating, color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp)
                         }
                     }
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = { onClick(item) }, contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp), shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.buttonColors(containerColor = StreamFlixColors.Amber, contentColor = Color(0xFF1A1204))) {
-                        Icon(Icons.Filled.PlayArrow, null, modifier = Modifier.size(18.dp))
+                    Button(
+                        onClick = { onClick(item) },
+                        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color.Black,
+                            disabledContainerColor = Color.White,
+                            disabledContentColor = Color.Black,
+                        ),
+                    ) {
+                        Icon(Icons.Filled.PlayArrow, null, modifier = Modifier.size(18.dp), tint = Color.Black)
                         Spacer(Modifier.width(6.dp))
-                        Text("Ver detalhes", fontWeight = FontWeight.Bold)
+                        Text("Ver detalhes", fontWeight = FontWeight.Bold, color = Color.Black)
                     }
                 }
             }
@@ -168,7 +181,7 @@ private fun HeroBanner(items: List<TmdbItem>, onClick: (TmdbItem) -> Unit) {
                 items.indices.forEach { index ->
                     val isActive = pagerState.currentPage == index
                     val width by animateFloatAsState(targetValue = if (isActive) 20f else 6f, label = "heroIndicatorWidth")
-                    Box(modifier = Modifier.padding(horizontal = 3.dp).height(5.dp).width(width.dp).clip(RoundedCornerShape(3.dp)).background(if (isActive) StreamFlixColors.Amber else Color.White.copy(alpha = 0.35f)))
+                    Box(modifier = Modifier.padding(horizontal = 3.dp).height(5.dp).width(width.dp).clip(RoundedCornerShape(3.dp)).background(if (isActive) Color.White else Color.White.copy(alpha = 0.35f)))
                 }
             }
         }
@@ -187,13 +200,12 @@ private fun StartIoBanner() {
 private fun ContinueWatchingRow(entries: List<WatchProgressEntry>, onItemClick: (WatchProgressEntry) -> Unit, onItemDismiss: (WatchProgressEntry) -> Unit = {}) {
     Column {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.width(3.dp).height(22.dp).clip(RoundedCornerShape(2.dp)).background(StreamFlixColors.Amber))
+            Box(modifier = Modifier.width(3.dp).height(22.dp).clip(RoundedCornerShape(2.dp)).background(Color.White))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text("Continuar assistindo", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("Continuar assistindo", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Text("Retome de onde parou", fontSize = 12.sp, color = StreamFlixColors.TextMuted)
             }
-            Text("${entries.size}", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = StreamFlixColors.Amber)
         }
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
             items(entries) { entry -> ContinueWatchingCard(entry = entry, onClick = { onItemClick(entry) }, onDismiss = { onItemDismiss(entry) }) }
@@ -208,14 +220,14 @@ private fun ContinueWatchingCard(entry: WatchProgressEntry, onClick: () -> Unit,
     Column(modifier = Modifier.width(124.dp).clip(RoundedCornerShape(12.dp)).background(StreamFlixColors.Surface).clickable(onClick = onClick)) {
         Box(modifier = Modifier.fillMaxWidth().height(176.dp).clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)).background(StreamFlixColors.SurfaceRaised)) {
             AsyncImage(model = posterUrl, contentDescription = entry.displayTitle, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-            Box(modifier = Modifier.align(Alignment.Center).size(40.dp).clip(RoundedCornerShape(20.dp)).background(StreamFlixColors.Amber.copy(alpha = 0.92f)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = "Continuar", tint = Color(0xFF1A1204), modifier = Modifier.size(24.dp))
+            Box(modifier = Modifier.align(Alignment.Center).size(40.dp).clip(RoundedCornerShape(20.dp)).background(Color.White), contentAlignment = Alignment.Center) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = "Continuar", tint = Color.Black, modifier = Modifier.size(24.dp))
             }
             Box(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).size(26.dp).clip(RoundedCornerShape(13.dp)).background(Color.Black.copy(alpha = 0.65f)).clickable { onDismiss() }, contentAlignment = Alignment.Center) {
                 Text("X", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             Box(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().height(4.dp).background(Color.White.copy(alpha = 0.22f))) {
-                Box(modifier = Modifier.fillMaxWidth(entry.progressFraction.coerceIn(0f, 1f)).fillMaxHeight().background(StreamFlixColors.Amber))
+                Box(modifier = Modifier.fillMaxWidth(entry.progressFraction.coerceIn(0f, 1f)).fillMaxHeight().background(Color.White))
             }
         }
         Column(modifier = Modifier.height(40.dp).padding(horizontal = 6.dp, vertical = 6.dp)) {
@@ -232,12 +244,12 @@ private fun ContentRow(row: HomeRow, onItemClick: (tmdbId: Int, mediaType: Strin
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(row.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), color = StreamFlixColors.Text)
             row.exploreLink?.let { link ->
-                Text("Ver mais", fontSize = 13.sp, color = StreamFlixColors.Amber, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { onSeeAllClick(link) })
+                Text("Ver mais", fontSize = 13.sp, color = Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable { onSeeAllClick(link) })
             }
         }
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(start = 8.dp, end = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top,
         ) {
             itemsIndexed(row.items) { index, item ->
@@ -257,66 +269,42 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
     val isNew = yearNum != null && yearNum >= currentYear - 1
     Row(
         modifier = Modifier.height(232.dp),
-        verticalAlignment = Alignment.Top,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         if (rank != null) {
-            Text(
-                "$rank",
-                modifier = Modifier.width(22.dp).padding(top = 4.dp),
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = StreamFlixColors.Amber,
-            )
+            Box(
+                modifier = Modifier.width(42.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "$rank",
+                    fontSize = if (rank >= 10) 22.sp else 28.sp,
+                    fontWeight = FontWeight.Black,
+                    color = Color.White,
+                    maxLines = 1,
+                )
+            }
         }
         Column(
-            modifier = Modifier
-                .width(118.dp)
-                .clickable(onClick = onClick),
+            modifier = Modifier.width(118.dp).clickable(onClick = onClick),
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(StreamFlixColors.SurfaceRaised),
+                modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(StreamFlixColors.SurfaceRaised),
             ) {
-                AsyncImage(
-                    model = posterUrl,
-                    contentDescription = item.displayTitle,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
+                AsyncImage(model = posterUrl, contentDescription = item.displayTitle, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
                 if (isNew) {
                     Text(
                         "NOVO",
-                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(StreamFlixColors.BadgeNew).padding(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFFE50914)).padding(horizontal = 6.dp, vertical = 2.dp),
                         color = Color.White,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                     )
                 }
             }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .padding(top = 6.dp),
-            ) {
-                Text(
-                    item.displayTitle,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 15.sp,
-                    color = StreamFlixColors.Text,
-                )
-                Text(
-                    listOfNotNull(kind, item.displayYear).joinToString(" · "),
-                    fontSize = 10.sp,
-                    color = StreamFlixColors.TextDim,
-                    maxLines = 1,
-                )
+            Column(modifier = Modifier.fillMaxWidth().height(52.dp).padding(top = 6.dp)) {
+                Text(item.displayTitle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp, color = StreamFlixColors.Text)
+                Text(listOfNotNull(kind, item.displayYear).joinToString(" · "), fontSize = 10.sp, color = StreamFlixColors.TextDim, maxLines = 1)
             }
         }
     }
