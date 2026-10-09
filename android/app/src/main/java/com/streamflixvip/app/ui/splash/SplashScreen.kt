@@ -24,148 +24,75 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(onSplashFinished: () -> Unit) {
-    val Accent = Color(0xFFFFB547)
-    val DarkBg = Color(0xFF08090D)
+    val Accent = Color(0xFFFFFFFF)
+    val DarkBg = Color(0xFF0A0A0A)
 
     val scaleAnim by animateFloatAsState(
         targetValue = 1f,
         animationSpec = tween(durationMillis = 800, easing = EaseOutBack),
         label = "logo_scale"
     )
-
     val alphaAnim by animateFloatAsState(
         targetValue = 1f,
         animationSpec = tween(durationMillis = 1000),
         label = "logo_alpha"
     )
-
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseScale by pulseAnim.animateFloat(
         initialValue = 0.96f,
         targetValue = 1.04f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
+        animationSpec = infiniteRepeatable(tween(1400, easing = EaseInOut), RepeatMode.Reverse),
         label = "pulse_scale"
     )
-
-    val glowAlpha by pulseAnim.animateFloat(
-        initialValue = 0.18f,
-        targetValue = 0.45f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = EaseInOut),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glow_alpha"
-    )
-
     var showTagline by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(900)
-        showTagline = true
-    }
+    LaunchedEffect(Unit) { delay(900); showTagline = true }
     val taglineAlpha by animateFloatAsState(
         targetValue = if (showTagline) 1f else 0f,
-        animationSpec = tween(durationMillis = 700),
+        animationSpec = tween(700),
         label = "tagline_alpha"
     )
-
     var startExit by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(2400)
-        startExit = true
-    }
+    LaunchedEffect(Unit) { delay(2400); startExit = true }
     val exitAlpha by animateFloatAsState(
         targetValue = if (startExit) 0f else 1f,
-        animationSpec = tween(durationMillis = 450),
+        animationSpec = tween(450),
         label = "exit_alpha"
     )
-
     LaunchedEffect(exitAlpha) {
-        if (exitAlpha == 0f) {
-            delay(60)
-            onSplashFinished()
-        }
+        if (exitAlpha == 0f) { delay(60); onSplashFinished() }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .alpha(exitAlpha),
-        contentAlignment = Alignment.Center
-    ) {
+    Box(Modifier.fillMaxSize().alpha(exitAlpha), contentAlignment = Alignment.Center) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF1A140C),
-                            DarkBg
-                        ),
-                        center = Offset(0.5f, 0.42f),
-                        radius = 0.9f
-                    )
-                )
+            Modifier.fillMaxSize().background(
+                Brush.radialGradient(
+                    listOf(Color(0xFF161616), DarkBg),
+                    center = Offset(0.5f, 0.42f),
+                    radius = 0.9f,
+                ),
+            ),
         )
-
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .scale(scaleAnim)
-                .alpha(alphaAnim)
+            modifier = Modifier.scale(scaleAnim).alpha(alphaAnim),
         ) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(96.dp)
-                    .background(
-                        color = Accent.copy(alpha = glowAlpha * 0.22f),
-                        shape = CircleShape
-                    )
-                    .scale(pulseScale)
+                modifier = Modifier.size(96.dp).background(Color.White.copy(alpha = 0.06f), CircleShape).scale(pulseScale),
             ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "StreamFlixVIP",
-                    tint = Accent,
-                    modifier = Modifier.size(46.dp)
-                )
+                Icon(Icons.Default.PlayArrow, "StreamFlixVIP", tint = Accent, modifier = Modifier.size(46.dp))
             }
-
             Spacer(Modifier.height(28.dp))
-
-            Text(
-                text = "StreamFlix",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.White,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "VIP",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = Accent,
-                letterSpacing = 6.sp,
-                textAlign = TextAlign.Center
-            )
-
+            Text("StreamFlix", fontSize = 32.sp, fontWeight = FontWeight.ExtraBold, color = Color.White)
+            Text("VIP", fontSize = 18.sp, fontWeight = FontWeight.Medium, color = Color(0xFFA3A3A3), letterSpacing = 6.sp)
             Spacer(Modifier.height(18.dp))
-            Box(
-                Modifier
-                    .width(42.dp)
-                    .height(2.dp)
-                    .background(Accent.copy(alpha = taglineAlpha))
-            )
+            Box(Modifier.width(42.dp).height(2.dp).background(Color.White.copy(alpha = taglineAlpha)))
             Spacer(Modifier.height(14.dp))
             Text(
-                text = "Seu cinema. Seu ritmo.",
+                "Seu cinema. Seu ritmo.",
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
                 color = Color.White.copy(alpha = 0.62f * taglineAlpha),
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
         }
     }
