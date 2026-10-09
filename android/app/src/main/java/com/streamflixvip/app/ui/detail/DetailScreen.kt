@@ -340,7 +340,10 @@ private fun DetailContent(
     // Controla se o modal de trailer inline está aberto.
     var showTrailerModal by remember { mutableStateOf(false) }
 
-    LazyColumn(Modifier.fillMaxSize()) {
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val showBar = listState.firstVisibleItemIndex > 0
+    Box(Modifier.fillMaxSize()) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         item {
             DetailHeader(
                 title = title,
@@ -392,6 +395,13 @@ private fun DetailContent(
                     Text(overview, fontSize = 14.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f))
                 }
             }
+        }
+        item {
+            DetailGenreAndCast(
+                genres = details.genres,
+                cast = details.credits?.cast,
+                crew = details.credits?.crew,
+            )
         }
         if (state.trailerKey != null) {
             item {
@@ -554,6 +564,41 @@ private fun DetailContent(
         }
 
         item { Spacer(Modifier.height(32.dp)) }
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = showBar,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.align(Alignment.TopCenter),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xF0101010))
+                .statusBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CircleIconButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                tint = Color.White,
+                contentDescription = "Voltar",
+                onClick = onBack,
+                size = 36.dp,
+            )
+            Text(
+                title,
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+            Spacer(Modifier.width(36.dp))
+        }
+    }
     }
 
     // Só abre quando o episódio tocado tem 2+ servidores — ver a
@@ -1131,11 +1176,19 @@ private fun DetailHeader(
         ) {
             Text(
                 title,
-                fontSize = 26.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = (-0.4).sp,
-                lineHeight = 30.sp,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-0.6).sp,
+                lineHeight = 32.sp,
+                color = Color.White,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                style = androidx.compose.ui.text.TextStyle(
+                    shadow = androidx.compose.ui.graphics.Shadow(
+                        color = Color.Black.copy(alpha = 0.85f),
+                        offset = androidx.compose.ui.geometry.Offset(0f, 3f),
+                        blurRadius = 16f,
+                    ),
+                ),
                 modifier = Modifier.padding(horizontal = 28.dp),
             )
             tagline?.takeIf { it.isNotBlank() }?.let {
@@ -1167,7 +1220,7 @@ private fun DetailHeader(
             // "player interno vs externo" que a lista de servidores usa.
             // Some (em vez de desabilitar) quando não há fonte disponível
             // ainda, pra não prometer um play que vai falhar.
-            var sessionReady by remember { mutableStateOf(false) }
+            var sessionReady by rememberSaveable(title) { mutableStateOf(false) }
             LaunchedEffect(title, showServersLoading) {
                 if (showServersLoading) sessionReady = false
             }
@@ -1247,31 +1300,32 @@ private fun DetailHeader(
 @Composable
 private fun SideActions(isFavorite: Boolean, onToggleFavorite: () -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Box {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AnimatedVisibility(visible = open, enter = fadeIn(), exit = fadeOut()) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(Color(0xFF2A2A2A))
+                    .clickable(onClick = onToggleFavorite),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = if (isFavorite) "Salvo" else "Salvar",
+                    tint = if (isFavorite) Color(0xFFFF4D6D) else Color.White,
+                )
+            }
+        }
         Box(
             modifier = Modifier
                 .size(48.dp)
                 .clip(androidx.compose.foundation.shape.CircleShape)
                 .background(Color(0xFF2A2A2A))
-                .clickable { open = true },
+                .clickable { open = !open },
             contentAlignment = Alignment.Center,
         ) {
             Icon(Icons.Outlined.MoreVert, contentDescription = "Mais", tint = Color.White)
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text(if (isFavorite) "Salvo" else "Salvar") },
-                leadingIcon = {
-                    Icon(
-                        if (isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = null,
-                    )
-                },
-                onClick = {
-                    open = false
-                    onToggleFavorite()
-                },
-            )
         }
     }
 }
