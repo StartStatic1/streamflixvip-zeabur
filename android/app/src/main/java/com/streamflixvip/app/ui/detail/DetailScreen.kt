@@ -1209,8 +1209,10 @@ private fun DetailHeader(
                         .clip(RoundedCornerShape(14.dp)),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                        disabledContainerColor = Color.White,
+                        disabledContentColor = Color.Black,
                     ),
                 ) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1231,9 +1233,9 @@ private fun DetailHeader(
                                 ),
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Outlined.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Black)
                             Spacer(Modifier.width(10.dp))
-                            Text("Assistir Agora", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("Assistir Agora", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
                         }
                     }
                 }

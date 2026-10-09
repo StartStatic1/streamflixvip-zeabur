@@ -7,6 +7,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -271,23 +272,20 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
         modifier = Modifier.height(232.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (rank != null) {
-            Box(
-                modifier = Modifier.width(42.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+        Box(modifier = Modifier.width(if (rank != null) 156.dp else 118.dp).clickable(onClick = onClick)) {
+            if (rank != null) {
                 Text(
                     "$rank",
-                    fontSize = if (rank >= 10) 22.sp else 28.sp,
+                    modifier = Modifier.align(Alignment.CenterStart).offset(x = (-6).dp),
+                    fontSize = if (rank >= 10) 78.sp else 92.sp,
                     fontWeight = FontWeight.Black,
-                    color = Color.White,
+                    color = Color.White.copy(alpha = 0.22f),
                     maxLines = 1,
                 )
             }
-        }
-        Column(
-            modifier = Modifier.width(118.dp).clickable(onClick = onClick),
-        ) {
+            Column(
+                modifier = Modifier.width(118.dp).align(Alignment.CenterEnd),
+            ) {
             Box(
                 modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(StreamFlixColors.SurfaceRaised),
             ) {
@@ -306,6 +304,7 @@ private fun PosterCard(item: TmdbItem, onClick: () -> Unit, rank: Int? = null) {
                 Text(item.displayTitle, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 15.sp, color = StreamFlixColors.Text)
                 Text(listOfNotNull(kind, item.displayYear).joinToString(" · "), fontSize = 10.sp, color = StreamFlixColors.TextDim, maxLines = 1)
             }
+        }
         }
     }
 }
