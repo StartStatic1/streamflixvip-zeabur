@@ -34,8 +34,9 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.streamflixvip.app.data.CatalogRepository
 
-private val OceanCyan = Color(0xFF00E5FF)
-private val DarkBg = Color(0xFF05050A)
+private val Amber = Color(0xFFFFB547)
+private val DarkBg = Color(0xFF08090D)
+private val Ink = Color(0xFF1A1204)
 
 @Composable
 fun AuthScreen(
@@ -58,9 +59,9 @@ fun AuthScreen(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            DarkBg.copy(alpha = 0.78f),
-                            DarkBg.copy(alpha = 0.88f),
-                            DarkBg.copy(alpha = 0.78f),
+                            DarkBg.copy(alpha = 0.82f),
+                            DarkBg.copy(alpha = 0.9f),
+                            DarkBg.copy(alpha = 0.84f),
                         ),
                     ),
                 ),
@@ -77,7 +78,7 @@ fun AuthScreen(
         ) {
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = Color(0xFF0F0F16).copy(alpha = 0.92f),
+                color = Color(0xFF101218).copy(alpha = 0.94f),
                 shadowElevation = 16.dp,
                 tonalElevation = 8.dp,
                 modifier = Modifier.fillMaxWidth(),
@@ -86,12 +87,19 @@ fun AuthScreen(
                     modifier = Modifier.padding(24.dp),
                 ) {
                     Text(
-                        "StreamFlixVIP",
+                        "StreamFlix",
                         fontSize = 26.sp,
                         fontWeight = FontWeight.Bold,
-                        color = OceanCyan,
+                        color = Color.White,
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "VIP",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Amber,
+                        letterSpacing = 3.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
 
                     when (state.step) {
                         AuthStep.EnterEmail -> EmailStep(state, viewModel)
@@ -101,7 +109,7 @@ fun AuthScreen(
 
                     state.infoMessage?.let {
                         Spacer(Modifier.height(12.dp))
-                        Text(it, color = OceanCyan, fontSize = 13.sp)
+                        Text(it, color = Amber, fontSize = 13.sp)
                     }
                     state.errorMessage?.let {
                         Spacer(Modifier.height(12.dp))
@@ -117,7 +125,7 @@ fun AuthScreen(
 
 @Composable
 private fun EmailStep(state: AuthUiState, viewModel: AuthViewModel) {
-    Text("Entre com seu e-mail para continuar", fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f))
+    Text("Digite o e-mail. Enviamos um código.", fontSize = 14.sp, color = Color.White.copy(alpha = 0.85f))
     Spacer(Modifier.height(16.dp))
     OutlinedTextField(
         value = state.email,
@@ -127,10 +135,12 @@ private fun EmailStep(state: AuthUiState, viewModel: AuthViewModel) {
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email),
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = OceanCyan,
+            focusedBorderColor = Amber,
             unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
-            focusedLabelColor = OceanCyan,
-            cursorColor = OceanCyan,
+            focusedLabelColor = Amber,
+            cursorColor = Amber,
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
         ),
         shape = RoundedCornerShape(14.dp),
     )
@@ -141,14 +151,14 @@ private fun EmailStep(state: AuthUiState, viewModel: AuthViewModel) {
         modifier = Modifier.fillMaxWidth().height(50.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = OceanCyan,
-            contentColor = Color(0xFF001820),
+            containerColor = Amber,
+            contentColor = Ink,
         ),
     ) {
         if (state.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Color(0xFF001820))
+            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Ink)
         } else {
-            Text("Continuar", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("Enviar código", fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
     }
 }
@@ -156,7 +166,7 @@ private fun EmailStep(state: AuthUiState, viewModel: AuthViewModel) {
 @Composable
 private fun CodeStep(state: AuthUiState, viewModel: AuthViewModel) {
     Text(
-        "Digite o código de 6 dígitos enviado para ${state.email}",
+        "Código de 6 dígitos enviado para ${state.email}",
         fontSize = 14.sp,
         color = Color.White.copy(alpha = 0.85f),
     )
@@ -169,10 +179,12 @@ private fun CodeStep(state: AuthUiState, viewModel: AuthViewModel) {
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = OceanCyan,
+            focusedBorderColor = Amber,
             unfocusedBorderColor = Color.White.copy(alpha = 0.25f),
-            focusedLabelColor = OceanCyan,
-            cursorColor = OceanCyan,
+            focusedLabelColor = Amber,
+            cursorColor = Amber,
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
         ),
         shape = RoundedCornerShape(14.dp),
     )
@@ -183,15 +195,19 @@ private fun CodeStep(state: AuthUiState, viewModel: AuthViewModel) {
         modifier = Modifier.fillMaxWidth().height(50.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = OceanCyan,
-            contentColor = Color(0xFF001820),
+            containerColor = Amber,
+            contentColor = Ink,
         ),
     ) {
         if (state.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Color(0xFF001820))
+            CircularProgressIndicator(modifier = Modifier.height(20.dp), strokeWidth = 2.dp, color = Ink)
         } else {
             Text("Entrar", fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
+    }
+    Spacer(Modifier.height(10.dp))
+    TextButton(onClick = viewModel::sendCode, enabled = !state.isLoading) {
+        Text("Reenviar código", color = Amber, fontSize = 13.sp)
     }
 }
 

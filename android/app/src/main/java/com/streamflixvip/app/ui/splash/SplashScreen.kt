@@ -24,8 +24,8 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun SplashScreen(onSplashFinished: () -> Unit) {
-    val Accent = Color(0xFF00E5FF)
-    val DarkBg = Color(0xFF05050A)
+    val Accent = Color(0xFFFFB547)
+    val DarkBg = Color(0xFF08090D)
 
     val scaleAnim by animateFloatAsState(
         targetValue = 1f,
@@ -41,8 +41,8 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 
     val pulseAnim = rememberInfiniteTransition(label = "pulse")
     val pulseScale by pulseAnim.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
+        initialValue = 0.96f,
+        targetValue = 1.04f,
         animationSpec = infiniteRepeatable(
             animation = tween(1400, easing = EaseInOut),
             repeatMode = RepeatMode.Reverse
@@ -51,8 +51,8 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
     )
 
     val glowAlpha by pulseAnim.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.7f,
+        initialValue = 0.18f,
+        targetValue = 0.45f,
         animationSpec = infiniteRepeatable(
             animation = tween(1400, easing = EaseInOut),
             repeatMode = RepeatMode.Reverse
@@ -62,43 +62,30 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 
     var showTagline by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(1100)
+        delay(900)
         showTagline = true
     }
     val taglineAlpha by animateFloatAsState(
         targetValue = if (showTagline) 1f else 0f,
-        animationSpec = tween(durationMillis = 900),
+        animationSpec = tween(durationMillis = 700),
         label = "tagline_alpha"
     )
 
     var startExit by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(3400)
+        delay(2400)
         startExit = true
     }
     val exitAlpha by animateFloatAsState(
         targetValue = if (startExit) 0f else 1f,
-        animationSpec = tween(durationMillis = 550),
+        animationSpec = tween(durationMillis = 450),
         label = "exit_alpha"
     )
 
     LaunchedEffect(exitAlpha) {
         if (exitAlpha == 0f) {
-            delay(80)
+            delay(60)
             onSplashFinished()
-        }
-    }
-
-    val particles = remember {
-        (0 until 14).map { _ ->
-            Particle(
-                startX = (8..92).random().toFloat(),
-                startY = (8..92).random().toFloat(),
-                sizeDp = (2..4).random(),
-                duration = (3500..7000).random(),
-                delayMs = (0..2500).random(),
-                maxOpacity = 0.15f + (Math.random() * 0.35).toFloat()
-            )
         }
     }
 
@@ -114,22 +101,14 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFF061018),
+                            Color(0xFF1A140C),
                             DarkBg
                         ),
                         center = Offset(0.5f, 0.42f),
-                        radius = 0.85f
+                        radius = 0.9f
                     )
                 )
         )
-
-        particles.forEach { particle ->
-            FloatingParticle(
-                particle = particle,
-                accent = Accent,
-                modifier = Modifier.alpha(exitAlpha)
-            )
-        }
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -140,9 +119,9 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(108.dp)
+                    .size(96.dp)
                     .background(
-                        color = Accent.copy(alpha = glowAlpha * 0.18f),
+                        color = Accent.copy(alpha = glowAlpha * 0.22f),
                         shape = CircleShape
                     )
                     .scale(pulseScale)
@@ -151,81 +130,43 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = "StreamFlixVIP",
                     tint = Accent,
-                    modifier = Modifier.size(52.dp)
+                    modifier = Modifier.size(46.dp)
                 )
             }
 
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(28.dp))
 
             Text(
                 text = "StreamFlix",
-                fontSize = 34.sp,
+                fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.White,
                 textAlign = TextAlign.Center
             )
             Text(
                 text = "VIP",
-                fontSize = 34.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
                 color = Accent,
+                letterSpacing = 6.sp,
                 textAlign = TextAlign.Center
             )
 
-            Spacer(Modifier.height(22.dp))
+            Spacer(Modifier.height(18.dp))
+            Box(
+                Modifier
+                    .width(42.dp)
+                    .height(2.dp)
+                    .background(Accent.copy(alpha = taglineAlpha))
+            )
+            Spacer(Modifier.height(14.dp))
             Text(
                 text = "Seu cinema. Seu ritmo.",
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.65f * taglineAlpha),
+                color = Color.White.copy(alpha = 0.62f * taglineAlpha),
                 textAlign = TextAlign.Center
             )
         }
-    }
-}
-
-data class Particle(
-    val startX: Float,
-    val startY: Float,
-    val sizeDp: Int,
-    val duration: Int,
-    val delayMs: Int,
-    val maxOpacity: Float
-)
-
-@Composable
-private fun FloatingParticle(
-    particle: Particle,
-    accent: Color,
-    modifier: Modifier = Modifier,
-) {
-    val transition = rememberInfiniteTransition(label = "particle_${particle.startX}")
-    val offsetY by transition.animateFloat(
-        initialValue = particle.startY,
-        targetValue = particle.startY - 28f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(particle.duration, delayMillis = particle.delayMs),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "particle_offset"
-    )
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .offset(
-                x = (particle.startX / 100f * 100).dp,
-                y = (offsetY / 100f * 100).dp
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(particle.sizeDp.dp)
-                .background(
-                    color = accent.copy(alpha = particle.maxOpacity),
-                    shape = CircleShape
-                )
-        )
     }
 }
