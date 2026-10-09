@@ -15,6 +15,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
@@ -1142,10 +1143,12 @@ private fun DetailHeader(
             Spacer(Modifier.height(14.dp))
             Text(
                 title,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
+                fontSize = 26.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = (-0.4).sp,
+                lineHeight = 30.sp,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 24.dp),
+                modifier = Modifier.padding(horizontal = 28.dp),
             )
             tagline?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(4.dp))
@@ -1154,7 +1157,7 @@ private fun DetailHeader(
                     fontSize = 13.sp,
                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                     // Subtítulo em cor âmbar/dourada suave para destacar sem berrar
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                    color = Color(0xFFB5B5B5),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 32.dp),
                 )
@@ -1203,11 +1206,11 @@ private fun DetailHeader(
                 Button(
                     onClick = onWatchNowClick,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .height(54.dp)
-                        .clip(RoundedCornerShape(14.dp)),
-                    shape = RoundedCornerShape(14.dp),
+                        .padding(horizontal = 28.dp)
+                        .height(44.dp)
+                        .widthIn(max = 240.dp)
+                        .clip(RoundedCornerShape(50)),
+                    shape = RoundedCornerShape(50),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
                         contentColor = Color.Black,
@@ -1235,7 +1238,7 @@ private fun DetailHeader(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.PlayCircle, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.Black)
                             Spacer(Modifier.width(10.dp))
-                            Text("Assistir Agora", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
+                            Text("Assistir", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black)
                         }
                     }
                 }
@@ -1490,42 +1493,23 @@ private fun TrailerModal(
         containerColor = androidx.compose.ui.graphics.Color.Black,
         dragHandle = null,
     ) {
-        Column(Modifier.fillMaxWidth()) {
-            // Barra de título com botão de fechar
-            Row(
+        Column(Modifier.fillMaxWidth().padding(bottom = 18.dp)) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Trailer — $title",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = androidx.compose.ui.graphics.Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(Modifier.width(8.dp))
-                CircleIconButton(
-                    icon = Icons.Filled.KeyboardArrowDown,
-                    tint = androidx.compose.ui.graphics.Color.White,
-                    contentDescription = "Fechar trailer",
-                    onClick = onDismiss,
-                    size = 32.dp,
-                )
-            }
-
-            // Player em 16:9 — fica contido dentro do sheet, sem ocupar a
-            // tela inteira de forma abrupta.
+                    .padding(top = 10.dp, bottom = 10.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .width(42.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.35f)),
+            )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
                     .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                    .background(androidx.compose.ui.graphics.Color.Black),
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color.Black),
             ) {
                 var isLoading by remember { mutableStateOf(true) }
 
@@ -1543,12 +1527,12 @@ private fun TrailerModal(
                         <meta name="referrer" content="strict-origin-when-cross-origin">
                         <style>
                             html, body { margin:0; padding:0; background:#000; height:100%; overflow:hidden; }
-                            iframe { position:absolute; top:0; left:0; width:100%; height:100%; border:0; }
+                            iframe { position:absolute; top:-12%; left:-8%; width:116%; height:124%; border:0; pointer-events:auto; }
                         </style>
                     </head>
                     <body>
                         <iframe
-                            src="https://www.youtube.com/embed/$trailerKey?autoplay=1&playsinline=1&rel=0&modestbranding=1&origin=$TRAILER_BASE_URL"
+                            src="https://www.youtube-nocookie.com/embed/$trailerKey?autoplay=1&playsinline=1&rel=0&modestbranding=1&controls=0&fs=0&iv_load_policy=3&disablekb=1&origin=$TRAILER_BASE_URL"
                             referrerpolicy="strict-origin-when-cross-origin"
                             allow="autoplay; encrypted-media; picture-in-picture"
                             allowfullscreen>
@@ -1558,6 +1542,18 @@ private fun TrailerModal(
                     """.trimIndent()
                 }
 
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(32.dp)
+                        .clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Fechar", tint = Color.White, modifier = Modifier.size(20.dp))
+                }
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
