@@ -1,7 +1,7 @@
 {
-  "versionCode": 140700,
-  "versionName": "14.7.0",
+  "versionCode": 140800,
+  "versionName": "14.8.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias e correcoes"
+  "releaseNotes": "Top 10 mostra o 10 inteiro e o nome do poster nao some mais"
 }
