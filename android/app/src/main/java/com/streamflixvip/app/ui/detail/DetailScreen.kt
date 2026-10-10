@@ -2396,10 +2396,14 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val audio = audioFromSource(source)
     val origin = originFromSource(source)
     val size = sizeFromSource(source)
-    val parts = source.source_label.orEmpty().split("·", "•", "|").map { it.trim() }.filter { it.isNotBlank() }
-    val head = parts.firstOrNull() ?: source.displayName
-    val rest = parts.drop(1).joinToString(" · ").ifBlank { null }
-    val desc = source.meta?.description?.takeIf { it.isNotBlank() && !it.equals(head, ignoreCase = true) }
+    val label = source.source_label.orEmpty()
+    val isFlix = label.contains("FlixHub", ignoreCase = true) || label.contains("Server", ignoreCase = true)
+    val serverName = if (isFlix) {
+        Regex("(?:FlixHub\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value
+            ?: Regex("(?:Goldvip|Srcine|Kraps|Stank|Gooddb)\\s+Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value
+    } else null
+    val head = if (isFlix && serverName != null) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
+    val desc = source.meta?.description?.takeIf { it.isNotBlank() } ?: label.takeIf { !isFlix }
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2408,32 +2412,23 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .padding(14.dp),
     ) {
         Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-        if (!desc.isNullOrBlank()) {
-            Text(desc, color = Color(0xFFAAAAAA), fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp), maxLines = 2)
-        } else if (!rest.isNullOrBlank()) {
-            Text(rest, color = Color(0xFFAAAAAA), fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp), maxLines = 2)
+        if (!desc.isNullOrBlank() && !desc.equals(head, ignoreCase = true)) {
+            Text(desc, color = Color(0xFFCCCCCC), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 2)
         }
-        // Meta em linhas separadas — estilo Nuvio (bandeira/info abaixo)
-        if (!quality.isNullOrBlank() || !audio.isNullOrBlank() || !size.isNullOrBlank()) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (!quality.isNullOrBlank()) MetaChip(quality)
-                if (!audio.isNullOrBlank()) MetaChip(audio)
-                if (!size.isNullOrBlank()) MetaChip(size)
+        if (serverName != null) {
+            Text("⚡ $serverName", color = Color(0xFFEEEEEE), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp))
+        }
+        if (!quality.isNullOrBlank()) {
+            Text("🎯 $quality", color = Color(0xFFDDDDDD), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+        }
+        if (!origin.isNullOrBlank() || !size.isNullOrBlank() || !audio.isNullOrBlank()) {
+            val bits = listOfNotNull(audio, size, origin).joinToString("  ")
+            if (bits.isNotBlank()) {
+                Text(bits, color = Color(0xFFAAAAAA), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
             }
         }
-        if (!origin.isNullOrBlank() || locked) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.padding(top = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (!origin.isNullOrBlank()) MetaChip(origin)
-                if (locked) MetaChip("VIP")
-            }
+        if (locked) {
+            Text("VIP", color = Color(0xFFFFD54F), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }
