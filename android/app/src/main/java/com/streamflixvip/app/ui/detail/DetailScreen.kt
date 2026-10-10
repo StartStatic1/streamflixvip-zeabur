@@ -28,6 +28,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.material3.DropdownMenu
@@ -548,11 +550,16 @@ private fun DetailContent(
         // pra não chamar atenção pra uma parte secundária da tela.
         if (state.collectionParts.isNotEmpty()) {
             item {
+                val raw = state.collectionName.orEmpty()
+                    .replace(" Coleção", "")
+                    .replace(" Collection", "")
                 Text(
-                    state.collectionName?.let { "Do universo · $it" } ?: "Do universo",
+                    if (raw.isBlank()) "Do universo" else "Do universo · $raw",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 10.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 10.dp),
                 )
             }
             item {
@@ -1527,6 +1534,27 @@ private fun PersonSheet(
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
                 )
+                if (photos.size > 1) {
+                    Spacer(Modifier.height(16.dp))
+                    Text("Fotos", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    ) {
+                        photos.forEachIndexed { index, path ->
+                            AsyncImage(
+                                model = com.streamflixvip.app.network.TmdbImages.poster(path, "w185"),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .clickable { photoIndex = index },
+                                contentScale = ContentScale.Crop,
+                            )
+                        }
+                    }
+                }
                 FilmographyRow("Filmes", movies, onDismiss, onOpenTitle)
                 FilmographyRow("Séries", series, onDismiss, onOpenTitle)
             }
@@ -1590,30 +1618,45 @@ private fun PersonalRateRow(tmdbId: Int, mediaType: String) {
         prefs.edit().putInt(key, value).apply()
     }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.End,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Sua nota", color = Color(0xFFB5B5B5), fontSize = 13.sp, modifier = Modifier.weight(1f))
-        RateChip("Ruim", value == -1) { set(-1) }
-        RateChip("Ok", value == 1) { set(1) }
-        RateChip("Bom", value == 2) { set(2) }
+        RateIcon(
+            icon = Icons.Filled.ThumbDown,
+            selected = value == -1,
+            onClick = { set(-1) },
+        )
+        Spacer(Modifier.width(10.dp))
+        RateIcon(
+            icon = Icons.Filled.ThumbUp,
+            selected = value == 2,
+            onClick = { set(2) },
+        )
     }
 }
 
 @Composable
-private fun RateChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        label,
-        color = if (selected) Color.Black else Color.White,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.SemiBold,
+private fun RateIcon(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
+            .size(40.dp)
+            .clip(androidx.compose.foundation.shape.CircleShape)
             .background(if (selected) Color.White else Color(0xFF2A2A2A))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = if (selected) Color.Black else Color.White,
+            modifier = Modifier.size(20.dp),
+        )
+    }
 }
 
 @Composable
