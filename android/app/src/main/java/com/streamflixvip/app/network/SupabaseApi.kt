@@ -316,6 +316,13 @@ interface CommentsApi {
     )
 
     @retrofit2.http.Headers("Content-Type: application/json", "Prefer: return=minimal")
+    @POST("rest/v1/rpc/vote_comment")
+    suspend fun voteComment(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Body body: VoteRequest,
+    )
+
     @POST("rest/v1/title_comments")
     suspend fun postComment(
         @Header("apikey") apiKey: String,
@@ -332,6 +339,9 @@ data class TitleComment(
     val is_vip_author: Boolean = false,
     val comment_text: String,
     val created_at: String,
+    val up_count: Int = 0,
+    val down_count: Int = 0,
+    val parent_id: Long? = null,
 ) {
     val displayAuthor: String get() = user_display_name?.takeIf { it.isNotBlank() } ?: "Usuário"
 }
@@ -344,4 +354,12 @@ data class TitleCommentInsert(
     val user_display_name: String?,
     val is_vip_author: Boolean,
     val comment_text: String,
+    val parent_id: Long? = null,
+)
+
+
+@JsonClass(generateAdapter = true)
+data class VoteRequest(
+    val p_comment_id: Long,
+    val p_value: Int,
 )

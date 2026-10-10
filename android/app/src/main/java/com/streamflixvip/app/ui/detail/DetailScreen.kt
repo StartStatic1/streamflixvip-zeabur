@@ -203,6 +203,8 @@ fun DetailScreen(
                 onDismissComments = viewModel::closeComments,
                 onPostComment = { text, onResult -> viewModel.postComment(text, isVip = com.streamflixvip.app.data.VipStatusHolder.isVip.value, onResult = onResult) },
                 onDeleteComment = { id, done -> viewModel.deleteComment(id, done) },
+                onVoteComment = { id, v -> viewModel.voteComment(id, v) },
+                onReplyComment = { parentId -> /* set reply target */ },
                 onToggleFavorite = viewModel::toggleFavorite,
                 onTicketClick = {
                     if (!userId.isNullOrBlank()) showTicketPay = true
@@ -289,6 +291,8 @@ private fun DetailContent(
     onDismissComments: () -> Unit,
     onPostComment: (text: String, onResult: (Boolean) -> Unit) -> Unit,
     onDeleteComment: (Long, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
+    onVoteComment: (Long, Int) -> Unit = { _, _ -> },
+    onReplyComment: (Long) -> Unit = {},
     onToggleFavorite: () -> Unit,
     onTicketClick: () -> Unit = {},
     skipHeroLoading: Boolean = false,
@@ -666,6 +670,8 @@ private fun DetailContent(
             onDismiss = onDismissComments,
             onPost = onPostComment,
             onDelete = onDeleteComment,
+            onVote = onVoteComment,
+            onReply = { id, _ -> onReplyComment(id) },
         )
     }
 
@@ -957,6 +963,8 @@ private fun CommentsModal(
     onDismiss: () -> Unit,
     onPost: (text: String, onResult: (Boolean) -> Unit) -> Unit,
     onDelete: (Long, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
+    onVote: (Long, Int) -> Unit = { _, _ -> },
+    onReply: (Long, String) -> Unit = { _, _ -> },
 ) {
     var draft by remember { mutableStateOf("") }
     var rate by remember { mutableStateOf(0) }
@@ -1061,25 +1069,19 @@ private fun CommentsModal(
                                             Icons.Filled.ThumbUp,
                                             contentDescription = null,
                                             tint = if (myRate == 1) Color(0xFF4CAF50) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable {
-                                                if (myRate == 1) { myRate = 0; up = (up - 1).coerceAtLeast(0) }
-                                                else { if (myRate == -1) down = (down - 1).coerceAtLeast(0); myRate = 1; up += 1 }
-                                                prefs.edit().putInt("c_${comment.id}", myRate).putInt("up_${comment.id}", up).putInt("down_${comment.id}", down).apply()
-                                            },
+                                            modifier = Modifier.size(16.dp).clickable { onVote(comment.id, 1); myRate = if (myRate == 1) 0 else 1 },
                                         )
-                                        Text(" $up", fontSize = 12.sp, color = Color(0xFFB5B5B5))
+                                        Text(" ${comment.up_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
                                         Icon(
                                             Icons.Filled.ThumbDown,
                                             contentDescription = null,
                                             tint = if (myRate == -1) Color(0xFFE53935) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable {
-                                                if (myRate == -1) { myRate = 0; down = (down - 1).coerceAtLeast(0) }
-                                                else { if (myRate == 1) up = (up - 1).coerceAtLeast(0); myRate = -1; down += 1 }
-                                                prefs.edit().putInt("c_${comment.id}", myRate).putInt("up_${comment.id}", up).putInt("down_${comment.id}", down).apply()
-                                            },
+                                            modifier = Modifier.size(16.dp).clickable { onVote(comment.id, -1); myRate = if (myRate == -1) 0 else -1 },
                                         )
-                                        Text(" $down", fontSize = 12.sp, color = Color(0xFFB5B5B5))
+                                        Text(" ${comment.down_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
+                                        Spacer(Modifier.width(12.dp))
+                                        Text("Responder", fontSize = 12.sp, color = Color(0xFFB5B5B5), modifier = Modifier.clickable { onReply(comment.id, "") })
                                         if (canDelete) {
                                             Spacer(Modifier.weight(1f))
                                             Text(

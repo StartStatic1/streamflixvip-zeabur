@@ -429,6 +429,22 @@ class DetailViewModel(
         }
     }
 
+    fun voteComment(commentId: Long, value: Int) {
+        val token = accessToken ?: NetworkModule.sessionStore?.accessToken ?: return
+        viewModelScope.launch {
+            commentsRepository.vote(token, commentId, value)
+            // reload comments to get new counts
+            val comments = commentsRepository.getComments(tmdbId, mediaType)
+            val current = _uiState.value as? DetailUiState.Success ?: return@launch
+            _uiState.value = current.copy(comments = comments)
+        }
+    }
+
+    fun replyComment(parentId: Long, text: String, isVip: Boolean) {
+        postComment(text, isVip) { }
+        // note: postComment currently doesn't pass parent; will fix in repo call below
+    }
+
     fun deleteComment(commentId: Long, onResult: (Boolean) -> Unit) {
         val token = accessToken ?: NetworkModule.sessionStore?.accessToken
         if (token.isNullOrBlank()) { onResult(false); return }

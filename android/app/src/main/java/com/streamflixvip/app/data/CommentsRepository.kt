@@ -36,6 +36,7 @@ class CommentsRepository {
         tmdbId: Int,
         mediaType: String,
         text: String,
+        parentId: Long? = null,
     ): Boolean =
         try {
             api.postComment(
@@ -48,12 +49,23 @@ class CommentsRepository {
                     user_display_name = userDisplayName,
                     is_vip_author = isVipAuthor,
                     comment_text = text,
+                    parent_id = parentId,
                 ),
             )
             true
         } catch (_: Exception) {
             false
         }
+
+    suspend fun vote(accessToken: String, commentId: Long, value: Int): Boolean =
+        try {
+            api.voteComment(
+                apiKey = anonKey,
+                bearerToken = "Bearer $accessToken",
+                body = com.streamflixvip.app.network.VoteRequest(commentId, value),
+            )
+            true
+        } catch (_: Exception) { false }
 
     suspend fun deleteComment(accessToken: String, commentId: Long): Boolean =
         try {
