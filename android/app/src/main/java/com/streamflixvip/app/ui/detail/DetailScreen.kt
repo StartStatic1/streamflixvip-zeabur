@@ -979,7 +979,18 @@ private fun CommentsModal(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Comentários", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Comentários", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        if (comments.isNotEmpty()) {
+                            val totalUp = comments.sumOf { it.up_count }
+                            val totalDown = comments.sumOf { it.down_count }
+                            val total = totalUp + totalDown
+                            if (total > 0) {
+                                val pct = (totalUp * 100) / total
+                                Text("  $pct%", fontSize = 13.sp, color = Color(0xFFB5B5B5), modifier = Modifier.padding(start = 6.dp))
+                            }
+                        }
+                    }
                     // Seta pra fechar o modal — pedido explícito: "tem seta
                     // pra fecha modal tela inteira".
                     Icon(
