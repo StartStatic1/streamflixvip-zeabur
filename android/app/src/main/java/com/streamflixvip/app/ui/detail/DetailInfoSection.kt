@@ -76,7 +76,7 @@ fun DetailGenreAndCast(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .width(72.dp)
+                            .width(88.dp)
                             .clickable { onPersonClick(person.id) },
                     ) {
                         AsyncImage(

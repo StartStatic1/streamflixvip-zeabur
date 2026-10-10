@@ -315,7 +315,7 @@ private fun DetailContent(
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
     val posterPath = details.poster_path
-    val backdropUrl = details.backdrop_path?.let { TmdbImages.backdrop(it) }
+    val backdropUrl = details.backdrop_path?.let { TmdbImages.backdrop(it, "w1280") }
     val posterUrl = posterPath?.let { TmdbImages.poster(it, "w500") }
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -339,9 +339,11 @@ private fun DetailContent(
 
     // Controla se o modal de trailer inline está aberto.
     var showTrailerModal by remember { mutableStateOf(false) }
+    var personId by remember { mutableStateOf<Int?>(null) }
+    var trailerPick by remember { mutableStateOf<String?>(null) }
 
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val showBar = listState.firstVisibleItemIndex > 0
+    val showBar = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 220
     Box(Modifier.fillMaxSize()) {
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         item {
@@ -398,12 +400,17 @@ private fun DetailContent(
                 genres = details.genres,
                 cast = details.credits?.cast,
                 crew = details.credits?.crew,
+                onPersonClick = { personId = it },
             )
         }
-        if (state.trailerKey != null) {
+        val clips = details.videos?.results.orEmpty().filter {
+            it.site == "YouTube" && it.type in setOf("Trailer", "Teaser")
+        }
+        if (clips.isNotEmpty()) {
             item {
-                TrailerWindow(trailerKey = state.trailerKey!!, onClick = {
+                TrailerWindow(clips = clips, onClick = { key ->
                     if (!isVip) AdsHelper.showInterstitial(context)
+                    trailerPick = key
                     showTrailerModal = true
                 })
             }
@@ -571,7 +578,8 @@ private fun DetailContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xF0101010))
+                .background(Color(0xFF101010))
+                .zIndex(4f)
                 .statusBarsPadding()
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -596,6 +604,10 @@ private fun DetailContent(
             Spacer(Modifier.width(36.dp))
         }
     }
+    }
+
+    personId?.let { id ->
+        PersonSheet(personId = id, onDismiss = { personId = null })
     }
 
     // Só abre quando o episódio tocado tem 2+ servidores — ver a
@@ -659,9 +671,9 @@ private fun DetailContent(
 
     // Modal de trailer inline — Dialog sobreposto à tela inteira, fora
     // do LazyColumn, para não ser tratado como item de lista.
-    if (showTrailerModal && state.trailerKey != null) {
+    if (showTrailerModal && (trailerPick ?: state.trailerKey) != null) {
         TrailerModal(
-            trailerKey = state.trailerKey!!,
+            trailerKey = (trailerPick ?: state.trailerKey)!!,
             title = title,
             onDismiss = { showTrailerModal = false },
         )
@@ -1188,7 +1200,7 @@ private fun DetailHeader(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(92.dp)
+                        .height(72.dp)
                         .padding(horizontal = 28.dp),
                 )
             } else {
@@ -1376,39 +1388,85 @@ private fun ExpandableSynopsis(overview: String?) {
     }
 }
 
+
 @Composable
-private fun TrailerWindow(trailerKey: String, onClick: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.Start) {
+private fun PersonSheet(personId: Int, onDismiss: () -> Unit) {
+    var person by remember { mutableStateOf<com.streamflixvip.app.network.TmdbResponse?>(null) }
+    var failed by remember { mutableStateOf(false) }
+    LaunchedEffect(personId) {
+        failed = false
+        person = null
+        try {
+            person = com.streamflixvip.app.data.CatalogRepository.getPerson(personId)
+        } catch (_: Exception) {
+            failed = true
+        }
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF161616)) {
+            Column(Modifier.padding(16.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AsyncImage(
+                        model = com.streamflixvip.app.network.TmdbImages.poster(person?.profile_path, "w185"),
+                        contentDescription = person?.name,
+                        modifier = Modifier.size(64.dp).clip(androidx.compose.foundation.shape.CircleShape),
+                        contentScale = ContentScale.Crop,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(person?.name ?: "Carregando…", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    when {
+                        failed -> "Não foi possível carregar a biografia."
+                        person == null -> "Buscando biografia…"
+                        person?.biography.isNullOrBlank() -> "Sem biografia neste idioma."
+                        else -> person?.biography.orEmpty()
+                    },
+                    color = Color(0xFFD0D0D0),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrailerWindow(
+    clips: List<com.streamflixvip.app.network.TmdbVideo>,
+    onClick: (String) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalAlignment = Alignment.Start) {
         Text(
-            "Trailer",
+            "Trailers",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 8.dp),
         )
-        Box(
-            modifier = Modifier
-                .width(210.dp)
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.Black)
-                .clickable(onClick = onClick),
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
         ) {
-            AsyncImage(
-                model = "https://img.youtube.com/vi/$trailerKey/hqdefault.jpg",
-                contentDescription = "Trailer",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.28f)))
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(54.dp)
-                    .clip(androidx.compose.foundation.shape.CircleShape)
-                    .background(Color.White),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = "Assistir trailer", tint = Color.Black, modifier = Modifier.size(32.dp))
+            clips.forEach { clip ->
+                Column(Modifier.width(168.dp).clickable { onClick(clip.key) }) {
+                    AsyncImage(
+                        model = "https://img.youtube.com/vi/${clip.key}/hqdefault.jpg",
+                        contentDescription = clip.type,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.Black),
+                        contentScale = ContentScale.Crop,
+                    )
+                    Text(
+                        if (clip.type == "Teaser") "Teaser" else "Trailer",
+                        fontSize = 12.sp,
+                        color = Color(0xFFB5B5B5),
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
         }
     }
@@ -1443,8 +1501,8 @@ private fun LivingBackdrop(backdropUrl: String?) {
         label = "backdropScale",
     )
     val veilAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.10f,
-        targetValue = 0.22f,
+        initialValue = 0.04f,
+        targetValue = 0.10f,
         animationSpec = androidx.compose.animation.core.infiniteRepeatable(
             animation = androidx.compose.animation.core.tween(durationMillis = 5000, easing = androidx.compose.animation.core.LinearEasing),
             repeatMode = androidx.compose.animation.core.RepeatMode.Reverse,
