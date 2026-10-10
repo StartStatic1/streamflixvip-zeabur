@@ -50,6 +50,8 @@ data class TmdbResponse(
     val known_for_department: String? = null,
     val profile_path: String? = null,
     val combined_credits: TmdbCombinedCredits? = null,
+    val belongs_to_collection: TmdbCollectionRef? = null,
+    val parts: List<TmdbItem>? = null,
 ) {
     val displayRuntime: String?
         get() = runtime?.takeIf { it > 0 }?.let {
@@ -164,11 +166,26 @@ data class TmdbEpisode(
 
 
 @JsonClass(generateAdapter = true)
-data class TmdbImagesResponse(val logos: List<TmdbLogo>? = null)
+data class TmdbImagesResponse(
+    val logos: List<TmdbLogo>? = null,
+    val profiles: List<TmdbProfile>? = null,
+)
 
 @JsonClass(generateAdapter = true)
 data class TmdbLogo(
     val file_path: String? = null,
     val iso_639_1: String? = null,
     val vote_average: Double? = null,
+)
+
+
+@JsonClass(generateAdapter = true)
+data class TmdbProfile(val file_path: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbCollectionRef(
+    val id: Int,
+    val name: String? = null,
+    val poster_path: String? = null,
+    val backdrop_path: String? = null,
 )

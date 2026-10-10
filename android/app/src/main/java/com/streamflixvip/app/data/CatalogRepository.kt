@@ -63,7 +63,17 @@ class CatalogRepository {
 
     suspend fun getSimilarTitles(tmdbId: Int, mediaType: String): List<TmdbItem> =
         try {
-            tmdb.request(path = "/$mediaType/$tmdbId/similar").results.orEmpty()
+            val rec = tmdb.request(path = "/$mediaType/$tmdbId/recommendations").results.orEmpty()
+            val base = if (rec.isNotEmpty()) rec else tmdb.request(path = "/$mediaType/$tmdbId/similar").results.orEmpty()
+            base.filter { it.id != tmdbId }
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+    suspend fun getCollectionParts(collectionId: Int): List<TmdbItem> =
+        try {
+            tmdb.request(path = "/collection/$collectionId").parts.orEmpty()
+                .filter { !it.poster_path.isNullOrBlank() }
         } catch (e: Exception) {
             emptyList()
         }

@@ -444,7 +444,10 @@ private fun DetailContent(
                 }
             }
             item {
-                CommentsEntryButton(onClick = onOpenComments, modifier = Modifier.padding(16.dp))
+                PersonalRateRow(tmdbId = details.id ?: 0, mediaType = state.mediaType)
+            }
+            item {
+                CommentsEntryButton(onClick = onOpenComments, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
         } else {
             // T1–Tn primeiro; season 0 = Especiais no fim
@@ -543,10 +546,32 @@ private fun DetailContent(
         // (disparada em paralelo no ViewModel) já trouxe algo; enquanto
         // isso a seção simplesmente não existe, sem placeholder de loading
         // pra não chamar atenção pra uma parte secundária da tela.
-        if (state.similarTitles.isNotEmpty()) {
+        if (state.collectionParts.isNotEmpty()) {
             item {
                 Text(
-                    "Você também pode gostar",
+                    state.collectionName?.let { "Do universo · $it" } ?: "Do universo",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 10.dp),
+                )
+            }
+            item {
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                ) {
+                    items(state.collectionParts) { part ->
+                        SimilarTitleCard(item = part, onClick = { onOpenTitle(part.id, part.resolvedMediaType) })
+                    }
+                }
+            }
+        }
+
+        if (state.similarTitles.isNotEmpty()) {
+            val genre = details.genres?.firstOrNull()?.name
+            item {
+                Text(
+                    if (genre != null) "Mais de $genre" else "Você também pode gostar",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 10.dp),
@@ -1417,12 +1442,12 @@ private fun PersonSheet(
         try {
             var data = com.streamflixvip.app.network.NetworkModule.tmdbApi.request(
                 path = "/person/$personId",
-                appendToResponse = "combined_credits",
+                appendToResponse = "combined_credits,images",
             )
             if (data.biography.isNullOrBlank()) {
                 val en = com.streamflixvip.app.network.NetworkModule.tmdbApi.request(
                     path = "/person/$personId?language=en-US",
-                    appendToResponse = "combined_credits",
+                    appendToResponse = "combined_credits,images",
                 )
                 if (!en.biography.isNullOrBlank()) data = en
             }
@@ -1431,15 +1456,28 @@ private fun PersonSheet(
             failed = true
         }
     }
+    val photos = person?.images?.profiles.orEmpty().mapNotNull { it.file_path }.ifEmpty {
+        listOfNotNull(person?.profile_path)
+    }
+    var photoIndex by remember { mutableStateOf(0) }
+    LaunchedEffect(photos.size) {
+        if (photos.size < 2) return@LaunchedEffect
+        while (true) {
+            kotlinx.coroutines.delay(4000)
+            photoIndex = (photoIndex + 1) % photos.size
+        }
+    }
     val works = person?.combined_credits?.cast.orEmpty()
         .filter { !it.poster_path.isNullOrBlank() }
         .distinctBy { it.id }
-        .sortedByDescending { it.popularity ?: 0.0 }
-        .take(18)
-    val hero = works.firstOrNull()?.backdrop_path?.let { com.streamflixvip.app.network.TmdbImages.backdrop(it, "w780") }
+    val movies = works.filter { it.resolvedMediaType == "movie" }
+        .sortedByDescending { it.displayYear ?: "0" }
+    val series = works.filter { it.resolvedMediaType != "movie" }
+        .sortedByDescending { it.displayYear ?: "0" }
+    val hero = photos.getOrNull(photoIndex)?.let { com.streamflixvip.app.network.TmdbImages.poster(it, "w500") }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-            Box(Modifier.fillMaxWidth().height(220.dp)) {
+            Box(Modifier.fillMaxWidth().height(260.dp)) {
                 AsyncImage(
                     model = hero,
                     contentDescription = null,
@@ -1467,7 +1505,12 @@ private fun PersonSheet(
                         contentScale = ContentScale.Crop,
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text(person?.name ?: "Carregando…", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                    Column {
+                        Text(person?.name ?: "Carregando…", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
+                        if (photos.size > 1) {
+                            Text("${photoIndex + 1}/${photos.size}", color = Color(0xFFB5B5B5), fontSize = 12.sp)
+                        }
+                    }
                 }
             }
             Column(Modifier.padding(16.dp)) {
@@ -1484,42 +1527,93 @@ private fun PersonSheet(
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
                 )
-                if (works.isNotEmpty()) {
-                    Spacer(Modifier.height(18.dp))
-                    Text("Também em", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                    Spacer(Modifier.height(10.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    ) {
-                        works.forEach { item ->
-                            Column(
-                                Modifier.width(96.dp).clickable {
-                                    onDismiss()
-                                    onOpenTitle(item.id, item.resolvedMediaType)
-                                },
-                            ) {
-                                AsyncImage(
-                                    model = com.streamflixvip.app.network.TmdbImages.poster(item.poster_path, "w185"),
-                                    contentDescription = item.displayTitle,
-                                    modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)),
-                                    contentScale = ContentScale.Crop,
-                                )
-                                Text(
-                                    item.displayTitle,
-                                    color = Color.White,
-                                    fontSize = 11.sp,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(top = 4.dp),
-                                )
-                            }
-                        }
-                    }
+                FilmographyRow("Filmes", movies, onDismiss, onOpenTitle)
+                FilmographyRow("Séries", series, onDismiss, onOpenTitle)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilmographyRow(
+    label: String,
+    items: List<com.streamflixvip.app.network.TmdbItem>,
+    onDismiss: () -> Unit,
+    onOpenTitle: (Int, String) -> Unit,
+) {
+    if (items.isEmpty()) return
+    Spacer(Modifier.height(18.dp))
+    Text("$label · ${items.size}", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+    Spacer(Modifier.height(10.dp))
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+    ) {
+        items.take(24).forEach { item ->
+            Column(
+                Modifier.width(96.dp).clickable {
+                    onDismiss()
+                    onOpenTitle(item.id, item.resolvedMediaType)
+                },
+            ) {
+                AsyncImage(
+                    model = com.streamflixvip.app.network.TmdbImages.poster(item.poster_path, "w185"),
+                    contentDescription = item.displayTitle,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Crop,
+                )
+                Text(
+                    item.displayTitle,
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                item.displayYear?.let {
+                    Text(it, color = Color(0xFF9A9A9A), fontSize = 10.sp)
                 }
             }
         }
     }
+}
+
+@Composable
+private fun PersonalRateRow(tmdbId: Int, mediaType: String) {
+    if (tmdbId == 0) return
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("personal_rate", android.content.Context.MODE_PRIVATE) }
+    val key = "rate_${tmdbId}_$mediaType"
+    var value by remember { mutableStateOf(prefs.getInt(key, 0)) }
+    fun set(v: Int) {
+        value = if (value == v) 0 else v
+        prefs.edit().putInt(key, value).apply()
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Sua nota", color = Color(0xFFB5B5B5), fontSize = 13.sp, modifier = Modifier.weight(1f))
+        RateChip("Ruim", value == -1) { set(-1) }
+        RateChip("Ok", value == 1) { set(1) }
+        RateChip("Bom", value == 2) { set(2) }
+    }
+}
+
+@Composable
+private fun RateChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        color = if (selected) Color.Black else Color.White,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) Color.White else Color(0xFF2A2A2A))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }
 
 @Composable

@@ -37,6 +37,8 @@ sealed interface DetailUiState {
         val isLoadingEpisodeSources: Boolean = false,
         val showServerPickerForEpisode: Int? = null,
         val similarTitles: List<TmdbItem> = emptyList(),
+        val collectionParts: List<TmdbItem> = emptyList(),
+        val collectionName: String? = null,
         val showSeasonPicker: Boolean = false,
         val expandedEpisodeNumber: Int? = null,
         val showComments: Boolean = false,
@@ -181,6 +183,12 @@ class DetailViewModel(
                     val similar = repository.getSimilarTitles(tmdbId, mediaType)
                     val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
                     _uiState.value = stillCurrent.copy(similarTitles = similar)
+                }
+                launch {
+                    val col = details.belongs_to_collection ?: return@launch
+                    val parts = repository.getCollectionParts(col.id).filter { it.id != tmdbId }
+                    val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
+                    _uiState.value = stillCurrent.copy(collectionParts = parts, collectionName = col.name)
                 }
             } catch (e: Exception) {
                 _uiState.value = DetailUiState.Error(e.message ?: "Erro ao carregar detalhes")
