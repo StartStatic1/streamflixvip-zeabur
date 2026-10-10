@@ -202,6 +202,7 @@ fun DetailScreen(
                 onOpenComments = viewModel::openComments,
                 onDismissComments = viewModel::closeComments,
                 onPostComment = { text, onResult -> viewModel.postComment(text, isVip = com.streamflixvip.app.data.VipStatusHolder.isVip.value, onResult = onResult) },
+                onDeleteComment = { id, done -> viewModel.deleteComment(id, done) },
                 onToggleFavorite = viewModel::toggleFavorite,
                 onTicketClick = {
                     if (!userId.isNullOrBlank()) showTicketPay = true
@@ -287,6 +288,7 @@ private fun DetailContent(
     onOpenComments: () -> Unit,
     onDismissComments: () -> Unit,
     onPostComment: (text: String, onResult: (Boolean) -> Unit) -> Unit,
+    onDeleteComment: (Long, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
     onToggleFavorite: () -> Unit,
     onTicketClick: () -> Unit = {},
     skipHeroLoading: Boolean = false,
@@ -663,9 +665,7 @@ private fun DetailContent(
             currentUserId = userId,
             onDismiss = onDismissComments,
             onPost = onPostComment,
-            onDelete = { id, done ->
-                viewModel.deleteComment(id, done)
-            },
+            onDelete = onDeleteComment,
         )
     }
 
@@ -2401,18 +2401,6 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     }
 }
 
-@Composable
-private fun MetaChip(text: String) {
-    Text(
-        text,
-        color = Color.White,
-        fontSize = 11.sp,
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF2A2A2A))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-    )
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
