@@ -446,10 +446,7 @@ private fun DetailContent(
                 }
             }
             item {
-                PersonalRateRow(tmdbId = details.id ?: 0, mediaType = state.mediaType)
-            }
-            item {
-                CommentsEntryButton(onClick = onOpenComments, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                CommentsEntryButton(onClick = onOpenComments, modifier = Modifier.padding(16.dp))
             }
         } else {
             // T1–Tn primeiro; season 0 = Especiais no fim
@@ -1003,6 +1000,7 @@ private fun CommentsModal(
     onPost: (text: String, onResult: (Boolean) -> Unit) -> Unit,
 ) {
     var draft by remember { mutableStateOf("") }
+    var rate by remember { mutableStateOf(0) }
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
@@ -1046,6 +1044,13 @@ private fun CommentsModal(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         ) {
                             items(comments) { comment ->
+                                val raw = comment.comment_text
+                                val rate = when {
+                                    raw.startsWith("👍 ") -> 1
+                                    raw.startsWith("👎 ") -> -1
+                                    else -> 0
+                                }
+                                val body = if (rate == 0) raw else raw.drop(2)
                                 Column(Modifier.padding(vertical = 10.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(comment.displayAuthor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -1064,9 +1069,26 @@ private fun CommentsModal(
                                                 )
                                             }
                                         }
+                                        if (rate != 0) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Icon(
+                                                if (rate > 0) Icons.Filled.ThumbUp else Icons.Filled.ThumbDown,
+                                                contentDescription = null,
+                                                tint = if (rate > 0) Color(0xFF4CAF50) else Color(0xFFE53935),
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                        }
+                                        Spacer(Modifier.weight(1f))
+                                        Text(
+                                            comment.created_at.take(10).let { d ->
+                                                if (d.length == 10) "${d.substring(8,10)}/${d.substring(5,7)}" else ""
+                                            },
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
                                     }
                                     Spacer(Modifier.height(3.dp))
-                                    Text(comment.comment_text, fontSize = 13.sp, lineHeight = 18.sp)
+                                    Text(body, fontSize = 13.sp, lineHeight = 18.sp)
                                 }
                             }
                         }
@@ -1085,6 +1107,28 @@ private fun CommentsModal(
                             modifier = Modifier.fillMaxWidth().padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(if (rate == -1) Color(0xFFE53935) else Color(0xFF2A2A2A))
+                                    .clickable { rate = if (rate == -1) 0 else -1 },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.Filled.ThumbDown, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(if (rate == 1) Color(0xFF4CAF50) else Color(0xFF2A2A2A))
+                                    .clickable { rate = if (rate == 1) 0 else 1 },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.Filled.ThumbUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(Modifier.width(8.dp))
                             OutlinedTextField(
                                 value = draft,
                                 onValueChange = { draft = it },
@@ -1106,7 +1150,12 @@ private fun CommentsModal(
                                         .graphicsLayer { rotationZ = 180f }
                                         .clip(androidx.compose.foundation.shape.CircleShape)
                                         .clickable(enabled = draft.isNotBlank()) {
-                                            onPost(draft) { success -> if (success) draft = "" }
+                                            val marked = when (rate) {
+                                                1 -> "👍 $draft"
+                                                -1 -> "👎 $draft"
+                                                else -> draft
+                                            }
+                                            onPost(marked) { success -> if (success) { draft = ""; rate = 0 } }
                                         }
                                         .padding(4.dp),
                                 )
@@ -1467,13 +1516,7 @@ private fun PersonSheet(
         listOfNotNull(person?.profile_path)
     }
     var photoIndex by remember { mutableStateOf(0) }
-    LaunchedEffect(photos.size) {
-        if (photos.size < 2) return@LaunchedEffect
-        while (true) {
-            kotlinx.coroutines.delay(4000)
-            photoIndex = (photoIndex + 1) % photos.size
-        }
-    }
+    var photoOpen by remember { mutableStateOf(false) }
     val works = person?.combined_credits?.cast.orEmpty()
         .filter { !it.poster_path.isNullOrBlank() }
         .distinctBy { it.id }
@@ -1549,7 +1592,7 @@ private fun PersonSheet(
                                 modifier = Modifier
                                     .size(72.dp)
                                     .clip(androidx.compose.foundation.shape.CircleShape)
-                                    .clickable { photoIndex = index },
+                                    .clickable { photoIndex = index; photoOpen = true },
                                 contentScale = ContentScale.Crop,
                             )
                         }
@@ -1557,6 +1600,48 @@ private fun PersonSheet(
                 }
                 FilmographyRow("Filmes", movies, onDismiss, onOpenTitle)
                 FilmographyRow("Séries", series, onDismiss, onOpenTitle)
+            }
+        }
+        if (photoOpen && photos.isNotEmpty()) {
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                AsyncImage(
+                    model = com.streamflixvip.app.network.TmdbImages.poster(photos[photoIndex], "w780"),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit,
+                )
+                Box(Modifier.statusBarsPadding().padding(8.dp)) {
+                    CircleIconButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        tint = Color.White,
+                        contentDescription = "Fechar",
+                        onClick = { photoOpen = false },
+                        size = 38.dp,
+                    )
+                }
+                if (photos.size > 1) {
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        CircleIconButton(
+                            icon = Icons.AutoMirrored.Filled.ArrowBack,
+                            tint = Color.White,
+                            contentDescription = "Anterior",
+                            onClick = { photoIndex = (photoIndex - 1 + photos.size) % photos.size },
+                            size = 42.dp,
+                        )
+                        Box(Modifier.graphicsLayer { rotationZ = 180f }) {
+                            CircleIconButton(
+                                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                                tint = Color.White,
+                                contentDescription = "Próxima",
+                                onClick = { photoIndex = (photoIndex + 1) % photos.size },
+                                size = 42.dp,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
