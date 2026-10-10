@@ -2385,7 +2385,10 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .padding(14.dp),
     ) {
         Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        if (!rest.isNullOrBlank()) {
+        val desc = source.meta?.description?.takeIf { it.isNotBlank() && !it.equals(head, ignoreCase = true) }
+        if (!desc.isNullOrBlank()) {
+            Text(desc, color = Color(0xFFD0D0D0), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 3)
+        } else if (!rest.isNullOrBlank()) {
             Text(rest, color = Color(0xFFD0D0D0), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 2)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {

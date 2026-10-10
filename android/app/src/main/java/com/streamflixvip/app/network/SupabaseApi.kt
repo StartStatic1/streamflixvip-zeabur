@@ -53,6 +53,7 @@ data class SourceMeta(
     val audio: String? = null,
     val origin: String? = null,
     val size: String? = null,
+    val description: String? = null,
 )
 
 @JsonClass(generateAdapter = true)
