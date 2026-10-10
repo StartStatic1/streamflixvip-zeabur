@@ -390,11 +390,7 @@ private fun DetailContent(
         }
 
         item {
-            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                details.overview?.let { overview ->
-                    Text(overview, fontSize = 14.sp, lineHeight = 20.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f))
-                }
-            }
+            ExpandableSynopsis(details.overview)
         }
         item {
             DetailGenreAndCast(
@@ -1331,6 +1327,34 @@ private fun SideActions(isFavorite: Boolean, onToggleFavorite: () -> Unit) {
 }
 
 @Composable
+
+@Composable
+private fun ExpandableSynopsis(overview: String?) {
+    if (overview.isNullOrBlank()) return
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Text(
+            overview,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+            maxLines = if (expanded) Int.MAX_VALUE else 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (overview.length > 140) {
+            Text(
+                if (expanded) "Mostrar menos" else "Mostrar mais",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFB5B5B5),
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .clickable { expanded = !expanded },
+            )
+        }
+    }
+}
+
 private fun TrailerWindow(trailerKey: String, onClick: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.Start) {
         Text(
