@@ -987,7 +987,20 @@ private fun CommentsModal(
                             val total = totalUp + totalDown
                             if (total > 0) {
                                 val pct = (totalUp * 100) / total
-                                Text("  $pct%", fontSize = 13.sp, color = Color(0xFFB5B5B5), modifier = Modifier.padding(start = 6.dp))
+                                val badgeColor = when {
+                                    pct >= 70 -> Color(0xFF4CAF50)
+                                    pct >= 40 -> Color(0xFFFFC107)
+                                    else -> Color(0xFFE53935)
+                                }
+                                Text(
+                                    " $pct%",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = badgeColor,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                        .background(badgeColor.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
                             }
                         }
                     }
