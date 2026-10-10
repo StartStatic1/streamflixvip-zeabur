@@ -302,7 +302,7 @@ interface CommentsApi {
         @Header("apikey") apiKey: String,
         @Query("tmdb_id") tmdbIdFilter: String,
         @Query("media_type") mediaTypeFilter: String,
-        @Query("select") select: String = "id,user_id,user_display_name,is_vip_author,comment_text,created_at",
+        @Query("select") select: String = "id,user_id,user_display_name,is_vip_author,comment_text,created_at,up_count,down_count",
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 100,
     ): List<TitleComment>
