@@ -38,7 +38,7 @@ function isVideoServerAddon(name) {
     return false;
   }
   if (t.startsWith('streamflix.')) return true;
-  return /fenix|frost|flix-streams|king\s?vod|bscine|popplay|comet|nuvio|megasource|webstream|allinone|bridge|pengu/.test(t);
+  return /fenix|frost|flix|flixhub|flix-streams|king\s?vod|bscine|popplay|comet|nuvio|megasource|webstream|allinone|bridge|pengu|goldvip|guindex|betor|magneto|jackett|aiostreams/.test(t);
 }
 
 function labelKey(label) {

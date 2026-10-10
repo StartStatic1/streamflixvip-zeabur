@@ -2351,6 +2351,25 @@ private fun ServersBrowser(
                             )
                         }
                     }
+                } else if (loading && shown.isNotEmpty()) {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        item {
+                            Text("Buscando mais servidores...", color = Color(0xFFB5B5B5), fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                        }
+                        itemsIndexed(shown) { index, source ->
+                            val locked = !isVip && isAddonSourceLabel(source.source_label) && index >= FREE_SERVER_SLOTS
+                            ServerInfoCard(source, locked, onClick = { if (locked) onLocked() else onPick(source) })
+                        }
+                        item {
+                            Box(
+                                Modifier.fillMaxWidth().height(72.dp)
+                                    .clip(RoundedCornerShape(14.dp)).background(Color(0xFF1A1A1A))
+                            )
+                        }
+                    }
                 } else if (shown.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("Nenhum servidor agora.", color = Color(0xFFB5B5B5))
