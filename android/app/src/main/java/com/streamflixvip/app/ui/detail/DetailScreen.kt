@@ -2283,9 +2283,9 @@ private fun PremiumTag(gold: androidx.compose.ui.graphics.Color) {
 private fun addonGroupOf(label: String?): String {
     val raw = label?.trim().orEmpty()
     if (raw.isEmpty()) return "Outros"
+    val known = listOf("FlixHub", "Goldvip", "FrostStream", "BeTor", "GuIndex", "TorrentsDB", "Magneto", "BestCine", "Hyper", "AIOStreams", "MegaEmbed", "Torrentio", "Jackettio", "DatCent", "Eliteapy")
+    known.firstOrNull { raw.contains(it, ignoreCase = true) }?.let { return it }
     val first = raw.split("·", "•", "|").first().trim()
-    val known = listOf("FlixHub", "Goldvip", "FrostStream", "BeTor", "Gulndex", "TorrentsDB", "Magneto", "BestCine", "Hyper", "AIOStreams", "MegaEmbed", "Torrentio", "Jackettio")
-    known.firstOrNull { first.startsWith(it, ignoreCase = true) }?.let { return it }
     return first.split(" ").firstOrNull()?.take(16) ?: "Outros"
 }
 
@@ -2407,11 +2407,11 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .clickable(onClick = onClick)
             .padding(14.dp),
     ) {
-        Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         if (!desc.isNullOrBlank()) {
-            Text(desc, color = Color(0xFFD0D0D0), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 3)
+            Text(desc, color = Color(0xFFAAAAAA), fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp), maxLines = 2)
         } else if (!rest.isNullOrBlank()) {
-            Text(rest, color = Color(0xFFD0D0D0), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 2)
+            Text(rest, color = Color(0xFFAAAAAA), fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp), maxLines = 2)
         }
         // Meta em linhas separadas — estilo Nuvio (bandeira/info abaixo)
         if (!quality.isNullOrBlank() || !audio.isNullOrBlank() || !size.isNullOrBlank()) {
