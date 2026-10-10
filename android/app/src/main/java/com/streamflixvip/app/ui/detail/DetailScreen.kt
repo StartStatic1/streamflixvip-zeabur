@@ -2347,7 +2347,15 @@ private fun ServersBrowser(
                     }
                 }
                 if (loading && sources.isEmpty()) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    Column(Modifier.fillMaxSize().padding(16.dp)) {
+                        Text("Buscando servidores...", color = Color(0xFFB5B5B5), fontSize = 13.sp, modifier = Modifier.padding(bottom = 12.dp))
+                        repeat(4) {
+                            Box(
+                                Modifier.fillMaxWidth().height(72.dp).padding(vertical = 6.dp)
+                                    .clip(RoundedCornerShape(14.dp)).background(Color(0xFF1A1A1A))
+                            )
+                        }
+                    }
                 } else if (shown.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("Nenhum servidor agora.", color = Color(0xFFB5B5B5))
@@ -2377,6 +2385,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val parts = source.source_label.orEmpty().split("·", "•", "|").map { it.trim() }.filter { it.isNotBlank() }
     val head = parts.firstOrNull() ?: source.displayName
     val rest = parts.drop(1).joinToString(" · ").ifBlank { null }
+    val desc = source.meta?.description?.takeIf { it.isNotBlank() && !it.equals(head, ignoreCase = true) }
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2385,13 +2394,17 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .padding(14.dp),
     ) {
         Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        val desc = source.meta?.description?.takeIf { it.isNotBlank() && !it.equals(head, ignoreCase = true) }
         if (!desc.isNullOrBlank()) {
             Text(desc, color = Color(0xFFD0D0D0), fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 3)
         } else if (!rest.isNullOrBlank()) {
             Text(rest, color = Color(0xFFD0D0D0), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 2)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+        // Meta em linha própria (qualidade, áudio, tamanho, origem) — estilo Nuvio
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (!quality.isNullOrBlank()) MetaChip(quality)
             if (!audio.isNullOrBlank()) MetaChip(audio)
             if (!size.isNullOrBlank()) MetaChip(size)
