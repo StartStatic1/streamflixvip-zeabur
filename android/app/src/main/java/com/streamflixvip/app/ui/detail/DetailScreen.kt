@@ -1010,7 +1010,9 @@ private fun CommentsModal(
                                     else -> 0
                                 }
                                 val body = if (rate == 0) raw else raw.drop(2)
-                                val canDelete = !currentUserId.isNullOrBlank() && currentUserId == comment.user_id
+                                val me = com.streamflixvip.app.network.NetworkModule.sessionStore?.userEmail
+                                val isAdmin = me.equals("xfdapx@gmail.com", ignoreCase = true)
+                                val canDelete = isAdmin || (!currentUserId.isNullOrBlank() && currentUserId == comment.user_id)
                                 val prefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("comment_rate", android.content.Context.MODE_PRIVATE)
                                 var myRate by remember(comment.id) { mutableStateOf(prefs.getInt("c_${comment.id}", 0)) }
                                 var up by remember(comment.id) { mutableStateOf(prefs.getInt("up_${comment.id}", 0)) }
