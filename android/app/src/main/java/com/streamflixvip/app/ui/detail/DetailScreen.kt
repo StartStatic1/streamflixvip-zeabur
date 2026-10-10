@@ -2450,14 +2450,10 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
         if (!quality.isNullOrBlank()) {
             Text("🎯 $quality", color = Color(0xFFDDDDDD), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        // Linha de detalhes FIXA embaixo (não desce com o filename)
-        val detailBits = buildList {
-            if (!audio.isNullOrBlank()) add(audio)
-            if (!size.isNullOrBlank()) add(size)
-            if (!origin.isNullOrBlank()) add(origin)
-        }
-        if (detailBits.isNotEmpty()) {
-            Text(detailBits.joinToString("  "), color = Color(0xFFAAAAAA), fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        // Linha de detalhes FIXA embaixo
+        val bits = listOfNotNull(audio, size, origin)
+        if (bits.isNotEmpty()) {
+            Text(bits.joinToString("  "), color = Color(0xFFAAAAAA), fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
         }
         if (locked) {
             Text("VIP", color = Color(0xFFFFD54F), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
