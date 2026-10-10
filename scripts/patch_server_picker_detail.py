@@ -6,6 +6,11 @@ if 'serversAvailableLabel(' in t and t.count('Escolha onde assistir') >= 2:
     print('DetailScreen already patched')
     raise SystemExit(0)
 
+# Nova aba de servidores ja substituiu o sheet antigo.
+if 'ServersBrowser(' in t:
+    print('ServersBrowser ja presente, pulando patch antigo')
+    raise SystemExit(0)
+
 old_movie_title = '''                        item {
                             Text(
                                 "Escolha o servidor",
