@@ -187,9 +187,9 @@ fun DetailScreen(
                 },
                 onWatchMovieNow = {
                     when {
+                        s.isLoadingMovieSources || s.movieSources.size > 1 -> showMovieServerPicker = true
                         s.movieSources.size == 1 -> pendingWatch = PendingSource(s.movieSources.first(), 0, 0)
-                        s.movieSources.size > 1 -> showMovieServerPicker = true
-                        else -> Unit
+                        else -> showMovieServerPicker = true
                     }
                 },
                 onDismissServerPicker = viewModel::closeServerPicker,
@@ -1355,13 +1355,7 @@ private fun DetailHeader(
             LaunchedEffect(title, showServersLoading) {
                 if (showServersLoading) sessionReady = false
             }
-            if (showServersLoading || (showWatchNowButton && !sessionReady)) {
-                Spacer(Modifier.height(16.dp))
-                HeroCinemaLoading(
-                    finishing = showWatchNowButton && !showServersLoading,
-                    onReady = { sessionReady = true },
-                )
-            } else if (showWatchNowButton) {
+            if (showWatchNowButton) {
                 Spacer(Modifier.height(16.dp))
                 // Efeito Shimmer/Brilho sutil no botão CTA
                 val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "shimmer")
