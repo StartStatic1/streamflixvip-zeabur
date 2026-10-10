@@ -55,3 +55,15 @@ class CommentsRepository {
             false
         }
 }
+
+    suspend fun deleteComment(accessToken: String, commentId: Long): Boolean =
+        try {
+            api.deleteComment(
+                apiKey = anonKey,
+                bearerToken = "Bearer $accessToken",
+                idFilter = PostgrestFilter.eq(commentId),
+            )
+            true
+        } catch (_: Exception) {
+            false
+        }

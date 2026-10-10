@@ -301,10 +301,18 @@ interface CommentsApi {
         @Header("apikey") apiKey: String,
         @Query("tmdb_id") tmdbIdFilter: String,
         @Query("media_type") mediaTypeFilter: String,
-        @Query("select") select: String = "id,user_display_name,is_vip_author,comment_text,created_at",
+        @Query("select") select: String = "id,user_id,user_display_name,is_vip_author,comment_text,created_at",
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 100,
     ): List<TitleComment>
+
+    @retrofit2.http.Headers("Content-Type: application/json", "Prefer: return=minimal")
+    @retrofit2.http.HTTP(method = "DELETE", path = "rest/v1/title_comments", hasBody = false)
+    suspend fun deleteComment(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("id") idFilter: String,
+    )
 
     @retrofit2.http.Headers("Content-Type: application/json", "Prefer: return=minimal")
     @POST("rest/v1/title_comments")
@@ -318,6 +326,7 @@ interface CommentsApi {
 @JsonClass(generateAdapter = true)
 data class TitleComment(
     val id: Long,
+    val user_id: String? = null,
     val user_display_name: String?,
     val is_vip_author: Boolean = false,
     val comment_text: String,

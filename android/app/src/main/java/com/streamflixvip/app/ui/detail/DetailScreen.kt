@@ -201,6 +201,7 @@ fun DetailScreen(
                 onTicketClick = {
                     if (!userId.isNullOrBlank()) showTicketPay = true
                 },
+                userId = userId,
             )
 
             if (showMovieServerPicker) {
@@ -215,51 +216,18 @@ fun DetailScreen(
                         pendingWatch = PendingSource(s.movieSources.first(), 0, 0)
                     }
                 }
-                ModalBottomSheet(onDismissRequest = { showMovieServerPicker = false }, sheetState = sheetState) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 48.dp),
-                    ) {
-                        item {
-                            Text(
-                                "Escolha o servidor",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                modifier = Modifier.padding(bottom = 12.dp),
-                            )
-                        }
-                        if (s.movieSources.isEmpty() && s.isLoadingMovieSources) {
-                            item {
-                                CinemaServersLoading()
-                            }
-                        } else if (s.movieSources.isEmpty() && !s.isLoadingMovieSources) {
-                            item {
-                                Text(
-                                    "Nenhum servidor disponível agora. Tente de novo em instantes.",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(vertical = 20.dp),
-                                )
-                            }
-                        } else {
-                            itemsIndexed(s.movieSources) { index, source ->
-                                val isAddon = isAddonSourceLabel(source.source_label)
-                                val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
-                                SourceRow(
-                                    source = source,
-                                    isRecommended = index == 0 && !isAddon,
-                                    isLockedForFree = lockedForFree,
-                                    onClick = {
-                                        showMovieServerPicker = false
-                                        pendingWatch = PendingSource(source, 0, 0)
-                                    },
-                                    onLockedClick = { showPremiumSheet = true },
-                                )
-                                Spacer(Modifier.height(8.dp))
-                            }
-                        }
-                    }
-                }
+                ServersBrowser(
+                    title = "Servidores",
+                    sources = s.movieSources,
+                    loading = s.isLoadingMovieSources,
+                    isVip = isVip,
+                    onDismiss = { showMovieServerPicker = false },
+                    onPick = { source ->
+                        showMovieServerPicker = false
+                        pendingWatch = PendingSource(source, 0, 0)
+                    },
+                    onLocked = { showPremiumSheet = true },
+                )
                 if (showPremiumSheet) {
                     PremiumServerSheet(
                         onDismiss = { showPremiumSheet = false },
@@ -317,6 +285,7 @@ private fun DetailContent(
     onToggleFavorite: () -> Unit,
     onTicketClick: () -> Unit = {},
     skipHeroLoading: Boolean = false,
+    userId: String? = null,
 ) {
     val details = state.details
     val title = details.title ?: details.name ?: "Sem título"
@@ -659,39 +628,18 @@ private fun DetailContent(
     if (state.mediaType == "tv" && state.showServerPickerForEpisode != null) {
         val sheetState = rememberModalBottomSheetState()
         var showPremiumSheet by remember { mutableStateOf(false) }
-        ModalBottomSheet(
-            onDismissRequest = onDismissServerPicker,
-            sheetState = sheetState,
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 48.dp),
-            ) {
-                item {
-                    Text(
-                        "Episódio ${state.showServerPickerForEpisode} · Escolha o servidor",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 12.dp),
-                    )
-                }
-                itemsIndexed(state.episodeSources) { index, source ->
-                    val isAddon = isAddonSourceLabel(source.source_label)
-                    val lockedForFree = !isVip && (index >= FREE_SERVER_SLOTS || isAddon)
-                    SourceRow(
-                        source = source,
-                        isRecommended = index == 0 && !isAddon,
-                        isLockedForFree = lockedForFree,
-                        onClick = {
-                            onDismissServerPicker()
-                            onRequestWatch(source, state.selectedSeason ?: 0, state.selectedEpisode ?: 0)
-                        },
-                        onLockedClick = { showPremiumSheet = true },
-                    )
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-        }
+        ServersBrowser(
+            title = "Episódio ${state.showServerPickerForEpisode}",
+            sources = state.episodeSources,
+            loading = state.isLoadingEpisodeSources,
+            isVip = isVip,
+            onDismiss = onDismissServerPicker,
+            onPick = { source ->
+                onDismissServerPicker()
+                onRequestWatch(source, state.selectedSeason ?: 0, state.selectedEpisode ?: 0)
+            },
+            onLocked = { showPremiumSheet = true },
+        )
         if (showPremiumSheet) {
             PremiumServerSheet(
                 onDismiss = { showPremiumSheet = false },
@@ -707,8 +655,17 @@ private fun DetailContent(
             isPosting = state.isPostingComment,
             isVip = isVip,
             canPost = state.canPostComments,
+            currentUserId = userId,
             onDismiss = onDismissComments,
             onPost = onPostComment,
+            onDelete = { id, done ->
+                val token = com.streamflixvip.app.network.NetworkModule.sessionStore?.accessToken
+                if (token.isNullOrBlank()) { done(false); return@CommentsModal }
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                    val ok = com.streamflixvip.app.data.CommentsRepository().deleteComment(token, id)
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { done(ok) }
+                }
+            },
         )
     }
 
@@ -996,8 +953,10 @@ private fun CommentsModal(
     isPosting: Boolean,
     isVip: Boolean,
     canPost: Boolean,
+    currentUserId: String? = null,
     onDismiss: () -> Unit,
     onPost: (text: String, onResult: (Boolean) -> Unit) -> Unit,
+    onDelete: (Long, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
 ) {
     var draft by remember { mutableStateOf("") }
     var rate by remember { mutableStateOf(0) }
@@ -1051,6 +1010,11 @@ private fun CommentsModal(
                                     else -> 0
                                 }
                                 val body = if (rate == 0) raw else raw.drop(2)
+                                val canDelete = !currentUserId.isNullOrBlank() && currentUserId == comment.user_id
+                                val prefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("comment_rate", android.content.Context.MODE_PRIVATE)
+                                var myRate by remember(comment.id) { mutableStateOf(prefs.getInt("c_${comment.id}", 0)) }
+                                var up by remember(comment.id) { mutableStateOf(prefs.getInt("up_${comment.id}", 0)) }
+                                var down by remember(comment.id) { mutableStateOf(prefs.getInt("down_${comment.id}", 0)) }
                                 Column(Modifier.padding(vertical = 10.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(comment.displayAuthor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -1089,6 +1053,40 @@ private fun CommentsModal(
                                     }
                                     Spacer(Modifier.height(3.dp))
                                     Text(body, fontSize = 13.sp, lineHeight = 18.sp)
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                                        Icon(
+                                            Icons.Filled.ThumbUp,
+                                            contentDescription = null,
+                                            tint = if (myRate == 1) Color(0xFF4CAF50) else Color(0xFF8A8A8A),
+                                            modifier = Modifier.size(16.dp).clickable {
+                                                if (myRate == 1) { myRate = 0; up = (up - 1).coerceAtLeast(0) }
+                                                else { if (myRate == -1) down = (down - 1).coerceAtLeast(0); myRate = 1; up += 1 }
+                                                prefs.edit().putInt("c_${comment.id}", myRate).putInt("up_${comment.id}", up).putInt("down_${comment.id}", down).apply()
+                                            },
+                                        )
+                                        Text(" $up", fontSize = 12.sp, color = Color(0xFFB5B5B5))
+                                        Spacer(Modifier.width(12.dp))
+                                        Icon(
+                                            Icons.Filled.ThumbDown,
+                                            contentDescription = null,
+                                            tint = if (myRate == -1) Color(0xFFE53935) else Color(0xFF8A8A8A),
+                                            modifier = Modifier.size(16.dp).clickable {
+                                                if (myRate == -1) { myRate = 0; down = (down - 1).coerceAtLeast(0) }
+                                                else { if (myRate == 1) up = (up - 1).coerceAtLeast(0); myRate = -1; down += 1 }
+                                                prefs.edit().putInt("c_${comment.id}", myRate).putInt("up_${comment.id}", up).putInt("down_${comment.id}", down).apply()
+                                            },
+                                        )
+                                        Text(" $down", fontSize = 12.sp, color = Color(0xFFB5B5B5))
+                                        if (canDelete) {
+                                            Spacer(Modifier.weight(1f))
+                                            Text(
+                                                "Excluir",
+                                                fontSize = 12.sp,
+                                                color = Color(0xFFE53935),
+                                                modifier = Modifier.clickable { onDelete(comment.id) { } },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -2279,6 +2277,114 @@ private fun PremiumTag(gold: androidx.compose.ui.graphics.Color) {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+
+private fun addonGroupOf(label: String?): String {
+    val raw = label?.trim().orEmpty()
+    if (raw.isEmpty()) return "Outros"
+    val first = raw.split("·", "•", "|").first().trim()
+    val known = listOf("FlixHub", "Goldvip", "FrostStream", "BeTor", "Gulndex", "TorrentsDB", "Magneto", "BestCine", "Hyper", "AIOStreams", "MegaEmbed", "Torrentio", "Jackettio")
+    known.firstOrNull { first.startsWith(it, ignoreCase = true) }?.let { return it }
+    return first.split(" ").firstOrNull()?.take(16) ?: "Outros"
+}
+
+@Composable
+private fun ServersBrowser(
+    title: String,
+    sources: List<VipSource>,
+    loading: Boolean,
+    isVip: Boolean,
+    onDismiss: () -> Unit,
+    onPick: (VipSource) -> Unit,
+    onLocked: () -> Unit,
+) {
+    val groups = sources.groupBy { addonGroupOf(it.source_label) }.toSortedMap()
+    val chips = listOf("Todos") + groups.keys
+    var selected by remember { mutableStateOf("Todos") }
+    val shown = if (selected == "Todos") sources else groups[selected].orEmpty()
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(Modifier.fillMaxSize(), color = Color.Black) {
+            Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircleIconButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        tint = Color.White,
+                        contentDescription = "Voltar",
+                        onClick = onDismiss,
+                        size = 38.dp,
+                    )
+                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 8.dp))
+                }
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    chips.forEach { chip ->
+                        val on = chip == selected
+                        Text(
+                            chip,
+                            color = if (on) Color.Black else Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (on) Color.White else Color(0xFF2A2A2A))
+                                .clickable { selected = chip }
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+                if (loading && sources.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                } else if (shown.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Nenhum servidor agora.", color = Color(0xFFB5B5B5))
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        itemsIndexed(shown) { index, source ->
+                            val locked = !isVip && isAddonSourceLabel(source.source_label) && index >= FREE_SERVER_SLOTS
+                            ServerInfoCard(source, locked, onClick = { if (locked) onLocked() else onPick(source) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Unit) {
+    val quality = qualityFromSource(source)
+    val audio = audioFromSource(source)
+    val origin = originFromSource(source)
+    val size = sizeFromSource(source)
+    Column(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF161616))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+    ) {
+        Text(source.displayName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        if (!quality.isNullOrBlank()) Text(quality, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+        if (!origin.isNullOrBlank()) Text(origin, color = Color(0xFFB5B5B5), fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
+            if (!audio.isNullOrBlank()) Text(audio, color = Color(0xFFB5B5B5), fontSize = 12.sp)
+            if (!size.isNullOrBlank()) Text(size, color = Color(0xFFB5B5B5), fontSize = 12.sp)
+            if (locked) Text("VIP", color = Color(0xFFFFC107), fontSize = 12.sp)
+        }
+    }
+}
+
 private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
     val gold = MaterialTheme.colorScheme.primary
