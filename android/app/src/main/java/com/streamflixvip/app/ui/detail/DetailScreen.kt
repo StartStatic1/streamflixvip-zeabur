@@ -1068,7 +1068,7 @@ private fun CommentsModal(
                                             Icons.Filled.ThumbUp,
                                             contentDescription = null,
                                             tint = if (myRate == 1) Color(0xFF4CAF50) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable { onVote(comment.id, 1); myRate = if (myRate == 1) 0 else 1 },
+                                            modifier = Modifier.size(16.dp).clickable { if (myRate != 1) { onVote(comment.id, 1); myRate = 1 } },
                                         )
                                         Text(" ${comment.up_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
@@ -1076,7 +1076,7 @@ private fun CommentsModal(
                                             Icons.Filled.ThumbDown,
                                             contentDescription = null,
                                             tint = if (myRate == -1) Color(0xFFE53935) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable { onVote(comment.id, -1); myRate = if (myRate == -1) 0 else -1 },
+                                            modifier = Modifier.size(16.dp).clickable { if (myRate != -1) { onVote(comment.id, -1); myRate = -1 } },
                                         )
                                         Text(" ${comment.down_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
@@ -2403,7 +2403,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             ?: Regex("(?:Goldvip|Srcine|Kraps|Stank|Gooddb)\\s+Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value
     } else null
     val head = if (isFlix && serverName != null) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
-    val desc = source.meta?.description?.takeIf { it.isNotBlank() } ?: label.takeIf { !isFlix }
+    val desc = if (isFlix) null else source.meta?.description?.takeIf { it.isNotBlank() } ?: label.takeIf { it.isNotBlank() && !it.equals(head, ignoreCase = true) }
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
