@@ -2392,6 +2392,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     }
 }
 
+@Composable
 private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
     val gold = MaterialTheme.colorScheme.primary
