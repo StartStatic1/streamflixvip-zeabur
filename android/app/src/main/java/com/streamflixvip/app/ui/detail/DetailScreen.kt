@@ -2411,11 +2411,12 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val isFlix = label.contains("FlixHub", ignoreCase = true) || label.contains("Server", ignoreCase = true)
     val serverName = if (isFlix) {
         Regex("(?:FlixHub\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value
-            ?: Regex("(?:Goldvip|Srcine|Kraps|Stank|Gooddb)\\s+Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value
+            ?: Regex("(?:Goldvip|Srcine|Kraps|Stank|Gooddb|Infinity)\\s+Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value
     } else null
     val head = if (isFlix && serverName != null) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
-    val filename = source.meta?.description?.takeIf { it.isNotBlank() && !it.equals(head, ignoreCase = true) }
-        ?: if (!isFlix) label.split("·", "•", "|").drop(1).joinToString(" ").trim().ifBlank { null } else null
+    val filename = if (isFlix) null else source.meta?.description?.takeIf { it.isNotBlank() }
+        ?: label.split("·", "•", "|").drop(1).joinToString(" ").trim().ifBlank { null }
+    val movieName = if (isFlix) source.meta?.description?.takeIf { it.isNotBlank() } else null
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2424,7 +2425,10 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .padding(14.dp),
     ) {
         Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-        if (!filename.isNullOrBlank()) {
+        if (!movieName.isNullOrBlank()) {
+            Text("🎬 $movieName", color = Color(0xFFEEEEEE), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 1)
+        }
+        if (!filename.isNullOrBlank() && !filename.equals(head, ignoreCase = true)) {
             Text(filename, color = Color(0xFFCCCCCC), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 2)
         }
         if (serverName != null) {
@@ -2433,9 +2437,14 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
         if (!quality.isNullOrBlank()) {
             Text("🎯 $quality", color = Color(0xFFDDDDDD), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        val metaBits = listOfNotNull(audio, size, origin).joinToString("  ")
-        if (metaBits.isNotBlank()) {
-            Text(metaBits, color = Color(0xFFAAAAAA), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
+        // Linha de detalhes FIXA embaixo (não desce com o filename)
+        val detailBits = buildList {
+            if (!audio.isNullOrBlank()) add(audio)
+            if (!size.isNullOrBlank()) add(size)
+            if (!origin.isNullOrBlank()) add(origin)
+        }
+        if (detailBits.isNotEmpty()) {
+            Text(detailBits.joinToString("  "), color = Color(0xFFAAAAAA), fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
         }
         if (locked) {
             Text("VIP", color = Color(0xFFFFD54F), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
@@ -2444,7 +2453,6 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
 }
 
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
