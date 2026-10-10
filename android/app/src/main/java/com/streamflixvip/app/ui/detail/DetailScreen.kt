@@ -595,23 +595,33 @@ private fun DetailContent(
                 onClick = onBack,
                 size = 36.dp,
             )
-            Text(
-                title,
-                color = Color.White,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
+            val logo = details.bestLogoUrl()
+            if (!logo.isNullOrBlank()) {
+                AsyncImage(
+                    model = logo,
+                    contentDescription = title,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.weight(1f).height(28.dp).padding(horizontal = 8.dp),
+                )
+            } else {
+                Text(
+                    title,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
             Spacer(Modifier.width(36.dp))
         }
     }
     }
 
     personId?.let { id ->
-        PersonSheet(personId = id, onDismiss = { personId = null })
+        PersonSheet(personId = id, onDismiss = { personId = null }, onOpenTitle = onOpenTitle)
     }
 
     // Só abre quando o episódio tocado tem 2+ servidores — ver a
@@ -1394,46 +1404,117 @@ private fun ExpandableSynopsis(overview: String?) {
 
 
 @Composable
-private fun PersonSheet(personId: Int, onDismiss: () -> Unit) {
+private fun PersonSheet(
+    personId: Int,
+    onDismiss: () -> Unit,
+    onOpenTitle: (Int, String) -> Unit,
+) {
     var person by remember { mutableStateOf<com.streamflixvip.app.network.TmdbResponse?>(null) }
     var failed by remember { mutableStateOf(false) }
     LaunchedEffect(personId) {
         failed = false
         person = null
         try {
-            person = com.streamflixvip.app.network.NetworkModule.tmdbApi.request(
+            var data = com.streamflixvip.app.network.NetworkModule.tmdbApi.request(
                 path = "/person/$personId",
                 appendToResponse = "combined_credits",
             )
+            if (data.biography.isNullOrBlank()) {
+                val en = com.streamflixvip.app.network.NetworkModule.tmdbApi.request(
+                    path = "/person/$personId?language=en-US",
+                    appendToResponse = "combined_credits",
+                )
+                if (!en.biography.isNullOrBlank()) data = en
+            }
+            person = data
         } catch (_: Exception) {
             failed = true
         }
     }
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF161616)) {
-            Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+    val works = person?.combined_credits?.cast.orEmpty()
+        .filter { !it.poster_path.isNullOrBlank() }
+        .distinctBy { it.id }
+        .sortedByDescending { it.popularity ?: 0.0 }
+        .take(18)
+    val hero = works.firstOrNull()?.backdrop_path?.let { com.streamflixvip.app.network.TmdbImages.backdrop(it, "w780") }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Box(Modifier.fillMaxWidth().height(220.dp)) {
+                AsyncImage(
+                    model = hero,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+                CircleIconButton(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    tint = Color.White,
+                    contentDescription = "Voltar",
+                    onClick = onDismiss,
+                    size = 38.dp,
+                )
+                Row(
+                    modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     AsyncImage(
                         model = com.streamflixvip.app.network.TmdbImages.poster(person?.profile_path, "w185"),
                         contentDescription = person?.name,
-                        modifier = Modifier.size(64.dp).clip(androidx.compose.foundation.shape.CircleShape),
+                        modifier = Modifier.size(84.dp).clip(androidx.compose.foundation.shape.CircleShape),
                         contentScale = ContentScale.Crop,
                     )
                     Spacer(Modifier.width(12.dp))
-                    Text(person?.name ?: "Carregando…", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(person?.name ?: "Carregando…", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 22.sp)
                 }
-                Spacer(Modifier.height(12.dp))
+            }
+            Column(Modifier.padding(16.dp)) {
+                Text("Biografia", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Spacer(Modifier.height(8.dp))
                 Text(
                     when {
-                        failed -> "Não foi possível carregar a biografia."
-                        person == null -> "Buscando biografia…"
-                        person?.biography.isNullOrBlank() -> "Sem biografia neste idioma."
+                        failed -> "Não foi possível carregar."
+                        person == null -> "Buscando…"
+                        person?.biography.isNullOrBlank() -> "Sem biografia cadastrada."
                         else -> person?.biography.orEmpty()
                     },
                     color = Color(0xFFD0D0D0),
-                    fontSize = 13.sp,
-                    lineHeight = 18.sp,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
                 )
+                if (works.isNotEmpty()) {
+                    Spacer(Modifier.height(18.dp))
+                    Text("Também em", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    ) {
+                        works.forEach { item ->
+                            Column(
+                                Modifier.width(96.dp).clickable {
+                                    onDismiss()
+                                    onOpenTitle(item.id, item.resolvedMediaType)
+                                },
+                            ) {
+                                AsyncImage(
+                                    model = com.streamflixvip.app.network.TmdbImages.poster(item.poster_path, "w185"),
+                                    contentDescription = item.displayTitle,
+                                    modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Crop,
+                                )
+                                Text(
+                                    item.displayTitle,
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(top = 4.dp),
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

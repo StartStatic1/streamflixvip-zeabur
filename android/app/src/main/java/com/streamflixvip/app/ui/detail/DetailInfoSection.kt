@@ -53,10 +53,11 @@ fun DetailGenreAndCast(
     ) {
         if (directors.isNotEmpty()) {
             Text(
-                text = "Dir. " + directors.joinToString(" · ") { it.name },
-                fontSize = 12.sp,
+                text = "Diretor: " + directors.joinToString(" · ") { it.name },
+                fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
-                color = StreamFlixColors.TextMuted,
+                color = StreamFlixColors.Text,
+                modifier = Modifier.clickable { onPersonClick(directors.first().id) },
             )
             Spacer(Modifier.height(12.dp))
         }
