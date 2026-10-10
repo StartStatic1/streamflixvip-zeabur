@@ -222,7 +222,7 @@ fun DetailScreen(
                     }
                 }
                 ServersBrowser(
-                    title = "Servidores",
+                    title = s.details.title ?: s.details.name ?: "Servidores",
                     sources = s.movieSources,
                     loading = s.isLoadingMovieSources,
                     isVip = isVip,
@@ -634,7 +634,7 @@ private fun DetailContent(
         val sheetState = rememberModalBottomSheetState()
         var showPremiumSheet by remember { mutableStateOf(false) }
         ServersBrowser(
-            title = "Episódio ${state.showServerPickerForEpisode}",
+            title = state.details.name ?: state.details.title ?: "Episódio",
             sources = state.episodeSources,
             loading = state.isLoadingEpisodeSources,
             isVip = isVip,
@@ -664,12 +664,7 @@ private fun DetailContent(
             onDismiss = onDismissComments,
             onPost = onPostComment,
             onDelete = { id, done ->
-                val token = com.streamflixvip.app.network.NetworkModule.sessionStore?.accessToken
-                if (token.isNullOrBlank()) done(false)
-                else CoroutineScope(Dispatchers.IO).launch {
-                    val ok = com.streamflixvip.app.data.CommentsRepository().deleteComment(token, id)
-                    withContext(Dispatchers.Main) { done(ok) }
-                }
+                viewModel.deleteComment(id, done)
             },
         )
     }
@@ -1018,7 +1013,8 @@ private fun CommentsModal(
                                 val me = com.streamflixvip.app.network.NetworkModule.sessionStore?.userEmail
                                 val isAdmin = me.equals("xfdapx@gmail.com", ignoreCase = true)
                                 val canDelete = isAdmin || (!currentUserId.isNullOrBlank() && currentUserId == comment.user_id)
-                                val prefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("comment_rate", android.content.Context.MODE_PRIVATE)
+                                val ctx = androidx.compose.ui.platform.LocalContext.current
+                                val prefs = ctx.getSharedPreferences("comment_rate", android.content.Context.MODE_PRIVATE)
                                 var myRate by remember(comment.id) { mutableStateOf(prefs.getInt("c_${comment.id}", 0)) }
                                 var up by remember(comment.id) { mutableStateOf(prefs.getInt("up_${comment.id}", 0)) }
                                 var down by remember(comment.id) { mutableStateOf(prefs.getInt("down_${comment.id}", 0)) }
@@ -1090,7 +1086,11 @@ private fun CommentsModal(
                                                 "Excluir",
                                                 fontSize = 12.sp,
                                                 color = Color(0xFFE53935),
-                                                modifier = Modifier.clickable { onDelete(comment.id) { } },
+                                                modifier = Modifier.clickable {
+                                                onDelete(comment.id) { ok ->
+                                                    if (!ok) android.widget.Toast.makeText(ctx, "Não foi possível excluir", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
                                             )
                                         }
                                     }
@@ -2325,7 +2325,7 @@ private fun ServersBrowser(
                         onClick = onDismiss,
                         size = 38.dp,
                     )
-                    Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 8.dp))
+                    Text(title, color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, modifier = Modifier.padding(start = 8.dp).weight(1f), maxLines = 2)
                 }
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -2374,6 +2374,9 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val audio = audioFromSource(source)
     val origin = originFromSource(source)
     val size = sizeFromSource(source)
+    val parts = source.source_label.orEmpty().split("·", "•", "|").map { it.trim() }.filter { it.isNotBlank() }
+    val head = parts.firstOrNull() ?: source.displayName
+    val rest = parts.drop(1).joinToString(" · ").ifBlank { null }
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2381,15 +2384,31 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .clickable(onClick = onClick)
             .padding(14.dp),
     ) {
-        Text(source.displayName, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-        if (!quality.isNullOrBlank()) Text(quality, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
-        if (!origin.isNullOrBlank()) Text(origin, color = Color(0xFFB5B5B5), fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 4.dp)) {
-            if (!audio.isNullOrBlank()) Text(audio, color = Color(0xFFB5B5B5), fontSize = 12.sp)
-            if (!size.isNullOrBlank()) Text(size, color = Color(0xFFB5B5B5), fontSize = 12.sp)
-            if (locked) Text("VIP", color = Color(0xFFFFC107), fontSize = 12.sp)
+        Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        if (!rest.isNullOrBlank()) {
+            Text(rest, color = Color(0xFFD0D0D0), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 2)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            if (!quality.isNullOrBlank()) MetaChip(quality)
+            if (!audio.isNullOrBlank()) MetaChip(audio)
+            if (!size.isNullOrBlank()) MetaChip(size)
+            if (!origin.isNullOrBlank()) MetaChip(origin)
+            if (locked) MetaChip("VIP")
         }
     }
+}
+
+@Composable
+private fun MetaChip(text: String) {
+    Text(
+        text,
+        color = Color.White,
+        fontSize = 11.sp,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF2A2A2A))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

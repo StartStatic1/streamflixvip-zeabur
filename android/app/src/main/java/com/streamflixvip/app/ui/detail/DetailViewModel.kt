@@ -429,6 +429,19 @@ class DetailViewModel(
         }
     }
 
+    fun deleteComment(commentId: Long, onResult: (Boolean) -> Unit) {
+        val token = accessToken ?: NetworkModule.sessionStore?.accessToken
+        if (token.isNullOrBlank()) { onResult(false); return }
+        viewModelScope.launch {
+            val ok = commentsRepository.deleteComment(token, commentId)
+            val current = _uiState.value as? DetailUiState.Success
+            if (ok && current != null) {
+                _uiState.value = current.copy(comments = current.comments.filter { it.id != commentId })
+            }
+            onResult(ok)
+        }
+    }
+
     fun toggleFavorite() {
         val current = _uiState.value as? DetailUiState.Success ?: return
         if (current.isTogglingFavorite) return
