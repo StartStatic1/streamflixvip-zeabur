@@ -320,7 +320,7 @@ interface CommentsApi {
     suspend fun voteComment(
         @Header("apikey") apiKey: String,
         @Header("Authorization") bearerToken: String,
-        @Body body: VoteRequest,
+        @retrofit2.http.Body body: VoteRequest,
     )
 
     @POST("rest/v1/title_comments")
