@@ -13,6 +13,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.widthIn
@@ -1408,7 +1411,7 @@ private fun PersonSheet(personId: Int, onDismiss: () -> Unit) {
     }
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFF161616)) {
-            Column(Modifier.padding(16.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+            Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     AsyncImage(
                         model = com.streamflixvip.app.network.TmdbImages.poster(person?.profile_path, "w185"),
@@ -1450,7 +1453,7 @@ private fun TrailerWindow(
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
         ) {
             clips.forEach { clip ->
                 Column(Modifier.width(168.dp).clickable { onClick(clip.key) }) {
