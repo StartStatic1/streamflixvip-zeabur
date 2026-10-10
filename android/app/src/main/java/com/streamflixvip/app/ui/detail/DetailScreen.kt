@@ -1078,8 +1078,6 @@ private fun CommentsModal(
  * (ano, duração, nota) — tudo escaneável num único golpe de vista antes
  * de decidir assistir.
  */
-@Composable
-
 private fun com.streamflixvip.app.network.TmdbResponse.bestLogoUrl(): String? {
     val logos = images?.logos.orEmpty().filter { !it.file_path.isNullOrBlank() }
     val pick = logos.firstOrNull { it.iso_639_1 == "pt" }
@@ -1089,6 +1087,7 @@ private fun com.streamflixvip.app.network.TmdbResponse.bestLogoUrl(): String? {
     return com.streamflixvip.app.network.TmdbImages.url(pick?.file_path, "w500")
 }
 
+@Composable
 private fun DetailHeader(
     title: String,
     tagline: String?,
@@ -1351,8 +1350,6 @@ private fun SideActions(isFavorite: Boolean, onToggleFavorite: () -> Unit) {
 }
 
 @Composable
-
-@Composable
 private fun ExpandableSynopsis(overview: String?) {
     if (overview.isNullOrBlank()) return
     var expanded by rememberSaveable { mutableStateOf(false) }
@@ -1379,6 +1376,7 @@ private fun ExpandableSynopsis(overview: String?) {
     }
 }
 
+@Composable
 private fun TrailerWindow(trailerKey: String, onClick: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.Start) {
         Text(
