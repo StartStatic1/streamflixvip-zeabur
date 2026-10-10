@@ -1,7 +1,7 @@
 {
-  "versionCode": 150800,
-  "versionName": "15.8.0",
+  "versionCode": 150900,
+  "versionName": "15.9.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias, novidades"
+  "releaseNotes": "Melhorado tela detalhes, adicionado comentários com nota, biografia atores ao clicar na foto, mudanças layout."
 }
