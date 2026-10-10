@@ -316,8 +316,7 @@ private fun DetailContent(
     // Assistir so quando existe fonte — evita clique em titulo fora da grade
     // (loading embaixo; se vazio, card Pedir filme)
     val heroWatchEnabled = !skipHeroLoading && state.mediaType == "movie" &&
-        !state.movieIsLocked(isVip) &&
-        state.movieSources.isNotEmpty()
+        !state.movieIsLocked(isVip)
     val heroServersLoading = !skipHeroLoading && state.mediaType == "movie" &&
         !state.movieIsLocked(isVip) &&
         state.isLoadingMovieSources &&
@@ -2395,17 +2394,27 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
         } else if (!rest.isNullOrBlank()) {
             Text(rest, color = Color(0xFFD0D0D0), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 2)
         }
-        // Meta em linha própria (qualidade, áudio, tamanho, origem) — estilo Nuvio
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(top = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (!quality.isNullOrBlank()) MetaChip(quality)
-            if (!audio.isNullOrBlank()) MetaChip(audio)
-            if (!size.isNullOrBlank()) MetaChip(size)
-            if (!origin.isNullOrBlank()) MetaChip(origin)
-            if (locked) MetaChip("VIP")
+        // Meta em linhas separadas — estilo Nuvio (bandeira/info abaixo)
+        if (!quality.isNullOrBlank() || !audio.isNullOrBlank() || !size.isNullOrBlank()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (!quality.isNullOrBlank()) MetaChip(quality)
+                if (!audio.isNullOrBlank()) MetaChip(audio)
+                if (!size.isNullOrBlank()) MetaChip(size)
+            }
+        }
+        if (!origin.isNullOrBlank() || locked) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(top = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (!origin.isNullOrBlank()) MetaChip(origin)
+                if (locked) MetaChip("VIP")
+            }
         }
     }
 }
