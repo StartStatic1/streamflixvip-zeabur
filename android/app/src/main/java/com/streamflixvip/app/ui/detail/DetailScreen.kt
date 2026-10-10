@@ -1397,7 +1397,10 @@ private fun PersonSheet(personId: Int, onDismiss: () -> Unit) {
         failed = false
         person = null
         try {
-            person = com.streamflixvip.app.data.CatalogRepository.getPerson(personId)
+            person = com.streamflixvip.app.network.NetworkModule.tmdbApi.request(
+                path = "/person/$personId",
+                appendToResponse = "combined_credits",
+            )
         } catch (_: Exception) {
             failed = true
         }
