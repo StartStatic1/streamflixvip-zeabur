@@ -360,6 +360,7 @@ private fun DetailContent(
                 onWatchNowClick = onWatchMovieNow,
                 onBack = onBack,
                 trailerKey = state.trailerKey,
+                logoUrl = details.bestLogoUrl(),
                 onTrailerClick = {
                     // Abre o trailer em modal fullscreen dentro do próprio
                     // app — sem sair pro YouTube ou navegador externo.
@@ -1078,6 +1079,16 @@ private fun CommentsModal(
  * de decidir assistir.
  */
 @Composable
+
+private fun com.streamflixvip.app.network.TmdbResponse.bestLogoUrl(): String? {
+    val logos = images?.logos.orEmpty().filter { !it.file_path.isNullOrBlank() }
+    val pick = logos.firstOrNull { it.iso_639_1 == "pt" }
+        ?: logos.firstOrNull { it.iso_639_1 == "en" }
+        ?: logos.firstOrNull { it.iso_639_1 == null }
+        ?: logos.maxByOrNull { it.vote_average ?: 0.0 }
+    return com.streamflixvip.app.network.TmdbImages.url(pick?.file_path, "w500")
+}
+
 private fun DetailHeader(
     title: String,
     tagline: String?,
@@ -1093,6 +1104,7 @@ private fun DetailHeader(
     onWatchNowClick: () -> Unit,
     onBack: () -> Unit,
     trailerKey: String?,
+    logoUrl: String? = null,
     onTrailerClick: () -> Unit,
     onShare: () -> Unit,
 ) {
@@ -1170,6 +1182,17 @@ private fun DetailHeader(
                 .padding(top = 310.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            if (!logoUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = logoUrl,
+                    contentDescription = title,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(92.dp)
+                        .padding(horizontal = 28.dp),
+                )
+            } else {
             Text(
                 title,
                 fontSize = 28.sp,
@@ -1187,6 +1210,7 @@ private fun DetailHeader(
                 ),
                 modifier = Modifier.padding(horizontal = 28.dp),
             )
+            }
             tagline?.takeIf { it.isNotBlank() }?.let {
                 Spacer(Modifier.height(4.dp))
                 Text(

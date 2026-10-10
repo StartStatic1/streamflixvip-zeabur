@@ -56,10 +56,10 @@ class CatalogRepository {
     }
 
     suspend fun getMovieDetails(tmdbId: Int) =
-        tmdb.request(path = "/movie/$tmdbId", appendToResponse = "videos,credits")
+        tmdb.request(path = "/movie/$tmdbId", appendToResponse = "videos,credits,images")
 
     suspend fun getSeriesDetails(tmdbId: Int) =
-        tmdb.request(path = "/tv/$tmdbId", appendToResponse = "videos,credits")
+        tmdb.request(path = "/tv/$tmdbId", appendToResponse = "videos,credits,images")
 
     suspend fun getSimilarTitles(tmdbId: Int, mediaType: String): List<TmdbItem> =
         try {

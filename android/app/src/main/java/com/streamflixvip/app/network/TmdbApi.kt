@@ -43,6 +43,7 @@ data class TmdbResponse(
     val original_language: String? = null,
     val videos: TmdbVideosResponse? = null,
     val credits: TmdbCredits? = null,
+    val images: TmdbImagesResponse? = null,
     val biography: String? = null,
     val birthday: String? = null,
     val place_of_birth: String? = null,
@@ -160,3 +161,14 @@ data class TmdbEpisode(
     val displayRuntime: String? get() = runtime?.takeIf { it > 0 }?.let { "$it min" }
     val displayName: String get() = name?.takeIf { it.isNotBlank() } ?: "Episódio $episode_number"
 }
+
+
+@JsonClass(generateAdapter = true)
+data class TmdbImagesResponse(val logos: List<TmdbLogo>? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbLogo(
+    val file_path: String? = null,
+    val iso_639_1: String? = null,
+    val vote_average: Double? = null,
+)
