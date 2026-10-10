@@ -1447,13 +1447,15 @@ private fun PersonSheet(
                     contentScale = ContentScale.Crop,
                 )
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
-                CircleIconButton(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
-                    tint = Color.White,
-                    contentDescription = "Voltar",
-                    onClick = onDismiss,
-                    size = 38.dp,
-                )
+                Box(Modifier.statusBarsPadding().padding(8.dp)) {
+                    CircleIconButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        tint = Color.White,
+                        contentDescription = "Voltar",
+                        onClick = onDismiss,
+                        size = 38.dp,
+                    )
+                }
                 Row(
                     modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
