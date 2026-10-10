@@ -660,8 +660,8 @@ private fun DetailContent(
             onPost = onPostComment,
             onDelete = { id, done ->
                 val token = com.streamflixvip.app.network.NetworkModule.sessionStore?.accessToken
-                if (token.isNullOrBlank()) { done(false); return@CommentsModal }
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                if (token.isNullOrBlank()) done(false)
+                else kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                     val ok = com.streamflixvip.app.data.CommentsRepository().deleteComment(token, id)
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) { done(ok) }
                 }
@@ -2288,6 +2288,7 @@ private fun addonGroupOf(label: String?): String {
 }
 
 @Composable
+@Composable
 private fun ServersBrowser(
     title: String,
     sources: List<VipSource>,
@@ -2361,6 +2362,7 @@ private fun ServersBrowser(
     }
 }
 
+@Composable
 @Composable
 private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Unit) {
     val quality = qualityFromSource(source)

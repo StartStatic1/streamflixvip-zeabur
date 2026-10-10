@@ -54,7 +54,6 @@ class CommentsRepository {
         } catch (_: Exception) {
             false
         }
-}
 
     suspend fun deleteComment(accessToken: String, commentId: Long): Boolean =
         try {
@@ -67,3 +66,4 @@ class CommentsRepository {
         } catch (_: Exception) {
             false
         }
+}
