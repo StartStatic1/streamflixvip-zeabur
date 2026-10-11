@@ -2445,16 +2445,16 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     ) {
         Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         if (!movieName.isNullOrBlank()) {
-            Text(movieName, color = Color(0xFFDDDDDD), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
+            Text("🎬 $movieName", color = Color(0xFFDDDDDD), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
         }
         if (!filename.isNullOrBlank() && !filename.equals(head, ignoreCase = true)) {
             Text(filename, color = Color(0xFFAAAAAA), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp), maxLines = 2, lineHeight = 15.sp)
         }
         if (serverName != null) {
-            Text(serverName, color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("⚡ $serverName", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         }
         if (!quality.isNullOrBlank()) {
-            Text(quality, color = Color(0xFFCCCCCC), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+            Text("🎯 $quality", color = Color(0xFFCCCCCC), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
         val bits = listOfNotNull(audio, size, origin)
         if (bits.isNotEmpty()) {
