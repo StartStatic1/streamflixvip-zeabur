@@ -2429,16 +2429,13 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val label = source.source_label.orEmpty()
     val desc = source.meta?.description.orEmpty()
     val lines = desc.split("\n").map { it.trim() }.filter { it.isNotBlank() }
-    val isFlix = label.contains("FlixHub", ignoreCase = true) || desc.contains("FlixHub", ignoreCase = true) || lines.any { it.contains("Server", ignoreCase = true) }
-    // Para FlixHub: usa as linhas que o manifest já manda
-    val movieLine = lines.firstOrNull { it.startsWith("🎬") || (!it.contains("Server", ignoreCase = true) && !it.contains("FULL HD") && !it.contains("🎯")) }
+    val isFlix = label.contains("FlixHub", ignoreCase = true) || desc.contains("FlixHub", ignoreCase = true)
+    val movieLine = lines.firstOrNull { it.startsWith("🎬") || it.startsWith("📺") }
     val serverLine = lines.firstOrNull { it.contains("Server", ignoreCase = true) }
-    val qualityLine = lines.firstOrNull { it.contains("🎯") || it.contains("FULL HD", ignoreCase = true) || it.contains("1080p") || it.contains("4K") }
     val head = if (isFlix) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
-    val serverName = serverLine?.replace(Regex("^[⚡🚀🎬🎯\\s]+"), "")?.trim()
-        ?: Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find("$label $desc")?.value?.trim()
+    val serverName = serverLine?.replace(Regex("^[⚡🚀\\s]+"), "")?.trim()
     val movieName = movieLine?.replace(Regex("^[🎬📺\\s]+"), "")?.trim()
-    val filename = if (!isFlix) lines.firstOrNull { !it.contains("Server") && it.length > 10 } else null
+    val filename = if (!isFlix) lines.firstOrNull { it.length > 8 && !it.contains("Server") } else null
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2446,23 +2443,22 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .clickable(onClick = onClick)
             .padding(14.dp),
     ) {
-        Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        if (!movieName.isNullOrBlank() && isFlix) {
-            Text("🎬 $movieName", color = Color(0xFFEEEEEE), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
+        Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        if (!movieName.isNullOrBlank()) {
+            Text(movieName, color = Color(0xFFDDDDDD), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
         }
-        if (!filename.isNullOrBlank() && !isFlix && !filename.equals(head, ignoreCase = true)) {
-            Text(filename, color = Color(0xFFBBBBBB), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 2, lineHeight = 16.sp)
+        if (!filename.isNullOrBlank() && !filename.equals(head, ignoreCase = true)) {
+            Text(filename, color = Color(0xFFAAAAAA), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp), maxLines = 2, lineHeight = 15.sp)
         }
         if (serverName != null) {
-            Text("⚡ $serverName", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            Text(serverName, color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         }
-        val q = qualityLine?.replace(Regex("^[🎯\\s]+"), "")?.trim() ?: quality
-        if (!q.isNullOrBlank()) {
-            Text("🎯 $q", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+        if (!quality.isNullOrBlank()) {
+            Text(quality, color = Color(0xFFCCCCCC), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
         val bits = listOfNotNull(audio, size, origin)
         if (bits.isNotEmpty()) {
-            Text(bits.joinToString("  "), color = Color(0xFF999999), fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+            Text(bits.joinToString(" · "), color = Color(0xFF888888), fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
         }
         if (locked) {
             Text("VIP", color = Color(0xFFFFD54F), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
