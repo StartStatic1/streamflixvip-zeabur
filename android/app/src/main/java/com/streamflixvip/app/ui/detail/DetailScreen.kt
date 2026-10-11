@@ -1008,7 +1008,8 @@ private fun CommentsModal(
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().imePadding()) {
+            Box(Modifier.fillMaxSize().imePadding()) {
+            Column(Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1177,11 +1178,12 @@ private fun CommentsModal(
                 // Campo de digitar: só aparece pra quem está logado — sem
                 // login, mostra convite simples em vez de campo desabilitado
                 // (mais claro do que um campo cinza sem explicação).
+                } // end header+list column
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 6.dp,
                     shadowElevation = 8.dp,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
                 ) {
                     if (canPost) {
                         Row(
