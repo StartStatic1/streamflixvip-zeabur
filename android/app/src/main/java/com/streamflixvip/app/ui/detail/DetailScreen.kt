@@ -1008,7 +1008,8 @@ private fun CommentsModal(
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize().imePadding()) {
+            Box(Modifier.fillMaxSize().imePadding()) {
+            Column(Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1070,7 +1071,7 @@ private fun CommentsModal(
                             val bestId = comments.maxByOrNull { c -> c.up_count + (if (prefs.getInt("c_${c.id}", 0) == 1) 1 else 0) }?.id
                             LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 80.dp),
+                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 100.dp),
                         ) {
                             items(comments) { comment ->
                                 val raw = comment.comment_text
@@ -1177,11 +1178,12 @@ private fun CommentsModal(
                 // Campo de digitar: só aparece pra quem está logado — sem
                 // login, mostra convite simples em vez de campo desabilitado
                 // (mais claro do que um campo cinza sem explicação).
+                } // fim Column lista
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 6.dp,
                     shadowElevation = 8.dp,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
                 ) {
                     if (canPost) {
                         Row(
@@ -2422,33 +2424,33 @@ private fun ServersBrowser(
                     val shimmer by infinite.animateFloat(
                         initialValue = 0f,
                         targetValue = 1f,
-                        animationSpec = infiniteRepeatable(animation = tween(1200), repeatMode = RepeatMode.Restart),
+                        animationSpec = infiniteRepeatable(animation = tween(1100), repeatMode = RepeatMode.Restart),
                         label = "shimmer",
                     )
-                    val pendingNames = listOf("GuIndex", "FlixHub", "FrostStream", "Hyper", "Goldvip")
                     Column(Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("🔍 Buscando as melhores fontes...", color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp))
-                        pendingNames.forEach { name ->
-                            Row(
+                        Text("Buscando as melhores fontes...", color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(bottom = 14.dp))
+                        repeat(4) {
+                            Box(
                                 Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 6.dp)
+                                    .height(64.dp)
+                                    .padding(vertical = 5.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(
                                         Brush.linearGradient(
-                                            colors = listOf(Color(0xFF141414), Color(0xFF222222), Color(0xFF141414)),
-                                            start = Offset(shimmer * 420f - 200f, 0f),
-                                            end = Offset(shimmer * 420f + 200f, 0f),
+                                            colors = listOf(Color(0xFF141414), Color(0xFF242424), Color(0xFF141414)),
+                                            start = Offset(shimmer * 400f - 180f, 0f),
+                                            end = Offset(shimmer * 400f + 180f, 0f),
                                         )
                                     )
-                                    .padding(horizontal = 14.dp, vertical = 16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Text(name, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                Text("Buscando…", color = Color(0xFF8A8A8A), fontSize = 12.sp)
-                            }
+                            )
                         }
+                        Text(
+                            "As fontes mais rapidas aparecem primeiro.",
+                            color = Color(0xFF666666),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
                     }
                 } else if (loading && shown.isNotEmpty()) {
                     LazyColumn(
