@@ -1036,7 +1036,7 @@ private fun CommentsModal(
                             val bestId = comments.maxByOrNull { c -> c.up_count + (if (prefs.getInt("c_${c.id}", 0) == 1) 1 else 0) }?.id
                             LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp, bottom = 80.dp),
+                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 80.dp),
                         ) {
                             items(comments) { comment ->
                                 val raw = comment.comment_text
