@@ -958,6 +958,35 @@ private fun CommentsEntryButton(onClick: () -> Unit, modifier: Modifier = Modifi
  * descrito: "aparece do lado se usuário for VIP".
  */
 @Composable
+
+private fun formatCommentDate(iso: String?): String {
+    if (iso.isNullOrBlank()) return ""
+    return try {
+        val raw = iso.trim().replace(" ", "T")
+        val normalized = when {
+            raw.endsWith("Z") -> raw
+            "+" in raw.takeLast(6) -> raw
+            "T" in raw -> raw + "Z"
+            else -> raw + "T00:00:00Z"
+        }
+        val instant = java.time.Instant.parse(normalized)
+        val z = instant.atZone(java.time.ZoneId.systemDefault())
+        val now = java.time.ZonedDateTime.now()
+        val date = z.toLocalDate()
+        val today = now.toLocalDate()
+        val time = z.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+        when {
+            date == today -> "hoje, $time"
+            date == today.minusDays(1) -> "ontem, $time"
+            date.year == today.year -> z.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM, HH:mm"))
+            else -> z.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+        }
+    } catch (_: Exception) {
+        val d = iso.take(10)
+        if (d.length == 10) "${d.substring(8,10)}/${d.substring(5,7)}/${d.substring(0,4)}" else ""
+    }
+}
+
 private fun CommentsModal(
     comments: List<com.streamflixvip.app.network.TitleComment>,
     isLoading: Boolean,
@@ -980,7 +1009,7 @@ private fun CommentsModal(
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(Modifier.fillMaxSize()) {
+            Column(Modifier.fillMaxSize().imePadding()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1095,9 +1124,7 @@ private fun CommentsModal(
                                         }
                                         Spacer(Modifier.weight(1f))
                                         Text(
-                                            comment.created_at.take(10).let { d ->
-                                                if (d.length == 10) "${d.substring(8,10)}/${d.substring(5,7)}" else ""
-                                            },
+                                            formatCommentDate(comment.created_at),
                                             fontSize = 11.sp,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -1152,7 +1179,9 @@ private fun CommentsModal(
                 // login, mostra convite simples em vez de campo desabilitado
                 // (mais claro do que um campo cinza sem explicação).
                 Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 6.dp,
+                    shadowElevation = 8.dp,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (canPost) {
@@ -2397,20 +2426,29 @@ private fun ServersBrowser(
                         animationSpec = infiniteRepeatable(animation = tween(1200), repeatMode = RepeatMode.Restart),
                         label = "shimmer",
                     )
+                    val pendingNames = listOf("GuIndex", "FlixHub", "FrostStream", "Hyper", "Goldvip")
                     Column(Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("🔍 Buscando as melhores fontes...", color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(bottom = 16.dp))
-                        repeat(5) {
-                            Box(
-                                Modifier.fillMaxWidth().height(68.dp).padding(vertical = 5.dp)
+                        Text("🔍 Buscando as melhores fontes...", color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(bottom = 12.dp))
+                        pendingNames.forEach { name ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(
                                         Brush.linearGradient(
-                                            colors = listOf(Color(0xFF1A1A1A), Color(0xFF2A2A2A), Color(0xFF1A1A1A)),
-                                            start = Offset(shimmer * 400f - 200f, 0f),
-                                            end = Offset(shimmer * 400f + 200f, 0f),
+                                            colors = listOf(Color(0xFF141414), Color(0xFF222222), Color(0xFF141414)),
+                                            start = Offset(shimmer * 420f - 200f, 0f),
+                                            end = Offset(shimmer * 420f + 200f, 0f),
                                         )
                                     )
-                            )
+                                    .padding(horizontal = 14.dp, vertical = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(name, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                Text("Buscando…", color = Color(0xFF8A8A8A), fontSize = 12.sp)
+                            }
                         }
                     }
                 } else if (loading && shown.isNotEmpty()) {

@@ -92,8 +92,8 @@ fun PixPaymentSheet(
             planLabel.contains("30") -> "Prepare a pipoca! Sua maratona de um mes esta prestes a comecar."
             planLabel.contains("90") -> "Uma trilogia de meses sem anuncios! O papel principal e seu."
             planLabel.contains("180") -> "Seis meses de sessao continua. Luz, camera, VIP."
-            planLabel.contains("Vitalicio", ignoreCase = true) ->
-                "O final feliz: acesso ilimitado para sempre."
+            planLabel.contains("Anual", ignoreCase = true) || planLabel.contains("Vitalicio", ignoreCase = true) ->
+                "Um ano de sessao VIP. Luz, camera, acao o ano inteiro."
             else -> "Luz, Camera, Acao! Garanta seu acesso VIP agora."
         }
     }
