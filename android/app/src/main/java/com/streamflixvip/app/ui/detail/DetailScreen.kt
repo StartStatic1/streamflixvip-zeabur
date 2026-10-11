@@ -2421,14 +2421,17 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val origin = originFromSource(source)
     val size = sizeFromSource(source)
     val label = source.source_label.orEmpty()
+    val desc = source.meta?.description.orEmpty()
     val isFlix = label.contains("FlixHub", ignoreCase = true) || label.contains("Server", ignoreCase = true)
-    // Server name: pega qualquer "Xxx Server N" do label (permite renomear no painel)
+    // Server: pega "Xxx Server N" do label (permite Stank Server 1, Kraps Server 8, etc.)
     val serverName = if (isFlix) {
         Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value?.trim()
     } else null
     val head = if (isFlix && serverName != null) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
-    val movieName = if (isFlix) source.meta?.description?.takeIf { it.isNotBlank() && !it.contains("Server", ignoreCase = true) } else null
-    val filename = if (!isFlix) source.meta?.description?.takeIf { it.isNotBlank() } else null
+    // Nome do filme limpo (sem "Server" no texto)
+    val movieName = if (isFlix) desc.takeIf { it.isNotBlank() && !it.contains("Server", ignoreCase = true) } else null
+    // Filename para os outros
+    val filename = if (!isFlix) desc.takeIf { it.isNotBlank() } else null
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2449,7 +2452,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
         if (!quality.isNullOrBlank()) {
             Text("🎯 $quality", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        // Linha de detalhes SEMPRE separada embaixo
+        // Detalhes sempre embaixo, separados
         val bits = listOfNotNull(audio, size, origin)
         if (bits.isNotEmpty()) {
             Text(bits.joinToString("  "), color = Color(0xFF999999), fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
