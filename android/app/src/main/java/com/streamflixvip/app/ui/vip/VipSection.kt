@@ -70,26 +70,67 @@ fun VipSection(viewModel: VipViewModel) {
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
-                state.expiresAt?.let { expires ->
+                state.expiresAt?.let { expiresAt ->
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Valido ate ${formatExpiry(expires)}",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
+                        text = "Valido ate ${formatVipExpiry(expiresAt)}",
+                        fontSize = 13.sp
+                    )
+
+                    val daysLeft = daysUntilExpiry(expiresAt)
+                    if (daysLeft != null && daysLeft in 0..5) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = if (daysLeft == 0L) {
+                                    "Seu VIP expira hoje. Renove pra nao perder o acesso."
+                                } else {
+                                    "Seu VIP expira em $daysLeft ${if (daysLeft == 1L) "dia" else "dias"}. Renove pra nao perder o acesso."
+                                },
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
+                }
+                state.planLabel?.let { plan ->
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = plan,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             } else {
                 Text(
-                    text = "Seja VIP",
-                    fontSize = 18.sp,
+                    text = "Assine o VIP",
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Assista sem anuncios, desbloqueie servidores premium e tenha a melhor experiencia.",
+                    text = "Filmes, series e TV ao vivo sem anuncios — suporte ao app e catalogo sempre no ar.",
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+                listOf(
+                    "Sem anuncios na reproducao",
+                    "Catalogo de filmes e series",
+                    "Canais ao vivo e qualidade HD+"
+                ).forEach { benefit ->
+                    Text(
+                        text = "  ·  $benefit",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 1.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(16.dp))
 
                 VipPlanCard(
@@ -139,63 +180,55 @@ fun VipSection(viewModel: VipViewModel) {
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            Divider(
-                color = MaterialTheme.colorScheme.outlineVariant,
-                thickness = 0.5.dp
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Ja tem um codigo?",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedTextField(
-                value = state.codeInput,
-                onValueChange = viewModel::onCodeChange,
-                label = { Text("Codigo VIP") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                isError = state.redeemError != null
-            )
-
-            state.redeemError?.let {
-                Text(
-                    text = it,
-                    color = MaterialTheme.colorScheme.error,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 4.dp)
+                Spacer(modifier = Modifier.height(24.dp))
+                Divider(
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                    thickness = 0.5.dp
                 )
-            }
-            state.redeemSuccess?.let {
-                Text(
-                    text = it,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
+                Spacer(modifier = Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = viewModel::redeemCode,
-                enabled = !state.isRedeeming && state.codeInput.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (state.isRedeeming) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.height(18.dp).width(18.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Text("Ativar codigo")
+                Text(
+                    text = "Ja tem um codigo?",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = state.redeemCode,
+                    onValueChange = viewModel::onCodeChange,
+                    label = { Text("Codigo VIP") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = viewModel::redeem,
+                    enabled = !state.isRedeeming,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (state.isRedeeming) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.height(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Ativar codigo")
+                    }
                 }
+            }
+
+            state.redeemMessage?.let { msg ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = msg,
+                    fontSize = 13.sp,
+                    color = if (state.redeemSuccess) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
             }
         }
     }
@@ -208,70 +241,98 @@ private fun VipPlanCard(
     priceSuffix: String,
     badge: String?,
     highlighted: Boolean,
-    accentOutline: Boolean = false,
     onClick: () -> Unit,
+    accentOutline: Boolean = false
 ) {
-    val borderColor = when {
-        highlighted -> MaterialTheme.colorScheme.primary
-        accentOutline -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.outlineVariant
-    }
+    val accent = Color(0xFF00E5FF)
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(12.dp),
-        color = if (highlighted) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-        else MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, borderColor),
+        shape = RoundedCornerShape(14.dp),
+        color = if (highlighted) {
+            accent.copy(alpha = 0.12f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        border = when {
+            highlighted -> BorderStroke(1.5.dp, accent)
+            accentOutline -> BorderStroke(1.dp, accent.copy(alpha = 0.5f))
+            else -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        },
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = title,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     if (badge != null) {
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                            color = accent.copy(alpha = 0.18f)
                         ) {
                             Text(
-                                badge,
+                                text = badge,
                                 fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                fontWeight = FontWeight.SemiBold,
+                                color = accent,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                         }
                     }
                 }
                 if (priceSuffix.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        priceSuffix,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 2.dp)
+                        text = priceSuffix,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             Text(
-                price,
+                text = price,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.primary
+                color = if (highlighted || accentOutline) {
+                    accent
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
             )
         }
     }
 }
 
-private fun formatExpiry(iso: String): String {
+private fun formatVipExpiry(isoDate: String): String {
     return try {
-        val odt = OffsetDateTime.parse(iso)
-        odt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+        val date = OffsetDateTime.parse(isoDate)
+        date.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
     } catch (_: DateTimeParseException) {
-        iso
+        isoDate
+    }
+}
+
+private fun daysUntilExpiry(isoDate: String): Long? {
+    return try {
+        val expiry = OffsetDateTime.parse(isoDate)
+        val now = OffsetDateTime.now()
+        java.time.Duration.between(now, expiry).toDays()
+    } catch (_: DateTimeParseException) {
+        null
     }
 }
