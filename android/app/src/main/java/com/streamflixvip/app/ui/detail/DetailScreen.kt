@@ -1097,7 +1097,7 @@ private fun CommentsModal(
     else { onVote(comment.id, 1); myRate = 1; prefs.edit().putInt("c_${comment.id}", 1).apply() }
 },
                                         )
-                                        Text(" ${comment.up_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
+                                        Text(" ${comment.up_count + (if (myRate == 1) 1 else 0)}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
                                         Icon(
                                             Icons.Filled.ThumbDown,
@@ -1108,7 +1108,7 @@ private fun CommentsModal(
     else { onVote(comment.id, -1); myRate = -1; prefs.edit().putInt("c_${comment.id}", -1).apply() }
 },
                                         )
-                                        Text(" ${comment.down_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
+                                        Text(" ${comment.down_count + (if (myRate == -1) 1 else 0)}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
                                         Text("Responder", fontSize = 12.sp, color = Color(0xFFB5B5B5), modifier = Modifier.clickable { onReply(comment.id, "") })
                                         if (canDelete) {
@@ -2451,7 +2451,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             Text("🎬 $movieName", color = Color(0xFFEEEEEE), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
         }
         if (!filename.isNullOrBlank() && !isFlix && !filename.equals(head, ignoreCase = true)) {
-            Text(filename, color = Color(0xFFBBBBBB), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 2)
+            Text(filename, color = Color(0xFFBBBBBB), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 2, lineHeight = 16.sp)
         }
         if (serverName != null) {
             Text("⚡ $serverName", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
