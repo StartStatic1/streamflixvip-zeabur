@@ -1092,7 +1092,7 @@ private fun CommentsModal(
                                             Icons.Filled.ThumbUp,
                                             contentDescription = null,
                                             tint = if (myRate == 1) Color(0xFF4CAF50) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable { if (myRate != 1) { onVote(comment.id, 1); myRate = 1 } },
+                                            modifier = Modifier.size(16.dp).clickable { if (myRate != 1) { onVote(comment.id, 1); myRate = 1 } else { myRate = 0 } },
                                         )
                                         Text(" ${comment.up_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
@@ -1100,7 +1100,7 @@ private fun CommentsModal(
                                             Icons.Filled.ThumbDown,
                                             contentDescription = null,
                                             tint = if (myRate == -1) Color(0xFFE53935) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable { if (myRate != -1) { onVote(comment.id, -1); myRate = -1 } },
+                                            modifier = Modifier.size(16.dp).clickable { if (myRate != -1) { onVote(comment.id, -1); myRate = -1 } else { myRate = 0 } },
                                         )
                                         Text(" ${comment.down_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
@@ -2438,9 +2438,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .padding(14.dp),
     ) {
         Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-        if (!movieName.isNullOrBlank()) {
-            Text("🎬 $movieName", color = Color(0xFFEEEEEE), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 1)
-        }
+        // FlixHub: sem linha de filme (server e qualidade bastam)
         if (!filename.isNullOrBlank() && !filename.equals(head, ignoreCase = true)) {
             Text(filename, color = Color(0xFFCCCCCC), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 2)
         }
