@@ -965,6 +965,7 @@ private fun CommentsModal(
     onVote: (Long, Int) -> Unit = { _, _ -> },
     onReply: (Long, String) -> Unit = { _, _ -> },
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var draft by remember { mutableStateOf("") }
     var rate by remember { mutableStateOf(0) }
 
