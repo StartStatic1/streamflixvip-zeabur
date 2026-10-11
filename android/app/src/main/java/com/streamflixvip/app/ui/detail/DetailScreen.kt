@@ -2428,17 +2428,17 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val size = sizeFromSource(source)
     val label = source.source_label.orEmpty()
     val desc = source.meta?.description.orEmpty()
-    val full = "$label $desc"
-    val isFlix = full.contains("FlixHub", ignoreCase = true) || Regex("Server\\s*\\d+", RegexOption.IGNORE_CASE).containsMatchIn(full)
-    // Pega qualquer "Xxx Server N" de label ou desc
-    val serverMatch = Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(full)
-    val serverName = serverMatch?.value?.trim()
-    val head = if (isFlix) "FlixHub" else label.split("·", "•", "|", "-").first().trim().ifBlank { source.displayName }
-    // Filme: desc sem a parte do Server
-    val movieName = if (isFlix && desc.isNotBlank()) {
-        desc.replace(Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+.*", RegexOption.IGNORE_CASE), "").trim().ifBlank { null }
-    } else null
-    val filename = if (!isFlix && desc.isNotBlank()) desc else null
+    val lines = desc.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+    val isFlix = label.contains("FlixHub", ignoreCase = true) || desc.contains("FlixHub", ignoreCase = true) || lines.any { it.contains("Server", ignoreCase = true) }
+    // Para FlixHub: usa as linhas que o manifest já manda
+    val movieLine = lines.firstOrNull { it.startsWith("🎬") || (!it.contains("Server", ignoreCase = true) && !it.contains("FULL HD") && !it.contains("🎯")) }
+    val serverLine = lines.firstOrNull { it.contains("Server", ignoreCase = true) }
+    val qualityLine = lines.firstOrNull { it.contains("🎯") || it.contains("FULL HD", ignoreCase = true) || it.contains("1080p") || it.contains("4K") }
+    val head = if (isFlix) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
+    val serverName = serverLine?.replace(Regex("^[⚡🚀🎬🎯\\s]+"), "")?.trim()
+        ?: Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find("$label $desc")?.value?.trim()
+    val movieName = movieLine?.replace(Regex("^[🎬📺\\s]+"), "")?.trim()
+    val filename = if (!isFlix) lines.firstOrNull { !it.contains("Server") && it.length > 10 } else null
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2447,17 +2447,18 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .padding(14.dp),
     ) {
         Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-        if (!movieName.isNullOrBlank()) {
+        if (!movieName.isNullOrBlank() && isFlix) {
             Text("🎬 $movieName", color = Color(0xFFEEEEEE), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
         }
-        if (!filename.isNullOrBlank() && !filename.equals(head, ignoreCase = true)) {
+        if (!filename.isNullOrBlank() && !isFlix && !filename.equals(head, ignoreCase = true)) {
             Text(filename, color = Color(0xFFBBBBBB), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 2)
         }
         if (serverName != null) {
             Text("⚡ $serverName", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         }
-        if (!quality.isNullOrBlank()) {
-            Text("🎯 $quality", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+        val q = qualityLine?.replace(Regex("^[🎯\\s]+"), "")?.trim() ?: quality
+        if (!q.isNullOrBlank()) {
+            Text("🎯 $q", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
         val bits = listOfNotNull(audio, size, origin)
         if (bits.isNotEmpty()) {
