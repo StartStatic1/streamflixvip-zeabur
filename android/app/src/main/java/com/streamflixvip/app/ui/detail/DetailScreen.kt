@@ -1030,7 +1030,10 @@ private fun CommentsModal(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        else -> LazyColumn(
+                        else -> {
+                            val prefs = context.getSharedPreferences("comment_votes", android.content.Context.MODE_PRIVATE)
+                            val bestId = comments.maxByOrNull { c -> c.up_count + (if (prefs.getInt("c_${c.id}", 0) == 1) 1 else 0) }?.id
+                            LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         ) {
@@ -1066,6 +1069,12 @@ private fun CommentsModal(
                                                     color = MaterialTheme.colorScheme.primary,
                                                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
                                                 )
+                                            }
+                                        }
+                                        if (comment.id == bestId && (comment.up_count + (if (myRate == 1) 1 else 0)) > 0) {
+                                            Spacer(Modifier.width(6.dp))
+                                            Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFFC107).copy(alpha = 0.2f)) {
+                                                Text("⭐ Melhor", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFC107), modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
                                             }
                                         }
                                         if (rate != 0) {
