@@ -2427,29 +2427,29 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val origin = originFromSource(source)
     val size = sizeFromSource(source)
     val label = source.source_label.orEmpty()
-    val desc = source.meta?.description.orEmpty().replace("\n", " ")
+    val desc = source.meta?.description.orEmpty()
+    val lines = desc.split("\n").map { it.trim() }.filter { it.isNotBlank() }
     val isFlix = label.contains("FlixHub", ignoreCase = true) || desc.contains("FlixHub", ignoreCase = true)
+    val isJackett = label.contains("Jackettio", ignoreCase = true) || desc.contains("Jackettio", ignoreCase = true)
     val head = if (isFlix) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
-    val serverMatch = Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(desc)
+    // FlixHub: server name
+    val serverMatch = if (isFlix) Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(desc) else null
     val serverName = serverMatch?.value?.trim()
     val movieName = if (isFlix && serverMatch != null) {
         desc.substring(0, serverMatch.range.first).replace(Regex("^[⚡🚀🎬📺\\s]+"), "").trim().ifBlank { null }
     } else null
-    // Filename limpo: remove bandeiras, TorBox, tamanho, seeders do final
-    val filename = if (!isFlix) {
-        var f = desc
-        f = f.replace(Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸🇬🇧]+"), "")
-        f = f.replace(Regex("TorBox\\s*[\\d.]+\\s*GB.*"), "")
-        f = f.replace(Regex("\\d+(\\.\\d+)?\\s*GB\\s*\\d+.*"), "")
-        f = f.replace(Regex("\\d{4,}\\s+\\w+.*"), "")
-        f.trim().ifBlank { null }
+    // Outros: primeira linha = filename, resto = detalhes
+    val filename = if (!isFlix && lines.isNotEmpty()) lines.first() else null
+    val detailLine = if (!isFlix && lines.size > 1) lines.drop(1).joinToString(" ") else ""
+    // Seeders so Jackettio
+    val seeders = if (isJackett) {
+        Regex("👥\\s*(\\d+)").find(detailLine)?.groupValues?.getOrNull(1)
+            ?: Regex("(?<!\\d)(\\d{2,5})(?!\\d)").find(detailLine)?.value?.takeIf { !it.startsWith("19") && !it.startsWith("20") }
     } else null
-    // Extrai seeders, provider, flags do desc
-    val seeders = if (label.contains("Jackettio", ignoreCase = true) || desc.contains("Jackettio", ignoreCase = true)) {
-        Regex("(?<!\\d)(\\d{3,5})(?!\\d)").find(desc)?.value?.takeIf { !it.startsWith("19") && !it.startsWith("20") && it.toIntOrNull()?.let { n -> n in 100..99999 } == true }
-    } else null
-    val provider = Regex("(TorBox|therarbg|torrentgalaxyclone|catalogobetor|YTS|RARBG)", RegexOption.IGNORE_CASE).find(desc)?.value
-    val flags = Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸🇬🇧]+").find(desc)?.value
+    // Flags, size, provider do detailLine
+    val flags = Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸🇬🇧🇷🇺]+").find(detailLine)?.value
+    val provider = Regex("(TorBox|therarbg|thepiratebay|torrentgalaxyclone|YTS|RARBG|comando|STK)", RegexOption.IGNORE_CASE).find(detailLine)?.value
+    val sizeFromLine = Regex("([\\d.]+\\s*GB)").find(detailLine)?.value
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2470,11 +2470,10 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
         if (!quality.isNullOrBlank()) {
             Text("🎯 $quality", color = Color(0xFFCCCCCC), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        // Linha de detalhes organizada
         val detailBits = mutableListOf<String>()
         if (flags != null) detailBits.add(flags)
         if (audio != null) detailBits.add(audio)
-        if (size != null) detailBits.add(size)
+        if (sizeFromLine != null) detailBits.add(sizeFromLine) else if (size != null) detailBits.add(size)
         if (provider != null) detailBits.add(provider)
         if (seeders != null) detailBits.add("👥 $seeders")
         if (detailBits.isNotEmpty()) {
