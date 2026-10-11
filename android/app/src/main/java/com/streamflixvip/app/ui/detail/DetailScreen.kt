@@ -2428,16 +2428,17 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val size = sizeFromSource(source)
     val label = source.source_label.orEmpty()
     val desc = source.meta?.description.orEmpty()
-    val isFlix = label.contains("FlixHub", ignoreCase = true) || label.contains("Server", ignoreCase = true)
-    // Server: pega "Xxx Server N" do label (permite Stank Server 1, Kraps Server 8, etc.)
-    val serverName = if (isFlix) {
-        Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value?.trim()
+    val full = "$label $desc"
+    val isFlix = full.contains("FlixHub", ignoreCase = true) || Regex("Server\\s*\\d+", RegexOption.IGNORE_CASE).containsMatchIn(full)
+    // Pega qualquer "Xxx Server N" de label ou desc
+    val serverMatch = Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(full)
+    val serverName = serverMatch?.value?.trim()
+    val head = if (isFlix) "FlixHub" else label.split("·", "•", "|", "-").first().trim().ifBlank { source.displayName }
+    // Filme: desc sem a parte do Server
+    val movieName = if (isFlix && desc.isNotBlank()) {
+        desc.replace(Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+.*", RegexOption.IGNORE_CASE), "").trim().ifBlank { null }
     } else null
-    val head = if (isFlix && serverName != null) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
-    // Nome do filme limpo (sem "Server" no texto)
-    val movieName = if (isFlix) desc.takeIf { it.isNotBlank() && !it.contains("Server", ignoreCase = true) } else null
-    // Filename para os outros
-    val filename = if (!isFlix) desc.takeIf { it.isNotBlank() } else null
+    val filename = if (!isFlix && desc.isNotBlank()) desc else null
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2458,7 +2459,6 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
         if (!quality.isNullOrBlank()) {
             Text("🎯 $quality", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        // Detalhes sempre embaixo, separados
         val bits = listOfNotNull(audio, size, origin)
         if (bits.isNotEmpty()) {
             Text(bits.joinToString("  "), color = Color(0xFF999999), fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
