@@ -2430,17 +2430,24 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val desc = source.meta?.description.orEmpty().replace("\n", " ")
     val isFlix = label.contains("FlixHub", ignoreCase = true) || desc.contains("FlixHub", ignoreCase = true)
     val head = if (isFlix) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
-    // FlixHub: extrai server name do texto concatenado
     val serverMatch = Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(desc)
     val serverName = serverMatch?.value?.trim()
-    // Filme: texto antes do Server
     val movieName = if (isFlix && serverMatch != null) {
         desc.substring(0, serverMatch.range.first).replace(Regex("^[⚡🚀🎬📺\\s]+"), "").trim().ifBlank { null }
     } else null
-    // Filename para outros: remove bandeiras e detalhes do final
+    // Filename limpo: remove bandeiras, TorBox, tamanho, seeders do final
     val filename = if (!isFlix) {
-        desc.replace(Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸]+"), "").replace(Regex("TorBox.*"), "").trim().ifBlank { null }
+        var f = desc
+        f = f.replace(Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸🇬🇧]+"), "")
+        f = f.replace(Regex("TorBox\\s*[\\d.]+\\s*GB.*"), "")
+        f = f.replace(Regex("\\d+(\\.\\d+)?\\s*GB\\s*\\d+.*"), "")
+        f = f.replace(Regex("\\d{4,}\\s+\\w+.*"), "")
+        f.trim().ifBlank { null }
     } else null
+    // Extrai seeders, provider, flags do desc
+    val seeders = Regex("(\\d{3,})").find(desc)?.value
+    val provider = Regex("(TorBox|therarbg|torrentgalaxyclone|catalogobetor|YTS|RARBG)", RegexOption.IGNORE_CASE).find(desc)?.value
+    val flags = Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸🇬🇧]+").find(desc)?.value
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
@@ -2461,9 +2468,15 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
         if (!quality.isNullOrBlank()) {
             Text("🎯 $quality", color = Color(0xFFCCCCCC), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
-        val bits = listOfNotNull(audio, size, origin)
-        if (bits.isNotEmpty()) {
-            Text(bits.joinToString(" · "), color = Color(0xFF888888), fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        // Linha de detalhes organizada
+        val detailBits = mutableListOf<String>()
+        if (flags != null) detailBits.add(flags)
+        if (audio != null) detailBits.add(audio)
+        if (size != null) detailBits.add(size)
+        if (provider != null) detailBits.add(provider)
+        if (seeders != null) detailBits.add("👥 $seeders")
+        if (detailBits.isNotEmpty()) {
+            Text(detailBits.joinToString(" · "), color = Color(0xFF888888), fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
         }
         if (locked) {
             Text("VIP", color = Color(0xFFFFD54F), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
