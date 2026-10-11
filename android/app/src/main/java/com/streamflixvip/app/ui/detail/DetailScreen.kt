@@ -982,8 +982,9 @@ private fun CommentsModal(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Comentários", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         if (comments.isNotEmpty()) {
-                            val totalUp = comments.sumOf { it.up_count }
-                            val totalDown = comments.sumOf { it.down_count }
+                            val prefs = context.getSharedPreferences("comment_votes", android.content.Context.MODE_PRIVATE)
+                            val totalUp = comments.sumOf { c -> c.up_count + (if (prefs.getInt("c_${c.id}", 0) == 1) 1 else 0) }
+                            val totalDown = comments.sumOf { c -> c.down_count + (if (prefs.getInt("c_${c.id}", 0) == -1) 1 else 0) }
                             val total = totalUp + totalDown
                             if (total > 0) {
                                 val pct = (totalUp * 100) / total
