@@ -957,8 +957,6 @@ private fun CommentsEntryButton(onClick: () -> Unit, modifier: Modifier = Modifi
  * Autor VIP ganha um selinho ao lado do nome, igual o comportamento
  * descrito: "aparece do lado se usuário for VIP".
  */
-@Composable
-
 private fun formatCommentDate(iso: String?): String {
     if (iso.isNullOrBlank()) return ""
     return try {
@@ -987,6 +985,7 @@ private fun formatCommentDate(iso: String?): String {
     }
 }
 
+@Composable
 private fun CommentsModal(
     comments: List<com.streamflixvip.app.network.TitleComment>,
     isLoading: Boolean,
