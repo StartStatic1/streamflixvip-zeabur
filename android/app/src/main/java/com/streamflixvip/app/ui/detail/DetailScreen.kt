@@ -1036,7 +1036,7 @@ private fun CommentsModal(
                             val bestId = comments.maxByOrNull { c -> c.up_count + (if (prefs.getInt("c_${c.id}", 0) == 1) 1 else 0) }?.id
                             LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp, bottom = 80.dp),
                         ) {
                             items(comments) { comment ->
                                 val raw = comment.comment_text
@@ -2385,11 +2385,11 @@ private fun ServersBrowser(
                 }
                 if (loading && sources.isEmpty()) {
                     Column(Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("🔍 Buscando as melhores fontes...", color = Color(0xFFCCCCCC), fontSize = 14.sp, modifier = Modifier.padding(bottom = 14.dp))
-                        repeat(4) {
+                        Text("🔍 Buscando as melhores fontes...", color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(bottom = 16.dp))
+                        repeat(5) {
                             Box(
-                                Modifier.fillMaxWidth().height(72.dp).padding(vertical = 6.dp)
-                                    .clip(RoundedCornerShape(14.dp)).background(Color(0xFF1A1A1A))
+                                Modifier.fillMaxWidth().height(68.dp).padding(vertical = 5.dp)
+                                    .clip(RoundedCornerShape(12.dp)).background(Color(0xFF1C1C1C))
                             )
                         }
                     }
