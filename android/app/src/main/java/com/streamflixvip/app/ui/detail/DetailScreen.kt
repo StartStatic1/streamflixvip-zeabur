@@ -2427,15 +2427,20 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val origin = originFromSource(source)
     val size = sizeFromSource(source)
     val label = source.source_label.orEmpty()
-    val desc = source.meta?.description.orEmpty()
-    val lines = desc.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+    val desc = source.meta?.description.orEmpty().replace("\n", " ")
     val isFlix = label.contains("FlixHub", ignoreCase = true) || desc.contains("FlixHub", ignoreCase = true)
-    val movieLine = lines.firstOrNull { it.startsWith("🎬") || it.startsWith("📺") }
-    val serverLine = lines.firstOrNull { it.contains("Server", ignoreCase = true) }
     val head = if (isFlix) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
-    val serverName = serverLine?.replace(Regex("^[⚡🚀\\s]+"), "")?.trim()
-    val movieName = movieLine?.replace(Regex("^[🎬📺\\s]+"), "")?.trim()
-    val filename = if (!isFlix) lines.firstOrNull { it.length > 8 && !it.contains("Server") } else null
+    // FlixHub: extrai server name do texto concatenado
+    val serverMatch = Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(desc)
+    val serverName = serverMatch?.value?.trim()
+    // Filme: texto antes do Server
+    val movieName = if (isFlix && serverMatch != null) {
+        desc.substring(0, serverMatch.range.first).replace(Regex("^[⚡🚀🎬📺\\s]+"), "").trim().ifBlank { null }
+    } else null
+    // Filename para outros: remove bandeiras e detalhes do final
+    val filename = if (!isFlix) {
+        desc.replace(Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸]+"), "").replace(Regex("TorBox.*"), "").trim().ifBlank { null }
+    } else null
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
