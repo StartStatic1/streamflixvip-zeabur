@@ -960,28 +960,46 @@ private fun CommentsEntryButton(onClick: () -> Unit, modifier: Modifier = Modifi
 private fun formatCommentDate(iso: String?): String {
     if (iso.isNullOrBlank()) return ""
     return try {
-        val raw = iso.trim().replace(" ", "T")
-        val normalized = when {
-            raw.endsWith("Z") -> raw
-            "+" in raw.takeLast(6) -> raw
-            "T" in raw -> raw + "Z"
-            else -> raw + "T00:00:00Z"
+        val raw0 = iso.trim()
+        // aceita "2026-10-11 20:03:00", "2026-10-11T20:03:00.000Z", epoch ms, etc.
+        val instant = when {
+            raw0.all { it.isDigit() } && raw0.length >= 10 ->
+                java.time.Instant.ofEpochMilli(raw0.take(13).toLong())
+            else -> {
+                var raw = raw0.replace(" ", "T")
+                if (raw.endsWith("Z") || raw.contains("+")) raw
+                else if ("T" in raw) {
+                    if (raw.length == 16) raw += ":00" // yyyy-MM-ddTHH:mm
+                    raw += "Z"
+                } else raw = raw + "T00:00:00Z"
+                try {
+                    java.time.Instant.parse(raw)
+                } catch (_: Exception) {
+                    // fallback LocalDateTime sem zona
+                    val ldt = java.time.LocalDateTime.parse(
+                        raw0.replace(" ", "T").take(19),
+                        java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME
+                    )
+                    ldt.atZone(java.time.ZoneId.systemDefault()).toInstant()
+                }
+            }
         }
-        val instant = java.time.Instant.parse(normalized)
         val z = instant.atZone(java.time.ZoneId.systemDefault())
         val now = java.time.ZonedDateTime.now()
         val date = z.toLocalDate()
         val today = now.toLocalDate()
         val time = z.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+        val days = java.time.temporal.ChronoUnit.DAYS.between(date, today)
         when {
             date == today -> "hoje, $time"
             date == today.minusDays(1) -> "ontem, $time"
+            days in 2..6 -> "ha ${days} dias"
             date.year == today.year -> z.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM, HH:mm"))
             else -> z.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))
         }
     } catch (_: Exception) {
         val d = iso.take(10)
-        if (d.length == 10) "${d.substring(8,10)}/${d.substring(5,7)}/${d.substring(0,4)}" else ""
+        if (d.length == 10 && d[4] == '-') "${d.substring(8,10)}/${d.substring(5,7)}" else ""
     }
 }
 
@@ -1002,14 +1020,19 @@ private fun CommentsModal(
     val context = androidx.compose.ui.platform.LocalContext.current
     var draft by remember { mutableStateOf("") }
     var rate by remember { mutableStateOf(0) }
+    var spoiler by remember { mutableStateOf(false) }
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Box(Modifier.fillMaxSize().imePadding()) {
-            Column(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .imePadding(),
+                verticalArrangement = Arrangement.Top,
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1054,7 +1077,7 @@ private fun CommentsModal(
                     )
                 }
 
-                Box(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     when {
                         isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
@@ -1080,7 +1103,14 @@ private fun CommentsModal(
                                     raw.startsWith("👎 ") -> -1
                                     else -> 0
                                 }
-                                val body = if (rate == 0) raw else raw.drop(2)
+                                val rawBody = if (rate == 0) raw else raw.drop(2)
+                                val isSpoiler = rawBody.startsWith("🔒 SPOILER ") || rawBody.startsWith("SPOILER ")
+                                val body = when {
+                                    rawBody.startsWith("🔒 SPOILER ") -> rawBody.removePrefix("🔒 SPOILER ")
+                                    rawBody.startsWith("SPOILER ") -> rawBody.removePrefix("SPOILER ")
+                                    else -> rawBody
+                                }
+                                var showSpoiler by remember(comment.id) { mutableStateOf(false) }
                                 val me = com.streamflixvip.app.network.NetworkModule.sessionStore?.userEmail
                                 val isAdmin = me.equals("xfdapx@gmail.com", ignoreCase = true)
                                 val canDelete = isAdmin || (!currentUserId.isNullOrBlank() && currentUserId == comment.user_id)
@@ -1130,7 +1160,16 @@ private fun CommentsModal(
                                         )
                                     }
                                     Spacer(Modifier.height(3.dp))
+                                    if (isSpoiler && !showSpoiler) {
+                                    Text(
+                                        "🔒 Spoiler — toque para ver",
+                                        fontSize = 13.sp,
+                                        color = Color(0xFFFFC107),
+                                        modifier = Modifier.clickable { showSpoiler = true },
+                                    )
+                                } else {
                                     Text(body, fontSize = 13.sp, lineHeight = 18.sp)
+                                }
                                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
                                         Icon(
                                             Icons.Filled.ThumbUp,
@@ -1178,12 +1217,11 @@ private fun CommentsModal(
                 // Campo de digitar: só aparece pra quem está logado — sem
                 // login, mostra convite simples em vez de campo desabilitado
                 // (mais claro do que um campo cinza sem explicação).
-                } // end header+list column
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 6.dp,
                     shadowElevation = 8.dp,
-                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (canPost) {
                         Row(
@@ -1211,11 +1249,22 @@ private fun CommentsModal(
                             ) {
                                 Icon(Icons.Filled.ThumbUp, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                             }
+                            Spacer(Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(if (spoiler) Color(0xFFFFC107) else Color(0xFF2A2A2A))
+                                    .clickable { spoiler = !spoiler },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text("🔒", fontSize = 14.sp)
+                            }
                             Spacer(Modifier.width(8.dp))
                             OutlinedTextField(
                                 value = draft,
                                 onValueChange = { draft = it },
-                                placeholder = { Text("Escreva um comentário...") },
+                                placeholder = { Text(if (spoiler) "Spoiler..." else "Escreva um comentário...") },
                                 modifier = Modifier.weight(1f),
                                 maxLines = 3,
                                 shape = RoundedCornerShape(20.dp),
@@ -1233,12 +1282,13 @@ private fun CommentsModal(
                                         .graphicsLayer { rotationZ = 180f }
                                         .clip(androidx.compose.foundation.shape.CircleShape)
                                         .clickable(enabled = draft.isNotBlank()) {
-                                            val marked = when (rate) {
+                                            val base = when (rate) {
                                                 1 -> "👍 $draft"
                                                 -1 -> "👎 $draft"
                                                 else -> draft
                                             }
-                                            onPost(marked) { success -> if (success) { draft = ""; rate = 0 } }
+                                            val marked = if (spoiler) "🔒 SPOILER $base" else base
+                                            onPost(marked) { success -> if (success) { draft = ""; rate = 0; spoiler = false } }
                                         }
                                         .padding(4.dp),
                                 )
