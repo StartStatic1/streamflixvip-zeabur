@@ -1092,7 +1092,10 @@ private fun CommentsModal(
                                             Icons.Filled.ThumbUp,
                                             contentDescription = null,
                                             tint = if (myRate == 1) Color(0xFF4CAF50) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable { if (myRate == 1) { myRate = 0 } else { onVote(comment.id, 1); myRate = 1 } },
+                                            modifier = Modifier.size(16.dp).clickable { 
+    if (myRate == 1) { myRate = 0; prefs.edit().putInt("c_${comment.id}", 0).apply() }
+    else { onVote(comment.id, 1); myRate = 1; prefs.edit().putInt("c_${comment.id}", 1).apply() }
+},
                                         )
                                         Text(" ${comment.up_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
@@ -1100,7 +1103,10 @@ private fun CommentsModal(
                                             Icons.Filled.ThumbDown,
                                             contentDescription = null,
                                             tint = if (myRate == -1) Color(0xFFE53935) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable { if (myRate == -1) { myRate = 0 } else { onVote(comment.id, -1); myRate = -1 } },
+                                            modifier = Modifier.size(16.dp).clickable { 
+    if (myRate == -1) { myRate = 0; prefs.edit().putInt("c_${comment.id}", 0).apply() }
+    else { onVote(comment.id, -1); myRate = -1; prefs.edit().putInt("c_${comment.id}", -1).apply() }
+},
                                         )
                                         Text(" ${comment.down_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
