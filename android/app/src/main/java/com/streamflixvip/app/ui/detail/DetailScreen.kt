@@ -2462,6 +2462,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PremiumServerSheet(onDismiss: () -> Unit, onUpgradeClick: () -> Unit) {
     val sheetState = rememberModalBottomSheetState()
