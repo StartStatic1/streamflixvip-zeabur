@@ -1256,6 +1256,7 @@ private fun CommentsModal(
         }
     }
 }
+}
 
 /**
  * Cabeçalho da tela de detalhes, no padrão visual do CineVerse: backdrop
