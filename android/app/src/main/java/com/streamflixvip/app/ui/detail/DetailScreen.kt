@@ -2384,12 +2384,26 @@ private fun ServersBrowser(
                     }
                 }
                 if (loading && sources.isEmpty()) {
+                    val infinite = rememberInfiniteTransition(label = "skel")
+                    val shimmer by infinite.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(animation = tween(1200), repeatMode = RepeatMode.Restart),
+                        label = "shimmer",
+                    )
                     Column(Modifier.fillMaxSize().padding(16.dp)) {
                         Text("🔍 Buscando as melhores fontes...", color = Color(0xFFAAAAAA), fontSize = 14.sp, modifier = Modifier.padding(bottom = 16.dp))
                         repeat(5) {
                             Box(
                                 Modifier.fillMaxWidth().height(68.dp).padding(vertical = 5.dp)
-                                    .clip(RoundedCornerShape(12.dp)).background(Color(0xFF1C1C1C))
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        Brush.linearGradient(
+                                            colors = listOf(Color(0xFF1A1A1A), Color(0xFF2A2A2A), Color(0xFF1A1A1A)),
+                                            start = Offset(shimmer * 400f - 200f, 0f),
+                                            end = Offset(shimmer * 400f + 200f, 0f),
+                                        )
+                                    )
                             )
                         }
                     }
