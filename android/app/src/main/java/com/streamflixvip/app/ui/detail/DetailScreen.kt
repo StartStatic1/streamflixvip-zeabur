@@ -1092,7 +1092,7 @@ private fun CommentsModal(
                                             Icons.Filled.ThumbUp,
                                             contentDescription = null,
                                             tint = if (myRate == 1) Color(0xFF4CAF50) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable { if (myRate != 1) { onVote(comment.id, 1); myRate = 1 } else { myRate = 0 } },
+                                            modifier = Modifier.size(16.dp).clickable { if (myRate == 1) { myRate = 0 } else { onVote(comment.id, 1); myRate = 1 } },
                                         )
                                         Text(" ${comment.up_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
@@ -1100,7 +1100,7 @@ private fun CommentsModal(
                                             Icons.Filled.ThumbDown,
                                             contentDescription = null,
                                             tint = if (myRate == -1) Color(0xFFE53935) else Color(0xFF8A8A8A),
-                                            modifier = Modifier.size(16.dp).clickable { if (myRate != -1) { onVote(comment.id, -1); myRate = -1 } else { myRate = 0 } },
+                                            modifier = Modifier.size(16.dp).clickable { if (myRate == -1) { myRate = 0 } else { onVote(comment.id, -1); myRate = -1 } },
                                         )
                                         Text(" ${comment.down_count}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
@@ -2422,9 +2422,9 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val size = sizeFromSource(source)
     val label = source.source_label.orEmpty()
     val isFlix = label.contains("FlixHub", ignoreCase = true) || label.contains("Server", ignoreCase = true)
+    // Server name: pega qualquer "Xxx Server N" do label (permite renomear no painel)
     val serverName = if (isFlix) {
-        Regex("(?:FlixHub\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value
-            ?: Regex("(?:Goldvip|Srcine|Kraps|Stank|Gooddb|Infinity)\\s+Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value
+        Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(label)?.value?.trim()
     } else null
     val head = if (isFlix && serverName != null) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
     val movieName = if (isFlix) source.meta?.description?.takeIf { it.isNotBlank() && !it.contains("Server", ignoreCase = true) } else null
@@ -2444,14 +2444,15 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             Text(filename, color = Color(0xFFBBBBBB), fontSize = 12.sp, modifier = Modifier.padding(top = 3.dp), maxLines = 2)
         }
         if (serverName != null) {
-            Text("⚡ $serverName", color = Color(0xFFFFD54F), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("⚡ $serverName", color = Color.White, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         }
         if (!quality.isNullOrBlank()) {
             Text("🎯 $quality", color = Color(0xFFE53935), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
         }
+        // Linha de detalhes SEMPRE separada embaixo
         val bits = listOfNotNull(audio, size, origin)
         if (bits.isNotEmpty()) {
-            Text(bits.joinToString("  "), color = Color(0xFF999999), fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+            Text(bits.joinToString("  "), color = Color(0xFF999999), fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
         }
         if (locked) {
             Text("VIP", color = Color(0xFFFFD54F), fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp))
