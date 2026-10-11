@@ -2445,7 +2445,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
         f.trim().ifBlank { null }
     } else null
     // Extrai seeders, provider, flags do desc
-    val seeders = Regex("(\\d{3,})").find(desc)?.value
+    val seeders = Regex("(?<!\\d)(\\d{3,5})(?!\\d)").find(desc)?.value?.takeIf { !it.startsWith("20") && it.toIntOrNull()?.let { n -> n in 100..99999 } == true }
     val provider = Regex("(TorBox|therarbg|torrentgalaxyclone|catalogobetor|YTS|RARBG)", RegexOption.IGNORE_CASE).find(desc)?.value
     val flags = Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸🇬🇧]+").find(desc)?.value
     Column(
