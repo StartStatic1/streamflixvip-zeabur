@@ -993,13 +993,13 @@ private fun CommentsModal(
                                     else -> Color(0xFFE53935)
                                 }
                                 Text(
-                                    " $pct%",
-                                    fontSize = 12.sp,
+                                    "$pct%",
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = badgeColor,
-                                    modifier = Modifier.padding(start = 8.dp)
-                                        .background(badgeColor.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                    color = Color.White,
+                                    modifier = Modifier.padding(start = 10.dp)
+                                        .background(badgeColor, RoundedCornerShape(10.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
                                 )
                             }
                         }
@@ -2373,7 +2373,7 @@ private fun ServersBrowser(
                 }
                 if (loading && sources.isEmpty()) {
                     Column(Modifier.fillMaxSize().padding(16.dp)) {
-                        Text("Buscando servidores...", color = Color(0xFFB5B5B5), fontSize = 13.sp, modifier = Modifier.padding(bottom = 12.dp))
+                        Text("🔍 Buscando as melhores fontes...", color = Color(0xFFCCCCCC), fontSize = 14.sp, modifier = Modifier.padding(bottom = 14.dp))
                         repeat(4) {
                             Box(
                                 Modifier.fillMaxWidth().height(72.dp).padding(vertical = 6.dp)
