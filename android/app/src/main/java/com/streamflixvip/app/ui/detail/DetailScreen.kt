@@ -1040,12 +1040,8 @@ private fun CommentsModal(
             )
         }
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .imePadding(),
-                verticalArrangement = Arrangement.Top,
-            ) {
+            Box(Modifier.fillMaxSize().imePadding()) {
+                Column(Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1318,6 +1314,7 @@ private fun CommentsModal(
                     }
                 }
             }
+        }
         }
     }
 }
