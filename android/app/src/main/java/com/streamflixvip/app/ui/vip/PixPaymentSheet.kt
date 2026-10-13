@@ -370,7 +370,7 @@ fun PixPaymentSheet(
                             } catch (_: Exception) {
                                 Toast.makeText(
                                     context,
-                                    "Abra o Telegram: @streamflixofc",
+                                    "Abra o WhatsApp de suporte",
                                     Toast.LENGTH_LONG,
                                 ).show()
                             }
