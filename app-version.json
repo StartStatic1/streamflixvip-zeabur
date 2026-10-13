@@ -1,7 +1,7 @@
 {
-  "versionCode": 160206,
-  "versionName": "16.2.6",
+  "versionCode": 160207,
+  "versionName": "16.2.7",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Melhorias e correcoes"
+  "releaseNotes": "Correção link comprovante agora ativo."
 }
