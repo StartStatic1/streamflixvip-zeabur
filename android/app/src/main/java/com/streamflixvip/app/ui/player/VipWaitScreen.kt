@@ -160,7 +160,7 @@ fun VipWaitScreen(
                     },
                     modifier = Modifier.fillMaxWidth(0.88f),
                 ) {
-                    Text("▶ Assistir anúncio e liberar grátis")
+                    Text("▶ Assistir anúncio e liberar grátis", color = Color.Black, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.height(10.dp))
             }
@@ -170,7 +170,7 @@ fun VipWaitScreen(
                 modifier = Modifier.fillMaxWidth(0.88f),
                 enabled = phase == Phase.Ready || phase == Phase.FallbackCountdown,
             ) {
-                Text("⚡ Pular tudo — seja VIP")
+                Text("⚡ Pular tudo — seja VIP", color = Color.Black, fontWeight = FontWeight.Bold)
             }
 
             // Atalho opcional: liberar sem anúncio só no fallback (já contando).

@@ -176,7 +176,7 @@ fun VipSection(viewModel: VipViewModel) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = "Ao escolher o plano: InfinitePay (automatico) ou Pix direto na chave." +
-                        " No Pix direto, envie o comprovante no Telegram e ative com o codigo.",
+                        " No Pix direto, envie o comprovante no WhatsApp e ative com o codigo.",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -202,7 +202,7 @@ fun VipSection(viewModel: VipViewModel) {
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(
+                Button(colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
                     onClick = viewModel::redeem,
                     enabled = !state.isRedeeming,
                     modifier = Modifier.fillMaxWidth()
@@ -213,7 +213,7 @@ fun VipSection(viewModel: VipViewModel) {
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Text("Ativar codigo")
+                        Text("Ativar codigo", color = Color.Black, fontWeight = FontWeight.Bold)
                     }
                 }
             }
