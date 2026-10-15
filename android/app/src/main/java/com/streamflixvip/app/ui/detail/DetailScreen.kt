@@ -2563,14 +2563,19 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val isFlix = label.contains("FlixHub", ignoreCase = true) || desc.contains("FlixHub", ignoreCase = true)
     val isHubPack = isStreamHub || isFlix
     val isJackett = label.contains("Jackettio", ignoreCase = true) || desc.contains("Jackettio", ignoreCase = true)
-    val head = when { isStreamHub -> "StreamHub"; isFlix -> "FlixHub"; else -> label.split("·", "•", "|").first().trim().ifBlank { source.displayName } }
-    val serverMatch = if (isFlix) Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(desc) else null
+    val head = when {
+        isStreamHub -> "StreamHub"
+        isFlix -> "FlixHub"
+        else -> label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
+    }
+    val serverMatch = if (isHubPack) Regex("([A-Za-z0-9]+\s+)?Server\s*\d+", RegexOption.IGNORE_CASE).find(desc + " " + label) else null
     val serverName = serverMatch?.value?.trim()
-    val movieName = if (isFlix && serverMatch != null) {
-        desc.substring(0, serverMatch.range.first).replace(Regex("^[⚡🚀🎬📺\\s]+"), "").trim().ifBlank { null }
+    val movieName = if (isHubPack && serverMatch != null) {
+        val cutAt = serverMatch.range.first.coerceAtMost(desc.length)
+        desc.substring(0, cutAt).replace(Regex("^[\p{So}\s]+"), "").trim().ifBlank { null }
     } else null
     // Filename: pega ate a primeira bandeira ou TorBox ou tamanho
-    val filename = if (!isFlix) {
+    val filename = if (!isHubPack) {
         val cut = Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸🇬🇧🇷🇺]|TorBox|\\d+(\\.\\d+)?\\s*GB|therarbg|thepiratebay").find(desc)
         if (cut != null) desc.substring(0, cut.range.first).trim().ifBlank { null } else desc.trim().ifBlank { null }
     } else null
