@@ -2568,7 +2568,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
         isFlix -> "FlixHub"
         else -> label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
     }
-    val serverMatch = if (isHubPack) Regex("([A-Za-z0-9]+ +)?Server *[0-9]+", RegexOption.IGNORE_CASE).find(desc + " " + label) else null
+    val serverMatch = if (isHubPack) Regex("([A-Za-z0-9]+\\s+)?Server\\s*[0-9]+", RegexOption.IGNORE_CASE).find(desc + " " + label) else null
     val serverName = serverMatch?.value?.trim()
     val movieName = if (isHubPack && serverMatch != null) {
         val cutAt = serverMatch.range.first.coerceAtMost(desc.length)
