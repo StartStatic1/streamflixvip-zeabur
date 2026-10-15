@@ -1033,6 +1033,16 @@ private fun CommentsModal(
             decorFitsSystemWindows = false,
         ),
     ) {
+        // Dialog do Compose muitas vezes NAO entrega altura maxima;
+        // sem MATCH_PARENT o weight nao empurra o campo para o rodape.
+        val dialogView = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.SideEffect {
+            val window = (dialogView.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+            window?.setLayout(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+        }
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(
                 modifier = Modifier

@@ -65,7 +65,7 @@ private val SheetBg = Color(0xFF0F0F14)
 
 /** Chave Pix Next (telefone) — só usada ao copiar, não exibida em destaque */
 private const val MANUAL_PIX_KEY = "84999585659"
-private const val TELEGRAM_URL = "https://t.me/streamflixofc"
+private const val WHATSAPP_SUPPORT_URL = "https://wa.me/558498334731"
 
 private enum class PayStep { Choose, InfiniteLoading, InfiniteReady, InfiniteError, Manual }
 
@@ -365,12 +365,12 @@ fun PixPaymentSheet(
                         onOpenTelegram = {
                             try {
                                 context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(TELEGRAM_URL)),
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(WHATSAPP_SUPPORT_URL)),
                                 )
                             } catch (_: Exception) {
                                 Toast.makeText(
                                     context,
-                                    "Abra o Telegram: @streamflixofc",
+                                    "Abra o WhatsApp de suporte",
                                     Toast.LENGTH_LONG,
                                 ).show()
                             }
@@ -419,7 +419,7 @@ private fun ManualPixBlock(
     // Passos limpos
     listOf(
         "1" to "Copie a chave e pague no app do banco",
-        "2" to "Envie o comprovante no nosso Telegram",
+        "2" to "Envie o comprovante no nosso WhatsApp",
         "3" to "Receba o codigo e ative em Ja tem um codigo?",
     ).forEach { (num, label) ->
         Row(
@@ -492,7 +492,7 @@ private fun ManualPixBlock(
         Icon(Icons.Default.Send, contentDescription = null)
         Spacer(modifier = Modifier.width(10.dp))
         Text(
-            text = "Enviar comprovante no Telegram",
+            text = "Enviar comprovante no WhatsApp",
             fontWeight = FontWeight.SemiBold,
             fontSize = 14.sp,
         )
