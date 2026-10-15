@@ -2421,7 +2421,7 @@ private fun PremiumTag(gold: androidx.compose.ui.graphics.Color) {
 private fun addonGroupOf(label: String?): String {
     val raw = label?.trim().orEmpty()
     if (raw.isEmpty()) return "Outros"
-    val known = listOf("FlixHub", "Goldvip", "FrostStream", "BeTor", "GuIndex", "TorrentsDB", "Magneto", "BestCine", "Hyper", "AIOStreams", "MegaEmbed", "Torrentio", "Jackettio", "DatCent", "Eliteapy")
+    val known = listOf("StreamHub", "FlixHub", "Goldvip", "FrostStream", "BeTor", "GuIndex", "TorrentsDB", "Magneto", "BestCine", "Hyper", "AIOStreams", "MegaEmbed", "Torrentio", "Jackettio", "DatCent", "Eliteapy")
     known.firstOrNull { raw.contains(it, ignoreCase = true) }?.let { return it }
     val first = raw.split("·", "•", "|").first().trim()
     return first.split(" ").firstOrNull()?.take(16) ?: "Outros"
@@ -2559,16 +2559,23 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val size = sizeFromSource(source)
     val label = source.source_label.orEmpty()
     val desc = source.meta?.description.orEmpty().replace("\n", " ").replace("\r", " ")
+    val isStreamHub = label.contains("StreamHub", ignoreCase = true) || desc.contains("StreamHub", ignoreCase = true)
     val isFlix = label.contains("FlixHub", ignoreCase = true) || desc.contains("FlixHub", ignoreCase = true)
+    val isHubPack = isStreamHub || isFlix
     val isJackett = label.contains("Jackettio", ignoreCase = true) || desc.contains("Jackettio", ignoreCase = true)
-    val head = if (isFlix) "FlixHub" else label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
-    val serverMatch = if (isFlix) Regex("([A-Za-z0-9]+\\s+)?Server\\s*\\d+", RegexOption.IGNORE_CASE).find(desc) else null
+    val head = when {
+        isStreamHub -> "StreamHub"
+        isFlix -> "FlixHub"
+        else -> label.split("·", "•", "|").first().trim().ifBlank { source.displayName }
+    }
+    val serverMatch = if (isHubPack) Regex("([A-Za-z0-9]+\s+)?Server\s*\d+", RegexOption.IGNORE_CASE).find(desc + " " + label) else null
     val serverName = serverMatch?.value?.trim()
-    val movieName = if (isFlix && serverMatch != null) {
-        desc.substring(0, serverMatch.range.first).replace(Regex("^[⚡🚀🎬📺\\s]+"), "").trim().ifBlank { null }
+    val movieName = if (isHubPack && serverMatch != null) {
+        val cutAt = serverMatch.range.first.coerceAtMost(desc.length)
+        desc.substring(0, cutAt).trim().replace(Regex("^[^A-Za-z0-9\u00C0-\u024F]+"), "").ifBlank { null }
     } else null
     // Filename: pega ate a primeira bandeira ou TorBox ou tamanho
-    val filename = if (!isFlix) {
+    val filename = if (!isHubPack) {
         val cut = Regex("[🇧🇷🇺🇸🇮🇹🇫🇷🇩🇪🇪🇸🇬🇧🇷🇺]|TorBox|\\d+(\\.\\d+)?\\s*GB|therarbg|thepiratebay").find(desc)
         if (cut != null) desc.substring(0, cut.range.first).trim().ifBlank { null } else desc.trim().ifBlank { null }
     } else null
