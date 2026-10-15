@@ -1,7 +1,6 @@
 package com.streamflixvip.app.ui.player
 
 import androidx.compose.ui.graphics.Color
-
 import com.streamflixvip.app.network.TmdbImages
 
 import androidx.compose.foundation.background
