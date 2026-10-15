@@ -2572,7 +2572,7 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
     val serverName = serverMatch?.value?.trim()
     val movieName = if (isHubPack && serverMatch != null) {
         val cutAt = serverMatch.range.first.coerceAtMost(desc.length)
-        desc.substring(0, cutAt).replace(Regex("^[\p{So}\s]+"), "").trim().ifBlank { null }
+        desc.substring(0, cutAt).trim().replace(Regex("^[^A-Za-z0-9\u00C0-\u024F]+"), "").ifBlank { null }
     } else null
     // Filename: pega ate a primeira bandeira ou TorBox ou tamanho
     val filename = if (!isHubPack) {
