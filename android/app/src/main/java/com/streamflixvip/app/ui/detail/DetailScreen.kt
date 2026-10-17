@@ -1024,6 +1024,10 @@ private fun CommentsModal(
 
     androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
+        // decorFitsSystemWindows = false: a janela do Dialog não é redimensionada
+        // pelo teclado; quem cuida disso é só o imePadding() abaixo. Antes os dois
+        // atuavam juntos (inset em dobro) e a lista ficava sem altura, sendo
+        // desenhada por baixo da barra de digitar.
         properties = androidx.compose.ui.window.DialogProperties(
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false,
@@ -1040,8 +1044,13 @@ private fun CommentsModal(
             )
         }
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Box(Modifier.fillMaxSize().imePadding()) {
-                Column(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding()
+                    .imePadding(),
+                verticalArrangement = Arrangement.Top,
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1086,7 +1095,7 @@ private fun CommentsModal(
                     )
                 }
 
-                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
                     when {
                         isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
@@ -1103,7 +1112,7 @@ private fun CommentsModal(
                             val bestId = comments.maxByOrNull { c -> c.up_count + (if (prefs.getInt("c_${c.id}", 0) == 1) 1 else 0) }?.id
                             LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 100.dp),
+                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 16.dp),
                         ) {
                             items(comments) { comment ->
                                 val raw = comment.comment_text
@@ -1314,7 +1323,6 @@ private fun CommentsModal(
                     }
                 }
             }
-        }
         }
     }
 }
