@@ -548,7 +548,10 @@ module.exports = async function handler(req, res) {
 
     await Promise.all(
       servers.map(async (server) => {
+        const serverTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
         try {
+          await Promise.race([
+            (async () => {
           if (streamReq.type === 'movie' && server.use_movies !== false) {
             const packV = await vodList(server);
             const hit = pick(packV, titles, year);
@@ -631,6 +634,9 @@ module.exports = async function handler(req, res) {
               }
             }
           }
+            })(),
+            serverTimeout,
+          ]);
         } catch (_) {}
       }),
     );
