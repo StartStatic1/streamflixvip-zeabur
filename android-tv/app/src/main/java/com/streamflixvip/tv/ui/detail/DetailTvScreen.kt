@@ -1,18 +1,46 @@
 package com.streamflixvip.tv.ui.detail
 
+import android.app.Application
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,318 +56,351 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.Border
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.Card
-import androidx.tv.material3.CardDefaults
+import androidx.tv.foundation.PivotOffsets
+import androidx.tv.foundation.lazy.list.TvLazyColumn
+import androidx.tv.foundation.lazy.list.TvLazyRow
+import androidx.tv.foundation.lazy.list.items
+import androidx.tv.foundation.lazy.list.itemsIndexed
+import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import androidx.tv.material3.Icon
-import androidx.tv.material3.IconButton
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
-import com.streamflixvip.tv.data.LocalFavorite
-import com.streamflixvip.tv.data.LocalLibraryStore
-import com.streamflixvip.tv.network.TmdbCastMember
 import com.streamflixvip.tv.network.TmdbEpisode
 import com.streamflixvip.tv.network.VipSource
+import com.streamflixvip.tv.ui.components.FadeImage
+import com.streamflixvip.tv.ui.components.LandscapeCard
+import com.streamflixvip.tv.ui.components.LoadingBox
+import com.streamflixvip.tv.ui.components.LocalToaster
+import com.streamflixvip.tv.ui.components.MessageBox
+import com.streamflixvip.tv.ui.components.MetaTag
+import com.streamflixvip.tv.ui.components.PanelItem
+import com.streamflixvip.tv.ui.components.PosterCard
+import com.streamflixvip.tv.ui.components.SectionTitle
+import com.streamflixvip.tv.ui.components.SidePanel
+import com.streamflixvip.tv.ui.components.TmdbImg
+import com.streamflixvip.tv.ui.components.TvButton
+import com.streamflixvip.tv.ui.components.TvChip
+import com.streamflixvip.tv.ui.home.FocusTargetBox
+import com.streamflixvip.tv.ui.theme.LocalPalette
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-private const val TMDB_BACKDROP = "https://image.tmdb.org/t/p/w1280"
-private const val TMDB_PROFILE = "https://image.tmdb.org/t/p/w185"
+/** Dados para abrir o player. */
+data class PlayRequest(
+    val source: VipSource,
+    val sources: List<VipSource>,
+    val season: Int,
+    val episode: Int,
+    val title: String,
+    val posterPath: String?,
+    val backdropPath: String?,
+    val fromStart: Boolean,
+)
 
-private val Bg = Color(0xFF0B0B14)
-private val Accent = Color(0xFF6366F1)
-private val AccentSoft = Color(0xFF818CF8)
-private val PlayBlue = Color(0xFF3B82F6)
-private val PlayFocus = Color(0xFF7C3AED)
-private val TextMuted = Color(0xFFA1A1B5)
-private val Glass = Color.White.copy(alpha = 0.08f)
-private val GlassBorder = Color.White.copy(alpha = 0.14f)
-private val GlassStrong = Color.White.copy(alpha = 0.14f)
+private const val KEY_PLAY = "btn:play"
 
 @Composable
 fun DetailTvScreen(
     tmdbId: Int,
     mediaType: String,
-    viewModel: DetailTvViewModel = viewModel(factory = DetailTvViewModelFactory(tmdbId, mediaType)),
-    onPlayClick: (source: VipSource, sources: List<VipSource>, season: Int, episode: Int, title: String, posterPath: String?) -> Unit = { _, _, _, _, _, _ -> },
-    onBack: () -> Unit = {},
-    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
+    onPlay: (PlayRequest) -> Unit,
+    onOpenTitle: (tmdbId: Int, mediaType: String) -> Unit,
 ) {
-    val state by viewModel.uiState.collectAsState()
-    LaunchedEffect(tmdbId) { viewModel.loadDetails() }
-
     val context = LocalContext.current
-    val libraryStore = remember(context) { LocalLibraryStore(context) }
-    val playFocus = remember { FocusRequester() }
-    val serverFocus = remember { FocusRequester() }
+    val toaster = LocalToaster.current
+    val p = LocalPalette.current
+    val viewModel: DetailTvViewModel = viewModel(
+        key = "detail_${mediaType}_$tmdbId",
+        factory = DetailTvViewModelFactory(context.applicationContext as Application, tmdbId, mediaType),
+    )
+    val state by viewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
+    val isSeries = mediaType == "tv"
 
-    var serverChoices by remember { mutableStateOf<List<VipSource>>(emptyList()) }
-    var pendingSeason by remember { mutableIntStateOf(0) }
-    var pendingEpisode by remember { mutableIntStateOf(0) }
-    var pendingTitle by remember { mutableStateOf("") }
-    var loadingSources by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { viewModel.loadDetails() }
 
-    Box(Modifier.fillMaxSize().background(Bg)) {
+    var restoreKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var focusTarget by remember { mutableStateOf<String?>(null) }
+    var focusNonce by remember { mutableIntStateOf(0) }
+    val listState = rememberTvLazyListState()
+    val episodesState = rememberTvLazyListState()
+    val retryFocus = remember { FocusRequester() }
+    val panelFirst = remember { FocusRequester() }
+
+    fun focus(key: String) {
+        focusTarget = key
+        focusNonce++
+    }
+
+    // primeiro foco (ou restaura ao voltar do player)
+    val details = state.details
+    LaunchedEffect(details != null, state.error) {
+        if (state.error != null) {
+            delay(60)
+            runCatching { retryFocus.requestFocus() }
+            return@LaunchedEffect
+        }
+        if (details == null) return@LaunchedEffect
+        val k = restoreKey
+        focus(k ?: KEY_PLAY)
+        if (k != null && k != KEY_PLAY) {
+            delay(500)
+            if (focusTarget != null) focus(KEY_PLAY)
+        }
+    }
+
+    val panel = state.panel
+    // foco entra no painel quando abre / quando chegam os servidores
+    val panelPhase = when {
+        panel == null -> -1
+        panel.sources.isNotEmpty() -> 2
+        panel.loading -> 0
+        else -> 1
+    }
+    LaunchedEffect(panelPhase) {
+        if (panel != null) {
+            delay(80)
+            runCatching { panelFirst.requestFocus() }
+        }
+    }
+
+    fun play(source: VipSource, sp: SourcePanel) {
+        val d = state.details ?: return
+        viewModel.rememberServer(source)
+        val ordered = listOf(source) + sp.sources.filter { it.source_url != source.source_url }
+        viewModel.closeSources()
+        onPlay(
+            PlayRequest(
+                source = source,
+                sources = ordered,
+                season = sp.season,
+                episode = sp.episode,
+                title = sp.title,
+                posterPath = d.poster_path,
+                backdropPath = d.backdrop_path,
+                fromStart = sp.fromStart,
+            ),
+        )
+    }
+
+    // so 1 servidor: abre direto
+    LaunchedEffect(panel?.loading, panel?.sources?.size) {
+        val sp = panel ?: return@LaunchedEffect
+        if (!sp.loading && sp.sources.size == 1) {
+            delay(250)
+            play(sp.sources.first(), sp)
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(p.bg)) {
         when {
-            state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AccentSoft)
-            }
-            state.showError != null && state.details == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(state.showError!!, color = TextMuted)
-                    Spacer(Modifier.height(16.dp))
-                    GlassButton("Tentar novamente") { viewModel.retryLoad() }
-                }
-            }
+            state.isLoading && details == null -> LoadingBox(Modifier.fillMaxSize(), "Carregando…")
+            details == null -> MessageBox(
+                title = "Não foi possível abrir",
+                message = state.error,
+                actionLabel = "Tentar de novo",
+                actionFocus = retryFocus,
+                onAction = { viewModel.retry() },
+                modifier = Modifier.fillMaxSize(),
+            )
             else -> {
-                val details = state.details ?: return@Box
-                val backdropUrl = details.backdrop_path?.let { "$TMDB_BACKDROP$it" }
-                val displayTitle = details.title ?: details.name ?: "Sem título"
-                val isSeries = mediaType == "tv"
-                var isFavorite by remember(tmdbId, mediaType) {
-                    mutableStateOf(libraryStore.isFavorite(tmdbId, mediaType))
-                }
-
-                fun handleSources(sources: List<VipSource>, season: Int, episode: Int, title: String) {
-                    loadingSources = false
-                    if (sources.isEmpty()) return
-                    if (sources.size == 1) {
-                        serverChoices = emptyList()
-                        onPlayClick(sources.first(), sources, season, episode, title, details.poster_path)
-                    } else {
-                        pendingSeason = season
-                        pendingEpisode = episode
-                        pendingTitle = title
-                        serverChoices = sources
-                    }
-                }
-
-                if (backdropUrl != null) {
-                    AsyncImage(backdropUrl, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    Box(
-                        Modifier.fillMaxSize().background(
-                            Brush.verticalGradient(
-                                0f to Color(0x880B0B14),
-                                0.4f to Color(0xCC0B0B14),
-                                0.75f to Bg,
-                                1f to Bg,
-                            ),
+                // Arte de fundo
+                FadeImage(
+                    TmdbImg.backdropLg(details.backdrop_path),
+                    Modifier.align(Alignment.TopEnd).fillMaxWidth(0.82f).aspectRatio(16f / 9f),
+                )
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.horizontalGradient(
+                            0f to p.bg, 0.30f to p.bg.copy(alpha = 0.96f), 0.62f to p.bg.copy(alpha = 0.35f), 1f to Color.Transparent,
                         ),
-                    )
-                }
+                    ),
+                )
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(0f to Color.Transparent, 0.5f to p.bg.copy(alpha = 0.4f), 0.85f to p.bg, 1f to p.bg),
+                    ),
+                )
 
-                Column(Modifier.fillMaxSize()) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Filled.ArrowBack, "Voltar", tint = Color.White)
-                        }
-                    }
+                val target = remember(state.progress, state.watched, state.seasonEpisodes, state.seasons) { viewModel.resumeTarget() }
+                val recs = (details.recommendations?.results.orEmpty().ifEmpty { details.similar?.results.orEmpty() })
+                    .filter { it.poster_path != null }.take(20)
+                val episodes = state.seasonEpisodes[state.selectedSeason].orEmpty()
 
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 48.dp)
-                            .padding(bottom = 8.dp),
-                    ) {
-                        Text(
-                            displayTitle,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            val year = (details.release_date ?: details.first_air_date)?.take(4)
-                            year?.let { MetaPill(it) }
-                            details.vote_average?.takeIf { it > 0 }?.let {
-                                MetaPill("★ ${"%.1f".format(it)}")
-                            }
-                            details.displayRuntime?.let { MetaPill(it) }
-                            details.genres.orEmpty().take(3).forEach { MetaPill(it.name) }
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-                        details.overview?.let {
-                            Text(
-                                it,
-                                fontSize = 14.sp,
-                                color = Color.White.copy(alpha = 0.78f),
-                                maxLines = if (isSeries) 2 else 3,
-                                overflow = TextOverflow.Ellipsis,
-                                lineHeight = 20.sp,
-                            )
-                        }
-                        Spacer(Modifier.height(14.dp))
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Button(
-                                onClick = {
-                                    loadingSources = true
-                                    serverChoices = emptyList()
-                                    if (isSeries) {
-                                        val season = state.selectedSeason
-                                        val title = "$displayTitle · T${season}E1"
-                                        viewModel.loadEpisodeSources(season, 1) { sources ->
-                                            handleSources(sources, season, 1, title)
-                                        }
-                                    } else {
-                                        viewModel.loadMovieSources { sources ->
-                                            handleSources(sources, 0, 0, displayTitle)
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.focusRequester(playFocus),
-                                colors = ButtonDefaults.colors(
-                                    containerColor = PlayBlue,
-                                    focusedContainerColor = PlayFocus,
-                                    contentColor = Color.White,
-                                    focusedContentColor = Color.White,
-                                ),
-                            ) {
-                                if (loadingSources) {
-                                    CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-                                    Spacer(Modifier.width(6.dp))
-                                } else {
-                                    Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                }
-                                Text("Assistir Agora", fontWeight = FontWeight.Bold)
-                            }
-                            GlassButton(if (isFavorite) "Na Minha Lista" else "Minha Lista") {
-                                isFavorite = libraryStore.toggleFavorite(
-                                    LocalFavorite(tmdbId, mediaType, displayTitle, details.poster_path),
-                                )
-                            }
-                        }
-
-                        if (serverChoices.isNotEmpty()) {
-                            Spacer(Modifier.height(12.dp))
-                            Text("Escolha o servidor", color = TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                            Spacer(Modifier.height(8.dp))
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(end = 8.dp),
-                            ) {
-                                items(serverChoices.size) { index ->
-                                    val src = serverChoices[index]
-                                    ServerChip(
-                                        label = src.displayName,
-                                        modifier = if (index == 0) Modifier.focusRequester(serverFocus) else Modifier,
-                                        onClick = {
-                                            onPlayClick(
-                                                src,
-                                                serverChoices,
-                                                pendingSeason,
-                                                pendingEpisode,
-                                                pendingTitle.ifBlank { displayTitle },
-                                                details.poster_path,
-                                            )
-                                            serverChoices = emptyList()
-                                        },
-                                    )
-                                }
-                            }
-                            LaunchedEffect(serverChoices) {
-                                runCatching { serverFocus.requestFocus() }
-                            }
-                        }
-                    }
-
-                    LaunchedEffect(Unit) { runCatching { playFocus.requestFocus() } }
-
-                    if (isSeries) {
+                TvLazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(22.dp),
+                    pivotOffsets = PivotOffsets(parentFraction = 0.0f),
+                ) {
+                    item(key = "header") {
                         Column(
-                            Modifier
+                            Modifier.fillParentMaxHeight(if (isSeries || recs.isNotEmpty()) 0.84f else 1f)
                                 .fillMaxWidth()
-                                .weight(1f),
+                                .padding(start = 56.dp, end = 56.dp, top = 36.dp),
+                            verticalArrangement = Arrangement.Bottom,
                         ) {
-                            Text(
-                                "Temporadas",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 48.dp),
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            // Padding no conteúdo da lista: primeiro e último chip cabem inteiros
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(horizontal = 48.dp),
-                            ) {
-                                items((1..(state.details?.number_of_seasons ?: 1)).toList()) { season ->
-                                    SeasonChip(
-                                        label = "T$season",
-                                        selected = season == state.selectedSeason,
-                                        onClick = {
-                                            serverChoices = emptyList()
-                                            viewModel.selectSeason(season)
-                                        },
-                                    )
+                            Header(details = details, isSeries = isSeries)
+                            Spacer(Modifier.height(22.dp))
+                            TvLazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 6.dp)) {
+                                item {
+                                    FocusTargetBox(KEY_PLAY, focusTarget, focusNonce, { focusTarget = null }) { m ->
+                                        TvButton(
+                                            target.label,
+                                            onClick = { viewModel.openSources(target.season, target.episode) },
+                                            icon = Icons.Filled.PlayArrow,
+                                            primary = true,
+                                            modifier = m.onFocusChanged { if (it.isFocused) restoreKey = KEY_PLAY },
+                                        )
+                                    }
                                 }
-                            }
-                            Spacer(Modifier.height(12.dp))
-
-                            if (state.loadingSeasons.contains(state.selectedSeason)) {
-                                Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(color = AccentSoft, modifier = Modifier.size(28.dp))
+                                if (target.hasProgress) {
+                                    item {
+                                        TvButton(
+                                            "Do início",
+                                            onClick = { viewModel.openSources(target.season, target.episode, fromStart = true) },
+                                            icon = Icons.Filled.Replay,
+                                            modifier = Modifier.onFocusChanged { if (it.isFocused) restoreKey = KEY_PLAY },
+                                        )
+                                    }
                                 }
-                            } else {
-                                val episodes = state.seasonEpisodes[state.selectedSeason].orEmpty()
-                                LazyColumn(
-                                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                                    contentPadding = PaddingValues(start = 48.dp, end = 48.dp, bottom = 28.dp),
-                                ) {
-                                    items(episodes, key = { it.episode_number }) { ep ->
-                                        EpisodeRow(
-                                            episode = ep,
+                                if (isSeries) {
+                                    item {
+                                        TvButton(
+                                            "Episódios",
                                             onClick = {
-                                                loadingSources = true
-                                                serverChoices = emptyList()
-                                                val title = "$displayTitle · T${state.selectedSeason}E${ep.episode_number}"
-                                                viewModel.loadEpisodeSources(state.selectedSeason, ep.episode_number) { sources ->
-                                                    handleSources(sources, state.selectedSeason, ep.episode_number, title)
+                                                scope.launch {
+                                                    listState.animateScrollToItem(1)
+                                                    val idx = episodes.indexOfFirst { it.episode_number == target.episode }
+                                                        .takeIf { target.season == state.selectedSeason && it >= 0 } ?: 0
+                                                    runCatching { episodesState.scrollToItem(idx) }
+                                                    episodes.getOrNull(idx)?.let { focus("ep:${state.selectedSeason}:${it.episode_number}") }
                                                 }
                                             },
+                                            icon = Icons.Filled.FormatListNumbered,
+                                        )
+                                    }
+                                }
+                                details.trailerKey?.let { key ->
+                                    item {
+                                        TvButton("Trailer", onClick = {
+                                            val ok = openTrailer(context, key)
+                                            if (!ok) toaster.show("Instale o YouTube para ver o trailer")
+                                        }, icon = Icons.Filled.Videocam)
+                                    }
+                                }
+                                item {
+                                    TvButton(
+                                        if (state.isFavorite) "Na minha lista" else "Minha lista",
+                                        onClick = {
+                                            val added = viewModel.toggleFavorite()
+                                            toaster.show(if (added) "Adicionado à Minha lista" else "Removido da Minha lista")
+                                        },
+                                        icon = if (state.isFavorite) Icons.Filled.Check else Icons.Filled.Add,
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (isSeries) {
+                        item(key = "episodes") {
+                            EpisodesBlock(
+                                seasons = state.seasons,
+                                selectedSeason = state.selectedSeason,
+                                episodes = episodes,
+                                loading = state.selectedSeason in state.loadingSeasons,
+                                failed = state.selectedSeason in state.failedSeasons,
+                                rowState = episodesState,
+                                target = target,
+                                watched = state.watched,
+                                progressOf = { s, e -> viewModel.progressFor(s, e)?.progressFraction },
+                                focusTarget = focusTarget,
+                                focusNonce = focusNonce,
+                                onFocusConsumed = { focusTarget = null },
+                                onSeason = { viewModel.selectSeason(it) },
+                                onRetrySeason = { viewModel.selectSeason(state.selectedSeason) },
+                                onEpisodeFocused = { key -> restoreKey = key },
+                                onEpisode = { ep -> viewModel.openSources(state.selectedSeason, ep.episode_number) },
+                            )
+                        }
+                    }
+
+                    if (recs.isNotEmpty()) {
+                        item(key = "recs") {
+                            Column {
+                                SectionTitle("Você também pode gostar", Modifier.padding(start = 56.dp, bottom = 10.dp))
+                                TvLazyRow(
+                                    contentPadding = PaddingValues(horizontal = 56.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                ) {
+                                    items(recs, key = { it.id }) { item ->
+                                        PosterCard(
+                                            title = item.displayTitle,
+                                            posterPath = item.poster_path,
+                                            width = 124.dp,
+                                            onClick = { onOpenTitle(item.id, item.media_type ?: mediaType) },
                                         )
                                     }
                                 }
                             }
                         }
-                    } else {
-                        val cast = details.credits?.cast.orEmpty().take(14)
-                        if (cast.isNotEmpty()) {
-                            Column(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                            ) {
-                                Text(
-                                    "Elenco",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 48.dp),
-                                )
-                                Spacer(Modifier.height(12.dp))
-                                // start/end no contentPadding: o último ator entra inteiro na tela ao focar/rolar
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                    contentPadding = PaddingValues(start = 48.dp, end = 48.dp, bottom = 28.dp),
-                                ) {
-                                    items(cast) { member ->
-                                        CastCard(member)
-                                    }
-                                }
-                            }
-                        } else {
-                            Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        SidePanel(
+            visible = panel != null,
+            title = "Escolha o servidor",
+            subtitle = panel?.heading,
+            onDismiss = {
+                viewModel.closeSources()
+                restoreKey?.let { focus(it) } ?: focus(KEY_PLAY)
+            },
+        ) {
+            val sp = panel
+            if (sp != null) {
+                if (sp.sources.isEmpty() && sp.loading) {
+                    LoadingBox(Modifier.fillMaxWidth().height(160.dp), "Procurando servidores…")
+                    TvButton(
+                        "Cancelar",
+                        onClick = {
+                            viewModel.closeSources()
+                            restoreKey?.let { focus(it) } ?: focus(KEY_PLAY)
+                        },
+                        modifier = Modifier.focusRequester(panelFirst),
+                    )
+                } else if (sp.sources.isEmpty()) {
+                    Text(sp.message ?: "Nenhum servidor disponível agora.", color = p.textMuted, fontSize = 14.sp)
+                    Spacer(Modifier.height(16.dp))
+                    TvButton(
+                        "Tentar de novo",
+                        onClick = { viewModel.openSources(sp.season, sp.episode, sp.fromStart) },
+                        icon = Icons.Filled.Refresh,
+                        primary = true,
+                        modifier = Modifier.focusRequester(panelFirst),
+                    )
+                } else {
+                    TvLazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f, fill = false)) {
+                        itemsIndexed(sp.sources, key = { _, s -> s.source_url }) { index, s ->
+                            val tags = sourceTags(s.displayName)
+                            PanelItem(
+                                title = s.displayName,
+                                subtitle = listOfNotNull(
+                                    if (s.displayName == sp.preferredLabel) "Último usado" else null,
+                                    tags.takeIf { it.isNotBlank() },
+                                ).joinToString(" · ").ifBlank { null },
+                                leading = Icons.Filled.Tv,
+                                trailingText = "${index + 1}",
+                                modifier = if (index == 0) Modifier.focusRequester(panelFirst) else Modifier,
+                                onClick = { play(s, sp) },
+                            )
                         }
+                    }
+                    if (sp.loading) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("Buscando mais servidores…", color = p.textDim, fontSize = 12.sp)
                     }
                 }
             }
@@ -348,178 +409,200 @@ fun DetailTvScreen(
 }
 
 @Composable
-private fun MetaPill(text: String) {
-    Box(
-        Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(Glass)
-            .border(1.dp, GlassBorder, RoundedCornerShape(6.dp))
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-    ) {
-        Text(text, color = Color.White.copy(alpha = 0.9f), fontSize = 12.sp)
-    }
-}
-
-@Composable
-private fun CastCard(member: TmdbCastMember) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(104.dp),
-    ) {
-        Box(
-            Modifier
-                .size(90.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF1A1A28))
-                .border(1.dp, GlassBorder, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (member.profile_path != null) {
-                AsyncImage(
-                    model = "$TMDB_PROFILE${member.profile_path}",
-                    contentDescription = member.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                Text(
-                    member.name.take(1),
-                    color = TextMuted,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        }
-        Spacer(Modifier.height(6.dp))
+private fun Header(details: com.streamflixvip.tv.network.TmdbResponse, isSeries: Boolean) {
+    val p = LocalPalette.current
+    val title = details.title ?: details.name ?: "Sem título"
+    val logo = details.logoPath
+    if (logo != null) {
+        FadeImage(
+            TmdbImg.LOGO + logo,
+            Modifier.widthIn(max = 420.dp).heightIn(max = 130.dp),
+            contentScale = ContentScale.Fit,
+            contentDescription = title,
+        )
+    } else {
         Text(
-            member.name,
-            color = Color.White,
-            fontSize = 11.sp,
+            title,
+            color = p.text,
+            fontSize = 40.sp,
+            fontWeight = FontWeight.Black,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(0.6f),
+            lineHeight = 44.sp,
+        )
+    }
+    Spacer(Modifier.height(14.dp))
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        details.vote_average?.takeIf { it > 0 }?.let {
+            Icon(Icons.Filled.Star, null, tint = p.star, modifier = Modifier.size(16.dp))
+            Text("%.1f".format(it), color = p.text, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+        (details.release_date ?: details.first_air_date)?.take(4)?.let { Text(it, color = p.textMuted, fontSize = 14.sp) }
+        details.ageRating?.let { MetaTag(if (it == "L") "L" else "$it+", highlight = false) }
+        if (isSeries) {
+            details.number_of_seasons?.let { n -> Text(if (n == 1) "1 temporada" else "$n temporadas", color = p.textMuted, fontSize = 14.sp) }
+        } else {
+            details.displayRuntime?.let { Text(it, color = p.textMuted, fontSize = 14.sp) }
+        }
+        MetaTag(if (isSeries) (if (details.original_language == "ja") "ANIME" else "SÉRIE") else "FILME", highlight = true)
+    }
+    details.genres?.takeIf { it.isNotEmpty() }?.let { g ->
+        Spacer(Modifier.height(8.dp))
+        Text(g.take(4).joinToString("  •  ") { it.name }, color = p.textMuted, fontSize = 13.sp)
+    }
+    details.tagline?.takeIf { it.isNotBlank() }?.let {
+        Spacer(Modifier.height(10.dp))
+        Text("“$it”", color = p.accent2, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    details.overview?.takeIf { it.isNotBlank() }?.let {
+        Spacer(Modifier.height(10.dp))
+        Text(
+            it,
+            color = p.text.copy(alpha = 0.88f),
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            maxLines = 4,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(0.55f),
+        )
+    }
+    details.credits?.cast?.take(5)?.takeIf { it.isNotEmpty() }?.let { cast ->
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Elenco: " + cast.joinToString(", ") { it.name },
+            color = p.textDim,
+            fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(0.55f),
         )
-        member.character?.let {
-            Text(
-                it,
-                color = TextMuted,
-                fontSize = 10.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
     }
 }
 
 @Composable
-private fun ServerChip(
-    label: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
+private fun EpisodesBlock(
+    seasons: List<Int>,
+    selectedSeason: Int,
+    episodes: List<TmdbEpisode>,
+    loading: Boolean,
+    failed: Boolean,
+    rowState: androidx.tv.foundation.lazy.list.TvLazyListState,
+    target: ResumeTarget,
+    watched: Set<Pair<Int, Int>>,
+    progressOf: (Int, Int) -> Float?,
+    focusTarget: String?,
+    focusNonce: Int,
+    onFocusConsumed: () -> Unit,
+    onSeason: (Int) -> Unit,
+    onRetrySeason: () -> Unit,
+    onEpisodeFocused: (String) -> Unit,
+    onEpisode: (TmdbEpisode) -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    Button(
-        onClick = onClick,
-        modifier = modifier
-            .onFocusChanged { focused = it.isFocused }
-            .border(
-                1.5.dp,
-                if (focused) AccentSoft else GlassBorder,
-                RoundedCornerShape(999.dp),
-            ),
-        colors = ButtonDefaults.colors(
-            containerColor = if (focused) Accent.copy(alpha = 0.4f) else Glass,
-            focusedContainerColor = Accent.copy(alpha = 0.5f),
-            contentColor = Color.White,
-            focusedContentColor = Color.White,
-        ),
-    ) {
-        Text(label, fontSize = 13.sp, maxLines = 1)
-    }
-}
+    val p = LocalPalette.current
+    var focusedEp by remember(selectedSeason) { mutableStateOf<TmdbEpisode?>(null) }
 
-@Composable
-private fun SeasonChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.colors(
-            containerColor = when {
-                selected -> Accent.copy(alpha = 0.45f)
-                focused -> GlassStrong
-                else -> Glass
-            },
-            focusedContainerColor = Accent.copy(alpha = 0.55f),
-            contentColor = Color.White,
-            focusedContentColor = Color.White,
-        ),
-        modifier = Modifier
-            .onFocusChanged { focused = it.isFocused }
-            .border(
-                1.dp,
-                when {
-                    selected || focused -> AccentSoft
-                    else -> GlassBorder
-                },
-                RoundedCornerShape(999.dp),
-            ),
-    ) {
-        Text(label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium)
+    // abre a fileira no episodio da vez
+    LaunchedEffect(selectedSeason, episodes.isNotEmpty()) {
+        if (episodes.isNotEmpty() && target.season == selectedSeason) {
+            val idx = episodes.indexOfFirst { it.episode_number == target.episode }
+            if (idx > 0) runCatching { rowState.scrollToItem(idx) }
+        }
     }
-}
 
-@Composable
-private fun EpisodeRow(episode: TmdbEpisode, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
-        scale = CardDefaults.scale(focusedScale = 1.02f),
-        colors = CardDefaults.colors(
-            containerColor = Glass,
-            focusedContainerColor = Accent.copy(alpha = 0.28f),
-        ),
-        border = CardDefaults.border(
-            focusedBorder = Border(
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, AccentSoft),
-                shape = RoundedCornerShape(12.dp),
-            ),
-        ),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "E${episode.episode_number}",
-                color = AccentSoft,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                modifier = Modifier.width(48.dp),
-            )
-            Text(
-                episode.name ?: "Episódio ${episode.episode_number}",
-                color = Color.White,
-                fontSize = 14.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Icon(Icons.Filled.PlayArrow, null, tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+    Column(Modifier.fillMaxWidth()) {
+        SectionTitle("Episódios", Modifier.padding(start = 56.dp, bottom = 10.dp), trailing = "${episodes.size.takeIf { it > 0 } ?: ""}".ifBlank { null }?.let { "$it episódios" })
+        if (seasons.size > 1) {
+            TvLazyRow(
+                contentPadding = PaddingValues(horizontal = 56.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(seasons) { s ->
+                    TvChip(
+                        text = "Temporada $s",
+                        selected = s == selectedSeason,
+                        onClick = { onSeason(s) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+        when {
+            loading && episodes.isEmpty() -> LoadingBox(Modifier.fillMaxWidth().height(150.dp))
+            failed && episodes.isEmpty() -> Box(Modifier.padding(start = 56.dp)) {
+                TvButton("Erro ao carregar episódios — tentar de novo", onClick = onRetrySeason, icon = Icons.Filled.Refresh)
+            }
+            episodes.isEmpty() -> Text("Nenhum episódio nesta temporada.", color = p.textMuted, modifier = Modifier.padding(start = 56.dp))
+            else -> {
+                TvLazyRow(
+                    state = rowState,
+                    contentPadding = PaddingValues(horizontal = 56.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    items(episodes, key = { "$selectedSeason:${it.episode_number}" }) { ep ->
+                        val key = "ep:$selectedSeason:${ep.episode_number}"
+                        val isWatched = (selectedSeason to ep.episode_number) in watched
+                        val isNext = target.season == selectedSeason && target.episode == ep.episode_number
+                        FocusTargetBox(key, focusTarget, focusNonce, onFocusConsumed) { m ->
+                            LandscapeCard(
+                                title = "${ep.episode_number}. ${ep.displayName}",
+                                imageUrl = ep.still_path?.let { TmdbImg.STILL + it },
+                                width = 264.dp,
+                                subtitle = listOfNotNull(ep.displayRuntime, if (isWatched) "✓ Assistido" else null).joinToString(" · ").ifBlank { null },
+                                progress = progressOf(selectedSeason, ep.episode_number),
+                                showPlayIcon = isNext,
+                                topBadge = when {
+                                    isNext && target.hasProgress -> "CONTINUAR"
+                                    isNext -> "PRÓXIMO"
+                                    else -> null
+                                },
+                                onFocus = {
+                                    focusedEp = ep
+                                    onEpisodeFocused(key)
+                                },
+                                onClick = { onEpisode(ep) },
+                                modifier = m,
+                            )
+                        }
+                    }
+                }
+                val fe = focusedEp
+                Box(Modifier.padding(start = 56.dp, end = 56.dp, top = 6.dp).height(44.dp).fillMaxWidth(0.7f)) {
+                    if (fe != null && !fe.overview.isNullOrBlank()) {
+                        Text(fe.overview, color = p.textMuted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
+                    }
+                }
+            }
         }
     }
 }
 
-@Composable
-private fun GlassButton(text: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.colors(
-            containerColor = GlassStrong,
-            focusedContainerColor = Color.White.copy(alpha = 0.22f),
-            contentColor = Color.White,
-            focusedContentColor = Color.White,
-        ),
-    ) {
-        Text(text, fontSize = 14.sp)
+private fun sourceTags(label: String): String {
+    val l = label.lowercase()
+    return buildList {
+        if (Regex("\\bdub|dublad").containsMatchIn(l)) add("Dublado")
+        if (Regex("\\bleg|legend").containsMatchIn(l)) add("Legendado")
+        when {
+            l.contains("4k") || l.contains("2160") -> add("4K")
+            l.contains("1080") || l.contains("fhd") -> add("Full HD")
+            l.contains("720") -> add("HD")
+        }
+    }.joinToString(" · ")
+}
+
+private fun openTrailer(context: android.content.Context, key: String): Boolean {
+    val intents = listOf(
+        Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$key")),
+        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$key")),
+    )
+    for (i in intents) {
+        try {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(i)
+            return true
+        } catch (_: ActivityNotFoundException) {
+        } catch (_: SecurityException) {
+        }
     }
+    return false
 }
