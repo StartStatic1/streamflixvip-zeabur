@@ -226,6 +226,8 @@ class MainTvActivity : ComponentActivity() {
                     }
                     val preferred = cur.sources.firstOrNull()?.displayName ?: recent.lastServer(cur.tmdbId)
                     val (sources, res) = resolveSources(cur.tmdbId, "tv", next.first, next.second, preferred)
+                    // saiu do player enquanto buscava: nao reabre o player sozinho
+                    if (navController.currentDestination?.route != "player") return@launch
                     if (sources.isEmpty()) {
                         toaster.show(sourcesMessage(res))
                         return@launch
@@ -323,22 +325,26 @@ class MainTvActivity : ComponentActivity() {
                     },
                 )
             }
-            composable("player") {
+            composable("player") { entry ->
                 val args = playerArgs
                 if (args != null) {
                     PlayerTvScreen(
                         args = args,
+                        // Nao zera playerArgs: durante a animacao de saida a rota "player"
+                        // ainda esta na tela e, com args nulo, fazia um 2o popBackStack
+                        // (voltava 2 telas, ex. pulava os detalhes).
                         onBack = {
-                            playerArgs = null
-                            navController.popBackStack()
+                            if (navController.currentDestination?.route == "player") navController.popBackStack()
                         },
                         onNextEpisode = if (args.mediaType == "tv") ({ playNextEpisode() }) else null,
                     )
                 } else {
-                    LaunchedEffect(Unit) { navController.popBackStack() }
+                    LaunchedEffect(Unit) {
+                        if (navController.currentBackStackEntry?.id == entry.id) navController.popBackStack()
+                    }
                 }
             }
-            composable("live-player") {
+            composable("live-player") { entry ->
                 val session = liveSession
                 if (session != null && session.channels.isNotEmpty()) {
                     LivePlayerTvScreen(
@@ -347,10 +353,14 @@ class MainTvActivity : ComponentActivity() {
                         epgNow = session.epgNow,
                         epgNext = session.epgNext,
                         onChannelChanged = { i -> liveSession = session.copy(index = i) },
-                        onBack = { navController.popBackStack() },
+                        onBack = {
+                            if (navController.currentDestination?.route == "live-player") navController.popBackStack()
+                        },
                     )
                 } else {
-                    LaunchedEffect(Unit) { navController.popBackStack() }
+                    LaunchedEffect(Unit) {
+                        if (navController.currentBackStackEntry?.id == entry.id) navController.popBackStack()
+                    }
                 }
             }
         }
