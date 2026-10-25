@@ -122,19 +122,15 @@ class DetailViewModel(
                                 sources = res.sources
                                 fromApiConfig = res.vipConfig
                             } else {
-                                // API vazia: tenta repo (respeita VIP no fallback)
-                                sources = try {
-                                    repository.getSourcesForMovie(tmdbId)
-                                } catch (_: Exception) {
-                                    emptyList()
-                                }
+                                // API vazia: tenta so o banco (sem repetir a API)
+                                sources = repository.getMovieSourcesDbFallback(tmdbId)
                             }
+                        } catch (e: retrofit2.HttpException) {
+                            // 401/403 = sem permissao: nao contorna pelo banco (igual antes)
+                            sources = if (e.code() == 401 || e.code() == 403) emptyList()
+                            else repository.getMovieSourcesDbFallback(tmdbId)
                         } catch (_: Exception) {
-                            sources = try {
-                                repository.getSourcesForMovie(tmdbId)
-                            } catch (_: Exception) {
-                                emptyList()
-                            }
+                            sources = repository.getMovieSourcesDbFallback(tmdbId)
                         }
                         val still = _uiState.value as? DetailUiState.Success ?: return@launch
                         val mergedConfig = when {

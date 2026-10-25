@@ -109,6 +109,26 @@ class CatalogRepository {
         }
     }
 
+    /**
+     * Fallback direto no banco, sem chamar a API de novo. Usado quando a API ja respondeu
+     * (vazia ou com erro) — antes o app repetia o mesmo pedido lento (ate 15s) duas vezes.
+     */
+    suspend fun getMovieSourcesDbFallback(tmdbId: Int): List<VipSource> {
+        val config = try { getVipTitleConfig(tmdbId, "movie") } catch (_: Exception) { null }
+        if (requiresVip(config, null) && !VipStatusHolder.isVipNow()) return emptyList()
+        return try {
+            prioritize(
+                supabase.getSourcesForMovie(
+                    apiKey = anonKey,
+                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
+                    mediaTypeFilter = PostgrestFilter.eq("movie"),
+                ),
+            )
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     suspend fun getSourcesForEpisode(tmdbId: Int, season: Int, episode: Int): List<VipSource> {
         try {
             val res = mediaSources.getEpisodeSources(tmdbId, season = season, episode = episode)

@@ -84,6 +84,16 @@ object NetworkModule {
         .readTimeout(18, TimeUnit.SECONDS)
         .build()
 
+    // Fontes/servidores: o servidor junta varios add-ons (ate ~11s na 1a vez).
+    // Com 15s o app desistia antes e caia num 2o pedido; 25s cobre com folga.
+    private val mediaSourcesOkHttp = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
+        .addInterceptor(loggingInterceptor)
+        .authenticator(tokenAuthenticator)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(25, TimeUnit.SECONDS)
+        .build()
+
     val fastProbeClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.SECONDS)
@@ -130,7 +140,7 @@ object NetworkModule {
     val mediaSourcesApi: MediaSourcesApi by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL)
-            .client(okHttpClient)
+            .client(mediaSourcesOkHttp)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(MediaSourcesApi::class.java)
