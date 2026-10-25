@@ -344,10 +344,13 @@ async function handler(req, res) {
   }
 
   const hard = isMediaAuthHard();
-  const access = await resolveVipAccess(req, serviceKey, { feature: 'media-sources' });
+  // Acesso VIP e config do titulo em paralelo (antes era um depois do outro).
+  const [access, vipConfig] = await Promise.all([
+    resolveVipAccess(req, serviceKey, { feature: 'media-sources' }),
+    loadVipTitleConfig(serviceKey, tmdbId, mediaType),
+  ]);
   const loggedIn = access.source === 'jwt' || access.source === 'userId' || access.source === 'deviceId';
 
-  const vipConfig = await loadVipTitleConfig(serviceKey, tmdbId, mediaType);
   const needsVip = titleRequiresVip(vipConfig, mediaType === 'tv' ? episode : null, mediaType);
 
   if (needsVip && !access.isVip) {
@@ -374,25 +377,35 @@ async function handler(req, res) {
     return;
   }
 
+  // Area Free: is_free libera addons reais (nao so R2/DB)
+  const allowAddons = access.isVip || (vipConfig && vipConfig.is_free === true);
+  const freeFast = !!(vipConfig && vipConfig.is_free === true);
+  // VIP: add-ons comecam junto com o banco (nao esperam o banco terminar).
+  const earlyAddons = allowAddons && !freeFast
+    ? collectAddonSources(serviceKey, tmdbId, mediaType, season, episode)
+    : null;
+  if (earlyAddons) earlyAddons.catch(() => {});
+
   try {
-    const dbSources = await loadSources(serviceKey, tmdbId, mediaType, season, episode);
-    const catalogSources = await loadR2Sources(tmdbId, mediaType, season, episode);
+    const [dbSources, catalogSources, pausedHosts] = await Promise.all([
+      loadSources(serviceKey, tmdbId, mediaType, season, episode),
+      loadR2Sources(tmdbId, mediaType, season, episode),
+      loadPausedIptvHosts(serviceKey),
+    ]);
     const seen = new Set();
     let sources = [];
     pushUnique(catalogSources, seen, sources);
     pushUnique(dbSources, seen, sources);
 
-    const pausedHosts = await loadPausedIptvHosts(serviceKey);
     sources = dropPausedHosts(sources, pausedHosts);
 
-    // Area Free: is_free libera addons reais (nao so R2/DB)
-    const allowAddons = access.isVip || (vipConfig && vipConfig.is_free === true);
     if (allowAddons) {
       try {
-        const freeFast = vipConfig && vipConfig.is_free === true;
-        if (!(freeFast && sources.length)) {
+        if (earlyAddons) {
+          pushUnique(await earlyAddons, seen, sources);
+        } else if (!(freeFast && sources.length)) {
           pushUnique(
-            await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode, freeFast ? 1200 : undefined),
+            await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode, 1200),
             seen,
             sources,
           );
