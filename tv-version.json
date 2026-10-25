@@ -1,7 +1,7 @@
 {
-  "versionCode": 17,
-  "versionName": "3.0.2",
+  "versionCode": 18,
+  "versionName": "3.0.3",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Correções: a tela Ver tudo não treme nem deixa rastros; app mais leve no Fire TV e TV box com pouca memória (prévia ao vivo desligada nesses aparelhos); TV ao vivo evita servidores que não conectam e troca sozinho para outro; menos canais repetidos; player reconecta após queda de internet; voltar do player não pula telas; menu com destaque compacto."
+  "releaseNotes": "Novidades: aba Explorar com filtros por gênero, ano/década e ordem para filmes e séries. TV ao vivo: canais organizados (Canais, Regionais, Capitais, HBO, Telecine, Filmes e Séries, Notícias, Premiere, SporTV, ESPN, PPV, Discovery e mais), sem canais 24h nem repetidos; menos travadas (buffer maior, reconecta sozinho e volta ao ponto ao vivo); a melhor fonte fica em primeiro; ao apertar HOME o canal para de tocar; lista atualiza na hora quando uma fonte é removida."
 }
