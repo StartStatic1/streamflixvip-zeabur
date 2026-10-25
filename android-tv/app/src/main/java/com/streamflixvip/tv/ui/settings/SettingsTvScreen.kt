@@ -89,6 +89,7 @@ fun SettingsTvScreen(
     val firstFocus = remember { FocusRequester() }
     var handledToken by remember { mutableIntStateOf(0) }
     var confirm by remember { mutableStateOf<String?>(null) }
+    var crashSummary by remember { mutableStateOf(com.streamflixvip.tv.util.CrashLog.lastSummary(context)) }
 
     LaunchedEffect(focusSignal.token) {
         if (handledToken == focusSignal.token) return@LaunchedEffect
@@ -162,7 +163,8 @@ fun SettingsTvScreen(
         item {
             PanelItem(
                 title = "Prévia ao vivo na TV",
-                subtitle = "Toca o canal em uma janelinha ao passar pela lista (desligue se a TV box for fraca)",
+                subtitle = if (com.streamflixvip.tv.util.DeviceProfile.isLowRam) "Este aparelho tem pouca memória: deixe desligado para o app não fechar"
+                else "Toca o canal em uma janelinha ao passar pela lista (desligue se a TV box for fraca)",
                 leading = Icons.Filled.LiveTv,
                 trailingText = onOff(s.livePreview),
                 onClick = { TvSettingsStore.update { it.copy(livePreview = !it.livePreview) } },
@@ -268,6 +270,22 @@ fun SettingsTvScreen(
                     "StreamFlixVIP TV  v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                     color = p.textMuted,
                     fontSize = 13.sp,
+                )
+            }
+        }
+        // ultimo fechamento inesperado (fica so no aparelho) - ajuda a achar bug no Fire TV
+        val crash = crashSummary
+        if (crash != null) {
+            item {
+                PanelItem(
+                    title = "Último erro do app",
+                    subtitle = crash,
+                    leading = Icons.Filled.Info,
+                    trailingText = "Limpar",
+                    onClick = {
+                        com.streamflixvip.tv.util.CrashLog.clear(context)
+                        crashSummary = null
+                    },
                 )
             }
         }

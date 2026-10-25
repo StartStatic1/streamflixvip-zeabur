@@ -52,4 +52,6 @@ internal fun buildLiveMediaSource(url: String): MediaSource {
 @OptIn(UnstableApi::class)
 internal fun liveLoadControl(): DefaultLoadControl = DefaultLoadControl.Builder()
     .setBufferDurationsMs(15_000, 30_000, 1_000, 2_500)
+    .setTargetBufferBytes(com.streamflixvip.tv.util.DeviceProfile.playerBufferBytes / 2)
+    .setPrioritizeTimeOverSizeThresholds(false)
     .build()

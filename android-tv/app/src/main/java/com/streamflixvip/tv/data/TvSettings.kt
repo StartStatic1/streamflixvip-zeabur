@@ -76,6 +76,12 @@ object TvSettingsStore {
             subColor = enumOr(p.getString("sub_color", null), SubColor.WHITE),
             subBackground = enumOr(p.getString("sub_bg", null), SubBackground.OUTLINE),
         )
+        // Aparelho com pouca RAM (Fire TV Stick etc.): desliga a previa ao vivo uma vez
+        // (2 decodificadores ao mesmo tempo derrubam o app). Da para religar em Ajustes.
+        if (com.streamflixvip.tv.util.DeviceProfile.isLowRam && !p.getBoolean("lowram_preview_off", false)) {
+            p.edit().putBoolean("lowram_preview_off", true).putBoolean("live_preview", false).apply()
+            _state.value = _state.value.copy(livePreview = false)
+        }
     }
 
     val current: TvSettings get() = _state.value

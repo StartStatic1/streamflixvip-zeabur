@@ -85,7 +85,10 @@ internal fun buildPlaybackMediaSource(url: String, forceHls: Boolean = false): M
 /** Comeca a tocar com 1,5s de buffer, volta de travada com 3s, guarda ate 90s. */
 @OptIn(UnstableApi::class)
 internal fun streamingLoadControl(): DefaultLoadControl = DefaultLoadControl.Builder()
-    .setBufferDurationsMs(25_000, 90_000, 1_500, 3_000)
+    .setBufferDurationsMs(25_000, if (com.streamflixvip.tv.util.DeviceProfile.isLowRam) 50_000 else 90_000, 1_500, 3_000)
+    // sem teto o ExoPlayer pode guardar 100+ MB no heap e o Fire TV fecha o app (falta de memoria)
+    .setTargetBufferBytes(com.streamflixvip.tv.util.DeviceProfile.playerBufferBytes)
+    .setPrioritizeTimeOverSizeThresholds(false)
     .build()
 
 private val NETWORK_ERROR_CODES = setOf(

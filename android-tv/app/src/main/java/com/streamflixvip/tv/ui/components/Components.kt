@@ -79,7 +79,9 @@ object TmdbImg {
 
     fun poster(path: String?) = path?.takeIf { it.isNotBlank() }?.let { POSTER + it }
     fun backdrop(path: String?) = path?.takeIf { it.isNotBlank() }?.let { BACKDROP + it }
-    fun backdropLg(path: String?) = path?.takeIf { it.isNotBlank() }?.let { BACKDROP_LG + it }
+    fun backdropLg(path: String?) = path?.takeIf { it.isNotBlank() }?.let {
+        (if (com.streamflixvip.tv.util.DeviceProfile.isLowRam) BACKDROP else BACKDROP_LG) + it
+    }
 }
 
 /** Imagem com fade suave (coil crossfade). */
