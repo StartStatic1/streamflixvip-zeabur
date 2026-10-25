@@ -105,6 +105,26 @@ const wrap = (handler) => (req, res) => {
   });
 };
 
+// Mudou fonte/ponte/canal da TV ao vivo no admin: lista refeita na hora
+// (antes a fonte apagada continuava aparecendo ate o cache de 20 min vencer).
+const LIVE_ADMIN_ACTION_RE = /(live-tv|iptv-source|xtream-source|^save$|^toggle$|^rename$|^delete|^update|^create)/;
+app.use(['/api/admin-bridge', '/api/admin-vip'], (req, res, next) => {
+  if (req.method === 'POST' || req.method === 'PATCH' || req.method === 'DELETE') {
+    const action = String((req.body && req.body.action) || '');
+    const isLive = req.baseUrl === '/api/admin-bridge'
+      ? !/^(list|probe)$/.test(action)
+      : /live-tv|iptv-source|xtream-source/.test(action) && !/^(list|scan)/.test(action);
+    if (isLive && LIVE_ADMIN_ACTION_RE.test(action)) {
+      res.on('finish', () => {
+        if (res.statusCode < 400) {
+          try { liveTv.invalidate(`admin ${req.baseUrl} ${action}`); } catch (_) {}
+        }
+      });
+    }
+  }
+  next();
+});
+
 app.all('/api/active-ads', wrap(activeAds));
 app.all('/api/admin-vip', wrap(adminVip));
 app.all('/api/admin-partners', wrap(adminPartners));
