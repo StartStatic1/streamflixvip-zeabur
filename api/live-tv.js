@@ -80,9 +80,14 @@ async function xtreamFetch(baseUrl, username, password, action, params = {}) {
   }
 }
 
+// "HBO 2" = "HBO2", "SporTV ²" / "RECORD RS FHD2" / "HBO XTREMEFHD": numeros
+// sobrescritos e etiquetas de qualidade grudadas no nome nao viram canal novo.
+const SUPERSCRIPT_RE = /[\u00b9\u00b2\u00b3\u2070-\u209f]/g;
+
 function channelMergeKey(name) {
-  let n = normalizeName(name);
+  let n = normalizeName(String(name || '').replace(SUPERSCRIPT_RE, ' '));
   if (!n) return '';
+  n = n.replace(/\b(fhd|uhd|hd|sd|4k)\d\b/g, ' ').trim().replace(/\b([a-z]{3,}?)(fhd|uhd|hd|4k)$/, '$1');
   n = n.replace(/^\d+\s+/, '');
   n = n.replace(/^(br|pt|us|uk|ar|mx|lat|latam|sp|es|fr|de|it|cl|pe|co|uy|py)\s+/, '');
   n = n.replace(/\b(sd|hd|fhd|uhd|4k|8k|h264|h265|hevc|hdr|lq|hq|full\s*hd|vip|premium|raw|aac|ac3)\b/g, ' ');
@@ -499,7 +504,7 @@ function mergeResults(results, manuals) {
         ch.name = String(s.name || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || s.name;
       }
       if (!ch.streams.some((x) => x.url === s.url)) {
-        const basePri = r.priority ?? 100;
+        const basePri = (r.priority ?? 100) + playbackPenalty(r.entryKey);
         const q = qualityScore(s.name);
         ch.streams.push({
           url: s.url,
@@ -560,9 +565,15 @@ function mergeResults(results, manuals) {
   }
 
   // Mesmo nome exibido = mesmo canal (junta as URLs como alternativas).
+  // Chave sem espacos: "SporTV 2" = "SporTV2", "TV Cidade CE" = "TV CidadeCE".
+  // "ESPN 1"/"SporTV 1"/"Paramount 01" + o canal sem numero = o mesmo canal.
+  const compactKey = (ch) => (channelMergeKey(ch.name) || normalizeName(ch.name)).replace(/\s+/g, '');
+  const allKeys = new Set(channels.map(compactKey));
   const byDisplay = new Map();
   for (const ch of channels) {
-    const dn = normalizeName(ch.name);
+    let dn = compactKey(ch);
+    const one = dn.match(/^(.*[a-z])0?1$/);
+    if (one && allKeys.has(one[1])) dn = one[1];
     if (!dn) continue;
     const prev = byDisplay.get(dn);
     if (!prev) { byDisplay.set(dn, ch); continue; }
@@ -595,6 +606,89 @@ function mergeResults(results, manuals) {
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
   return { channels, categories };
+}
+
+// ---------------------------------------------------------------------------
+// Teste de reproducao: a lista da fonte pode vir OK (player_api) mas os links
+// nao tocarem (ex.: Lives0topTV/4LiveTV devolvendo 404/403). A cada 30 min
+// testamos alguns links de cada fonte; fonte que nao toca vai para o FIM da
+// ordem dos links (continua como reserva - nada e apagado do painel).
+// Obs.: o teste sai do IP do VPS; painel que bloqueia datacenter parece morto
+// aqui e so e rebaixado, nao removido.
+// ---------------------------------------------------------------------------
+const PROBE_TTL_MS = 30 * 60 * 1000;
+const PROBE_SAMPLES = 4;
+const PROBE_TIMEOUT_MS = 8000;
+const playbackHealth = new Map(); // entryKey -> { ok, total, at, name }
+
+function probeEnabled() {
+  const v = String(process.env.LIVE_TV_PROBE || '').trim();
+  if (v === '0') return false;
+  if (v === '1') return true;
+  return process.env.NODE_ENV !== 'test';
+}
+
+function playbackPenalty(entryKey) {
+  const h = entryKey && playbackHealth.get(entryKey);
+  if (!h || !h.total) return 0;
+  if (h.ok === 0) return 1000;
+  if (h.ok / h.total < 0.5) return 300;
+  return 0;
+}
+
+async function probeStreamUrl(url) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: 'follow',
+      headers: { 'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20', Range: 'bytes=0-4095' },
+    });
+    if (!(res.status === 200 || res.status === 206)) return false;
+    const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+    let buf = Buffer.alloc(0);
+    if (reader) {
+      while (buf.length < 512) {
+        const { value, done } = await reader.read();
+        if (done || !value) break;
+        buf = Buffer.concat([buf, Buffer.from(value)]);
+      }
+      try { await reader.cancel(); } catch (_) {}
+    }
+    if (!buf.length) return false;
+    const head = buf.slice(0, 64).toString('latin1');
+    if (/^\s*#EXTM3U/.test(head)) return true;
+    if (buf[0] === 0x47) return true; // MPEG-TS
+    return false; // html / vazio = painel respondendo erro
+  } catch (_) {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function probeSources(results, now = Date.now()) {
+  if (!probeEnabled()) return;
+  const jobs = results
+    .filter((r) => r.entryKey && r.streams && r.streams.length)
+    .filter((r) => {
+      const h = playbackHealth.get(r.entryKey);
+      return !h || now - h.at > PROBE_TTL_MS;
+    })
+    .map(async (r) => {
+      const pool = r.streams;
+      const picks = [];
+      for (let i = 0; i < PROBE_SAMPLES && pool.length; i++) {
+        picks.push(pool[Math.floor(((i + 0.5) / PROBE_SAMPLES) * pool.length)].url);
+      }
+      const oks = await Promise.all(picks.map(probeStreamUrl));
+      const ok = oks.filter(Boolean).length;
+      playbackHealth.set(r.entryKey, { ok, total: picks.length, at: Date.now(), name: r.sourceName });
+    });
+  await Promise.all(jobs);
+  const summary = Array.from(playbackHealth.values()).map((h) => `${h.name} ${h.ok}/${h.total}`);
+  if (summary.length) console.log('[live-tv] teste de reproducao:', summary.join(', '));
 }
 
 async function buildLiveTv(serviceKey) {
@@ -644,6 +738,12 @@ async function buildLiveTv(serviceKey) {
   });
   if (sameContent.length) console.log('[live-tv] mesma lista em fontes diferentes:', sameContent.join('; '));
 
+  try {
+    await probeSources(results);
+  } catch (e) {
+    console.warn('[live-tv] teste de reproducao falhou:', e && e.message);
+  }
+
   const report = entries.map((e) => {
     const st = sourceHealth.get(e.key) || {};
     const r = settled.find((x) => x && x.entryKey === e.key);
@@ -653,6 +753,7 @@ async function buildLiveTv(serviceKey) {
       reused: !!(r && r.reused),
       skip: (r && r.skipReason) || (r ? null : 'sem resposta no tempo'),
       fails: st.fails || 0,
+      playable: playbackHealth.has(e.key) ? `${playbackHealth.get(e.key).ok}/${playbackHealth.get(e.key).total}` : null,
     };
   });
   console.log('[live-tv] scan fontes:', JSON.stringify(report));
@@ -791,6 +892,10 @@ module.exports._test = {
   mergeResults,
   streamFingerprint,
   refreshLiveTv,
+  channelMergeKey,
+  playbackHealth,
+  playbackPenalty,
+  probeStreamUrl,
 };
 
 // Aquece a lista logo apos o boot (direto, sem passar pelo bloqueio VIP do

@@ -146,3 +146,47 @@ test('categorias 24h e "Canais |" ficam com nome limpo', () => {
   assert.strictEqual(cleanCategoryName('Canais | Abertos'), 'Abertos');
   assert.strictEqual(categoryKey('Canais | Abertos'), 'abertos');
 });
+
+test('nomes do mesmo canal com numero/qualidade grudados viram um so', () => {
+  const { channelMergeKey, mergeResults } = require('../api/live-tv.js')._test;
+  const k = (n) => channelMergeKey(n).replace(/\s+/g, '');
+  assert.strictEqual(k('HBO 2'), k('HBO2'));
+  assert.strictEqual(k('SporTV 2'), k('SporTV2'));
+  assert.strictEqual(k('HBO XTREMEFHD'), k('HBO Xtreme'));
+  assert.strictEqual(k('RECORD RS FHD2'), k('RECORD RS'));
+  assert.strictEqual(k('-SPORTV 3'), k('SporTV 3'));
+  assert.notStrictEqual(k('SporTV 2'), k('SporTV 3'));
+  const r = {
+    entryKey: 'a', priority: 1, categories: [{ id: '1', name: 'Filmes' }],
+    streams: [
+      { name: 'HBO 2', categoryId: '1', url: 'http://a/1.m3u8', sourceLabel: 'A' },
+      { name: 'HBO2 FHD', categoryId: '1', url: 'http://a/2.m3u8', sourceLabel: 'A' },
+    ],
+  };
+  const { channels } = mergeResults([r], []);
+  assert.strictEqual(channels.length, 1);
+  assert.strictEqual(channels[0].streams.length, 2);
+});
+
+test('fonte cujos links nao tocam vai para o fim da ordem', () => {
+  const { mergeResults, playbackHealth } = require('../api/live-tv.js')._test;
+  playbackHealth.set('morta', { ok: 0, total: 4, at: Date.now(), name: 'Morta' });
+  const mk = (key, pri, url) => ({
+    entryKey: key, priority: pri, categories: [{ id: '1', name: 'Abertos' }],
+    streams: [{ name: 'Globo HD', categoryId: '1', url, sourceLabel: key }],
+  });
+  const { channels } = mergeResults([mk('morta', 1, 'http://m/1.m3u8'), mk('boa', 5, 'http://b/1.m3u8')], []);
+  assert.strictEqual(channels[0].streams[0].url, 'http://b/1.m3u8');
+  assert.strictEqual(channels[0].streams.length, 2, 'a fonte morta continua como reserva');
+  playbackHealth.delete('morta');
+});
+
+test('"ESPN 1" junta com "ESPN", mas "ESPN 2" continua separado', () => {
+  const { mergeResults } = require('../api/live-tv.js')._test;
+  const r = {
+    entryKey: 'x', priority: 1, categories: [{ id: '1', name: 'Esportes' }],
+    streams: ['ESPN', 'ESPN 1', 'ESPN 2'].map((name, i) => ({ name, categoryId: '1', url: `http://x/${i}.m3u8`, sourceLabel: 'X' })),
+  };
+  const names = mergeResults([r], []).channels.map((c) => c.name).sort();
+  assert.deepStrictEqual(names, ['ESPN', 'ESPN 2']);
+});
