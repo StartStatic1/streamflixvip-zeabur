@@ -1,7 +1,7 @@
 {
-  "versionCode": 16,
-  "versionName": "3.0.1",
+  "versionCode": 17,
+  "versionName": "3.0.2",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Correções: o foco não fica mais preso no menu lateral ao trocar de aba (Direita/OK leva ao conteúdo, Esquerda volta ao menu, Voltar sai do menu); a tela volta a rolar para cima e o destaque reaparece; sinopse do destaque sem sobreposição com as fileiras; menu lateral com fundo sólido, sem texto por cima do conteúdo; painéis e lista de canais não perdem o foco ao fechar."
+  "releaseNotes": "Correções: a tela Ver tudo não treme nem deixa rastros; app mais leve no Fire TV e TV box com pouca memória (prévia ao vivo desligada nesses aparelhos); TV ao vivo evita servidores que não conectam e troca sozinho para outro; menos canais repetidos; player reconecta após queda de internet; voltar do player não pula telas; menu com destaque compacto."
 }
