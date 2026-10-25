@@ -42,6 +42,7 @@ class StreamFlixTvApp : Application(), ImageLoaderFactory {
         CrashLog.install(this)
         DeviceProfile.init(this)
         TvSettingsStore.init(this)
+        com.streamflixvip.tv.ui.livetv.LiveHostHealth.init(this)
         sessionStore = SessionStore(this)
         NetworkModule.sessionStore = sessionStore
         // VIP na TV e por device_id (tv_activations), nao por e-mail JWT

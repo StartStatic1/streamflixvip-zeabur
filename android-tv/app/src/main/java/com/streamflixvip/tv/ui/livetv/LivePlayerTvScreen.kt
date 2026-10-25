@@ -172,11 +172,13 @@ fun LivePlayerTvScreen(
                 if (state == Player.STATE_READY) {
                     loading = false
                     error = null
+                    streamsNow.getOrNull(streamIndex)?.let { LiveHostHealth.markOk(it.url) }
                 }
                 if (state == Player.STATE_BUFFERING) loading = true
             }
 
             override fun onPlayerError(e: PlaybackException) {
+                streamsNow.getOrNull(streamIndex)?.let { LiveHostHealth.markFail(it.url) }
                 if (streamIndex + 1 < streamsNow.size) {
                     streamIndex++
                     toaster.show("Fonte falhou — tentando outra")
@@ -230,6 +232,7 @@ fun LivePlayerTvScreen(
         }
         delay(LIVE_START_TIMEOUT_MS)
         if (loading && error == null) {
+            LiveHostHealth.markFail(opt.url)
             if (streamIndex + 1 < streams.size) {
                 streamIndex++
                 toaster.show("Fonte lenta — tentando outra")

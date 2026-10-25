@@ -14,12 +14,63 @@ import com.streamflixvip.tv.network.LiveStreamOption
 
 private val QUALITY_RANK = mapOf("4K" to 0, "UHD" to 0, "FHD" to 1, "FULLHD" to 1, "HD" to 2, "SD" to 3, "STD" to 3)
 
-/** Melhor qualidade primeiro, depois prioridade da API. */
+/**
+ * Ordem dos links de um canal:
+ *  1) servidor que falhou neste aparelho nas ultimas horas vai para o fim;
+ *  2) prioridade da API (ja junta prioridade da fonte + qualidade + teste de reproducao);
+ *  3) qualidade como desempate.
+ * Antes a qualidade vinha primeiro e um FHD de servidor morto (ex. lives01.top)
+ * sempre ganhava de um HD que funciona.
+ */
 internal fun orderStreams(streams: List<LiveStreamOption>): List<LiveStreamOption> =
     streams.sortedWith(
-        compareBy<LiveStreamOption> { QUALITY_RANK[(it.quality ?: "").uppercase().replace(" ", "")] ?: 5 }
-            .thenBy { it.priority ?: 100 },
+        compareBy<LiveStreamOption> { LiveHostHealth.penalty(it.url) }
+            .thenBy { it.priority ?: 100 }
+            .thenBy { QUALITY_RANK[(it.quality ?: "").uppercase().replace(" ", "")] ?: 5 },
     )
+
+/** Lembra (no aparelho) quais servidores de TV ao vivo falharam recentemente. */
+internal object LiveHostHealth {
+    private const val PREFS = "sfv_live_hosts"
+    private const val WINDOW_MS = 6 * 60 * 60 * 1000L
+    private var prefs: android.content.SharedPreferences? = null
+    private val mem = java.util.concurrent.ConcurrentHashMap<String, Pair<Int, Long>>()
+
+    fun init(context: android.content.Context) {
+        if (prefs != null) return
+        val p = context.applicationContext.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+        prefs = p
+        val now = System.currentTimeMillis()
+        p.all.forEach { (host, v) ->
+            val parts = (v as? String)?.split("|") ?: return@forEach
+            val fails = parts.getOrNull(0)?.toIntOrNull() ?: return@forEach
+            val at = parts.getOrNull(1)?.toLongOrNull() ?: return@forEach
+            if (now - at < WINDOW_MS) mem[host] = fails to at
+        }
+    }
+
+    fun hostOf(url: String): String = runCatching { java.net.URI(url).host?.lowercase() }.getOrNull() ?: url.take(40)
+
+    /** 0 = ok; 1 = falhou 1x; 2 = falhou 2x ou mais (vai para o fim). */
+    fun penalty(url: String): Int {
+        val (fails, at) = mem[hostOf(url)] ?: return 0
+        if (System.currentTimeMillis() - at > WINDOW_MS) return 0
+        return fails.coerceAtMost(2)
+    }
+
+    fun markFail(url: String) {
+        val h = hostOf(url)
+        val fails = (mem[h]?.first ?: 0) + 1
+        val now = System.currentTimeMillis()
+        mem[h] = fails to now
+        prefs?.edit()?.putString(h, "$fails|$now")?.apply()
+    }
+
+    fun markOk(url: String) {
+        val h = hostOf(url)
+        if (mem.remove(h) != null) prefs?.edit()?.remove(h)?.apply()
+    }
+}
 
 internal fun streamLabel(option: LiveStreamOption, index: Int): String = buildString {
     val q = option.quality?.takeIf { it.isNotBlank() }
