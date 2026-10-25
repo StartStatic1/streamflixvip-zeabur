@@ -54,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -386,9 +387,10 @@ private fun PlayerSession(
     }
 
     // erros: tenta de novo, depois troca de servidor sozinho
+    // Nao zera pendingError aqui: mudar a chave cancelaria este efeito no meio do
+    // delay da reconexao e o video ficava parado no erro.
     LaunchedEffect(pendingError) {
         val err = pendingError ?: return@LaunchedEffect
-        pendingError = null
         val code = err.errorCode
         val url = current?.resolvedPlaybackUrl(NetworkModule.ZEABUR_BASE_URL).orEmpty()
         val pos = if (everReady) exo.currentPosition.coerceAtLeast(0L) else startPositionMs
@@ -622,11 +624,21 @@ private fun PlayerSession(
         } else {
             showControls()
         }
+        // ultimo episodio (ou falha ao achar o proximo): mostra os controles em vez de tela parada
+        if (isSeries) {
+            delay(2500)
+            showControls()
+        }
     }
 
-    val remaining = if (durationMs > 0) durationMs - positionMs else Long.MAX_VALUE
-    val showNextCard = isSeries && onNextEpisode != null && firstReady && !nextDismissed &&
-        durationMs > 5 * 60_000 && remaining in 1..NEXT_CARD_MS && panel == PlayerPanel.NONE
+    // derivedStateOf: a tela inteira nao recompoe a cada tique do relogio (TV box fraca)
+    val showNextCard by remember {
+        derivedStateOf {
+            val rem = if (durationMs > 0) durationMs - positionMs else Long.MAX_VALUE
+            isSeries && onNextEpisode != null && firstReady && !nextDismissed &&
+                durationMs > 5 * 60_000 && rem in 1..NEXT_CARD_MS && panel == PlayerPanel.NONE
+        }
+    }
     LaunchedEffect(showNextCard) {
         if (showNextCard) {
             delay(80)
@@ -859,7 +871,7 @@ private fun PlayerSession(
                 Text("Próximo episódio", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (settings.autoplayNext) "Começa em ${(remaining / 1000).coerceAtLeast(0)}s" else "Reprodução automática desligada",
+                    if (settings.autoplayNext) "Começa em ${((durationMs - positionMs) / 1000).coerceAtLeast(0)}s" else "Reprodução automática desligada",
                     color = p.textMuted,
                     fontSize = 13.sp,
                 )
