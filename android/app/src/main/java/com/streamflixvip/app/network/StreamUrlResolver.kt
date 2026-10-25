@@ -1,9 +1,10 @@
 package com.streamflixvip.app.network
 
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -42,23 +43,26 @@ object StreamUrlResolver {
     suspend fun resolveFastest(candidates: List<String>): String {
         if (candidates.size <= 1) return candidates.firstOrNull().orEmpty()
 
-        val winner = withTimeoutOrNull(6_000L) {
-            coroutineScope {
-                val results = Channel<String?>(capacity = candidates.size)
-                candidates.forEach { url ->
-                    launch {
-                        results.send(if (probe(url)) url else null)
-                    }
-                }
+        // Os testes rodam num escopo proprio: o 1o que responde OK vence na hora.
+        // (Antes o coroutineScope esperava TODOS os testes terminarem, entao um backend
+        // lento segurava o play ate 6s mesmo quando o outro ja tinha respondido.)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val winner = try {
+            val results = Channel<String?>(capacity = candidates.size)
+            candidates.forEach { url ->
+                scope.launch { results.send(if (probe(url)) url else null) }
+            }
+            withTimeoutOrNull(6_000L) {
                 var found: String? = null
-                repeat(candidates.size) {
-                    if (found == null) {
-                        val value = results.receive()
-                        if (value != null) found = value
-                    }
+                var received = 0
+                while (found == null && received < candidates.size) {
+                    found = results.receive()
+                    received++
                 }
                 found
             }
+        } finally {
+            scope.cancel()
         }
         return winner ?: candidates.first()
     }
