@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Movie
@@ -73,6 +74,7 @@ import com.streamflixvip.tv.data.TvSettingsStore
 import com.streamflixvip.tv.network.LiveChannel
 import com.streamflixvip.tv.ui.account.MyListTvScreen
 import com.streamflixvip.tv.ui.components.LocalToaster
+import com.streamflixvip.tv.ui.explore.ExploreTvScreen
 import com.streamflixvip.tv.ui.home.BrowseSection
 import com.streamflixvip.tv.ui.home.HomeTvScreen
 import com.streamflixvip.tv.ui.livetv.LiveTvScreen
@@ -89,6 +91,7 @@ enum class ShellSection(val label: String, val icon: ImageVector) {
     HOME("Início", Icons.Filled.Home),
     MOVIES("Filmes", Icons.Filled.Movie),
     SERIES("Séries", Icons.Filled.Tv),
+    EXPLORE("Explorar", Icons.Filled.FilterList),
     LIVE("TV ao vivo", Icons.Filled.LiveTv),
     MYLIST("Minha lista", Icons.Filled.Bookmark),
     SETTINGS("Ajustes", Icons.Filled.Settings),
@@ -125,7 +128,7 @@ fun MainShell(
     }
     var sectionName by rememberSaveable { mutableStateOf(initial.name) }
     val visibleSections = remember(settings.kidsMode) {
-        if (settings.kidsMode) ShellSection.entries.filter { it != ShellSection.MOVIES && it != ShellSection.SERIES }
+        if (settings.kidsMode) ShellSection.entries.filter { it != ShellSection.MOVIES && it != ShellSection.SERIES && it != ShellSection.EXPLORE }
         else ShellSection.entries.toList()
     }
     val section = ShellSection.entries.firstOrNull { it.name == sectionName }
@@ -211,6 +214,11 @@ fun MainShell(
                         onContinueClick = onContinueClick,
                         onSeeAll = onSeeAll,
                         onToast = { toaster.show(it) },
+                    )
+                    ShellSection.EXPLORE -> ExploreTvScreen(
+                        focusSignal = focusSignal,
+                        kidsMode = settings.kidsMode,
+                        onItemClick = onItemClick,
                     )
                     ShellSection.SEARCH -> SearchTvScreen(
                         focusSignal = focusSignal,

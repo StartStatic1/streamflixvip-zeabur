@@ -52,6 +52,7 @@ data class TmdbResponse(
     val videos: TmdbVideosResponse? = null,
     val credits: TmdbCredits? = null,
     val total_pages: Int? = null,
+    val total_results: Int? = null,
     val number_of_episodes: Int? = null,
     val status: String? = null,
     val images: TmdbImages? = null,
