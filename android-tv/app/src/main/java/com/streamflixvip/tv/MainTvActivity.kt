@@ -1,10 +1,12 @@
 package com.streamflixvip.tv
 
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -12,36 +14,45 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.streamflixvip.tv.data.LocalWatchProgress
+import com.streamflixvip.tv.data.RecentStore
 import com.streamflixvip.tv.data.TvActivationManager
+import com.streamflixvip.tv.network.AppVersionResponse
 import com.streamflixvip.tv.network.LiveChannel
+import com.streamflixvip.tv.network.MediaSourcesResponse
 import com.streamflixvip.tv.network.NetworkModule
 import com.streamflixvip.tv.network.VipSource
-import com.streamflixvip.tv.ui.account.AccountTvScreen
-import com.streamflixvip.tv.ui.account.MyListTvScreen
+import com.streamflixvip.tv.network.sourcesMessage
 import com.streamflixvip.tv.ui.activation.ActivationTvScreen
+import com.streamflixvip.tv.ui.components.LocalToaster
+import com.streamflixvip.tv.ui.components.ToastHost
+import com.streamflixvip.tv.ui.components.Toaster
 import com.streamflixvip.tv.ui.detail.DetailTvScreen
 import com.streamflixvip.tv.ui.home.CategoryTvScreen
-import com.streamflixvip.tv.ui.home.HomeTvScreen
 import com.streamflixvip.tv.ui.livetv.LivePlayerTvScreen
-import com.streamflixvip.tv.ui.livetv.LiveTvScreen
+import com.streamflixvip.tv.ui.player.PlayerArgs
 import com.streamflixvip.tv.ui.player.PlayerTvScreen
-import com.streamflixvip.tv.ui.search.SearchTvScreen
+import com.streamflixvip.tv.ui.shell.MainShell
 import com.streamflixvip.tv.ui.splash.SplashTvScreen
 import com.streamflixvip.tv.ui.theme.StreamFlixTvTheme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import androidx.compose.ui.platform.LocalContext
-import com.streamflixvip.tv.BuildConfig
-import com.streamflixvip.tv.network.AppVersionResponse
 import com.streamflixvip.tv.ui.update.UpdateRequiredTvScreen
 import com.streamflixvip.tv.update.ApkInstaller
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+private data class LiveSession(
+    val channels: List<LiveChannel>,
+    val index: Int,
+    val epgNow: Map<String, String>,
+    val epgNext: Map<String, String>,
+)
 
 class MainTvActivity : ComponentActivity() {
 
@@ -50,331 +61,296 @@ class MainTvActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             StreamFlixTvTheme {
-                val navController = rememberNavController()
-                val activationManager = remember { TvActivationManager(applicationContext) }
-                val scope = rememberCoroutineScope()
-                val context = LocalContext.current
-
-                var updateInfo by remember { mutableStateOf<AppVersionResponse?>(null) }
-                var isDownloadingUpdate by remember { mutableStateOf(false) }
-                var downloadProgress by remember { mutableIntStateOf(0) }
-                var updateStatusMessage by remember { mutableStateOf<String?>(null) }
-
-                LaunchedEffect(Unit) {
-                    try {
-                        val response = NetworkModule.appVersionApi.getVersion()
-                        if (response.forceUpdate && response.versionCode > BuildConfig.VERSION_CODE) {
-                            updateInfo = response
-                        }
-                    } catch (_: Exception) {
+                val toaster = remember { Toaster() }
+                CompositionLocalProvider(LocalToaster provides toaster) {
+                    Box(Modifier.fillMaxSize()) {
+                        AppRoot(toaster)
+                        ToastHost(toaster)
                     }
                 }
+            }
+        }
+    }
 
-                if (updateInfo != null) {
-                    UpdateRequiredTvScreen(
-                        versionName = updateInfo!!.versionName,
-                        releaseNotes = updateInfo!!.releaseNotes ?: "",
-                        isDownloading = isDownloadingUpdate,
-                        downloadProgress = downloadProgress,
-                        statusMessage = updateStatusMessage,
-                        onDownloadClick = {
-                            val url = updateInfo!!.apkUrl
-                            if (url.isNullOrBlank()) {
-                                updateStatusMessage = "URL do APK nao configurada no servidor."
-                                return@UpdateRequiredTvScreen
+    @androidx.compose.runtime.Composable
+    private fun AppRoot(toaster: Toaster) {
+        val navController = rememberNavController()
+        val activationManager = remember { TvActivationManager(applicationContext) }
+        val recent = remember { RecentStore(applicationContext) }
+        val scope = rememberCoroutineScope()
+        val context = LocalContext.current
+
+        // ── atualizacao obrigatoria ─────────────────────────────────────
+        var updateInfo by remember { mutableStateOf<AppVersionResponse?>(null) }
+        var isDownloadingUpdate by remember { mutableStateOf(false) }
+        var downloadProgress by remember { mutableIntStateOf(0) }
+        var updateStatusMessage by remember { mutableStateOf<String?>(null) }
+
+        LaunchedEffect(Unit) {
+            runCatching { NetworkModule.appVersionApi.getVersion() }.onSuccess { response ->
+                if (response.forceUpdate && response.versionCode > BuildConfig.VERSION_CODE) updateInfo = response
+            }
+        }
+
+        val info = updateInfo
+        if (info != null) {
+            UpdateRequiredTvScreen(
+                versionName = info.versionName,
+                releaseNotes = info.releaseNotes ?: "",
+                isDownloading = isDownloadingUpdate,
+                downloadProgress = downloadProgress,
+                statusMessage = updateStatusMessage,
+                onDownloadClick = {
+                    val url = info.apkUrl
+                    if (url.isNullOrBlank()) {
+                        updateStatusMessage = "Link da atualização não configurado no servidor."
+                        return@UpdateRequiredTvScreen
+                    }
+                    isDownloadingUpdate = true
+                    downloadProgress = 0
+                    updateStatusMessage = null
+                    scope.launch {
+                        try {
+                            if (!ApkInstaller.canInstallPackages(context)) {
+                                updateStatusMessage = "Permita instalar apps deste app nas configurações e aperte Baixar de novo."
+                                ApkInstaller.openInstallPermissionSettings(context)
+                                isDownloadingUpdate = false
+                                return@launch
                             }
-                            isDownloadingUpdate = true
-                            downloadProgress = 0
-                            updateStatusMessage = null
-                            scope.launch {
-                                try {
-                                    // Em Android 8+: se ainda nao pode instalar, abre a permissao
-                                    if (!ApkInstaller.canInstallPackages(context)) {
-                                        updateStatusMessage =
-                                            "Permita instalar apps deste app nas configuracoes e toque de novo em Baixar."
-                                        ApkInstaller.openInstallPermissionSettings(context)
-                                        isDownloadingUpdate = false
-                                        return@launch
-                                    }
-                                    val file = ApkInstaller.download(context, url) { pct ->
-                                        downloadProgress = pct
-                                    }
-                                    downloadProgress = 100
-                                    ApkInstaller.install(context, file)
-                                } catch (e: Exception) {
-                                    updateStatusMessage =
-                                        "Falha no download: ${e.message ?: "erro desconhecido"}"
-                                    Toast.makeText(
-                                        this@MainTvActivity,
-                                        "Erro ao baixar atualizacao",
-                                        Toast.LENGTH_LONG,
-                                    ).show()
-                                } finally {
-                                    isDownloadingUpdate = false
-                                }
-                            }
-                        },
+                            val file = ApkInstaller.download(context, url) { pct -> downloadProgress = pct }
+                            downloadProgress = 100
+                            ApkInstaller.install(context, file)
+                        } catch (e: Exception) {
+                            updateStatusMessage = "Falha no download: ${e.message ?: "erro desconhecido"}"
+                        } finally {
+                            isDownloadingUpdate = false
+                        }
+                    }
+                },
+            )
+            return
+        }
+
+        // ── estado compartilhado entre telas ─────────────────────────────
+        var playerArgs by remember { mutableStateOf<PlayerArgs?>(null) }
+        var liveSession by remember { mutableStateOf<LiveSession?>(null) }
+        var busy by remember { mutableStateOf(false) }
+
+        fun openPlayer(args: PlayerArgs) {
+            playerArgs = args
+            if (navController.currentDestination?.route != "player") {
+                navController.navigate("player") { launchSingleTop = true }
+            }
+        }
+
+        /** Busca servidores (fast=1) e para cedo quando o servidor preferido aparece. */
+        suspend fun resolveSources(tmdbId: Int, type: String, season: Int?, episode: Int?, preferred: String?): Pair<List<VipSource>, MediaSourcesResponse?> {
+            var last: MediaSourcesResponse? = null
+            var polls = 0
+            while (true) {
+                val res = runCatching {
+                    NetworkModule.vipApi.getMediaSources(tmdbId, type, season, episode, fast = 1)
+                }.getOrNull() ?: break
+                val merged = if (last != null && res.sources.size < last.sources.size) res.copy(sources = last.sources) else res
+                last = merged
+                val hasPreferred = preferred != null && merged.sources.any { it.displayName == preferred }
+                if (!merged.partial || merged.code != null || hasPreferred || polls >= 8) break
+                delay((merged.pollAfterMs ?: 1500L).coerceIn(500L, 5000L))
+                polls++
+            }
+            val list = last?.sources.orEmpty().distinctBy { it.source_url }
+                .sortedByDescending { preferred != null && it.displayName == preferred }
+            return list to last
+        }
+
+        fun resumeContinueWatching(entry: LocalWatchProgress) {
+            if (busy) return
+            busy = true
+            toaster.show("Abrindo ${entry.title}…")
+            scope.launch {
+                try {
+                    val isTv = entry.mediaType == "tv"
+                    val (sources, res) = resolveSources(
+                        entry.tmdbId,
+                        if (isTv) "tv" else "movie",
+                        if (isTv) entry.season else null,
+                        if (isTv) entry.episode else null,
+                        recent.lastServer(entry.tmdbId),
                     )
-                    return@StreamFlixTvTheme
-                }
-
-                var pendingSource by remember { mutableStateOf<VipSource?>(null) }
-                var pendingSources by remember { mutableStateOf<List<VipSource>>(emptyList()) }
-                var pendingSeason by remember { mutableStateOf(0) }
-                var pendingEpisode by remember { mutableStateOf(0) }
-                var pendingTitle by remember { mutableStateOf("Sem título") }
-                var pendingTmdbId by remember { mutableStateOf(0) }
-                var pendingMediaType by remember { mutableStateOf("movie") }
-                var pendingPosterPath by remember { mutableStateOf<String?>(null) }
-
-                var pendingLiveChannel by remember { mutableStateOf<LiveChannel?>(null) }
-                var pendingLiveList by remember { mutableStateOf<List<LiveChannel>>(emptyList()) }
-                var pendingLiveIndex by remember { mutableIntStateOf(0) }
-
-                fun openPlayer(
-                    source: VipSource,
-                    sources: List<VipSource>,
-                    season: Int,
-                    episode: Int,
-                    title: String,
-                    tmdbId: Int,
-                    mediaType: String,
-                    posterPath: String?,
-                ) {
-                    pendingSource = source
-                    pendingSources = sources
-                    pendingSeason = season
-                    pendingEpisode = episode
-                    pendingTitle = title
-                    pendingTmdbId = tmdbId
-                    pendingMediaType = mediaType
-                    pendingPosterPath = posterPath
-                    navController.navigate("player") { launchSingleTop = true }
-                }
-
-                fun goBackFromPlayer() {
-                    val tmdbId = pendingTmdbId
-                    val mediaType = pendingMediaType
-                    pendingSource = null
-                    pendingSources = emptyList()
-                    val detailRoute = "detail/$mediaType/$tmdbId"
-                    if (tmdbId > 0) {
-                        val landed = navController.popBackStack(detailRoute, inclusive = false)
-                        if (!landed) {
-                            navController.navigate(detailRoute) {
-                                popUpTo("player") { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        }
-                    } else {
-                        navController.popBackStack()
+                    if (sources.isEmpty()) {
+                        toaster.show(sourcesMessage(res))
+                        navController.navigate("detail/${entry.mediaType}/${entry.tmdbId}")
+                        return@launch
                     }
-                }
-
-                fun resumeContinueWatching(entry: LocalWatchProgress) {
-                    scope.launch {
-                        val sources = withContext(Dispatchers.IO) {
-                            runCatching {
-                                if (entry.mediaType == "tv") {
-                                    NetworkModule.vipApi.getMediaSources(
-                                        tmdbId = entry.tmdbId,
-                                        type = "tv",
-                                        season = entry.season,
-                                        episode = entry.episode,
-                                    ).sources
-                                } else {
-                                    NetworkModule.vipApi.getMediaSources(
-                                        tmdbId = entry.tmdbId,
-                                        type = "movie",
-                                    ).sources
-                                }
-                            }.getOrDefault(emptyList())
-                        }
-                        if (sources.isEmpty()) {
-                            Toast.makeText(this@MainTvActivity, "Nenhuma fonte disponível — abrindo detalhes", Toast.LENGTH_SHORT).show()
-                            navController.navigate("detail/${entry.mediaType}/${entry.tmdbId}")
-                            return@launch
-                        }
-                        openPlayer(sources.first(), sources, entry.season, entry.episode, entry.title, entry.tmdbId, entry.mediaType, entry.posterPath)
-                    }
-                }
-
-                fun playNextEpisode() {
-                    if (pendingMediaType != "tv" || pendingTmdbId <= 0) return
-                    val nextEp = pendingEpisode + 1
-                    val season = pendingSeason
-                    val tmdbId = pendingTmdbId
-                    val titleBase = pendingTitle.substringBefore(" · ").ifBlank { pendingTitle }
-                    scope.launch {
-                        val sources = withContext(Dispatchers.IO) {
-                            runCatching {
-                                NetworkModule.vipApi.getMediaSources(
-                                    tmdbId = tmdbId,
-                                    type = "tv",
-                                    season = season,
-                                    episode = nextEp,
-                                ).sources
-                            }.getOrDefault(emptyList())
-                        }
-                        if (sources.isEmpty()) {
-                            Toast.makeText(this@MainTvActivity, "Não há próximo episódio nesta temporada", Toast.LENGTH_SHORT).show()
-                            return@launch
-                        }
-                        openPlayer(sources.first(), sources, season, nextEp, "$titleBase · T${season}E$nextEp", tmdbId, "tv", pendingPosterPath)
-                    }
-                }
-
-                NavHost(navController = navController, startDestination = "splash") {
-                    composable("splash") {
-                        SplashTvScreen(
-                            activationManager = activationManager,
-                            onFinished = { isActivated ->
-                                val next = if (isActivated) "home" else "activation"
-                                navController.navigate(next) { popUpTo("splash") { inclusive = true } }
-                            },
-                        )
-                    }
-                    composable("activation") {
-                        ActivationTvScreen(
-                            activationManager = activationManager,
-                            onActivated = {
-                                navController.navigate("home") { popUpTo("activation") { inclusive = true } }
-                            },
-                        )
-                    }
-                    composable("home") {
-                        HomeTvScreen(
-                            onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$mediaType/$tmdbId") },
-                            onContinueClick = { entry -> resumeContinueWatching(entry) },
-                            onNavigateToSearch = { navController.navigate("search") },
-                            onNavigateToLiveTv = { navController.navigate("live") },
-                            onNavigateToMyList = { navController.navigate("mylist") },
-                            onNavigateToAccount = { navController.navigate("account") },
-                            onExploreCategory = { category -> navController.navigate("category/$category") },
-                        )
-                    }
-                    composable("live") {
-                        LiveTvScreen(
-                            onChannelClick = { channel, filteredList, indexInList ->
-                                pendingLiveChannel = channel
-                                pendingLiveList = filteredList
-                                pendingLiveIndex = indexInList
-                                navController.navigate("live-player") { launchSingleTop = true }
-                            },
-                            onBack = { navController.popBackStack() },
-                        )
-                    }
-                    composable("live-player") {
-                        val channel = pendingLiveChannel
-                        if (channel != null) {
-                            LivePlayerTvScreen(
-                                channelName = channel.name,
-                                streams = channel.streams,
-                                channelList = pendingLiveList,
-                                initialChannelIndex = pendingLiveIndex,
-                                onChannelChanged = { ch ->
-                                    pendingLiveChannel = ch
-                                    val idx = pendingLiveList.indexOfFirst { it.id == ch.id }
-                                    if (idx >= 0) pendingLiveIndex = idx
-                                },
-                                onBack = {
-                                    val landed = navController.popBackStack("live", inclusive = false)
-                                    if (!landed) {
-                                        navController.navigate("live") {
-                                            popUpTo("live-player") { inclusive = true }
-                                            launchSingleTop = true
-                                        }
-                                    }
-                                    pendingLiveChannel = null
-                                },
-                            )
-                        } else {
-                            LaunchedEffect(Unit) {
-                                val landed = navController.popBackStack("live", inclusive = false)
-                                if (!landed) {
-                                    navController.navigate("live") {
-                                        popUpTo("live-player") { inclusive = true }
-                                        launchSingleTop = true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    composable(
-                        route = "category/{key}",
-                        arguments = listOf(navArgument("key") { type = NavType.StringType }),
-                    ) { backStackEntry ->
-                        val key = backStackEntry.arguments?.getString("key") ?: "trending"
-                        CategoryTvScreen(
-                            category = key,
-                            onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$mediaType/$tmdbId") },
-                            onBack = { navController.popBackStack() },
-                        )
-                    }
-                    composable("search") {
-                        SearchTvScreen(
-                            onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$mediaType/$tmdbId") },
-                            onBack = { navController.popBackStack() },
-                        )
-                    }
-                    composable("mylist") {
-                        MyListTvScreen(
-                            onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$mediaType/$tmdbId") },
-                            onBack = { navController.popBackStack() },
-                        )
-                    }
-                    composable("account") {
-                        AccountTvScreen(
-                            activationManager = activationManager,
-                            onBack = { navController.popBackStack() },
-                            onDeactivated = {
-                                navController.navigate("activation") { popUpTo(0) { inclusive = true } }
-                            },
-                        )
-                    }
-                    composable(
-                        route = "detail/{mediaType}/{tmdbId}",
-                        arguments = listOf(
-                            navArgument("mediaType") { type = NavType.StringType },
-                            navArgument("tmdbId") { type = NavType.IntType },
+                    val base = entry.title.substringBefore(" · T")
+                    openPlayer(
+                        PlayerArgs(
+                            tmdbId = entry.tmdbId,
+                            mediaType = entry.mediaType,
+                            season = entry.season,
+                            episode = entry.episode,
+                            title = if (isTv) "$base · T${entry.season}E${entry.episode}" else base,
+                            posterPath = entry.posterPath,
+                            backdropPath = entry.backdropPath,
+                            sources = sources,
                         ),
-                    ) { backStackEntry ->
-                        val mediaType = backStackEntry.arguments?.getString("mediaType") ?: "movie"
-                        val tmdbId = backStackEntry.arguments?.getInt("tmdbId") ?: 0
-                        DetailTvScreen(
-                            tmdbId = tmdbId,
-                            mediaType = mediaType,
-                            onPlayClick = { source, sources, season, episode, title, posterPath ->
-                                openPlayer(source, sources, season, episode, title, tmdbId, mediaType, posterPath)
-                            },
-                            onBack = { navController.popBackStack() },
-                            onOpenTitle = { newTmdbId, newMediaType ->
-                                navController.navigate("detail/$newMediaType/$newTmdbId") {
-                                    popUpTo("detail/${mediaType}/${tmdbId}") { inclusive = true }
-                                }
-                            },
-                        )
-                    }
-                    composable("player") {
-                        val source = pendingSource
-                        if (source != null) {
-                            PlayerTvScreen(
-                                source = source,
-                                sources = pendingSources,
-                                season = pendingSeason,
-                                episode = pendingEpisode,
-                                title = pendingTitle,
-                                tmdbId = pendingTmdbId,
-                                mediaType = pendingMediaType,
-                                posterPath = pendingPosterPath,
-                                onBack = { goBackFromPlayer() },
-                                onServerFailed = { goBackFromPlayer() },
-                                onNextEpisode = if (pendingMediaType == "tv") ({ playNextEpisode() }) else null,
-                            )
+                    )
+                } finally {
+                    busy = false
+                }
+            }
+        }
+
+        /** Proximo episodio: mesma temporada, senao 1o da proxima. Mesmo servidor de antes. */
+        fun playNextEpisode() {
+            val cur = playerArgs ?: return
+            if (cur.mediaType != "tv" || busy) return
+            busy = true
+            toaster.show("Carregando o próximo episódio…")
+            scope.launch {
+                try {
+                    val next = runCatching {
+                        val sd = NetworkModule.tmdbApi.requestSeasonDetail("/tv/${cur.tmdbId}/season/${cur.season}")
+                        if (sd.episodes.orEmpty().any { it.episode_number == cur.episode + 1 }) {
+                            cur.season to cur.episode + 1
                         } else {
-                            LaunchedEffect(Unit) { navController.popBackStack() }
+                            val nsd = runCatching {
+                                NetworkModule.tmdbApi.requestSeasonDetail("/tv/${cur.tmdbId}/season/${cur.season + 1}")
+                            }.getOrNull()
+                            if (nsd?.episodes.orEmpty().isNotEmpty()) (cur.season + 1) to 1 else null
                         }
+                    }.getOrElse { cur.season to cur.episode + 1 }
+                    if (next == null) {
+                        toaster.show("Você chegou ao último episódio")
+                        return@launch
                     }
+                    val preferred = cur.sources.firstOrNull()?.displayName ?: recent.lastServer(cur.tmdbId)
+                    val (sources, res) = resolveSources(cur.tmdbId, "tv", next.first, next.second, preferred)
+                    if (sources.isEmpty()) {
+                        toaster.show(sourcesMessage(res))
+                        return@launch
+                    }
+                    val base = cur.title.substringBefore(" · T")
+                    openPlayer(
+                        cur.copy(
+                            season = next.first,
+                            episode = next.second,
+                            title = "$base · T${next.first}E${next.second}",
+                            sources = sources,
+                            fromStart = false,
+                        ),
+                    )
+                } finally {
+                    busy = false
+                }
+            }
+        }
+
+        NavHost(navController = navController, startDestination = "splash") {
+            composable("splash") {
+                SplashTvScreen(
+                    activationManager = activationManager,
+                    onFinished = { isActivated ->
+                        navController.navigate(if (isActivated) "main" else "activation") {
+                            popUpTo("splash") { inclusive = true }
+                        }
+                    },
+                )
+            }
+            composable("activation") {
+                ActivationTvScreen(
+                    activationManager = activationManager,
+                    onActivated = {
+                        navController.navigate("main") { popUpTo("activation") { inclusive = true } }
+                    },
+                )
+            }
+            composable("main") {
+                MainShell(
+                    activationManager = activationManager,
+                    onItemClick = { id, type -> navController.navigate("detail/$type/$id") },
+                    onContinueClick = { resumeContinueWatching(it) },
+                    onSeeAll = { key -> navController.navigate("category/$key") },
+                    onChannelClick = { _, list, index, now, next ->
+                        liveSession = LiveSession(list, index, now, next)
+                        navController.navigate("live-player") { launchSingleTop = true }
+                    },
+                    onDeactivated = {
+                        navController.navigate("activation") { popUpTo(0) { inclusive = true } }
+                    },
+                )
+            }
+            composable(
+                route = "category/{key}",
+                arguments = listOf(navArgument("key") { type = NavType.StringType }),
+            ) { entry ->
+                CategoryTvScreen(
+                    rowKey = entry.arguments?.getString("key") ?: "trending",
+                    onItemClick = { id, type -> navController.navigate("detail/$type/$id") },
+                )
+            }
+            composable(
+                route = "detail/{mediaType}/{tmdbId}",
+                arguments = listOf(
+                    navArgument("mediaType") { type = NavType.StringType },
+                    navArgument("tmdbId") { type = NavType.IntType },
+                ),
+            ) { entry ->
+                val mediaType = entry.arguments?.getString("mediaType") ?: "movie"
+                val tmdbId = entry.arguments?.getInt("tmdbId") ?: 0
+                DetailTvScreen(
+                    tmdbId = tmdbId,
+                    mediaType = mediaType,
+                    onPlay = { req ->
+                        openPlayer(
+                            PlayerArgs(
+                                tmdbId = tmdbId,
+                                mediaType = mediaType,
+                                season = req.season,
+                                episode = req.episode,
+                                title = req.title,
+                                posterPath = req.posterPath,
+                                backdropPath = req.backdropPath,
+                                sources = req.sources,
+                                fromStart = req.fromStart,
+                            ),
+                        )
+                    },
+                    onOpenTitle = { id, type ->
+                        navController.navigate("detail/$type/$id") {
+                            popUpTo("detail/{mediaType}/{tmdbId}") { inclusive = true }
+                        }
+                    },
+                )
+            }
+            composable("player") {
+                val args = playerArgs
+                if (args != null) {
+                    PlayerTvScreen(
+                        args = args,
+                        onBack = {
+                            playerArgs = null
+                            navController.popBackStack()
+                        },
+                        onNextEpisode = if (args.mediaType == "tv") ({ playNextEpisode() }) else null,
+                    )
+                } else {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                }
+            }
+            composable("live-player") {
+                val session = liveSession
+                if (session != null && session.channels.isNotEmpty()) {
+                    LivePlayerTvScreen(
+                        channels = session.channels,
+                        initialIndex = session.index,
+                        epgNow = session.epgNow,
+                        epgNext = session.epgNext,
+                        onChannelChanged = { i -> liveSession = session.copy(index = i) },
+                        onBack = { navController.popBackStack() },
+                    )
+                } else {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
                 }
             }
         }
