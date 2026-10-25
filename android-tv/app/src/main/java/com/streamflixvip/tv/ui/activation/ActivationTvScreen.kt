@@ -1,5 +1,6 @@
 package com.streamflixvip.tv.ui.activation
 
+import com.streamflixvip.tv.ui.theme.LocalPalette
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -7,7 +8,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
@@ -33,13 +34,13 @@ import androidx.tv.material3.CardDefaults
 import com.streamflixvip.tv.data.TvActivationManager
 import kotlinx.coroutines.launch
 
-private val Bg = Color(0xFF0B0B14)
-private val Accent = Color(0xFF6366F1)
-private val AccentSoft = Color(0xFF818CF8)
-private val Cyan = Color(0xFF22D3EE)
-private val Glass = Color.White.copy(alpha = 0.08f)
-private val GlassBorder = Color.White.copy(alpha = 0.14f)
-private val TextMuted = Color(0xFFA1A1B5)
+private val Bg: Color @Composable get() = LocalPalette.current.bg
+private val Accent: Color @Composable get() = LocalPalette.current.accent
+private val AccentSoft: Color @Composable get() = LocalPalette.current.accent2
+private val Cyan: Color @Composable get() = LocalPalette.current.accent2
+private val Glass: Color @Composable get() = LocalPalette.current.glass
+private val GlassBorder: Color @Composable get() = LocalPalette.current.glassBorder
+private val TextMuted: Color @Composable get() = LocalPalette.current.textMuted
 
 private val KEYS = listOf(
     "1", "2", "3", "4", "5",
@@ -81,7 +82,7 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF12122A), Bg, Color(0xFF0A0A12)),
+                    listOf(LocalPalette.current.bgElevated, Bg, Color(0xFF05070C)),
                 ),
             ),
     ) {
@@ -198,7 +199,7 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
                             focusedContentColor = Color.White,
                         ),
                     ) {
-                        Icon(Icons.Filled.Backspace, contentDescription = "Apagar")
+                        Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Apagar")
                     }
                     Button(
                         onClick = { code = "" },

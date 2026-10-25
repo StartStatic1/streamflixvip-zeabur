@@ -1,5 +1,6 @@
 package com.streamflixvip.tv.ui.splash
 
+import com.streamflixvip.tv.ui.theme.LocalPalette
 import android.media.MediaPlayer
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -42,10 +43,10 @@ import kotlinx.coroutines.withContext
 
 private const val TMDB_POSTER_W342 = "https://image.tmdb.org/t/p/w342"
 
-private val Bg = Color(0xFF0B0B14)
-private val Accent = Color(0xFF6366F1)
-private val AccentSoft = Color(0xFF818CF8)
-private val Cyan = Color(0xFF22D3EE)
+private val Bg: Color @Composable get() = LocalPalette.current.bg
+private val Accent: Color @Composable get() = LocalPalette.current.accent
+private val AccentSoft: Color @Composable get() = LocalPalette.current.accent2
+private val Cyan: Color @Composable get() = LocalPalette.current.accent2
 
 /**
  * Splash cinema: fileiras de pôsteres + logo glass indigo.
@@ -75,7 +76,7 @@ fun SplashTvScreen(
     }
 
     LaunchedEffect(Unit) {
-        val minDuration = async { delay(2400) }
+        val minDuration = async { delay(1200) }
 
         val postersJob = async(Dispatchers.IO) {
             runCatching {

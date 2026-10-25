@@ -1,5 +1,6 @@
 package com.streamflixvip.tv.ui.update
 
+import com.streamflixvip.tv.ui.theme.LocalPalette
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,8 +34,8 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 
-private val Accent = Color(0xFF6366F1)
-private val AccentSoft = Color(0xFF818CF8)
+private val Accent: Color @Composable get() = LocalPalette.current.accent
+private val AccentSoft: Color @Composable get() = LocalPalette.current.accent2
 
 @Composable
 fun UpdateRequiredTvScreen(
@@ -50,7 +51,7 @@ fun UpdateRequiredTvScreen(
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF12122A), Color(0xFF0B0B14), Color(0xFF0A0A12)),
+                    listOf(LocalPalette.current.bgElevated, LocalPalette.current.bg, Color(0xFF05070C)),
                 ),
             ),
         contentAlignment = Alignment.Center,

@@ -1,0 +1,335 @@
+package com.streamflixvip.tv.ui.shell
+
+import android.app.Activity
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
+import androidx.tv.material3.Surface
+import androidx.tv.material3.Text
+import com.streamflixvip.tv.data.LocalWatchProgress
+import com.streamflixvip.tv.data.StartScreen
+import com.streamflixvip.tv.data.TvActivationManager
+import com.streamflixvip.tv.data.TvSettingsStore
+import com.streamflixvip.tv.network.LiveChannel
+import com.streamflixvip.tv.ui.account.MyListTvScreen
+import com.streamflixvip.tv.ui.components.LocalToaster
+import com.streamflixvip.tv.ui.home.BrowseSection
+import com.streamflixvip.tv.ui.home.HomeTvScreen
+import com.streamflixvip.tv.ui.livetv.LiveTvScreen
+import com.streamflixvip.tv.ui.search.SearchTvScreen
+import com.streamflixvip.tv.ui.settings.SettingsTvScreen
+import com.streamflixvip.tv.ui.theme.LocalPalette
+import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+enum class ShellSection(val label: String, val icon: ImageVector) {
+    SEARCH("Buscar", Icons.Filled.Search),
+    HOME("Início", Icons.Filled.Home),
+    MOVIES("Filmes", Icons.Filled.Movie),
+    SERIES("Séries", Icons.Filled.Tv),
+    LIVE("TV ao vivo", Icons.Filled.LiveTv),
+    MYLIST("Minha lista", Icons.Filled.Bookmark),
+    SETTINGS("Ajustes", Icons.Filled.Settings),
+}
+
+private val RAIL_COLLAPSED = 76.dp
+private val RAIL_EXPANDED = 224.dp
+
+/**
+ * Casco principal: menu lateral que abre ao receber foco (estilo Google TV)
+ * + a secao escolhida. Voltar: conteudo -> menu -> Inicio -> sair (2x).
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun MainShell(
+    activationManager: TvActivationManager,
+    onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
+    onContinueClick: (LocalWatchProgress) -> Unit,
+    onSeeAll: (rowKey: String) -> Unit,
+    onChannelClick: (channel: LiveChannel, list: List<LiveChannel>, index: Int, epgNow: Map<String, String>, epgNext: Map<String, String>) -> Unit,
+    onDeactivated: () -> Unit,
+) {
+    val settings by TvSettingsStore.state.collectAsState()
+    val p = LocalPalette.current
+    val toaster = LocalToaster.current
+    val context = LocalContext.current
+
+    val initial = remember {
+        when (settings.startScreen) {
+            StartScreen.HOME -> ShellSection.HOME
+            StartScreen.LIVE -> ShellSection.LIVE
+            StartScreen.LAST -> ShellSection.entries.firstOrNull { it.name.equals(settings.lastSection, true) } ?: ShellSection.HOME
+        }
+    }
+    var sectionName by rememberSaveable { mutableStateOf(initial.name) }
+    val visibleSections = remember(settings.kidsMode) {
+        if (settings.kidsMode) ShellSection.entries.filter { it != ShellSection.MOVIES && it != ShellSection.SERIES }
+        else ShellSection.entries.toList()
+    }
+    val section = ShellSection.entries.firstOrNull { it.name == sectionName }
+        ?.takeIf { it in visibleSections } ?: ShellSection.HOME
+
+    val focusSignal = remember { FocusSignal() }
+    val railRequesters = remember { ShellSection.entries.associateWith { FocusRequester() } }
+    var railFocused by remember { mutableStateOf(false) }
+    var lastBack by remember { mutableLongStateOf(0L) }
+    val stateHolder = rememberSaveableStateHolder()
+
+    fun select(s: ShellSection) {
+        sectionName = s.name
+        TvSettingsStore.update { it.copy(lastSection = s.name) }
+        focusSignal.request()
+    }
+
+    BackHandler {
+        when {
+            !railFocused -> runCatching { railRequesters.getValue(section).requestFocus() }
+            section != ShellSection.HOME -> select(ShellSection.HOME)
+            else -> {
+                val now = System.currentTimeMillis()
+                if (now - lastBack < 2200) {
+                    (context as? Activity)?.finish()
+                } else {
+                    lastBack = now
+                    toaster.show("Aperte Voltar de novo para sair")
+                }
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize().background(p.bg)) {
+        // Conteudo da secao (abaixo do menu)
+        Box(Modifier.fillMaxSize().padding(start = RAIL_COLLAPSED)) {
+            stateHolder.SaveableStateProvider(section.name + if (settings.kidsMode) "_kids" else "") {
+                when (section) {
+                    ShellSection.HOME -> HomeTvScreen(
+                        section = if (settings.kidsMode) BrowseSection.KIDS else BrowseSection.HOME,
+                        focusSignal = focusSignal,
+                        onItemClick = onItemClick,
+                        onContinueClick = onContinueClick,
+                        onSeeAll = onSeeAll,
+                        onToast = { toaster.show(it) },
+                    )
+                    ShellSection.MOVIES -> HomeTvScreen(
+                        section = BrowseSection.MOVIES,
+                        focusSignal = focusSignal,
+                        onItemClick = onItemClick,
+                        onContinueClick = onContinueClick,
+                        onSeeAll = onSeeAll,
+                        onToast = { toaster.show(it) },
+                    )
+                    ShellSection.SERIES -> HomeTvScreen(
+                        section = BrowseSection.SERIES,
+                        focusSignal = focusSignal,
+                        onItemClick = onItemClick,
+                        onContinueClick = onContinueClick,
+                        onSeeAll = onSeeAll,
+                        onToast = { toaster.show(it) },
+                    )
+                    ShellSection.SEARCH -> SearchTvScreen(
+                        focusSignal = focusSignal,
+                        kidsMode = settings.kidsMode,
+                        onItemClick = onItemClick,
+                    )
+                    ShellSection.LIVE -> LiveTvScreen(
+                        focusSignal = focusSignal,
+                        kidsMode = settings.kidsMode,
+                        onChannelClick = onChannelClick,
+                    )
+                    ShellSection.MYLIST -> MyListTvScreen(
+                        focusSignal = focusSignal,
+                        onItemClick = onItemClick,
+                    )
+                    ShellSection.SETTINGS -> SettingsTvScreen(
+                        focusSignal = focusSignal,
+                        activationManager = activationManager,
+                        onDeactivated = onDeactivated,
+                    )
+                }
+            }
+            Clock(Modifier.align(Alignment.TopEnd).padding(top = 18.dp, end = 28.dp))
+        }
+
+        // Sombra quando o menu abre por cima do conteudo
+        AnimatedVisibility(visible = railFocused, enter = fadeIn(), exit = fadeOut()) {
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.horizontalGradient(
+                        0f to Color.Black.copy(alpha = 0.92f),
+                        0.35f to Color.Black.copy(alpha = 0.55f),
+                        0.7f to Color.Transparent,
+                    ),
+                ),
+            )
+        }
+
+        val railWidth by animateDpAsState(if (railFocused) RAIL_EXPANDED else RAIL_COLLAPSED, label = "rail")
+        Column(
+            Modifier
+                .fillMaxHeight()
+                .width(railWidth)
+                .background(
+                    if (railFocused) Color.Transparent
+                    else p.bg.copy(alpha = 0.72f),
+                )
+                .padding(vertical = 22.dp, horizontal = 12.dp)
+                .onFocusChanged { railFocused = it.hasFocus }
+                .focusProperties {
+                    enter = { railRequesters.getValue(section) }
+                    exit = { dir ->
+                        if (dir == FocusDirection.Right) focusSignal.request()
+                        FocusRequester.Cancel
+                    }
+                }
+                .focusGroup(),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            BrandMark(expanded = railFocused, kids = settings.kidsMode)
+            Spacer(Modifier.height(18.dp))
+            visibleSections.forEach { s ->
+                if (s == ShellSection.SETTINGS) Spacer(Modifier.weight(1f))
+                RailItem(
+                    section = s,
+                    selected = s == section,
+                    expanded = railFocused,
+                    modifier = Modifier.focusRequester(railRequesters.getValue(s)),
+                    onClick = { select(s) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrandMark(expanded: Boolean, kids: Boolean) {
+    val p = LocalPalette.current
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp)) {
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                .background(Brush.linearGradient(listOf(p.accent, p.accent2))),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (kids) Icon(Icons.Filled.ChildCare, null, tint = p.onAccent, modifier = Modifier.size(22.dp))
+            else Text("S", color = p.onAccent, fontWeight = FontWeight.Black, fontSize = 20.sp)
+        }
+        if (expanded) {
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Text("StreamFlix", color = p.text, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(if (kids) "MODO INFANTIL" else "VIP · TV", color = p.accent, fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 1.4.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RailItem(
+    section: ShellSection,
+    selected: Boolean,
+    expanded: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    val p = LocalPalette.current
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(12.dp)
+    Surface(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth().height(46.dp).onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(shape),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected && !expanded) p.accent.copy(alpha = 0.16f) else Color.Transparent,
+            contentColor = if (selected) p.accent else p.textMuted,
+            focusedContainerColor = Color.White,
+            focusedContentColor = Color.Black,
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.03f),
+    ) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(section.icon, section.label, Modifier.size(22.dp))
+            if (expanded) {
+                Spacer(Modifier.width(16.dp))
+                Text(
+                    section.label,
+                    fontSize = 15.sp,
+                    fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                if (selected) {
+                    Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(if (focused) Color.Black else p.accent))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun Clock(modifier: Modifier) {
+    val p = LocalPalette.current
+    var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Date()
+            delay(15_000)
+        }
+    }
+    val fmt = remember { SimpleDateFormat("HH:mm", Locale("pt", "BR")) }
+    Text(fmt.format(now), color = p.text.copy(alpha = 0.85f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = modifier)
+}
