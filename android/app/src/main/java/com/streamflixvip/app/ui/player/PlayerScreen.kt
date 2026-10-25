@@ -403,6 +403,7 @@ fun PlayerScreen(
     }
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @OptIn(DelicateCoroutinesApi::class)
 @Composable
 private fun NativePlayer(
