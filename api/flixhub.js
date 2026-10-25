@@ -81,15 +81,42 @@ async function xtreamOnce(server, action, extra, ua) {
 
 async function xtream(server, action, extra) {
   let last = null;
+  let timeouts = 0;
   for (const ua of XTREAM_UAS) {
     try {
       return await xtreamOnce(server, action, extra, ua);
     } catch (e) {
       last = e;
       if (e && e.status && e.status !== 403 && e.status !== 401 && e.status !== 406) break;
+      if (e && !e.status) {
+        // Servidor fora do ar / sem rede: trocar o User-Agent nao resolve.
+        // Timeout: tenta so mais uma vez (lista grande pode demorar na 1a vez).
+        if (e.name === 'AbortError' && timeouts++ < 1) continue;
+        break;
+      }
     }
   }
   throw last || new Error('Falha Xtream');
+}
+
+// Episodios de uma serie no painel: cache de 30 min (antes ia no painel a cada pedido).
+const SERIES_INFO_TTL_MS = 30 * 60 * 1000;
+const seriesInfoInflight = new Map();
+async function seriesInfo(server, sid) {
+  const k = 'fh:sinfo:' + hostOf(server) + ':' + server.user + ':' + sid;
+  const hit = cache.get(k);
+  if (hit && Date.now() - hit.at < SERIES_INFO_TTL_MS) return hit.info;
+  let p = seriesInfoInflight.get(k);
+  if (!p) {
+    p = xtream(server, 'get_series_info', { series_id: sid })
+      .then((info) => {
+        if (info && info.episodes) cache.set(k, { at: Date.now(), info });
+        return info;
+      })
+      .finally(() => seriesInfoInflight.delete(k));
+    seriesInfoInflight.set(k, p);
+  }
+  return p;
 }
 
 async function loadPack(id, token, key) {
@@ -144,35 +171,91 @@ function buildIndex(rows) {
   return byNorm;
 }
 
+// Listas Xtream (VOD/series) por servidor:
+// - cache de 45 min; depois disso devolve a lista antiga na hora e atualiza em segundo plano;
+// - um unico download por lista mesmo com varios pedidos ao mesmo tempo;
+// - servidor que falhou fica 10 min marcado (antes era baixado de novo a cada pedido e
+//   segurava a resposta inteira do FlixHub ate o limite de 8s).
+const LIST_TTL_MS = 45 * 60 * 1000;
+const LIST_STALE_MAX_MS = 6 * 60 * 60 * 1000;
+const LIST_FAIL_TTL_MS = 10 * 60 * 1000;
+const listInflight = new Map();
+
+function refreshList(k, loader) {
+  let p = listInflight.get(k);
+  if (p) return p;
+  p = (async () => {
+    try {
+      const pack = await loader();
+      cache.set(k, pack);
+      return pack;
+    } catch (e) {
+      const prev = cache.get(k);
+      if (prev && !prev.failed && Date.now() - prev.at < LIST_STALE_MAX_MS) {
+        // mantem a lista antiga e tenta de novo daqui a 10 min
+        prev.retryAt = Date.now() + LIST_FAIL_TTL_MS;
+        return prev;
+      }
+      const failed = { at: Date.now(), rows: [], byNorm: new Map(), failed: true };
+      cache.set(k, failed);
+      return failed;
+    } finally {
+      listInflight.delete(k);
+    }
+  })();
+  listInflight.set(k, p);
+  return p;
+}
+
+function cachedList(k, loader) {
+  const hit = cache.get(k);
+  const now = Date.now();
+  if (hit) {
+    const age = now - hit.at;
+    if (hit.failed) {
+      // servidor que falhou: tenta de novo em segundo plano, sem segurar o pedido
+      if (age >= LIST_FAIL_TTL_MS) refreshList(k, loader).catch(() => {});
+      return Promise.resolve(hit);
+    } else if (age < LIST_TTL_MS || (hit.retryAt && now < hit.retryAt)) {
+      return Promise.resolve(hit);
+    } else if (age < LIST_STALE_MAX_MS) {
+      refreshList(k, loader).catch(() => {});
+      return Promise.resolve(hit);
+    }
+  }
+  return refreshList(k, loader);
+}
+
+async function loadVodPack(server) {
+  const raw = await xtream(server, 'get_vod_streams');
+  let rows = Array.isArray(raw) ? raw : [];
+  rows = filterByCats(rows, server.vod_category_ids);
+  return { at: Date.now(), rows, byNorm: buildIndex(rows) };
+}
+
 async function vodList(server, strict) {
   const catKey = (server.vod_category_ids || []).slice().sort().join(',');
   const k = 'fh:vod:' + hostOf(server) + ':' + server.user + ':' + catKey;
-  const hit = cache.get(k);
-  if (hit && Date.now() - hit.at < 45 * 60 * 1000) return hit;
-  try {
-    const raw = await xtream(server, 'get_vod_streams');
-    let rows = Array.isArray(raw) ? raw : [];
-    rows = filterByCats(rows, server.vod_category_ids);
-    const pack = { at: Date.now(), rows, byNorm: buildIndex(rows) };
+  if (strict) {
+    // teste do painel: sempre de verdade, erro aparece pro admin
+    const hit = cache.get(k);
+    if (hit && !hit.failed && Date.now() - hit.at < LIST_TTL_MS) return hit;
+    const pack = await loadVodPack(server);
     cache.set(k, pack);
     return pack;
-  } catch (e) {
-    if (strict) throw e;
-    return { at: Date.now(), rows: [], byNorm: new Map() };
   }
+  return cachedList(k, () => loadVodPack(server));
 }
 
 async function seriesList(server) {
   const catKey = (server.series_category_ids || []).slice().sort().join(',');
   const k = 'fh:ser:' + hostOf(server) + ':' + server.user + ':' + catKey;
-  const hit = cache.get(k);
-  if (hit && Date.now() - hit.at < 45 * 60 * 1000) return hit;
-  const raw = await xtream(server, 'get_series').catch(() => []);
-  let rows = Array.isArray(raw) ? raw : [];
-  rows = filterByCats(rows, server.series_category_ids);
-  const pack = { at: Date.now(), rows, byNorm: buildIndex(rows) };
-  cache.set(k, pack);
-  return pack;
+  return cachedList(k, async () => {
+    const raw = await xtream(server, 'get_series');
+    let rows = Array.isArray(raw) ? raw : [];
+    rows = filterByCats(rows, server.series_category_ids);
+    return { at: Date.now(), rows, byNorm: buildIndex(rows) };
+  });
 }
 
 const LOW_Q = /\b(cinema|cam|hdcam|hqcam|telesync|telecine|ts\b|tc\b|r5|scr|screener|camrip|hdts|hd-ts)\b/i;
@@ -592,7 +675,7 @@ module.exports = async function handler(req, res) {
             const hit = pick(packS, titles, year);
             if (hit && (hit.series_id || hit.stream_id)) {
               const sid = hit.series_id || hit.stream_id;
-              const info = await xtream(server, 'get_series_info', { series_id: sid }).catch(() => null);
+              const info = await seriesInfo(server, sid).catch(() => null);
               const eps = (info && info.episodes) || {};
               const seasonKey = String(streamReq.season || 1);
               const bag = eps[seasonKey] || eps[String(Number(seasonKey))] || [];
