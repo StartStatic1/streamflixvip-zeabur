@@ -48,6 +48,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -88,6 +90,13 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.exoplayer.hls.HlsMediaSource
+import androidx.media3.exoplayer.dash.DashMediaSource
+import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.common.AudioAttributes
+import androidx.media3.datasource.HttpDataSource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
@@ -153,6 +162,72 @@ private fun playbackHttpFactory(url: String): DefaultHttpDataSource.Factory =
         .setReadTimeoutMs(20000)
         .setDefaultRequestProperties(playbackHeaders(url))
 
+
+private fun isLikelyDash(url: String): Boolean {
+    val lower = url.lowercase()
+    return lower.substringBefore('?').endsWith(".mpd") || lower.contains("format=mpd")
+}
+
+/** Fonte certa para a URL: HLS, DASH ou arquivo (mp4/mkv/ts). forceHls = 2a tentativa. */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun buildPlaybackMediaSource(url: String, forceHls: Boolean = false): MediaSource {
+    val http = playbackHttpFactory(url)
+    return when {
+        forceHls || isLikelyHls(url) -> HlsMediaSource.Factory(http).createMediaSource(
+            MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build(),
+        )
+        isLikelyDash(url) -> DashMediaSource.Factory(http).createMediaSource(
+            MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_MPD).build(),
+        )
+        else -> ProgressiveMediaSource.Factory(
+            http,
+            DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true),
+        ).createMediaSource(MediaItem.fromUri(url))
+    }
+}
+
+/**
+ * Buffer pensado para servidores IPTV/addons: comeca a tocar com 1,5s,
+ * volta de travada com 3s e guarda ate 90s a frente (limite de memoria padrao do Exo).
+ */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun streamingLoadControl(): DefaultLoadControl = DefaultLoadControl.Builder()
+    .setBufferDurationsMs(25_000, 90_000, 1_500, 3_000)
+    .build()
+
+private val NETWORK_ERROR_CODES = setOf(
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+    PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+    PlaybackException.ERROR_CODE_TIMEOUT,
+)
+
+private fun isContainerError(code: Int): Boolean =
+    code == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
+        code == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+private fun friendlyPlaybackError(error: PlaybackException): String {
+    val code = error.errorCode
+    val name = error.errorCodeName ?: ""
+    return when {
+        name.contains("DECODING", ignoreCase = true) || name.contains("DECODER", ignoreCase = true) ->
+            "Este aparelho nao consegue decodificar este video (codec). Toque em Trocar servidor ou abra no VLC."
+        code == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> {
+            val http = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+            "O servidor recusou o video" + (if (http != null) " (HTTP $http)" else "") + ". Tente outro servidor."
+        }
+        code == PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+            "Video nao encontrado neste servidor. Tente outro servidor."
+        code in NETWORK_ERROR_CODES ->
+            "Sem resposta do servidor do video. Verifique sua internet ou troque de servidor."
+        isContainerError(code) || name.contains("PARSING", ignoreCase = true) ->
+            "Formato de video nao suportado neste servidor. Tente outro servidor."
+        else -> "Erro ao reproduzir ($name). Tente outro servidor."
+    }
+}
+
+private const val SEEK_STEP_MS = 10_000L
 
 private const val SERIES_PREFS = "streamflix_series_prefs"
 
@@ -372,6 +447,11 @@ private fun NativePlayer(
     var controlsVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var retryAttempt by remember { mutableStateOf(0) }
+    var playbackErrorTick by remember { mutableStateOf(0) }
+    var lastPlaybackError by remember { mutableStateOf<PlaybackException?>(null) }
+    var hlsFallbackTried by remember { mutableStateOf(false) }
+    val triedUrls = remember { mutableSetOf<String>() }
+    var seekFeedback by remember { mutableStateOf<String?>(null) }
     var isRecovering by remember { mutableStateOf(false) }
     var activeUrl by remember { mutableStateOf(url) }
     var alternateSources by remember { mutableStateOf(emptyList<String>()) }
@@ -473,18 +553,24 @@ private fun NativePlayer(
         val httpDataSourceFactory = playbackHttpFactory(url)
         val extractorsFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
         val mediaSourceFactory = DefaultMediaSourceFactory(context, extractorsFactory).setDataSourceFactory(httpDataSourceFactory)
-        val mediaItem = MediaItem.fromUri(url)
-        val mediaSource = if (isLikelyHls(url)) {
-            HlsMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
-        } else {
-            ProgressiveMediaSource.Factory(httpDataSourceFactory, extractorsFactory).createMediaSource(mediaItem)
-        }
+        val mediaSource = buildPlaybackMediaSource(url)
         val renderersFactory = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
         ExoPlayer.Builder(context)
             .setRenderersFactory(renderersFactory)
             .setTrackSelector(trackSelector)
             .setMediaSourceFactory(mediaSourceFactory)
+            .setLoadControl(streamingLoadControl())
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                    .build(),
+                true, // pausa em ligacao / outro app tocando audio
+            )
+            .setHandleAudioBecomingNoisy(true) // pausa ao tirar o fone
+            .setSeekBackIncrementMs(SEEK_STEP_MS)
+            .setSeekForwardIncrementMs(SEEK_STEP_MS)
             .build().apply {
             setMediaSource(mediaSource)
             prepare()
@@ -493,13 +579,12 @@ private fun NativePlayer(
             addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     super.onPlayerError(error)
-                    val code = error.errorCodeName ?: ""
-                    errorMessage = if (code.contains("DECODING", ignoreCase = true) ||
-                        code.contains("DECODER", ignoreCase = true)) {
-                        "Este aparelho nao consegue decodificar este video (codec). Toque em Trocar servidor ou abra no VLC."
-                    } else {
-                        code
-                    }
+                    // Tratado no LaunchedEffect(playbackErrorTick): tenta de novo, HLS, outro servidor.
+                    lastPlaybackError = error
+                    playbackErrorTick += 1
+                }
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) retryAttempt = 0
                 }
                 override fun onTracksChanged(tracks: Tracks) {
                     val subtitles = mutableListOf<TrackOption>()
@@ -538,20 +623,14 @@ private fun NativePlayer(
         pendingReapplyTracks = false
     }
 
-        fun reloadWithUrl(streamUrl: String, resetPosition: Boolean = false) {
+        fun reloadWithUrl(streamUrl: String, resetPosition: Boolean = false, forceHls: Boolean = false) {
         try {
             val keepPos = if (resetPosition) 0L else exoPlayer.currentPosition.coerceAtLeast(0L)
             errorMessage = null
             isRecovering = true
+            if (streamUrl != activeUrl) hlsFallbackTried = false
             activeUrl = streamUrl
-            val httpDataSourceFactory = playbackHttpFactory(streamUrl)
-            val extractorsFactory = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
-            val mediaItem = MediaItem.fromUri(streamUrl)
-            val mediaSource = if (isLikelyHls(streamUrl)) {
-                HlsMediaSource.Factory(httpDataSourceFactory).createMediaSource(mediaItem)
-            } else {
-                ProgressiveMediaSource.Factory(httpDataSourceFactory, extractorsFactory).createMediaSource(mediaItem)
-            }
+            val mediaSource = buildPlaybackMediaSource(streamUrl, forceHls)
             trackSelector.parameters = trackSelector.parameters.buildUpon()
                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                 .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
@@ -597,28 +676,63 @@ private fun NativePlayer(
         try { loadAlternateSources() } catch (_: Exception) {}
     }
 
-    LaunchedEffect(errorMessage) {
-        if (errorMessage == null || isRecovering) return@LaunchedEffect
+    // Recuperacao automatica de erro de reproducao:
+    // 1) ao vivo atrasado -> volta pro ao vivo; 2) formato nao reconhecido -> tenta como HLS;
+    // 3) falha de rede -> tenta a mesma fonte 2x (mantendo a posicao);
+    // 4) proxima fonte ainda nao testada (sem ficar indo e voltando); 5) mostra erro claro.
+    LaunchedEffect(playbackErrorTick) {
+        if (playbackErrorTick == 0) return@LaunchedEffect
+        val error = lastPlaybackError ?: return@LaunchedEffect
+        val code = error.errorCode
+        if (code == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+            exoPlayer.seekToDefaultPosition()
+            exoPlayer.prepare()
+            return@LaunchedEffect
+        }
         isRecovering = true
+        if (!hlsFallbackTried && isContainerError(code) && !isLikelyHls(activeUrl)) {
+            hlsFallbackTried = true
+            reloadWithUrl(activeUrl, forceHls = true)
+            return@LaunchedEffect
+        }
+        if (code in NETWORK_ERROR_CODES && retryAttempt < 2) {
+            retryAttempt += 1
+            delay(1500L * retryAttempt)
+            reloadWithUrl(activeUrl)
+            return@LaunchedEffect
+        }
+        triedUrls += activeUrl
         if (alternateSources.isEmpty()) {
             try { loadAlternateSources() } catch (_: Exception) {}
         }
-        val next = alternateSources.firstOrNull { it != activeUrl && it.isNotBlank() }
+        val next = alternateSources.firstOrNull { it.isNotBlank() && it !in triedUrls }
         if (next != null) {
             retryAttempt = 0
-            errorMessage = null
+            val nome = alternateLabels[next]
+            Toast.makeText(
+                context,
+                if (nome.isNullOrBlank()) "Trocando de servidor..." else "Trocando para $nome...",
+                Toast.LENGTH_SHORT,
+            ).show()
             reloadWithUrl(next)
-            isRecovering = false
             return@LaunchedEffect
         }
-        if (retryAttempt < 2) {
-            retryAttempt += 1
-            delay(800L * retryAttempt)
-            reloadWithUrl(activeUrl)
-            delay(600)
-            if (exoPlayer.playerError == null) errorMessage = null
-        }
         isRecovering = false
+        errorMessage = friendlyPlaybackError(error)
+    }
+
+    fun seekBy(deltaMs: Long) {
+        val dur = exoPlayer.duration
+        var target = (exoPlayer.currentPosition + deltaMs).coerceAtLeast(0L)
+        if (dur > 0) target = target.coerceAtMost((dur - 1_000L).coerceAtLeast(0L))
+        exoPlayer.seekTo(target)
+        seekFeedback = if (deltaMs >= 0) "+${deltaMs / 1000}s" else "-${-deltaMs / 1000}s"
+        gestureHideJob?.cancel()
+        gestureKind = "seek"
+        gestureHideJob = MainScope().launch {
+            delay(700)
+            gestureKind = null
+        }
     }
 
     suspend fun playNextEpisode() {
@@ -647,6 +761,11 @@ private fun NativePlayer(
                 currentSeason = s
                 currentEpisode = e
                 currentTitle = "$title — S${s}E${e}"
+                // fontes alternativas eram do episodio anterior
+                triedUrls.clear()
+                alternateSources = emptyList()
+                alternateLabels = emptyMap()
+                retryAttempt = 0
                 reloadWithUrl(playUrl, resetPosition = true)
                 played = true
                 break
@@ -845,6 +964,32 @@ private fun NativePlayer(
         }
     }
 
+    // App em segundo plano: pausa (antes o audio seguia tocando) e salva onde parou.
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, exoPlayer) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                exoPlayer.pause()
+                if (userId != null && accessToken != null) {
+                    val positionSeconds = (exoPlayer.currentPosition / 1000).toInt()
+                    val durationSeconds = (exoPlayer.duration / 1000).toInt()
+                    if (durationSeconds > 0) {
+                        GlobalScope.launch(Dispatchers.IO) {
+                            try {
+                                progressRepository.saveProgress(
+                                    accessToken, userId, tmdbId, mediaType, currentSeason, currentEpisode,
+                                    currentTitle, posterPath, positionSeconds, durationSeconds,
+                                )
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             if (userId != null && accessToken != null) {
@@ -956,6 +1101,15 @@ private fun NativePlayer(
                                 playerViewRef?.showController()
                                 controlsVisible = true
                             },
+                            // toque duplo: esquerda volta 10s, direita avanca 10s, meio pausa/continua
+                            onDoubleTap = { offset ->
+                                val w = size.width.toFloat()
+                                when {
+                                    offset.x < w * 0.4f -> seekBy(-SEEK_STEP_MS)
+                                    offset.x > w * 0.6f -> seekBy(SEEK_STEP_MS)
+                                    else -> if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                }
+                            },
                         )
                     },
             )
@@ -967,6 +1121,18 @@ private fun NativePlayer(
                 .fillMaxHeight()
                 .fillMaxWidth(0.28f)
                 .align(Alignment.CenterStart)
+                .pointerInput(controlsVisible, settingsPanel) {
+                    // Com o menu escondido: toque abre o menu, toque duplo volta 10s
+                    if (!controlsVisible && settingsPanel == SettingsPanel.NONE) {
+                        detectTapGestures(
+                            onTap = {
+                                playerViewRef?.showController()
+                                controlsVisible = true
+                            },
+                            onDoubleTap = { seekBy(-SEEK_STEP_MS) },
+                        )
+                    }
+                }
                 .pointerInput(Unit) {
                     detectVerticalDragGestures(
                         onDragStart = {
@@ -1001,6 +1167,18 @@ private fun NativePlayer(
                 .fillMaxHeight()
                 .fillMaxWidth(0.28f)
                 .align(Alignment.CenterEnd)
+                .pointerInput(controlsVisible, settingsPanel) {
+                    // Com o menu escondido: toque abre o menu, toque duplo avanca 10s
+                    if (!controlsVisible && settingsPanel == SettingsPanel.NONE) {
+                        detectTapGestures(
+                            onTap = {
+                                playerViewRef?.showController()
+                                controlsVisible = true
+                            },
+                            onDoubleTap = { seekBy(SEEK_STEP_MS) },
+                        )
+                    }
+                }
                 .pointerInput(Unit) {
                     detectVerticalDragGestures(
                         onDragStart = {
@@ -1039,13 +1217,20 @@ private fun NativePlayer(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Icon(
-                        imageVector = if (gestureKind == "brightness") Icons.Filled.BrightnessHigh else Icons.Filled.VolumeUp,
+                        imageVector = when {
+                            gestureKind == "brightness" -> Icons.Filled.BrightnessHigh
+                            gestureKind == "seek" && (seekFeedback ?: "").startsWith("-") -> Icons.Filled.FastRewind
+                            gestureKind == "seek" -> Icons.Filled.FastForward
+                            else -> Icons.Filled.VolumeUp
+                        },
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(22.dp),
                     )
                     Text(
-                        if (gestureKind == "brightness") {
+                        if (gestureKind == "seek") {
+                            seekFeedback ?: ""
+                        } else if (gestureKind == "brightness") {
                             "Brilho ${(gestureValue * 100).toInt()}%"
                         } else {
                             "Volume ${(gestureValue * 100).toInt()}%"
@@ -1062,13 +1247,17 @@ private fun NativePlayer(
                 Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (isRecovering) {
                         CircularProgressIndicator(color = Color.White, modifier = Modifier.padding(bottom = 12.dp))
-                        Text("Tentando novamente ($retryAttempt/2)...", color = Color.White, textAlign = TextAlign.Center)
+                        Text(
+                            if (retryAttempt > 0) "Tentando novamente ($retryAttempt/2)..." else "Carregando...",
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                        )
                     } else {
                         Text("Nao foi possivel reproduzir", color = Color.White, fontSize = 16.sp, textAlign = TextAlign.Center)
                         Text(errorMessage ?: "", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp), textAlign = TextAlign.Center)
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)), modifier = Modifier.clickable {
-                                retryAttempt = 0; errorMessage = null; isRecovering = true; reloadWithUrl(activeUrl)
+                                retryAttempt = 0; triedUrls.clear(); errorMessage = null; isRecovering = true; reloadWithUrl(activeUrl)
                             }) {
                                 Text("Tentar de novo", color = Color.White, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                             }
@@ -1076,7 +1265,9 @@ private fun NativePlayer(
                                 MainScope().launch {
                                     if (alternateSources.isEmpty()) loadAlternateSources()
                                     if (alternateSources.isEmpty()) { errorMessage = "Sem outra fonte disponivel"; return@launch }
-                                    val next = alternateSources[alternateIndex % alternateSources.size]
+                                    triedUrls += activeUrl
+                                    val next = alternateSources.firstOrNull { it !in triedUrls }
+                                        ?: alternateSources[alternateIndex % alternateSources.size]
                                     alternateIndex += 1; retryAttempt = 0; errorMessage = null; reloadWithUrl(next)
                                 }
                             }) {
