@@ -74,6 +74,21 @@ test('prazo: devolve o que chegou e completa o cache depois', async () => {
   assert.ok(later.some((s) => s.source_url.includes('slow.mp4')), 'slow entrou no cache');
 });
 
+test('progresso: parcial no prazo curto, completo depois (mesma coleta)', async () => {
+  addons = [mk('ordered', 1), mk('slow', 2)];
+  lib.clearAddonCaches();
+  hits.length = 0;
+  const first = await lib.collectAddonSourcesProgress('k', 505, 'movie', null, null, 600);
+  assert.strictEqual(first.complete, false);
+  assert.ok(!first.sources.some((s) => s.source_url.includes('slow.mp4')));
+  const second = await lib.collectAddonSourcesProgress('k', 505, 'movie', null, null, 3000);
+  assert.strictEqual(second.complete, true);
+  assert.ok(second.sources.some((s) => s.source_url.includes('slow.mp4')));
+  assert.strictEqual(hits.filter((h) => h.startsWith('/slow/stream')).length, 1, 'nao refaz a coleta');
+  const cached = await lib.collectAddonSourcesProgress('k', 505, 'movie', null, null, 10);
+  assert.strictEqual(cached.complete, true);
+});
+
 test('disjuntor: add-on que nao responde fica pausado', async () => {
   lib.clearAddonCaches();
   addons = [mk('dead', 1)];

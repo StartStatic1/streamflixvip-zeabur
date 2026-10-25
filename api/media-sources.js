@@ -6,7 +6,11 @@
 
 const { resolveVipAccess } = require('../lib/vip-gate');
 const { enforceMinAppVersion } = require('../lib/client-gate');
-const { collectAddonSources, loadActiveAddons } = require('../lib/stremio-addons');
+const { collectAddonSources, collectAddonSourcesProgress, loadActiveAddons } = require('../lib/stremio-addons');
+
+// Resposta rapida (fast=1): prazo dos add-ons e intervalo sugerido para pedir o resto.
+const FAST_DEADLINE_MS = 3000;
+const FAST_POLL_MS = 1500;
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
@@ -381,9 +385,14 @@ async function handler(req, res) {
   const allowAddons = access.isVip || (vipConfig && vipConfig.is_free === true);
   const freeFast = !!(vipConfig && vipConfig.is_free === true);
   // VIP: add-ons comecam junto com o banco (nao esperam o banco terminar).
+  // fast=1 (app novo): responde em ~3s com o que ja chegou + partial=true;
+  // o app pede de novo e recebe o resto (a coleta continua em segundo plano).
+  // Sem fast: igual antes (espera ate o prazo normal) — apps antigos nao mudam.
+  const fastMode = String(req.query.fast || '') === '1';
   const earlyAddons = allowAddons && !freeFast
-    ? collectAddonSources(serviceKey, tmdbId, mediaType, season, episode)
+    ? collectAddonSourcesProgress(serviceKey, tmdbId, mediaType, season, episode, fastMode ? FAST_DEADLINE_MS : undefined)
     : null;
+  let addonsComplete = true;
   if (earlyAddons) earlyAddons.catch(() => {});
 
   try {
@@ -402,7 +411,9 @@ async function handler(req, res) {
     if (allowAddons) {
       try {
         if (earlyAddons) {
-          pushUnique(await earlyAddons, seen, sources);
+          const progress = await earlyAddons;
+          addonsComplete = progress.complete;
+          pushUnique(progress.sources, seen, sources);
         } else if (!(freeFast && sources.length)) {
           pushUnique(
             await collectAddonSources(serviceKey, tmdbId, mediaType, season, episode, 1200),
@@ -436,8 +447,10 @@ async function handler(req, res) {
       return ra.q - rb.q;
     });
 
+    const partial = fastMode && !addonsComplete;
     res.status(200).json({
       sources,
+      ...(fastMode ? { partial, pollAfterMs: partial ? FAST_POLL_MS : undefined } : {}),
       vipConfig: vipConfig
         ? { vip_lock: !!vipConfig.vip_lock, vip_free_episode_limit: vipConfig.vip_free_episode_limit ?? null, is_free: !!vipConfig.is_free }
         : null,
