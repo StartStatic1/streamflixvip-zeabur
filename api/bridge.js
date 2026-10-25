@@ -5,6 +5,7 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
 const cache = new Map();
+const { setBounded } = require('../lib/bounded-map');
 const PAGE = 80;
 
 function svc(key) {
@@ -229,7 +230,7 @@ async function imdbTitles(imdbId, kind) {
     const rows = kind === 'tv' ? (j.tv_results || []) : (j.movie_results || []);
     const row = rows[0] || (j.tv_results && j.tv_results[0]) || (j.movie_results && j.movie_results[0]);
     const meta = row ? metaFromTmdb(row) : { titles: [], year: null };
-    cache.set(k, { at: Date.now(), meta });
+    setBounded(cache, k, { at: Date.now(), meta }, 'imdb:', 2000);
     return meta;
   } catch (_) {
     return { titles: [], year: null };
@@ -269,7 +270,7 @@ async function tmdbMatch(title, year, kind) {
       .sort((a, b) => b.score - a.score)[0];
     const selected = best && (best.score >= 78 || rows.length === 1) ? best.row : null;
     const value = selected ? { id: selected.id, item: selected } : null;
-    cache.set(cacheKey, { at: Date.now(), value });
+    setBounded(cache, cacheKey, { at: Date.now(), value }, 'match:', 2000);
     return value;
   } catch (_) {
     return null;
@@ -291,7 +292,7 @@ async function tmdbDetails(id, kind) {
     const r = await fetch(url.toString());
     if (!r.ok) return null;
     const value = await r.json();
-    cache.set(cacheKey, { at: Date.now(), value });
+    setBounded(cache, cacheKey, { at: Date.now(), value }, 'details:', 2000);
     return value;
   } catch (_) {
     return null;

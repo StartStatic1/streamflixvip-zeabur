@@ -3,6 +3,7 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 
 const cache = new Map();
+const { setBounded } = require('../lib/bounded-map');
 
 function svc(key) {
   return { apikey: key, Authorization: 'Bearer ' + key };
@@ -110,7 +111,7 @@ async function seriesInfo(server, sid) {
   if (!p) {
     p = xtream(server, 'get_series_info', { series_id: sid })
       .then((info) => {
-        if (info && info.episodes) cache.set(k, { at: Date.now(), info });
+        if (info && info.episodes) setBounded(cache, k, { at: Date.now(), info }, 'fh:sinfo:', 300);
         return info;
       })
       .finally(() => seriesInfoInflight.delete(k));
@@ -445,7 +446,7 @@ async function imdbTitles(imdbId, kind) {
       poster: a.poster || b.poster || null,
       backdrop: a.backdrop || b.backdrop || null,
     };
-    cache.set(k, { at: Date.now(), meta });
+    setBounded(cache, k, { at: Date.now(), meta }, 'fh:imdb:', 2000);
     return meta;
   } catch (_) {
     return { titles: [], year: null };
