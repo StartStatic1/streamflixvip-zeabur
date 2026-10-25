@@ -528,11 +528,12 @@ function mergeResults(results, manuals) {
         // para tras das pontes).
         const basePri = (r.priority ?? 100) + playbackPenalty(r.entryKey);
         const q = qualityScore(s.name);
-        const pri = basePri + (q >= 30 ? 0 : q <= 5 ? 6 : 2);
+        // inteiro: os apps (TV 3.x e celular 16.3) leem priority como Int
+        const pri = Math.round(basePri + (q >= 30 ? 0 : q <= 5 ? 6 : 2));
         ch.streams.push({ url: s.url, label: s.sourceLabel, priority: pri, quality: q, leg: sLeg });
         const ts = tsVariant(s.url);
         if (ts && !ch.streams.some((x) => x.url === ts)) {
-          ch.streams.push({ url: ts, label: s.sourceLabel, priority: pri + 0.5, quality: q, leg: sLeg });
+          ch.streams.push({ url: ts, label: s.sourceLabel, priority: pri + 1, quality: q, leg: sLeg });
         }
       }
     }
@@ -559,7 +560,7 @@ function mergeResults(results, manuals) {
       ch.streams.push({
         url,
         label: 'Manual',
-        priority: Number.isFinite(Number(m.priority)) ? Number(m.priority) : 1,
+        priority: Number.isFinite(Number(m.priority)) ? Math.round(Number(m.priority)) : 1,
         quality: 40,
         leg: isLegendadoName(name),
       });

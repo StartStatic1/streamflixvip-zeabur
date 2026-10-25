@@ -226,3 +226,13 @@ test('melhor fonte (prioridade 1) fica na frente mesmo sem "HD" no nome', () => 
   const { channels } = mergeResults([mk('ponte', 80, 'AXN FHD'), mk('melhor', 1, 'AXN')], []);
   assert.strictEqual(channels[0].streams[0].label, 'melhor');
 });
+
+test('priority sempre inteiro (apps leem como Int)', () => {
+  const { mergeResults } = require('../api/live-tv.js')._test;
+  const r = {
+    entryKey: 'int', priority: 1, categories: [{ id: '1', name: 'Filmes' }],
+    streams: [{ name: 'AXN', categoryId: '1', url: 'http://h/live/u/p/9.m3u8', sourceLabel: 'I' }],
+  };
+  const { channels } = mergeResults([r], [{ name: 'AXN', stream_url: 'http://m/x.m3u8', priority: 2.7 }]);
+  for (const ch of channels) for (const st of ch.streams) assert.ok(Number.isInteger(st.priority), JSON.stringify(st));
+});
