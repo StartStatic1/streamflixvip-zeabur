@@ -10,6 +10,40 @@
 
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const STREMIO_OS_BASE = 'https://opensubtitles-v3.strem.io';
+const { loadActiveAddons, addonStreamInfo, baseFromManifestUrl } = require('../lib/stremio-addons');
+const { decodeSubtitleBuffer, toVtt } = require('../lib/subtitle-text');
+
+// Cache em memoria (limitado): busca por titulo/episodio e arquivos baixados por URL.
+const SEARCH_TTL_MS = 30 * 60 * 1000;
+const SEARCH_EMPTY_TTL_MS = 5 * 60 * 1000;
+const FILE_TTL_MS = 6 * 60 * 60 * 1000;
+function boundedCache(max) {
+  const map = new Map();
+  return {
+    get(k) {
+      const e = map.get(k);
+      if (!e) return null;
+      if (e.exp < Date.now()) { map.delete(k); return null; }
+      map.delete(k); map.set(k, e); // LRU
+      return e.v;
+    },
+    set(k, v, ttl) {
+      map.delete(k);
+      map.set(k, { v, exp: Date.now() + ttl });
+      while (map.size > max) map.delete(map.keys().next().value);
+    },
+  };
+}
+const searchCache = boundedCache(400);
+const fileCache = boundedCache(60);
+
+// pt-BR primeiro, depois portugues de Portugal
+function langRank(lang) {
+  const l = String(lang || '').toLowerCase();
+  if (l === 'pob' || l === 'pt-br' || l === 'pb' || l === 'ptbr' || l === 'pt_br') return 0;
+  if (l === 'por' || l === 'pt' || l === 'pt-pt') return 1;
+  return 2;
+}
 
 function sbHeaders(serviceKey) {
   return { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` };
@@ -32,20 +66,18 @@ async function fetchJson(url, timeout = 5000) {
   }
 }
 
+// So add-ons que declaram 'subtitles' no manifest (manifest em cache de 6h).
+// Se o manifest nao abrir, usa o nome como antes (legenda/opensubtitles/subs...).
 async function loadSubtitleAddons(serviceKey) {
   if (!serviceKey) return [];
   try {
-    const url = `${SUPABASE_URL}/rest/v1/stremio_addons?is_active=eq.true&select=name,manifest_url,base_url,priority&order=priority.asc`;
-    const r = await fetch(url, { headers: sbHeaders(serviceKey) });
-    if (!r.ok) return [];
-    const rows = await r.json();
-    const candidates = Array.isArray(rows) ? rows : [];
-    const checked = await Promise.all(candidates.map(async (a) => {
-      const manifest = await fetchJson(a.manifest_url, 5000);
-      const resources = Array.isArray(manifest?.resources) ? manifest.resources : [];
-      const isSubtitle = resources.some((x) => String(typeof x === 'string' ? x : x?.name || '').toLowerCase() === 'subtitles')
-        || /subtitle|legenda|opensubtitle|caption|sub\b/i.test(String(a.name || ''));
-      return isSubtitle ? { ...a, manifest } : null;
+    const rows = await loadActiveAddons(serviceKey);
+    const checked = await Promise.all((rows || []).map(async (a) => {
+      const base = String(a.base_url || baseFromManifestUrl(a.manifest_url) || '').replace(/\/+$/, '');
+      const info = await addonStreamInfo(a, base);
+      const byName = /subtitle|legenda|opensubtitle|caption|subsense|subsource|subsync|subdl/i.test(String(a.name || ''));
+      const isSubtitle = info && info.known ? !!info.hasSubtitles : byName;
+      return isSubtitle ? a : null;
     }));
     return checked.filter(Boolean);
   } catch (_) {
@@ -100,6 +132,7 @@ async function searchOfficial(apiKey, tmdbId, season, episode) {
       'Api-Key': apiKey,
       'User-Agent': 'streamflixvip v1',
     },
+    signal: AbortSignal.timeout(7000),
   });
   const data = await r.json();
   if (!r.ok) throw new Error(data.message || `OS HTTP ${r.status}`);
@@ -181,23 +214,31 @@ async function handleSearch(req, res) {
     return;
   }
 
-  let results = [];
-  if (apiKey) {
-    try {
-      results = await searchOfficial(apiKey, tmdb_id, season, episode);
-    } catch (e) {
-      console.warn('[subtitles] official search', e.message);
-    }
+  const cacheKey = [tmdb_id, season || '', episode || '', imdb_id || ''].join(':');
+  const cached = searchCache.get(cacheKey);
+  if (cached) {
+    res.status(200).json({ results: cached, prefer: 'pt-br', cached: true });
+    return;
   }
+
+  // Busca oficial e IMDb em paralelo (antes era um depois do outro).
+  let imdb = imdb_id && String(imdb_id).startsWith('tt') ? String(imdb_id) : null;
+  const mt = media_type === 'tv' || season ? 'tv' : 'movie';
+  const [official, imdbResolved] = await Promise.all([
+    apiKey
+      ? searchOfficial(apiKey, tmdb_id, season, episode).catch((e) => {
+        console.warn('[subtitles] official search', e.message);
+        return [];
+      })
+      : Promise.resolve([]),
+    imdb ? Promise.resolve(imdb) : resolveImdbFromTmdb(tmdb_id, mt),
+  ]);
+  let results = official;
+  imdb = imdbResolved;
 
   // Addons Stremio de legendas cadastrados no painel têm prioridade sobre
   // o fallback fixo: eles podem ter fontes PT-BR específicas para anime,
   // releases e áudio original.
-  let imdb = imdb_id && String(imdb_id).startsWith('tt') ? String(imdb_id) : null;
-  if (!imdb) {
-    const mt = media_type === 'tv' || season ? 'tv' : 'movie';
-    imdb = await resolveImdbFromTmdb(tmdb_id, mt);
-  }
   const configured = await searchConfiguredAddons(
     serviceKey,
     imdb,
@@ -229,6 +270,12 @@ async function handleSearch(req, res) {
     }
   }
 
+  // pt-BR na frente, depois pt; dentro do grupo mantem a ordem (mais baixadas primeiro)
+  results = results
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => langRank(a.r.lang) - langRank(b.r.lang) || a.i - b.i)
+    .map((x) => x.r);
+  searchCache.set(cacheKey, results, results.length ? SEARCH_TTL_MS : SEARCH_EMPTY_TTL_MS);
   res.status(200).json({ results, prefer: 'pt-br' });
 }
 
@@ -300,18 +347,6 @@ async function loginOpenSubtitles(apiKey) {
   }
 }
 
-function toVtt(text) {
-  const t = String(text || '');
-  if (t.trim().toLowerCase().startsWith('webvtt')) return t;
-  return (
-    'WEBVTT\n\n' +
-    t
-      .replace(/\r+/g, '')
-      .replace(/^\d+\n/gm, '')
-      .replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2')
-  );
-}
-
 async function handleDownload(req, res) {
   const apiKey = process.env.OPENSUBTITLES_API_KEY;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -321,6 +356,11 @@ async function handleDownload(req, res) {
   // Download direto por URL (fallback Stremio — já vem filtrado PT)
   if (url && /^https?:\/\//i.test(String(url))) {
     try {
+      const hit = fileCache.get(String(url));
+      if (hit) {
+        res.status(200).json({ content: hit, remaining: null, from_cache: true });
+        return;
+      }
       const fileRes = await fetch(String(url), {
         headers: { 'User-Agent': 'StreamFlixVIP/1.0' },
         signal: AbortSignal.timeout(15000),
@@ -330,13 +370,9 @@ async function handleDownload(req, res) {
         return;
       }
       const buffer = Buffer.from(await fileRes.arrayBuffer());
-      let text;
-      try {
-        text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
-      } catch (e) {
-        text = new TextDecoder('windows-1252').decode(buffer);
-      }
-      res.status(200).json({ content: toVtt(text), remaining: null, from_cache: false });
+      const content = toVtt(decodeSubtitleBuffer(buffer));
+      if (content.length < 2 * 1024 * 1024) fileCache.set(String(url), content, FILE_TTL_MS);
+      res.status(200).json({ content, remaining: null, from_cache: false });
       return;
     } catch (e) {
       res.status(502).json({ error: 'Falha ao baixar legenda: ' + e.message });
@@ -376,7 +412,9 @@ async function handleDownload(req, res) {
         language,
         svcHeaders,
       });
-      if (cached) {
+      // O cache guarda uma legenda por episodio; so serve se for o MESMO arquivo escolhido
+      // (antes trocar de legenda devolvia sempre a primeira baixada).
+      if (cached && String(cached.release_name || '').startsWith(`fid:${Number(file_id)}|`)) {
         res.status(200).json({ content: cached.vtt_content, remaining: null, from_cache: true });
         return;
       }
@@ -406,17 +444,9 @@ async function handleDownload(req, res) {
       return;
     }
 
-    const fileRes = await fetch(linkData.link);
+    const fileRes = await fetch(linkData.link, { signal: AbortSignal.timeout(15000) });
     const buffer = Buffer.from(await fileRes.arrayBuffer());
-
-    let text;
-    try {
-      text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
-    } catch (e) {
-      text = new TextDecoder('windows-1252').decode(buffer);
-    }
-
-    const vttContent = toVtt(text);
+    const vttContent = toVtt(decodeSubtitleBuffer(buffer));
 
     if (canUseCache) {
       await saveCachedSubtitle({
@@ -426,7 +456,7 @@ async function handleDownload(req, res) {
         episode: episodeNum,
         language,
         vttContent,
-        releaseName: linkData.file_name || null,
+        releaseName: `fid:${Number(file_id)}|${linkData.file_name || ''}`,
         svcHeaders,
       });
     }
