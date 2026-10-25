@@ -30,10 +30,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -68,6 +70,7 @@ import com.streamflixvip.tv.ui.components.TmdbImg
 import com.streamflixvip.tv.ui.shell.FocusSignal
 import com.streamflixvip.tv.ui.theme.LocalPalette
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** O que aparece na "vitrine" do topo: muda conforme o cartao em foco. */
 data class Spotlight(
@@ -175,6 +178,7 @@ fun HomeTvScreen(
     var focusTarget by remember { mutableStateOf<String?>(null) }
     var focusNonce by remember { mutableIntStateOf(0) }
     val listState = rememberTvLazyListState()
+    val scope = rememberCoroutineScope()
     val retryFocus = remember { FocusRequester() }
     val firstKey = rows.firstOrNull()?.let { firstCardKey(it) }
 
@@ -247,16 +251,24 @@ fun HomeTvScreen(
             )
             rows.isEmpty() -> LoadingBox(Modifier.fillMaxSize(), "Montando sua vitrine…")
             else -> Column(Modifier.fillMaxSize()) {
-                SpotlightInfo(spotlight, Modifier.fillMaxWidth().height(206.dp).padding(start = 44.dp, top = 26.dp, end = 32.dp))
+                SpotlightInfo(
+                    spotlight,
+                    Modifier.fillMaxWidth().height(236.dp).clipToBounds()
+                        .padding(start = 44.dp, top = 24.dp, end = 120.dp, bottom = 14.dp),
+                )
                 TvLazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentPadding = PaddingValues(bottom = 120.dp),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                     pivotOffsets = PivotOffsets(parentFraction = 0.0f),
                 ) {
-                    rows.forEach { row ->
+                    rows.forEachIndexed { rowIndex, row ->
                         item(key = row.key, contentType = row.contentType) {
+                          // fileira em foco sempre inteira no topo (titulo + cartoes), nos dois sentidos
+                          Box(Modifier.onFocusChanged {
+                              if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(rowIndex) } }
+                          }) {
                             HomeRowView(
                                 row = row,
                                 focusTarget = focusTarget,
@@ -279,6 +291,7 @@ fun HomeTvScreen(
                                 },
                                 onSeeAll = onSeeAll,
                             )
+                          }
                         }
                     }
                 }
@@ -314,9 +327,9 @@ private fun SpotlightInfo(s: Spotlight?, modifier: Modifier) {
         Text(
             s.title,
             color = p.text,
-            fontSize = 30.sp,
+            fontSize = if (s.title.length > 28) 24.sp else 30.sp,
             fontWeight = FontWeight.ExtraBold,
-            maxLines = 2,
+            maxLines = 1,
             lineHeight = 34.sp,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(0.58f),

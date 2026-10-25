@@ -235,6 +235,11 @@ fun DetailTvScreen(
                 ) {
                     item(key = "header") {
                         Column(
+                            Modifier.onFocusChanged {
+                                if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(0) } }
+                            },
+                        ) {
+                        Column(
                             Modifier.fillParentMaxHeight(if (isSeries || recs.isNotEmpty()) 0.84f else 1f)
                                 .fillMaxWidth()
                                 .padding(start = 56.dp, end = 56.dp, top = 36.dp),
@@ -301,10 +306,14 @@ fun DetailTvScreen(
                                 }
                             }
                         }
+                        }
                     }
 
                     if (isSeries) {
                         item(key = "episodes") {
+                          Box(Modifier.onFocusChanged {
+                              if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(1) } }
+                          }) {
                             EpisodesBlock(
                                 seasons = state.seasons,
                                 selectedSeason = state.selectedSeason,
@@ -323,12 +332,15 @@ fun DetailTvScreen(
                                 onEpisodeFocused = { key -> restoreKey = key },
                                 onEpisode = { ep -> viewModel.openSources(state.selectedSeason, ep.episode_number) },
                             )
+                          }
                         }
                     }
 
                     if (recs.isNotEmpty()) {
                         item(key = "recs") {
-                            Column {
+                            Column(Modifier.onFocusChanged {
+                                if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(if (isSeries) 2 else 1) } }
+                            }) {
                                 SectionTitle("Você também pode gostar", Modifier.padding(start = 56.dp, bottom = 10.dp))
                                 TvLazyRow(
                                     contentPadding = PaddingValues(horizontal = 56.dp, vertical = 8.dp),
