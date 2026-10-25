@@ -115,6 +115,14 @@ fun LiveTvScreen(
     val retryFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }
     val listState = rememberTvLazyListState()
+    // ao abrir um canal, solta a previa antes: TV box fraca tem 1 decodificador so
+    var openingChannel by remember { mutableStateOf(false) }
+    val shellLifecycle = LocalLifecycleOwner.current
+    DisposableEffect(shellLifecycle) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_START) openingChannel = false }
+        shellLifecycle.lifecycle.addObserver(obs)
+        onDispose { shellLifecycle.lifecycle.removeObserver(obs) }
+    }
 
     // categorias: virtuais (favoritos, recentes, todos) + as da API
     val cats: List<LiveCategory> = remember(state.categories, state.favoriteIds, state.recentIds, state.channels) {
@@ -235,7 +243,10 @@ fun LiveTvScreen(
                                             focusedChannel = ch
                                             restoreKey = key
                                         },
-                                        onClick = { onChannelClick(ch, channels, index, state.epgNow, state.epgNext) },
+                                        onClick = {
+                                            openingChannel = true
+                                            onChannelClick(ch, channels, index, state.epgNow, state.epgNext)
+                                        },
                                         onLongClick = {
                                             val fav = vm.toggleFavorite(ch)
                                             toaster.show(if (fav) "${ch.name} nos favoritos" else "${ch.name} saiu dos favoritos")
@@ -253,7 +264,7 @@ fun LiveTvScreen(
                     channel = focusedChannel?.takeIf { f -> channels.any { it.id == f.id } } ?: channels.firstOrNull(),
                     now = focusedChannel?.let { state.epgNow[it.id] },
                     next = focusedChannel?.let { state.epgNext[it.id] },
-                    livePreview = settings.livePreview,
+                    livePreview = settings.livePreview && !openingChannel,
                     modifier = Modifier.width(300.dp).fillMaxHeight(),
                 )
             }
