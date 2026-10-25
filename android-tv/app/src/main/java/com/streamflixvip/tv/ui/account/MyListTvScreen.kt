@@ -1,156 +1,122 @@
 package com.streamflixvip.tv.ui.account
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Border
-import androidx.tv.material3.Card
-import androidx.tv.material3.CardDefaults
+import androidx.tv.foundation.lazy.grid.TvGridCells
+import androidx.tv.foundation.lazy.grid.TvLazyVerticalGrid
+import androidx.tv.foundation.lazy.grid.itemsIndexed
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
-import com.streamflixvip.tv.data.LocalFavorite
 import com.streamflixvip.tv.data.LocalLibraryStore
+import com.streamflixvip.tv.ui.components.LocalToaster
+import com.streamflixvip.tv.ui.components.PosterCard
+import com.streamflixvip.tv.ui.shell.FocusSignal
+import com.streamflixvip.tv.ui.theme.LocalPalette
+import kotlinx.coroutines.delay
 
-private const val TMDB_POSTER = "https://image.tmdb.org/t/p/w342"
-private val Gold = Color(0xFFD4AF37)
-private val Bg = Color(0xFF0B0B12)
-
-/**
- * Tela dedicada de Minha lista (favoritos locais do aparelho).
- * Separada da Conta: coração na sidebar abre aqui; engrenagem abre Conta.
- */
+/** Minha lista (favoritos do aparelho). Segurar OK remove. */
 @Composable
 fun MyListTvScreen(
-    onItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
-    onBack: () -> Unit = {},
+    focusSignal: FocusSignal,
+    onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
 ) {
+    val p = LocalPalette.current
     val context = LocalContext.current
+    val toaster = LocalToaster.current
     val libraryStore = remember { LocalLibraryStore(context) }
     var favorites by remember { mutableStateOf(libraryStore.getFavorites()) }
-    val backFocus = remember { FocusRequester() }
+    val firstFocus = remember { FocusRequester() }
+    var handledToken by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(Unit) {
-        favorites = libraryStore.getFavorites()
-        runCatching { backFocus.requestFocus() }
+    LaunchedEffect(focusSignal.token, favorites.isEmpty()) {
+        if (handledToken == focusSignal.token || favorites.isEmpty()) return@LaunchedEffect
+        delay(60)
+        if (runCatching { firstFocus.requestFocus() }.isSuccess) handledToken = focusSignal.token
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Bg)
-            .padding(start = 40.dp, end = 40.dp, top = 28.dp, bottom = 40.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Card(
-                onClick = onBack,
-                modifier = Modifier.focusRequester(backFocus).height(48.dp),
-                colors = CardDefaults.colors(
-                    containerColor = Color(0xFF1A1A24),
-                    focusedContainerColor = Gold,
-                ),
-                shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(Icons.Filled.ArrowBack, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                    Text("Voltar", color = Color.White, fontWeight = FontWeight.SemiBold)
-                }
-            }
-            Spacer(Modifier.width(20.dp))
-            Text("Minha lista", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(12.dp))
+    Column(Modifier.fillMaxSize().padding(start = 36.dp, top = 28.dp, end = 28.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("Minha lista", color = p.text, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+            Spacer(Modifier.width(14.dp))
             Text(
-                "${favorites.size} título${if (favorites.size == 1) "" else "s"}",
-                color = Color.White.copy(alpha = 0.5f),
-                fontSize = 14.sp,
+                if (favorites.isEmpty()) "" else "${favorites.size} título${if (favorites.size == 1) "" else "s"} · segure OK para remover",
+                color = p.textMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(bottom = 5.dp),
             )
         }
-
-        Spacer(Modifier.height(24.dp))
-
+        Spacer(Modifier.height(18.dp))
         if (favorites.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Filled.FavoriteBorder,
-                        null,
-                        tint = Color.White.copy(alpha = 0.35f),
-                        modifier = Modifier.size(48.dp),
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "Sua lista está vazia",
-                        color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 18.sp,
-                    )
+                    Icon(Icons.Filled.BookmarkBorder, null, tint = p.accent, modifier = Modifier.size(54.dp))
+                    Spacer(Modifier.height(14.dp))
+                    Text("Sua lista está vazia", color = p.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "Adicione títulos nos detalhes do filme ou série.",
-                        color = Color.White.copy(alpha = 0.45f),
+                        "Nos detalhes de um título, toque em “Minha lista”.\nNa vitrine, segure OK em qualquer pôster.",
+                        color = p.textMuted,
                         fontSize = 14.sp,
                     )
                 }
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 130.dp),
-                contentPadding = PaddingValues(bottom = 48.dp, top = 8.dp),
+            TvLazyVerticalGrid(
+                columns = TvGridCells.Fixed(7),
+                contentPadding = PaddingValues(top = 6.dp, bottom = 60.dp, end = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                items(favorites, key = { "${it.tmdbId}_${it.mediaType}" }) { fav ->
-                    MyListPoster(fav) { onItemClick(fav.tmdbId, fav.mediaType) }
+                itemsIndexed(favorites, key = { _, it -> "${it.tmdbId}_${it.mediaType}" }) { index, fav ->
+                    Column {
+                        PosterCard(
+                            title = fav.title,
+                            posterPath = fav.posterPath,
+                            width = 200.dp,
+                            modifier = Modifier.fillMaxWidth().let { if (index == 0) it.focusRequester(firstFocus) else it },
+                            badge = if (fav.mediaType == "tv") "SÉRIE" else null,
+                            onLongClick = {
+                                libraryStore.removeFavorite(fav.tmdbId, fav.mediaType)
+                                favorites = libraryStore.getFavorites()
+                                toaster.show("“${fav.title}” saiu da Minha lista")
+                                if (favorites.isNotEmpty()) focusSignal.request()
+                            },
+                            onClick = { onItemClick(fav.tmdbId, fav.mediaType) },
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(fav.title, color = p.textMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun MyListPoster(fav: LocalFavorite, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
-        shape = CardDefaults.shape(RoundedCornerShape(10.dp)),
-        scale = CardDefaults.scale(focusedScale = 1.05f),
-        colors = CardDefaults.colors(
-            containerColor = Color(0xFF1A1A24),
-            focusedContainerColor = Color(0xFF1A1A24),
-        ),
-        border = CardDefaults.border(
-            focusedBorder = Border(
-                border = androidx.compose.foundation.BorderStroke(2.dp, Gold),
-                shape = RoundedCornerShape(10.dp),
-            ),
-        ),
-    ) {
-        AsyncImage(
-            model = fav.posterPath?.let { "$TMDB_POSTER$it" },
-            contentDescription = fav.title,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-        )
     }
 }

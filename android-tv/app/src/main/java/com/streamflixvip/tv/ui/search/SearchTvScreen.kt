@@ -1,484 +1,335 @@
 package com.streamflixvip.tv.ui.search
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SpaceBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.*
-import coil.compose.AsyncImage
+import androidx.tv.foundation.lazy.grid.TvGridCells
+import androidx.tv.foundation.lazy.grid.TvLazyVerticalGrid
+import androidx.tv.foundation.lazy.grid.itemsIndexed
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
+import androidx.tv.material3.Surface
+import androidx.tv.material3.Text
+import com.streamflixvip.tv.data.RecentStore
 import com.streamflixvip.tv.network.NetworkModule
 import com.streamflixvip.tv.network.TmdbItem
+import com.streamflixvip.tv.ui.components.LoadingBox
+import com.streamflixvip.tv.ui.components.PosterCard
+import com.streamflixvip.tv.ui.components.TvChip
+import com.streamflixvip.tv.ui.home.Catalog
+import com.streamflixvip.tv.ui.shell.FocusSignal
+import com.streamflixvip.tv.ui.theme.LocalPalette
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
-private const val TMDB_POSTER_W342 = "https://image.tmdb.org/t/p/w342"
-
-val GENRES = mapOf(
-    0 to "Todos",
-    28 to "Ação",
-    12 to "Aventura",
-    16 to "Animação",
-    35 to "Comédia",
-    80 to "Crime",
-    99 to "Documentário",
-    18 to "Drama",
-    10751 to "Família",
-    14 to "Fantasia",
-    36 to "História",
-    27 to "Terror",
-    10402 to "Música",
-    9648 to "Mistério",
-    10749 to "Romance",
-    878 to "Ficção Científica",
-    53 to "Thriller",
-    10752 to "Guerra",
+private val KEYS = listOf(
+    "a", "b", "c", "d", "e", "f",
+    "g", "h", "i", "j", "k", "l",
+    "m", "n", "o", "p", "q", "r",
+    "s", "t", "u", "v", "w", "x",
+    "y", "z", "1", "2", "3", "4",
+    "5", "6", "7", "8", "9", "0",
 )
 
-val YEARS = listOf(0, 2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015)
-val TYPES = listOf("Todos", "Filmes", "Séries", "Animes")
+private enum class SearchType(val label: String) { ALL("Tudo"), MOVIE("Filmes"), TV("Séries") }
 
+/**
+ * Busca com teclado na tela (funciona em qualquer controle, sem abrir o teclado
+ * do Android) + teclado fisico/air mouse. Resultados aparecem enquanto digita.
+ */
 @Composable
 fun SearchTvScreen(
-    onItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
-    onBack: () -> Unit = {},
+    focusSignal: FocusSignal,
+    kidsMode: Boolean,
+    onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
 ) {
-    var query by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf("Todos") }
-    var selectedGenre by remember { mutableIntStateOf(0) }
-    var selectedYear by remember { mutableIntStateOf(0) }
+    val p = LocalPalette.current
+    val context = LocalContext.current
+    val recentStore = remember { RecentStore(context) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var typeName by rememberSaveable { mutableStateOf(SearchType.ALL.name) }
+    val type = SearchType.valueOf(typeName)
     var results by remember { mutableStateOf<List<TmdbItem>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf<String?>(null) }
-    val coroutineScope = rememberCoroutineScope()
-    val searchBarFocus = remember { FocusRequester() }
+    var trending by remember { mutableStateOf<List<TmdbItem>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    var recents by remember { mutableStateOf(recentStore.searches()) }
+    val firstKey = remember { FocusRequester() }
+    var handledToken by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(Unit) {
-        searchBarFocus.requestFocus()
+    LaunchedEffect(focusSignal.token) {
+        if (handledToken == focusSignal.token) return@LaunchedEffect
+        delay(60)
+        if (runCatching { firstKey.requestFocus() }.isSuccess) handledToken = focusSignal.token
     }
 
-    // Busca automatica ao digitar / mudar filtro (debounce 450ms)
-    LaunchedEffect(query, selectedType, selectedGenre, selectedYear) {
+    LaunchedEffect(kidsMode) {
+        trending = runCatching {
+            val path = if (kidsMode) "/discover/movie" else "/trending/all/day"
+            val params = if (kidsMode) mapOf("with_genres" to "16", "sort_by" to "popularity.desc") else emptyMap()
+            NetworkModule.tmdbApi.requestMap(path, params).results.orEmpty()
+                .filter { it.media_type == null || it.media_type == "movie" || it.media_type == "tv" }
+                .map { if (kidsMode && it.media_type == null) it.copy(media_type = "movie") else it }
+        }.getOrDefault(emptyList())
+    }
+
+    LaunchedEffect(query, type, kidsMode) {
         val q = query.trim()
-        if (q.isBlank() && selectedGenre == 0 && selectedYear == 0) {
-            results = emptyList()
-            searchError = null
-            isLoading = false
+        if (q.length < 2) {
+            results = emptyList(); loading = false; failed = false
             return@LaunchedEffect
         }
-        isLoading = true
-        searchError = null
-        delay(450)
-        try {
-            results = performSearch(query, selectedType, selectedGenre, selectedYear)
-        } catch (e: Exception) {
-            results = emptyList()
-            searchError = e.message ?: "Erro na busca"
-        } finally {
-            isLoading = false
+        loading = true
+        delay(380)
+        val path = when (type) {
+            SearchType.ALL -> "/search/multi"
+            SearchType.MOVIE -> "/search/movie"
+            SearchType.TV -> "/search/tv"
         }
+        val res = runCatching {
+            NetworkModule.tmdbApi.requestMap(path, mapOf("query" to q, "include_adult" to "false")).results.orEmpty()
+        }
+        failed = res.isFailure
+        results = res.getOrDefault(emptyList())
+            .filter { it.media_type == null || it.media_type == "movie" || it.media_type == "tv" }
+            .map {
+                if (it.media_type == null) it.copy(media_type = if (type == SearchType.TV) "tv" else "movie") else it
+            }
+            .filter { !it.poster_path.isNullOrBlank() }
+            .let { list -> if (kidsMode) Catalog.kidsSafe(list).filter { it.isKidsFriendly } else list }
+            .sortedByDescending { it.popularity ?: 0.0 }
+        loading = false
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0A0A10))) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            fun triggerSearch() {
-                coroutineScope.launch {
-                    isLoading = true
-                    searchError = null
-                    try {
-                        results = performSearch(query, selectedType, selectedGenre, selectedYear)
-                    } catch (e: Exception) {
-                        results = emptyList()
-                        searchError = e.message ?: "Erro na busca"
-                    } finally {
-                        isLoading = false
+    fun type(ch: String) {
+        if (query.length < 40) query += ch
+    }
+
+    Row(
+        Modifier.fillMaxSize().padding(start = 28.dp, top = 24.dp, end = 24.dp)
+            .onPreviewKeyEvent { ev ->
+                // teclado fisico / air mouse: letras e numeros digitam direto
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val cp = ev.utf16CodePoint
+                if (cp in 'a'.code..'z'.code || cp in 'A'.code..'Z'.code || cp in '0'.code..'9'.code) {
+                    type(cp.toChar().lowercase()); true
+                } else if (ev.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DEL) {
+                    query = query.dropLast(1); true
+                } else if (cp == ' '.code) {
+                    type(" "); true
+                } else false
+            },
+    ) {
+        // ── Teclado ─────────────────────────────────────────────────────
+        Column(Modifier.width(300.dp).fillMaxHeight()) {
+            Row(
+                Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(14.dp))
+                    .background(p.surface).border(1.5.dp, p.accent.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Filled.Search, null, tint = p.accent, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (query.isEmpty()) "Digite o nome…" else query + "▏",
+                    color = if (query.isEmpty()) p.textDim else p.text,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            KEYS.chunked(6).forEachIndexed { rowIndex, row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 6.dp)) {
+                    row.forEachIndexed { i, k ->
+                        KeyButton(
+                            label = k.uppercase(),
+                            modifier = Modifier.weight(1f).let { if (rowIndex == 0 && i == 0) it.focusRequester(firstKey) else it },
+                            onClick = { type(k) },
+                        )
                     }
                 }
             }
-
-            SearchTopBar(
-                query = query,
-                onQueryChange = { query = it },
-                onBack = onBack,
-                onSearch = { triggerSearch() },
-                focusRequester = searchBarFocus,
-            )
-
-            FilterBar(
-                selectedType = selectedType,
-                onTypeSelected = { selectedType = it },
-                selectedGenre = selectedGenre,
-                onGenreSelected = { selectedGenre = it },
-                selectedYear = selectedYear,
-                onYearSelected = { selectedYear = it },
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            SearchResultsArea(
-                isLoading = isLoading,
-                results = results,
-                query = query,
-                onItemClick = onItemClick,
-            )
-        }
-    }
-}
-
-@Composable
-private fun SearchResultsArea(
-    isLoading: Boolean,
-    results: List<TmdbItem>,
-    query: String,
-    onItemClick: (Int, String) -> Unit,
-) {
-    Box(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
-        if (isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color(0xFF6366F1))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                KeyButton(icon = Icons.Filled.SpaceBar, label = "Espaço", modifier = Modifier.weight(2f)) { type(" ") }
+                KeyButton(icon = Icons.AutoMirrored.Filled.Backspace, label = "Apagar", modifier = Modifier.weight(2f)) { query = query.dropLast(1) }
+                KeyButton(label = "Limpar", modifier = Modifier.weight(2f)) { query = "" }
             }
-        } else if (results.isEmpty() && query.isNotBlank()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    "Nenhum resultado encontrado",
-                    color = Color.White.copy(alpha = 0.5f),
-                    fontSize = 16.sp,
-                )
-            }
-        } else if (results.isNotEmpty()) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                items(results) { item ->
-                    SearchResultCard(item) { onItemClick(item.id, item.resolvedMediaType) }
+            Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SearchType.entries.forEach { t ->
+                    TvChip(t.label, selected = t == type, onClick = { typeName = t.name })
                 }
             }
-        } else {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Busca e Filtros", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    Spacer(modifier = Modifier.height(8.dp))
+            if (recents.isNotEmpty() && query.isEmpty()) {
+                Spacer(Modifier.height(14.dp))
+                Text("Buscas recentes", color = p.textMuted, fontSize = 12.sp)
+                Spacer(Modifier.height(6.dp))
+                recents.take(3).forEach { r ->
+                    RecentRow(r) { query = r }
+                }
+            }
+        }
+
+        Spacer(Modifier.width(24.dp))
+
+        // ── Resultados ──────────────────────────────────────────────────
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            val showingResults = query.trim().length >= 2
+            Text(
+                when {
+                    !showingResults -> if (kidsMode) "Sugestões para a criançada" else "Em alta hoje"
+                    loading -> "Buscando “${query.trim()}”…"
+                    results.isEmpty() -> "Nada encontrado"
+                    else -> "${results.size} resultados para “${query.trim()}”"
+                },
+                color = p.text,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 10.dp, end = 70.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val list = if (showingResults) results else trending
+            when {
+                showingResults && loading && results.isEmpty() -> LoadingBox(Modifier.fillMaxSize())
+                showingResults && results.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        "Digite na barra — resultados aparecem sozinhos.\nFiltros de Tipo, Genero e Ano refinam na hora.",
-                        color = Color.White.copy(alpha = 0.5f),
+                        if (failed) "Sem conexão com o catálogo. Tente de novo."
+                        else "Tente outro nome ou confira a escrita.",
+                        color = p.textMuted,
                         fontSize = 14.sp,
-                        lineHeight = 20.sp,
+                        textAlign = TextAlign.Center,
                     )
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchTopBar(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onBack: () -> Unit,
-    onSearch: () -> Unit,
-    focusRequester: FocusRequester,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .background(Color(0xFF12121A))
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, contentDescription = "Voltar", tint = Color.White)
-            }
-
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .focusRequester(focusRequester),
-                placeholder = {
-                    Text("Pesquisar filmes, series...", color = Color.White.copy(alpha = 0.4f), fontSize = 14.sp)
-                },
-                leadingIcon = {
-                    Icon(Icons.Filled.Search, contentDescription = null, tint = Color(0xFF6366F1))
-                },
-                trailingIcon = {
-                    if (query.isNotBlank()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(Icons.Filled.Clear, contentDescription = "Limpar", tint = Color.White.copy(alpha = 0.6f))
+                else -> TvLazyVerticalGrid(
+                    columns = TvGridCells.Fixed(5),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 60.dp, end = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    itemsIndexed(list, key = { _, it -> "${it.resolvedMediaType}_${it.id}" }) { _, item ->
+                        Column {
+                            PosterCard(
+                                title = item.displayTitle,
+                                posterPath = item.poster_path,
+                                width = 200.dp,
+                                modifier = Modifier.fillMaxWidth(),
+                                badge = if (item.resolvedMediaType == "tv") "SÉRIE" else null,
+                                onClick = {
+                                    if (showingResults) {
+                                        recentStore.addSearch(query)
+                                        recents = recentStore.searches()
+                                    }
+                                    onItemClick(item.id, item.resolvedMediaType)
+                                },
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(item.displayTitle, color = p.textMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                },
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF6366F1),
-                    unfocusedBorderColor = Color(0xFF333344),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    cursorColor = Color(0xFF6366F1),
-                    focusedContainerColor = Color(0xFF1E1E2E),
-                    unfocusedContainerColor = Color(0xFF1E1E2E),
-                ),
-                shape = RoundedCornerShape(24.dp),
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Search,
-                ),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                    onSearch = { onSearch() },
-                ),
-            )
-        }
-    }
-}
-
-@Composable
-private fun FilterBar(
-    selectedType: String,
-    onTypeSelected: (String) -> Unit,
-    selectedGenre: Int,
-    onGenreSelected: (Int) -> Unit,
-    selectedYear: Int,
-    onYearSelected: (Int) -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            "Tipo",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF6366F1),
-            modifier = Modifier.padding(horizontal = 48.dp, vertical = 8.dp),
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(horizontal = 48.dp),
-        ) {
-            items(TYPES) { type ->
-                FilterChip(
-                    text = type,
-                    selected = type == selectedType,
-                    onClick = { onTypeSelected(type) },
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            "Genero",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF6366F1),
-            modifier = Modifier.padding(horizontal = 48.dp),
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(horizontal = 48.dp),
-        ) {
-            items(GENRES.entries.toList()) { (id, name) ->
-                FilterChip(
-                    text = name,
-                    selected = id == selectedGenre,
-                    onClick = { onGenreSelected(id) },
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            "Ano",
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = Color(0xFF6366F1),
-            modifier = Modifier.padding(horizontal = 48.dp),
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            contentPadding = PaddingValues(horizontal = 48.dp, vertical = 8.dp),
-        ) {
-            items(YEARS) { year ->
-                FilterChip(
-                    text = if (year == 0) "Todos" else year.toString(),
-                    selected = year == selectedYear,
-                    onClick = { onYearSelected(year) },
-                )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun FilterChip(
-    text: String,
-    selected: Boolean,
+private fun KeyButton(
+    label: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
     onClick: () -> Unit,
 ) {
-    var isFocused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (isFocused) 1.08f else 1f, label = "filter_scale")
-
-    Card(
+    val p = LocalPalette.current
+    Surface(
         onClick = onClick,
-        modifier = Modifier
-            .height(36.dp)
-            .scale(scale)
-            .onFocusChanged { isFocused = it.isFocused },
-        colors = CardDefaults.colors(
-            containerColor = if (selected) Color(0xFF6366F1) else Color(0xFF1E1E2E),
-            focusedContainerColor = Color(0xFF818CF8),
+        modifier = modifier.height(38.dp),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(9.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = p.glass,
+            contentColor = p.text,
+            focusedContainerColor = p.accent,
+            focusedContentColor = p.onAccent,
         ),
-        shape = CardDefaults.shape(RoundedCornerShape(18.dp)),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.12f),
     ) {
-        Text(
-            text,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-            color = if (selected) Color.White else Color.White,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            fontSize = 13.sp,
-        )
-    }
-}
-
-@Composable
-private fun SearchResultCard(item: TmdbItem, onClick: () -> Unit) {
-    var isFocused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(if (isFocused) 1.02f else 1f, label = "result_scale")
-
-    Card(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp)
-            .scale(scale)
-            .onFocusChanged { isFocused = it.isFocused },
-        colors = CardDefaults.colors(
-            containerColor = if (isFocused) Color(0xFF2E2E3E) else Color(0xFF15151C),
-            focusedContainerColor = Color(0xFF2E2E3E),
-        ),
-        shape = CardDefaults.shape(RoundedCornerShape(10.dp)),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize().padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            AsyncImage(
-                model = item.poster_path?.let { "$TMDB_POSTER_W342$it" },
-                contentDescription = item.displayTitle,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.width(68.dp).height(100.dp).clip(RoundedCornerShape(8.dp)),
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(item.displayTitle, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item.displayYear?.let { MetaPillSmall(it) }
-                    item.displayRating?.let { RatingPillSmall(it) }
-                    MetaPillSmall(item.displayMediaLabel)
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (icon != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(icon, label, Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(label, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                item.overview?.let {
-                    Text(it, fontSize = 12.sp, color = Color.White.copy(alpha = 0.5f), maxLines = 2)
-                }
+            } else {
+                Text(label, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
-
-            Icon(
-                Icons.Filled.PlayCircleFilled,
-                contentDescription = null,
-                tint = if (isFocused) Color(0xFF6366F1) else Color.White.copy(alpha = 0.3f),
-                modifier = Modifier.size(32.dp),
-            )
         }
     }
 }
 
 @Composable
-private fun MetaPillSmall(text: String) {
-    Box(modifier = Modifier.background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
-        Text(text, fontSize = 11.sp, color = Color.White)
-    }
-}
-
-@Composable
-private fun RatingPillSmall(rating: String) {
-    Box(modifier = Modifier.background(Color(0xFF6366F1), RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 3.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Star, contentDescription = null, tint = Color.White, modifier = Modifier.size(11.dp))
-            Text(" $rating", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+private fun RecentRow(text: String, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(8.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = p.textMuted,
+            focusedContainerColor = Color.White,
+            focusedContentColor = Color.Black,
+        ),
+    ) {
+        Row(Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.History, null, Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
-}
-
-private suspend fun performSearch(
-    query: String,
-    type: String,
-    genre: Int,
-    year: Int,
-): List<TmdbItem> {
-    val results = mutableListOf<TmdbItem>()
-    val searchPath = when (type) {
-        "Filmes" -> "/search/movie"
-        "Séries" -> "/search/tv"
-        "Animes" -> "/search/tv"
-        else -> "/search/multi"
-    }
-
-    val response = NetworkModule.tmdbApi.request(
-        path = searchPath,
-        query = query.takeIf { it.isNotBlank() },
-        withGenres = if (genre > 0) genre.toString() else null,
-        primaryReleaseYear = if (type != "Séries" && type != "Animes" && year > 0) year else null,
-        firstAirDateYear = if ((type == "Séries" || type == "Animes") && year > 0) year else null,
-        withOriginalLanguage = if (type == "Animes") "ja" else null,
-    )
-    results.addAll(response.results.orEmpty())
-
-    if (query.isBlank() && (genre > 0 || year > 0)) {
-        val discoverPath = when (type) {
-            "Filmes" -> "/discover/movie"
-            "Séries" -> "/discover/tv"
-            "Animes" -> "/discover/tv"
-            else -> "/discover/movie"
-        }
-        val discover = NetworkModule.tmdbApi.request(
-            path = discoverPath,
-            withGenres = if (genre > 0) genre.toString() else null,
-            primaryReleaseYear = if (type != "Séries" && type != "Animes" && year > 0) year else null,
-            firstAirDateYear = if ((type == "Séries" || type == "Animes") && year > 0) year else null,
-            withOriginalLanguage = if (type == "Animes") "ja" else null,
-        )
-        results.addAll(discover.results.orEmpty())
-    }
-
-    return results
 }

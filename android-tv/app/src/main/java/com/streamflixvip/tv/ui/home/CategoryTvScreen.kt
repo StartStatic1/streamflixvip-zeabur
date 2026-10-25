@@ -1,126 +1,180 @@
 package com.streamflixvip.tv.ui.home
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Border
-import androidx.tv.material3.Card
-import androidx.tv.material3.CardDefaults
-import androidx.tv.material3.Icon
-import androidx.tv.material3.IconButton
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.tv.foundation.lazy.grid.TvGridCells
+import androidx.tv.foundation.lazy.grid.TvLazyVerticalGrid
+import androidx.tv.foundation.lazy.grid.itemsIndexed
+import androidx.tv.foundation.lazy.grid.rememberTvLazyGridState
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
-import com.streamflixvip.tv.network.NetworkModule
+import com.streamflixvip.tv.data.TvSettingsStore
 import com.streamflixvip.tv.network.TmdbItem
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.streamflixvip.tv.ui.components.LoadingBox
+import com.streamflixvip.tv.ui.components.LocalToaster
+import com.streamflixvip.tv.ui.components.MessageBox
+import com.streamflixvip.tv.ui.components.PosterCard
+import com.streamflixvip.tv.ui.theme.LocalPalette
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
-private const val TMDB_POSTER = "https://image.tmdb.org/t/p/w342"
-private val Bg = Color(0xFF0B0B14)
-private val Accent = Color(0xFF6366F1)
-private val AccentSoft = Color(0xFF818CF8)
-private val TextMuted = Color(0xFFA1A1B5)
+data class CategoryUiState(
+    val items: List<TmdbItem> = emptyList(),
+    val page: Int = 0,
+    val loading: Boolean = false,
+    val endReached: Boolean = false,
+    val error: String? = null,
+)
 
-fun categoryTitle(key: String): String = when (key) {
-    "trending" -> "Em Alta"
-    "cinema" -> "No Cinema"
-    "upcoming" -> "Em breve"
-    "series" -> "Séries"
-    "continue" -> "Continuar assistindo"
-    else -> "Explorar"
-}
+class CategoryViewModel : ViewModel() {
+    private val _state = MutableStateFlow(CategoryUiState())
+    val state = _state.asStateFlow()
+    private var spec: RowSpec? = null
+    private var kids = false
 
-private fun categoryPath(key: String): String = when (key) {
-    "trending" -> "/trending/all/week"
-    "cinema" -> "/movie/now_playing"
-    "upcoming" -> "/movie/upcoming"
-    "series" -> "/tv/popular"
-    else -> "/trending/all/week"
-}
-
-@Composable
-fun CategoryTvScreen(
-    category: String,
-    onItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
-    onBack: () -> Unit = {},
-) {
-    var items by remember { mutableStateOf<List<TmdbItem>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(category) {
-        loading = true
-        error = null
-        val path = categoryPath(category)
-        val result = withContext(Dispatchers.IO) {
-            runCatching {
-                NetworkModule.tmdbApi.request(path = path).results.orEmpty()
-            }
-        }
-        result.fold(
-            onSuccess = { items = it; loading = false },
-            onFailure = { error = "Não foi possível carregar"; loading = false },
-        )
+    fun start(spec: RowSpec, kidsMode: Boolean) {
+        if (this.spec?.key == spec.key && kids == kidsMode && _state.value.items.isNotEmpty()) return
+        this.spec = spec
+        kids = kidsMode
+        _state.value = CategoryUiState()
+        loadMore()
     }
 
-    Column(Modifier.fillMaxSize().background(Bg)) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.Filled.ArrowBack, "Voltar", tint = Color.White)
+    fun loadMore() {
+        val s = spec ?: return
+        val st = _state.value
+        if (st.loading || st.endReached || st.page >= 15) return
+        _state.update { it.copy(loading = true, error = null) }
+        viewModelScope.launch {
+            val next = st.page + 1
+            val got = HomeTvViewModel.fetchRow(s, next).let { if (kids) Catalog.kidsSafe(it) else it }
+            _state.update { cur ->
+                val merged = (cur.items + got).distinctBy { "${it.id}_${it.resolvedMediaType}" }
+                cur.copy(
+                    items = merged,
+                    page = next,
+                    loading = false,
+                    endReached = got.isEmpty() && next > 1,
+                    error = if (merged.isEmpty()) "Nada encontrado nesta categoria agora." else null,
+                )
             }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                categoryTitle(category),
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 22.sp,
-            )
         }
+    }
 
+    fun retry() {
+        _state.value = CategoryUiState()
+        loadMore()
+    }
+}
+
+/** "Ver tudo" de uma fileira: grade com paginacao infinita. */
+@Composable
+fun CategoryTvScreen(
+    rowKey: String,
+    onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
+) {
+    val p = LocalPalette.current
+    val toaster = LocalToaster.current
+    val settings by TvSettingsStore.state.collectAsState()
+    val spec = remember(rowKey) { Catalog.spec(rowKey) }
+    val vm: CategoryViewModel = viewModel(key = "cat_$rowKey")
+    val state by vm.state.collectAsState()
+    val gridState = rememberTvLazyGridState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val library = remember { com.streamflixvip.tv.data.LocalLibraryStore(context) }
+    val firstFocus = remember { FocusRequester() }
+    var restoreKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var focusTarget by remember { mutableStateOf<String?>(null) }
+    var focusNonce by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(spec, settings.kidsMode) { vm.start(spec, settings.kidsMode) }
+    LaunchedEffect(state.items.isNotEmpty()) {
+        if (state.items.isNotEmpty()) {
+            focusTarget = restoreKey ?: state.items.first().let { "${it.id}_${it.resolvedMediaType}" }
+            focusNonce++
+        }
+    }
+
+    Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 30.dp, end = 40.dp)) {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(spec.title, color = p.text, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+            Spacer(Modifier.width(14.dp))
+            if (state.items.isNotEmpty()) {
+                Text("${state.items.size} títulos · segure OK para salvar na lista", color = p.textMuted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 5.dp))
+            }
+        }
+        Spacer(Modifier.height(16.dp))
         when {
-            loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = AccentSoft)
-            }
-            error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(error!!, color = TextMuted)
-            }
-            items.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Nenhum título encontrado", color = TextMuted)
-            }
-            else -> {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(6),
-                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    items(items, key = { it.id }) { item ->
-                        CategoryPosterCard(
-                            title = item.displayTitle,
-                            posterPath = item.poster_path,
-                            onClick = { onItemClick(item.id, item.resolvedMediaType) },
-                        )
+            state.items.isEmpty() && state.error != null -> MessageBox(
+                title = "Ops!",
+                message = state.error,
+                actionLabel = "Tentar de novo",
+                actionFocus = firstFocus,
+                onAction = { vm.retry() },
+                modifier = Modifier.fillMaxSize(),
+            )
+            state.items.isEmpty() -> LoadingBox(Modifier.fillMaxSize(), "Carregando…")
+            else -> TvLazyVerticalGrid(
+                state = gridState,
+                columns = TvGridCells.Fixed(7),
+                contentPadding = PaddingValues(top = 6.dp, bottom = 80.dp, end = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                itemsIndexed(state.items, key = { _, it -> "${it.id}_${it.resolvedMediaType}" }) { index, item ->
+                    val key = "${item.id}_${item.resolvedMediaType}"
+                    if (index >= state.items.size - 14) {
+                        LaunchedEffect(state.items.size) { vm.loadMore() }
+                    }
+                    FocusTargetBox(key, focusTarget, focusNonce, { focusTarget = null }) { m ->
+                        Column {
+                            PosterCard(
+                                title = item.displayTitle,
+                                posterPath = item.poster_path,
+                                width = 200.dp,
+                                modifier = m.fillMaxWidth(),
+                                badge = item.displayRating?.let { "★ $it" },
+                                onFocus = { restoreKey = key },
+                                onLongClick = {
+                                    val added = library.toggleFavorite(
+                                        com.streamflixvip.tv.data.LocalFavorite(item.id, item.resolvedMediaType, item.displayTitle, item.poster_path),
+                                    )
+                                    toaster.show(if (added) "Adicionado à Minha lista" else "Removido da Minha lista")
+                                },
+                                onClick = { onItemClick(item.id, item.resolvedMediaType) },
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(item.displayTitle, color = p.textMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
                     }
                 }
             }
@@ -128,47 +182,3 @@ fun CategoryTvScreen(
     }
 }
 
-@Composable
-private fun CategoryPosterCard(
-    title: String,
-    posterPath: String?,
-    onClick: () -> Unit,
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().aspectRatio(2f / 3f),
-        shape = CardDefaults.shape(shape = RoundedCornerShape(10.dp)),
-        scale = CardDefaults.scale(focusedScale = 1.06f),
-        colors = CardDefaults.colors(
-            containerColor = Color(0xFF151522),
-            focusedContainerColor = Color(0xFF151522),
-        ),
-        border = CardDefaults.border(
-            focusedBorder = Border(
-                border = androidx.compose.foundation.BorderStroke(2.dp, AccentSoft),
-                shape = RoundedCornerShape(10.dp),
-            ),
-        ),
-    ) {
-        Box {
-            AsyncImage(
-                model = posterPath?.let { "$TMDB_POSTER$it" },
-                contentDescription = title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            Text(
-                title,
-                color = Color.White,
-                fontSize = 11.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.65f))
-                    .padding(6.dp),
-            )
-        }
-    }
-}

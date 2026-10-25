@@ -1,737 +1,544 @@
 package com.streamflixvip.tv.ui.home
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.tv.foundation.PivotOffsets
+import androidx.tv.foundation.lazy.list.TvLazyColumn
+import androidx.tv.foundation.lazy.list.TvLazyRow
+import androidx.tv.foundation.lazy.list.itemsIndexed
+import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import androidx.tv.material3.Border
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
+import com.streamflixvip.tv.data.LocalFavorite
 import com.streamflixvip.tv.data.LocalWatchProgress
 import com.streamflixvip.tv.network.TmdbItem
+import com.streamflixvip.tv.ui.components.FadeImage
+import com.streamflixvip.tv.ui.components.LandscapeCard
+import com.streamflixvip.tv.ui.components.LoadingBox
+import com.streamflixvip.tv.ui.components.MessageBox
+import com.streamflixvip.tv.ui.components.PosterCard
+import com.streamflixvip.tv.ui.components.SectionTitle
+import com.streamflixvip.tv.ui.components.TmdbImg
+import com.streamflixvip.tv.ui.shell.FocusSignal
+import com.streamflixvip.tv.ui.theme.LocalPalette
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
-private const val TMDB_POSTER = "https://image.tmdb.org/t/p/w342"
-private const val TMDB_BACKDROP = "https://image.tmdb.org/t/p/w780"
-private const val TMDB_BACKDROP_LG = "https://image.tmdb.org/t/p/w1280"
+/** O que aparece na "vitrine" do topo: muda conforme o cartao em foco. */
+data class Spotlight(
+    val title: String,
+    val backdrop: String?,
+    val label: String?,
+    val rating: String? = null,
+    val meta: List<String> = emptyList(),
+    val overview: String? = null,
+    val progress: Float? = null,
+)
 
-private val Bg = Color(0xFF0B0B14)
-private val RailBg = Color(0xFF10101A)
-private val Accent = Color(0xFF00E5FF)
-private val AccentSoft = Color(0xFF22D3EE)
-private val PlayBlue = Color(0xFF00B4D8)
-private val PlayFocus = Color(0xFF00E5FF)
-private val TextMuted = Color(0xFFA1A1B5)
-private val Glass = Color.White.copy(alpha = 0.08f)
-private val GlassBorder = Color.White.copy(alpha = 0.14f)
-private val GlassStrong = Color.White.copy(alpha = 0.12f)
+fun TmdbItem.toSpotlight() = Spotlight(
+    title = displayTitle,
+    backdrop = TmdbImg.backdropLg(backdrop_path),
+    label = displayMediaLabel,
+    rating = displayRating,
+    meta = listOfNotNull(displayYear),
+    overview = overview,
+)
 
-private const val CONTINUE_VISIBLE = 6
+fun LocalWatchProgress.toSpotlight() = Spotlight(
+    title = title.substringBefore(" · "),
+    backdrop = TmdbImg.backdropLg(backdropPath),
+    label = "CONTINUAR ASSISTINDO",
+    meta = listOfNotNull(
+        displaySubtitle,
+        if (remainingMinutes > 0) "faltam $remainingMinutes min" else null,
+    ),
+    progress = progressFraction,
+)
 
+fun LocalFavorite.toSpotlight() = Spotlight(
+    title = title,
+    backdrop = null,
+    label = "NA MINHA LISTA",
+    meta = listOf(if (mediaType == "tv") "Série" else "Filme"),
+)
+
+private const val CONTINUE_KEY = "continue"
+private const val MYLIST_KEY = "mylist"
+
+/**
+ * Tela de navegacao (Inicio / Filmes / Series / Infantil) no estilo TV moderna:
+ * vitrine fixa no topo com a arte do titulo em foco e fileiras rolando por baixo
+ * (a fileira focada sempre sobe para o mesmo lugar — o olho nao precisa procurar).
+ */
 @Composable
 fun HomeTvScreen(
-    viewModel: HomeTvViewModel = viewModel(),
-    onItemClick: (tmdbId: Int, mediaType: String) -> Unit = { _, _ -> },
-    onContinueClick: (LocalWatchProgress) -> Unit = {},
-    onNavigateToSearch: () -> Unit = {},
-    onNavigateToLiveTv: () -> Unit = {},
-    onNavigateToMyList: () -> Unit = {},
-    onNavigateToAccount: () -> Unit = {},
-    onExploreCategory: (category: String) -> Unit = {},
-) {
-    val state by viewModel.uiState.collectAsState()
-    val playFocus = remember { FocusRequester() }
-    val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
-    var didInitialFocus by remember { mutableStateOf(false) }
-
-    fun ensureTopVisible() {
-        scope.launch {
-            listState.animateScrollToItem(0)
-        }
-    }
-
-    LaunchedEffect(Unit) { viewModel.loadAll() }
-    // Foco inicial só 1x — não re-prende no Assistir depois de rolar
-    LaunchedEffect(state.isLoading) {
-        if (!state.isLoading && !didInitialFocus) {
-            didInitialFocus = true
-            listState.scrollToItem(0)
-            runCatching { playFocus.requestFocus() }
-        }
-    }
-
-    val heroPool = remember(state.heroItems, state.trendingItems) {
-        (state.heroItems + state.trendingItems).distinctBy { it.id }.take(8)
-    }
-    var heroIndex by remember { mutableIntStateOf(0) }
-    LaunchedEffect(heroPool) {
-        if (heroPool.size <= 1) return@LaunchedEffect
-        while (true) {
-            delay(8000)
-            heroIndex = (heroIndex + 1) % heroPool.size
-        }
-    }
-    val hero = heroPool.getOrNull(heroIndex.coerceIn(0, (heroPool.size - 1).coerceAtLeast(0)))
-
-    Box(Modifier.fillMaxSize().background(Bg)) {
-        if (hero != null) {
-            val bgPath = hero.backdrop_path ?: hero.poster_path
-            if (bgPath != null) {
-                AsyncImage(
-                    model = "$TMDB_BACKDROP_LG$bgPath",
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().blur(48.dp),
-                    contentScale = ContentScale.Crop,
-                )
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.verticalGradient(
-                            0f to Color(0xCC0B0B14),
-                            0.45f to Color(0xE60B0B14),
-                            1f to Color(0xF20B0B14),
-                        ),
-                    ),
-                )
-            }
-        }
-
-        Row(Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .width(88.dp)
-                    .background(RailBg.copy(alpha = 0.92f))
-                    .padding(vertical = 18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Box(
-                    Modifier.size(40.dp).clip(CircleShape).background(Accent),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("S", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                }
-                Spacer(Modifier.height(28.dp))
-                NavRailItem(Icons.Filled.Home, "Início", selected = true, onClick = {
-                    ensureTopVisible()
-                    runCatching { playFocus.requestFocus() }
-                })
-                Spacer(Modifier.height(14.dp))
-                NavRailItem(Icons.Filled.LiveTv, "TV", selected = false, onClick = onNavigateToLiveTv)
-                Spacer(Modifier.height(14.dp))
-                NavRailItem(Icons.Filled.Search, "Buscar", selected = false, onClick = onNavigateToSearch)
-                Spacer(Modifier.height(14.dp))
-                NavRailItem(Icons.Filled.Favorite, "Lista", selected = false, onClick = onNavigateToMyList)
-                Spacer(Modifier.weight(1f))
-                NavRailItem(Icons.Filled.Settings, "Conta", selected = false, onClick = onNavigateToAccount)
-                Spacer(Modifier.height(12.dp))
-            }
-
-            when {
-                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = AccentSoft)
-                }
-                state.error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(state.error!!, color = Color.White)
-                }
-                else -> {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp),
-                    ) {
-                        if (hero != null) {
-                            item(key = "hero") {
-                                AnimatedContent(
-                                    targetState = hero,
-                                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                                    label = "hero",
-                                ) { h ->
-                                    StreamlyHero(
-                                        item = h,
-                                        playFocus = playFocus,
-                                        onPlay = { onItemClick(h.id, h.resolvedMediaType) },
-                                        onDetails = { onItemClick(h.id, h.resolvedMediaType) },
-                                        onTopFocused = { ensureTopVisible() },
-                                    )
-                                }
-                            }
-                        }
-
-                        item(key = "chips") {
-                            Spacer(Modifier.height(8.dp))
-                            ExploreChips(
-                                onCategory = onExploreCategory,
-                                onSearch = onNavigateToSearch,
-                                onFocused = { ensureTopVisible() },
-                            )
-                            Spacer(Modifier.height(12.dp))
-                        }
-
-                        item(key = "continue") {
-                            ContinueSection(
-                                entries = state.continueWatching,
-                                featuredFallback = emptyList(),
-                                onContinueClick = onContinueClick,
-                                onFeaturedClick = onItemClick,
-                                onSeeAll = { onExploreCategory("continue") },
-                            )
-                            Spacer(Modifier.height(14.dp))
-                        }
-
-                        if (state.trendingItems.isNotEmpty()) {
-                            item(key = "trending") {
-                                CatalogRow(
-                                    title = "Em alta",
-                                    items = state.trendingItems,
-                                    onItemClick = onItemClick,
-                                )
-                                Spacer(Modifier.height(12.dp))
-                            }
-                        }
-                        if (state.popularMovies.isNotEmpty()) {
-                            item(key = "movies") {
-                                CatalogRow(
-                                    title = "Filmes populares",
-                                    items = state.popularMovies,
-                                    onItemClick = onItemClick,
-                                )
-                                Spacer(Modifier.height(12.dp))
-                            }
-                        }
-                        if (state.popularSeries.isNotEmpty()) {
-                            item(key = "series") {
-                                CatalogRow(
-                                    title = "Séries populares",
-                                    items = state.popularSeries,
-                                    onItemClick = onItemClick,
-                                )
-                                Spacer(Modifier.height(12.dp))
-                            }
-                        }
-                        if (state.actionItems.isNotEmpty()) {
-                            item(key = "action") {
-                                CatalogRow(
-                                    title = "Ação",
-                                    items = state.actionItems,
-                                    onItemClick = onItemClick,
-                                )
-                                Spacer(Modifier.height(12.dp))
-                            }
-                        }
-                        if (state.comedyItems.isNotEmpty()) {
-                            item(key = "comedy") {
-                                CatalogRow(
-                                    title = "Comédia",
-                                    items = state.comedyItems,
-                                    onItemClick = onItemClick,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CatalogRow(
-    title: String,
-    items: List<TmdbItem>,
-    onItemClick: (Int, String) -> Unit,
-) {
-    Column(Modifier.fillMaxWidth()) {
-        Text(
-            title,
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 16.sp,
-            modifier = Modifier.padding(horizontal = 28.dp),
-        )
-        Spacer(Modifier.height(8.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 28.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(items.take(18), key = { "${title}_${it.id}" }) { item ->
-                FeaturedMiniCard(
-                    title = item.displayTitle,
-                    posterPath = item.poster_path,
-                    onClick = { onItemClick(item.id, item.resolvedMediaType) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun StreamlyHero(
-    item: TmdbItem,
-    playFocus: FocusRequester,
-    onPlay: () -> Unit,
-    onDetails: () -> Unit,
-    onTopFocused: () -> Unit = {},
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 28.dp, end = 28.dp, top = 4.dp, bottom = 4.dp)
-            .height(200.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        Column(
-            modifier = Modifier.weight(0.42f).fillMaxHeight(),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                item.displayMediaLabel,
-                color = AccentSoft,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                item.displayTitle,
-                color = Color.White,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 28.sp,
-            )
-            Spacer(Modifier.height(6.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                item.displayRating?.let {
-                    Text("IMDb $it", color = Color(0xFFFBBF24), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                }
-                item.displayYear?.let {
-                    Text(it, color = TextMuted, fontSize = 13.sp)
-                }
-            }
-            item.overview?.takeIf { it.isNotBlank() }?.let { overview ->
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    overview,
-                    color = TextMuted,
-                    fontSize = 12.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 16.sp,
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = onPlay,
-                    modifier = Modifier
-                        .focusRequester(playFocus)
-                        .onFocusChanged { if (it.isFocused) onTopFocused() },
-                    colors = ButtonDefaults.colors(
-                        containerColor = PlayBlue,
-                        focusedContainerColor = PlayFocus,
-                        contentColor = Color.Black,
-                        focusedContentColor = Color.Black,
-                    ),
-                ) {
-                    Icon(Icons.Filled.PlayArrow, null, Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Assistir", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                }
-                Button(
-                    onClick = onDetails,
-                    modifier = Modifier.onFocusChanged { if (it.isFocused) onTopFocused() },
-                    colors = ButtonDefaults.colors(
-                        containerColor = GlassStrong,
-                        focusedContainerColor = Color.White.copy(alpha = 0.22f),
-                        contentColor = Color.White,
-                        focusedContentColor = Color.White,
-                    ),
-                ) {
-                    Icon(Icons.Filled.Info, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Detalhes", fontSize = 14.sp)
-                }
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .weight(0.58f)
-                .fillMaxHeight()
-                .clip(RoundedCornerShape(18.dp))
-                .border(1.dp, GlassBorder, RoundedCornerShape(18.dp))
-                .background(Color(0xFF151522)),
-        ) {
-            AsyncImage(
-                model = (item.backdrop_path ?: item.poster_path)?.let { path ->
-                    if (item.backdrop_path != null) "$TMDB_BACKDROP$path" else "$TMDB_POSTER$path"
-                },
-                contentDescription = item.displayTitle,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .width(48.dp)
-                    .align(Alignment.CenterStart)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Bg.copy(alpha = 0.4f), Color.Transparent),
-                        ),
-                    ),
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExploreChips(
-    onCategory: (String) -> Unit,
-    onSearch: () -> Unit,
-    onFocused: () -> Unit = {},
-) {
-    val chips = listOf(
-        "explorar" to "Explorar",
-        "trending" to "Em Alta",
-        "cinema" to "No Cinema",
-        "upcoming" to "Em breve",
-        "series" to "Séries",
-    )
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 28.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        items(chips, key = { it.first }) { (key, label) ->
-            var focused by remember { mutableStateOf(false) }
-            Button(
-                onClick = {
-                    if (key == "explorar") onSearch() else onCategory(key)
-                },
-                colors = ButtonDefaults.colors(
-                    containerColor = if (focused) Accent.copy(alpha = 0.35f) else Glass,
-                    focusedContainerColor = Accent.copy(alpha = 0.45f),
-                    contentColor = Color.White,
-                    focusedContentColor = Color.White,
-                ),
-                modifier = Modifier
-                    .onFocusChanged {
-                        focused = it.isFocused
-                        if (it.isFocused) onFocused()
-                    }
-                    .border(
-                        width = if (focused) 1.5.dp else 1.dp,
-                        color = if (focused) AccentSoft else GlassBorder,
-                        shape = RoundedCornerShape(999.dp),
-                    ),
-            ) {
-                Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ContinueSection(
-    entries: List<LocalWatchProgress>,
-    featuredFallback: List<TmdbItem>,
+    section: BrowseSection,
+    focusSignal: FocusSignal,
+    onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
     onContinueClick: (LocalWatchProgress) -> Unit,
-    onFeaturedClick: (Int, String) -> Unit,
-    onSeeAll: () -> Unit,
+    onSeeAll: (rowKey: String) -> Unit,
+    onToast: (String) -> Unit,
 ) {
-    if (entries.isEmpty() && featuredFallback.isEmpty()) return
+    val viewModel: HomeTvViewModel = viewModel(key = "browse_${section.name}")
+    val state by viewModel.uiState.collectAsState()
+    val p = LocalPalette.current
 
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 28.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                if (entries.isNotEmpty()) "Continuar assistindo" else "Recomendados pra você",
-                color = Color.White,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
-            )
-            if (entries.size > CONTINUE_VISIBLE) {
-                var focused by remember { mutableStateOf(false) }
-                Button(
-                    onClick = onSeeAll,
-                    colors = ButtonDefaults.colors(
-                        containerColor = Glass,
-                        focusedContainerColor = GlassStrong,
-                        contentColor = Color.White,
-                        focusedContentColor = Color.White,
-                    ),
-                    modifier = Modifier.onFocusChanged { focused = it.isFocused },
-                ) {
-                    Text(
-                        "Ver todos",
-                        fontSize = 12.sp,
-                        color = if (focused) AccentSoft else TextMuted,
+    LaunchedEffect(section) { viewModel.load(section) }
+
+    // Linhas visiveis (na ordem): destaques, continuar, minha lista, catalogo...
+    val showLibraryRows = section == BrowseSection.HOME || section == BrowseSection.KIDS
+    val rows: List<HomeRow> = remember(state, showLibraryRows) {
+        buildList {
+            state.specs.forEachIndexed { index, spec ->
+                val items = state.rows[spec.key].orEmpty()
+                if (items.isNotEmpty()) add(HomeRow.Catalog(spec, items))
+                if (index == 0 && showLibraryRows) {
+                    if (state.continueWatching.isNotEmpty()) add(HomeRow.Continue(state.continueWatching))
+                    if (state.favorites.isNotEmpty()) add(HomeRow.MyList(state.favorites))
+                }
+            }
+            if (state.rows[state.specs.firstOrNull()?.key].isNullOrEmpty() && showLibraryRows) {
+                // destaques ainda nao chegaram: biblioteca aparece primeiro mesmo assim
+                if (state.continueWatching.isNotEmpty() && none { it is HomeRow.Continue }) add(0, HomeRow.Continue(state.continueWatching))
+            }
+        }
+    }
+
+    // ── Vitrine ──────────────────────────────────────────────────────────
+    var candidate by remember { mutableStateOf<Spotlight?>(null) }
+    var spotlight by remember { mutableStateOf<Spotlight?>(null) }
+    var backdrop by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(rows.isNotEmpty()) {
+        if (spotlight == null) {
+            val first = (rows.firstOrNull() as? HomeRow.Catalog)?.items?.firstOrNull()
+            if (first != null) {
+                spotlight = first.toSpotlight()
+                backdrop = spotlight?.backdrop
+            }
+        }
+    }
+    LaunchedEffect(candidate) {
+        val c = candidate ?: return@LaunchedEffect
+        delay(260)
+        spotlight = c
+        if (c.backdrop != null) backdrop = c.backdrop
+    }
+
+    // ── Foco: restaura o ultimo cartao (ou o primeiro) quando o casco pede ──
+    var restoreKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var handledToken by remember { mutableIntStateOf(0) }
+    var focusTarget by remember { mutableStateOf<String?>(null) }
+    var focusNonce by remember { mutableIntStateOf(0) }
+    val listState = rememberTvLazyListState()
+    val retryFocus = remember { FocusRequester() }
+    val firstKey = rows.firstOrNull()?.let { firstCardKey(it) }
+
+    LaunchedEffect(focusSignal.token, firstKey, state.error) {
+        if (handledToken == focusSignal.token) return@LaunchedEffect
+        if (state.error != null) {
+            delay(60)
+            if (runCatching { retryFocus.requestFocus() }.isSuccess) handledToken = focusSignal.token
+            return@LaunchedEffect
+        }
+        if (firstKey == null) return@LaunchedEffect
+        handledToken = focusSignal.token
+        val rk = restoreKey
+        if (rk != null) {
+            val ri = rows.indexOfFirst { rk.startsWith(it.key + ":") }
+            if (ri >= 0) runCatching { listState.scrollToItem(ri) }
+        }
+        focusTarget = rk ?: firstKey
+        focusNonce++
+        // se o cartao lembrado nao estiver na tela, cai para o primeiro
+        delay(450)
+        if (focusTarget != null) {
+            runCatching { listState.scrollToItem(0) }
+            focusTarget = firstKey
+            focusNonce++
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        // Arte de fundo (lado direito) com degradês
+        Crossfade(targetState = backdrop, animationSpec = tween(450), label = "backdrop") { url ->
+            Box(Modifier.fillMaxSize()) {
+                if (url != null) {
+                    FadeImage(
+                        url,
+                        Modifier.align(Alignment.TopEnd).fillMaxWidth(0.78f).aspectRatio(16f / 9f),
                     )
                 }
             }
         }
-
-        Spacer(Modifier.height(8.dp))
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.horizontalGradient(
+                    0f to p.bg,
+                    0.28f to p.bg,
+                    0.62f to p.bg.copy(alpha = 0.35f),
+                    1f to Color.Transparent,
+                ),
+            ),
+        )
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    0.38f to p.bg.copy(alpha = 0.55f),
+                    0.56f to p.bg,
+                    1f to p.bg,
+                ),
+            ),
+        )
 
         when {
-            entries.isNotEmpty() -> {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+            state.error != null && rows.isEmpty() -> MessageBox(
+                title = "Ops! Nada carregou",
+                message = state.error,
+                actionLabel = "Tentar de novo",
+                actionFocus = retryFocus,
+                onAction = { viewModel.retry() },
+                modifier = Modifier.fillMaxSize(),
+            )
+            rows.isEmpty() -> LoadingBox(Modifier.fillMaxSize(), "Montando sua vitrine…")
+            else -> Column(Modifier.fillMaxSize()) {
+                SpotlightInfo(spotlight, Modifier.fillMaxWidth().height(206.dp).padding(start = 44.dp, top = 26.dp, end = 32.dp))
+                TvLazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    contentPadding = PaddingValues(bottom = 120.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    pivotOffsets = PivotOffsets(parentFraction = 0.0f),
                 ) {
-                    items(
-                        entries.take(CONTINUE_VISIBLE),
-                        key = { "cw_${it.tmdbId}_${it.mediaType}" },
-                    ) { entry ->
-                        ContinueWatchingCard(entry) { onContinueClick(entry) }
+                    rows.forEach { row ->
+                        item(key = row.key, contentType = row.contentType) {
+                            HomeRowView(
+                                row = row,
+                                focusTarget = focusTarget,
+                                focusNonce = focusNonce,
+                                onFocusConsumed = { focusTarget = null },
+                                onCardFocused = { key, s ->
+                                    restoreKey = key
+                                    candidate = s
+                                },
+                                onItemClick = onItemClick,
+                                onItemLongClick = { item ->
+                                    val added = viewModel.toggleFavorite(item)
+                                    onToast(if (added) "Adicionado à Minha lista" else "Removido da Minha lista")
+                                },
+                                onContinueClick = onContinueClick,
+                                onContinueLongClick = { entry ->
+                                    viewModel.removeFromContinue(entry)
+                                    restoreKey = null
+                                    onToast("Removido de Continuar assistindo")
+                                },
+                                onSeeAll = onSeeAll,
+                            )
+                        }
                     }
                 }
             }
-            featuredFallback.isNotEmpty() -> {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 28.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(featuredFallback, key = { "fb_${it.id}" }) { item ->
-                        FeaturedMiniCard(
-                            title = item.displayTitle,
-                            posterPath = item.poster_path,
-                            onClick = { onFeaturedClick(item.id, item.resolvedMediaType) },
-                        )
-                    }
-                }
-            }
         }
     }
 }
 
+private sealed class HomeRow(val key: String, val contentType: String) {
+    class Catalog(val spec: RowSpec, val items: List<TmdbItem>) : HomeRow(spec.key, spec.style.name)
+    class Continue(val entries: List<LocalWatchProgress>) : HomeRow(CONTINUE_KEY, "continue")
+    class MyList(val favorites: List<LocalFavorite>) : HomeRow(MYLIST_KEY, "mylist")
+}
+
+private fun firstCardKey(row: HomeRow): String? = when (row) {
+    is HomeRow.Catalog -> row.items.firstOrNull()?.let { "${row.key}:${it.id}" }
+    is HomeRow.Continue -> row.entries.firstOrNull()?.let { "${row.key}:${it.tmdbId}_${it.mediaType}" }
+    is HomeRow.MyList -> row.favorites.firstOrNull()?.let { "${row.key}:${it.tmdbId}_${it.mediaType}" }
+}
+
 @Composable
-private fun NavRailItem(
-    icon: ImageVector,
-    contentDescription: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    var focused by remember { mutableStateOf(false) }
-    val borderColor = when {
-        focused -> AccentSoft
-        selected -> Accent.copy(alpha = 0.55f)
-        else -> Color.Transparent
+private fun SpotlightInfo(s: Spotlight?, modifier: Modifier) {
+    val p = LocalPalette.current
+    if (s == null) {
+        Box(modifier)
+        return
     }
-    val iconTint = when {
-        focused || selected -> AccentSoft
-        else -> Color.White.copy(alpha = 0.45f)
-    }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .border(2.dp, borderColor, RoundedCornerShape(12.dp))
-                .background(
-                    if (focused) Accent.copy(alpha = 0.18f) else Color.Transparent,
-                    RoundedCornerShape(12.dp),
-                )
-                .onFocusChanged { focused = it.isFocused },
-            contentAlignment = Alignment.Center,
-        ) {
-            androidx.compose.material3.IconButton(onClick = onClick) {
-                Icon(icon, contentDescription, tint = iconTint)
-            }
+    Column(modifier, verticalArrangement = Arrangement.Bottom) {
+        s.label?.let {
+            Text(it, color = p.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
+            Spacer(Modifier.height(4.dp))
         }
-        if (focused || selected) {
+        Text(
+            s.title,
+            color = p.text,
+            fontSize = 30.sp,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 2,
+            lineHeight = 34.sp,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth(0.58f),
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            s.rating?.let {
+                Icon(Icons.Filled.Star, null, tint = p.star, modifier = Modifier.size(14.dp))
+                Text(it, color = p.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.offset(x = (-6).dp))
+            }
+            s.meta.forEach { Text(it, color = p.textMuted, fontSize = 13.sp) }
+        }
+        if (s.progress != null && s.progress > 0f) {
+            Spacer(Modifier.height(6.dp))
+            com.streamflixvip.tv.ui.components.ProgressLine(s.progress, Modifier.width(220.dp), height = 4.dp)
+        }
+        s.overview?.takeIf { it.isNotBlank() }?.let {
+            Spacer(Modifier.height(6.dp))
             Text(
-                contentDescription,
-                color = AccentSoft,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ContinueWatchingCard(entry: LocalWatchProgress, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.width(168.dp).height(96.dp),
-        shape = CardDefaults.shape(shape = RoundedCornerShape(12.dp)),
-        scale = CardDefaults.scale(focusedScale = 1.06f),
-        colors = CardDefaults.colors(
-            containerColor = Color(0xFF151522),
-            focusedContainerColor = Color(0xFF151522),
-        ),
-        border = CardDefaults.border(
-            focusedBorder = Border(
-                border = androidx.compose.foundation.BorderStroke(2.dp, AccentSoft),
-                shape = RoundedCornerShape(12.dp),
-            ),
-        ),
-    ) {
-        Box(Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = entry.posterPath?.let { "$TMDB_POSTER$it" },
-                contentDescription = entry.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            0.4f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.88f),
-                        ),
-                    ),
-            )
-            Box(
-                Modifier
-                    .align(Alignment.Center)
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.5f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(16.dp))
-            }
-            Column(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    entry.title,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                entry.displaySubtitle?.let { sub ->
-                    Text(sub, color = TextMuted, fontSize = 10.sp, maxLines = 1)
-                }
-                Spacer(Modifier.height(3.dp))
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                        .clip(RoundedCornerShape(1.dp))
-                        .background(Color.White.copy(alpha = 0.2f)),
-                ) {
-                    Box(
-                        Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(entry.progressFraction.coerceIn(0f, 1f))
-                            .background(AccentSoft),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeaturedMiniCard(
-    title: String,
-    posterPath: String?,
-    onClick: () -> Unit,
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.width(112.dp).aspectRatio(2f / 3f),
-        shape = CardDefaults.shape(shape = RoundedCornerShape(10.dp)),
-        scale = CardDefaults.scale(focusedScale = 1.06f),
-        colors = CardDefaults.colors(
-            containerColor = Color(0xFF151522),
-            focusedContainerColor = Color(0xFF151522),
-        ),
-        border = CardDefaults.border(
-            focusedBorder = Border(
-                border = androidx.compose.foundation.BorderStroke(2.dp, AccentSoft),
-                shape = RoundedCornerShape(10.dp),
-            ),
-        ),
-    ) {
-        Box {
-            AsyncImage(
-                model = posterPath?.let { "$TMDB_POSTER$it" },
-                contentDescription = title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0.55f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.75f),
-                        ),
-                    ),
-            )
-            Text(
-                title,
-                color = Color.White,
-                fontSize = 10.sp,
-                maxLines = 2,
+                it,
+                color = p.text.copy(alpha = 0.78f),
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(6.dp),
+                modifier = Modifier.fillMaxWidth(0.52f),
             )
+        }
+    }
+}
+
+@Composable
+private fun HomeRowView(
+    row: HomeRow,
+    focusTarget: String?,
+    focusNonce: Int,
+    onFocusConsumed: () -> Unit,
+    onCardFocused: (key: String, spotlight: Spotlight) -> Unit,
+    onItemClick: (Int, String) -> Unit,
+    onItemLongClick: (TmdbItem) -> Unit,
+    onContinueClick: (LocalWatchProgress) -> Unit,
+    onContinueLongClick: (LocalWatchProgress) -> Unit,
+    onSeeAll: (String) -> Unit,
+) {
+    val rowState = rememberTvLazyListState()
+    val title = when (row) {
+        is HomeRow.Catalog -> row.spec.title
+        is HomeRow.Continue -> "Continuar assistindo"
+        is HomeRow.MyList -> "Minha lista"
+    }
+    val hint = when (row) {
+        is HomeRow.Continue -> "segure OK para remover"
+        is HomeRow.MyList -> "${row.favorites.size} títulos"
+        else -> null
+    }
+    Column(Modifier.fillMaxWidth()) {
+        SectionTitle(title, Modifier.padding(start = 44.dp, bottom = 8.dp), trailing = hint)
+        TvLazyRow(
+            state = rowState,
+            contentPadding = PaddingValues(horizontal = 44.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            pivotOffsets = PivotOffsets(parentFraction = 0.06f),
+        ) {
+            when (row) {
+                is HomeRow.Catalog -> {
+                    val list = row.items.take(20)
+                    itemsIndexed(list, key = { _, it -> it.id }) { index, item ->
+                        val key = "${row.key}:${item.id}"
+                        FocusTargetBox(key, focusTarget, focusNonce, onFocusConsumed) { mod ->
+                            when (row.spec.style) {
+                                RowStyle.FEATURED -> LandscapeCard(
+                                    title = item.displayTitle,
+                                    imageUrl = TmdbImg.backdrop(item.backdrop_path),
+                                    subtitle = listOfNotNull(item.displayMediaLabel.lowercase().replaceFirstChar { it.uppercase() }, item.displayYear).joinToString(" · "),
+                                    width = 300.dp,
+                                    modifier = mod,
+                                    onFocus = { onCardFocused(key, item.toSpotlight()) },
+                                    onLongClick = { onItemLongClick(item) },
+                                    onClick = { onItemClick(item.id, item.resolvedMediaType) },
+                                )
+                                RowStyle.TOP10 -> if (index < 10) {
+                                    Top10Card(index + 1) {
+                                        PosterCard(
+                                            title = item.displayTitle,
+                                            posterPath = item.poster_path,
+                                            width = 120.dp,
+                                            modifier = mod,
+                                            onFocus = { onCardFocused(key, item.toSpotlight()) },
+                                            onLongClick = { onItemLongClick(item) },
+                                            onClick = { onItemClick(item.id, item.resolvedMediaType) },
+                                        )
+                                    }
+                                } else {
+                                    PosterCard(
+                                        title = item.displayTitle,
+                                        posterPath = item.poster_path,
+                                        width = 120.dp,
+                                        modifier = mod,
+                                        onFocus = { onCardFocused(key, item.toSpotlight()) },
+                                        onLongClick = { onItemLongClick(item) },
+                                        onClick = { onItemClick(item.id, item.resolvedMediaType) },
+                                    )
+                                }
+                                RowStyle.POSTER -> PosterCard(
+                                    title = item.displayTitle,
+                                    posterPath = item.poster_path,
+                                    width = 120.dp,
+                                    modifier = mod,
+                                    onFocus = { onCardFocused(key, item.toSpotlight()) },
+                                    onLongClick = { onItemLongClick(item) },
+                                    onClick = { onItemClick(item.id, item.resolvedMediaType) },
+                                )
+                            }
+                        }
+                    }
+                    if (row.items.size >= 8) {
+                        item(key = "see_all") {
+                            SeeAllCard(featured = row.spec.style == RowStyle.FEATURED) { onSeeAll(row.spec.key) }
+                        }
+                    }
+                }
+                is HomeRow.Continue -> {
+                    itemsIndexed(row.entries, key = { _, it -> "${it.tmdbId}_${it.mediaType}" }) { _, entry ->
+                        val key = "${row.key}:${entry.tmdbId}_${entry.mediaType}"
+                        FocusTargetBox(key, focusTarget, focusNonce, onFocusConsumed) { mod ->
+                            LandscapeCard(
+                                title = entry.title.substringBefore(" · "),
+                                imageUrl = TmdbImg.backdrop(entry.backdropPath) ?: TmdbImg.backdrop(entry.posterPath),
+                                subtitle = listOfNotNull(
+                                    entry.displaySubtitle,
+                                    if (entry.remainingMinutes > 0) "faltam ${entry.remainingMinutes} min" else null,
+                                ).joinToString(" · ").ifBlank { null },
+                                progress = entry.progressFraction,
+                                showPlayIcon = true,
+                                width = 248.dp,
+                                modifier = mod,
+                                onFocus = { onCardFocused(key, entry.toSpotlight()) },
+                                onLongClick = { onContinueLongClick(entry) },
+                                onClick = { onContinueClick(entry) },
+                            )
+                        }
+                    }
+                }
+                is HomeRow.MyList -> {
+                    itemsIndexed(row.favorites, key = { _, it -> "${it.tmdbId}_${it.mediaType}" }) { _, fav ->
+                        val key = "${row.key}:${fav.tmdbId}_${fav.mediaType}"
+                        FocusTargetBox(key, focusTarget, focusNonce, onFocusConsumed) { mod ->
+                            PosterCard(
+                                title = fav.title,
+                                posterPath = fav.posterPath,
+                                width = 120.dp,
+                                modifier = mod,
+                                onFocus = { onCardFocused(key, fav.toSpotlight()) },
+                                onClick = { onItemClick(fav.tmdbId, fav.mediaType) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Liga um FocusRequester ao cartao e pede foco quando ele e o alvo atual. */
+@Composable
+fun FocusTargetBox(
+    key: String,
+    focusTarget: String?,
+    focusNonce: Int,
+    onFocusConsumed: () -> Unit,
+    content: @Composable (Modifier) -> Unit,
+) {
+    val requester = remember { FocusRequester() }
+    if (focusTarget == key) {
+        LaunchedEffect(focusNonce) {
+            delay(40)
+            if (runCatching { requester.requestFocus() }.isSuccess) onFocusConsumed()
+        }
+    }
+    content(Modifier.focusRequester(requester))
+}
+
+@Composable
+private fun Top10Card(rank: Int, poster: @Composable () -> Unit) {
+    val p = LocalPalette.current
+    Box(Modifier.width(if (rank >= 10) 196.dp else 172.dp)) {
+        Text(
+            "$rank",
+            style = TextStyle(
+                brush = Brush.verticalGradient(listOf(p.accent, p.accent.copy(alpha = 0.05f))),
+                fontSize = 120.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = (-8).sp,
+            ),
+            modifier = Modifier.align(Alignment.BottomStart).offset(y = 22.dp),
+        )
+        Box(Modifier.align(Alignment.CenterEnd)) { poster() }
+    }
+}
+
+@Composable
+private fun SeeAllCard(featured: Boolean, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(12.dp)
+    Card(
+        onClick = onClick,
+        modifier = if (featured) Modifier.width(170.dp).height(169.dp) else Modifier.width(120.dp).aspectRatio(2f / 3f),
+        shape = CardDefaults.shape(shape),
+        scale = CardDefaults.scale(focusedScale = 1.06f),
+        colors = CardDefaults.colors(containerColor = p.glass, focusedContainerColor = Color.White),
+        border = CardDefaults.border(
+            border = Border(androidx.compose.foundation.BorderStroke(1.dp, p.glassBorder), shape = shape),
+            focusedBorder = Border(androidx.compose.foundation.BorderStroke(2.dp, p.accent), shape = shape),
+        ),
+    ) {
+        var focused by remember { mutableStateOf(false) }
+        Box(Modifier.fillMaxSize().onFocusChanged { focused = it.hasFocus }, contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = p.accent, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.height(8.dp))
+                Text("Ver tudo", color = p.textMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }
