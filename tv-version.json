@@ -1,7 +1,7 @@
 {
-  "versionCode": 14,
-  "versionName": "2.0.3",
+  "versionCode": 15,
+  "versionName": "3.0.0",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Fix"
+  "releaseNotes": "App de TV todo novo! Menu lateral que abre no foco, vitrine com destaque que muda conforme você navega, 5 temas de cor, Modo Infantil e tela inicial à sua escolha. Detalhes com logo, episódios com progresso e o botão Continuar no episódio certo. Servidores aparecem mais rápido e o player troca de servidor sozinho se travar. Legendas PT-BR online automáticas, áudio, velocidade e próximo episódio automático. TV ao vivo com prévia, favoritos, recentes, programação (Agora/A seguir) e número do canal pelo controle."
 }
