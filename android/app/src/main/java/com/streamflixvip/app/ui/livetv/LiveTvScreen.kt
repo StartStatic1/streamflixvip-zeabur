@@ -28,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -45,10 +47,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -93,6 +98,15 @@ private fun initialsOf(name: String): String {
     }
 }
 
+/** Borda clara quando o item esta com foco (controle remoto / D-pad). */
+@Composable
+private fun Modifier.focusRing(shape: Shape): Modifier {
+    var focused by remember { mutableStateOf(false) }
+    return this
+        .onFocusChanged { focused = it.isFocused || it.hasFocus }
+        .then(if (focused) Modifier.border(2.dp, Color.White, shape) else Modifier)
+}
+
 private fun colorFor(name: String): Color {
     val i = (name.hashCode().and(0x7fffffff)) % BadgeColors.size
     return BadgeColors[i]
@@ -126,7 +140,12 @@ fun LiveTvScreen(
             nowTitle = selected?.let { state.nowTitle(it) },
             isFavorite = selected?.id?.let { state.favoriteIds.contains(it) } == true,
             onToggleFavorite = { selected?.let { viewModel.toggleFavorite(it.id) } },
-            onFullscreen = { selected?.let { onChannelClick(it) } },
+            onFullscreen = {
+                selected?.let {
+                    viewModel.markWatched(it)
+                    onChannelClick(it)
+                }
+            },
         )
 
         Box(
@@ -178,6 +197,12 @@ fun LiveTvScreen(
                 selected = state.tab == LiveTvTab.FAVORITES,
                 onClick = { viewModel.setTab(LiveTvTab.FAVORITES) },
             )
+            TabPill(
+                label = "Recentes",
+                icon = { Icon(Icons.Filled.History, null, Modifier.size(16.dp), tint = it) },
+                selected = state.tab == LiveTvTab.RECENT,
+                onClick = { viewModel.setTab(LiveTvTab.RECENT) },
+            )
         }
 
         if (state.tab == LiveTvTab.CHANNELS && state.searchQuery.isEmpty()) {
@@ -188,10 +213,13 @@ fun LiveTvScreen(
                     .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val counts = state.countByCategory
                 state.categories.forEach { cat ->
                     val sel = state.selectedCategoryId == cat.id
+                    val n = counts[cat.id] ?: 0
                     Box(
                         Modifier
+                            .focusRing(RoundedCornerShape(18.dp))
                             .clip(RoundedCornerShape(18.dp))
                             .background(if (sel) Accent else ChipBg)
                             .border(
@@ -203,7 +231,7 @@ fun LiveTvScreen(
                             .padding(horizontal = 14.dp, vertical = 7.dp),
                     ) {
                         Text(
-                            cat.name,
+                            if (n > 0) "${cat.name} · $n" else cat.name,
                             color = if (sel) Color.Black else Color.White.copy(alpha = 0.72f),
                             fontSize = 13.sp,
                             fontWeight = if (sel) FontWeight.Bold else FontWeight.Medium,
@@ -242,9 +270,12 @@ fun LiveTvScreen(
             list.isEmpty() -> {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        if (state.tab == LiveTvTab.FAVORITES)
-                            "Nenhum favorito ainda.\nToque no coração no player."
-                        else "Nenhum canal nesta categoria",
+                        when {
+                            state.searchQuery.isNotBlank() -> "Nenhum canal encontrado para \"${state.searchQuery.trim()}\""
+                            state.tab == LiveTvTab.FAVORITES -> "Nenhum favorito ainda.\nToque no coração ao lado do canal."
+                            state.tab == LiveTvTab.RECENT -> "Nenhum canal assistido ainda."
+                            else -> "Nenhum canal nesta categoria"
+                        },
                         color = Color.White.copy(alpha = 0.45f),
                         textAlign = TextAlign.Center,
                         fontSize = 13.sp,
@@ -265,10 +296,14 @@ fun LiveTvScreen(
                             selected = isSel,
                             isFavorite = isFav,
                             nowTitle = state.nowTitle(channel),
+                            hasEpg = state.hasEpg(channel),
                             nextTitle = state.nextTitle(channel),
                             onClick = { viewModel.selectChannel(channel) },
                             onToggleFavorite = { viewModel.toggleFavorite(channel.id) },
-                            onOpenFullscreen = { onChannelClick(channel) },
+                            onOpenFullscreen = {
+                                viewModel.markWatched(channel)
+                                onChannelClick(channel)
+                            },
                         )
                     }
                     item { Spacer(Modifier.height(72.dp)) }
@@ -340,6 +375,7 @@ private fun TabPill(
     val fg = if (selected) Accent else Color.White.copy(alpha = 0.45f)
     Row(
         Modifier
+            .focusRing(RoundedCornerShape(10.dp))
             .clip(RoundedCornerShape(10.dp))
             .background(bg)
             .clickable(onClick = onClick)
@@ -352,6 +388,7 @@ private fun TabPill(
     }
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 private fun LiveInlinePlayer(
     channel: LiveChannel?,
@@ -364,7 +401,22 @@ private fun LiveInlinePlayer(
     val streams = channel?.streams.orEmpty()
     var streamIndex by remember(channel?.id) { mutableIntStateOf(0) }
     var loading by remember(channel?.id) { mutableStateOf(channel != null) }
+    var allFailed by remember(channel?.id) { mutableStateOf(false) }
+    var retryTick by remember(channel?.id) { mutableIntStateOf(0) }
     var isPlaying by remember { mutableStateOf(false) }
+    // O listener do player e criado uma vez: sempre ler o canal/indice atuais.
+    val currentStreams by rememberUpdatedState(streams)
+    val currentIndex by rememberUpdatedState(streamIndex)
+    val onStreamFailed by rememberUpdatedState<() -> Unit>({
+        val next = streamIndex + 1
+        if (next < streams.size) {
+            streamIndex = next
+            loading = true
+        } else {
+            loading = false
+            allFailed = true
+        }
+    })
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply { playWhenReady = true }
@@ -374,7 +426,7 @@ private fun LiveInlinePlayer(
         onDispose { exoPlayer.release() }
     }
 
-    LaunchedEffect(channel?.id, streamIndex) {
+    LaunchedEffect(channel?.id, streamIndex, retryTick) {
         if (channel == null || streams.isEmpty()) {
             exoPlayer.stop()
             loading = false
@@ -382,8 +434,9 @@ private fun LiveInlinePlayer(
             return@LaunchedEffect
         }
         val url = streams.getOrNull(streamIndex)?.url ?: return@LaunchedEffect
+        allFailed = false
         val currentUri = exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
-        if (currentUri == url &&
+        if (retryTick == 0 && currentUri == url &&
             (exoPlayer.playbackState == Player.STATE_READY || exoPlayer.isPlaying)
         ) {
             loading = false
@@ -411,13 +464,8 @@ private fun LiveInlinePlayer(
                 if (playing) loading = false
             }
             override fun onPlayerError(error: PlaybackException) {
-                val next = streamIndex + 1
-                if (next < streams.size) {
-                    streamIndex = next
-                    loading = true
-                } else {
-                    loading = false
-                }
+                if (currentStreams.isEmpty() || currentIndex >= currentStreams.size) return
+                onStreamFailed()
             }
         }
         exoPlayer.addListener(listener)
@@ -460,7 +508,30 @@ private fun LiveInlinePlayer(
             }
         }
 
-        if (loading && !isPlaying && channel != null) {
+        if (allFailed && channel != null) {
+            Column(
+                Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    "Canal fora do ar agora",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(6.dp))
+                TextButton(onClick = {
+                    exoPlayer.stop()
+                    streamIndex = 0
+                    retryTick += 1
+                    loading = true
+                }) {
+                    Icon(Icons.Filled.Refresh, null, tint = Accent, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Tentar de novo", color = Accent, fontSize = 13.sp)
+                }
+            }
+        } else if (loading && !isPlaying && channel != null) {
             CircularProgressIndicator(
                 Modifier.align(Alignment.Center),
                 color = Accent,
@@ -532,6 +603,7 @@ private fun ChannelRow(
     selected: Boolean,
     isFavorite: Boolean,
     nowTitle: String,
+    hasEpg: Boolean,
     nextTitle: String?,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -543,6 +615,7 @@ private fun ChannelRow(
         Modifier
             .fillMaxWidth()
             .height(70.dp)
+            .focusRing(RoundedCornerShape(14.dp))
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .border(1.dp, border, RoundedCornerShape(14.dp))
@@ -562,19 +635,21 @@ private fun ChannelRow(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "Agora · $nowTitle",
+                if (hasEpg) "Agora · $nowTitle" else nowTitle,
                 color = if (selected) Accent else Color.White.copy(alpha = 0.62f),
                 fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(
-                if (!nextTitle.isNullOrBlank()) "A seguir · $nextTitle" else "A seguir · —",
-                color = Color.White.copy(alpha = 0.38f),
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (!nextTitle.isNullOrBlank()) {
+                Text(
+                    "A seguir · $nextTitle",
+                    color = Color.White.copy(alpha = 0.38f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         IconButton(onClick = onToggleFavorite, modifier = Modifier.size(34.dp)) {
             Icon(

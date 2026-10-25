@@ -19,7 +19,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import retrofit2.HttpException
 
-enum class LiveTvTab { CHANNELS, FAVORITES }
+enum class LiveTvTab { CHANNELS, FAVORITES, RECENT }
 
 data class LiveTvUiState(
     val isLoading: Boolean = true,
@@ -34,6 +34,7 @@ data class LiveTvUiState(
     val vipRequiredByServer: Boolean = false,
     val tab: LiveTvTab = LiveTvTab.CHANNELS,
     val favoriteIds: Set<String> = emptySet(),
+    val recentIds: List<String> = emptyList(),
     val selectedChannelId: String? = null,
     val epgNowById: Map<String, String> = emptyMap(),
     val epgNextById: Map<String, String> = emptyMap(),
@@ -48,7 +49,11 @@ data class LiveTvUiState(
 
             if (tab == LiveTvTab.FAVORITES) {
                 list = list.filter { favoriteIds.contains(it.id) }
-            } else if (selectedCategoryId != "all") {
+            } else if (tab == LiveTvTab.RECENT) {
+                val byId = channels.associateBy { it.id }
+                list = recentIds.mapNotNull { byId[it] }
+            } else if (q.isEmpty() && selectedCategoryId != "all") {
+                // busca procura em todos os canais, nao so na categoria aberta
                 list = list.filter { ch ->
                     tagsByChannel[ch.id]?.contains(selectedCategoryId) == true ||
                         ch.categoryId == selectedCategoryId
@@ -70,6 +75,20 @@ data class LiveTvUiState(
 
     fun nowTitle(channel: LiveChannel): String =
         epgNowById[channel.id]?.takeIf { it.isNotBlank() } ?: categoryLabel(channel)
+
+    fun hasEpg(channel: LiveChannel): Boolean =
+        !epgNowById[channel.id].isNullOrBlank()
+
+    /** Quantos canais em cada categoria (para os chips). */
+    val countByCategory: Map<String, Int> by lazy {
+        val out = HashMap<String, Int>()
+        for (ch in channels) {
+            val tags = tagsByChannel[ch.id] ?: setOfNotNull(ch.categoryId)
+            for (t in tags) out[t] = (out[t] ?: 0) + 1
+        }
+        out["all"] = channels.size
+        out
+    }
 
     fun nextTitle(channel: LiveChannel): String? =
         epgNextById[channel.id]?.takeIf { it.isNotBlank() }
@@ -105,7 +124,10 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("live_tv_cache_v3", Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(
-        LiveTvUiState(favoriteIds = LiveTvFavoritesStore.getIds(app)),
+        LiveTvUiState(
+            favoriteIds = LiveTvFavoritesStore.getIds(app),
+            recentIds = LiveTvRecentStore.getIds(app),
+        ),
     )
     val uiState: StateFlow<LiveTvUiState> = _uiState.asStateFlow()
 
@@ -221,7 +243,14 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun selectChannel(channel: LiveChannel) {
-        _uiState.update { it.copy(selectedChannelId = channel.id) }
+        val recent = LiveTvRecentStore.push(getApplication(), channel.id)
+        _uiState.update { it.copy(selectedChannelId = channel.id, recentIds = recent) }
+    }
+
+    /** Canal aberto em tela cheia tambem entra nos recentes. */
+    fun markWatched(channel: LiveChannel) {
+        val recent = LiveTvRecentStore.push(getApplication(), channel.id)
+        _uiState.update { it.copy(recentIds = recent) }
     }
 
     fun toggleFavorite(channelId: String) {
@@ -252,8 +281,8 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
             n.contains("24 horas") || n.contains("lendas do cinema") ||
             n.contains("lendas cinema")
         ) return true
-        if (Regex("""\\s+-\\s*s\\d+\\s*$""").containsMatchIn(n)) return true
-        if (Regex("""\\bs\\d+\\s*$""").containsMatchIn(n)) {
+        if (Regex("""\s+-\s*s\d+\s*$""").containsMatchIn(n)) return true
+        if (Regex("""\bs\d+\s*$""").containsMatchIn(n)) {
             val actors = listOf(
                 "smith", "snipes", "damme", "chan", "statham", "cruise", "dicaprio",
                 "schwarzenegger", "stallone", "willis", "cage", "diesel",
@@ -288,11 +317,11 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
         val n = LiveTvUiState.normalize("$rawName $rawId $channelName")
         if (n.contains("portugal") || n.contains("porto canal")) return true
         if (n.contains("benfica") || n.contains("cmtv") || n.contains("canal 11") || n.contains("canal11")) return true
-        if (Regex("""\\brtc\\b""").containsMatchIn(n) || n.contains("rtp1") || n.contains("rtp 1") ||
+        if (Regex("""\brtc\b""").containsMatchIn(n) || n.contains("rtp1") || n.contains("rtp 1") ||
             n.contains("rtp2") || n.contains("rtp 2") || n.contains("rtp3") || n.contains("rtp 3")
         ) return true
-        if (Regex("""\\bsic\\b""").containsMatchIn(n) || n.contains("sic noticias") || n.contains("sic radical")) return true
-        if (Regex("""\\btvi\\b""").containsMatchIn(n) || n.contains("tvi 24") || n.contains("tvi24")) return true
+        if (Regex("""\bsic\b""").containsMatchIn(n) || n.contains("sic noticias") || n.contains("sic radical")) return true
+        if (Regex("""\btvi\b""").containsMatchIn(n) || n.contains("tvi 24") || n.contains("tvi24")) return true
         if (n.contains("sport tv") || (n.contains("sporttv") && n.contains("port"))) return true
         return false
     }
@@ -404,8 +433,8 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun epgKey(name: String): String =
         LiveTvUiState.normalize(name)
-            .replace(Regex("""\\b(hd|fhd|sd|4k|uhd|h264|h265|hevc|hdr)\\b"""), " ")
-            .replace(Regex("""\\s+"""), " ")
+            .replace(Regex("""\b(hd|fhd|sd|4k|uhd|h264|h265|hevc|hdr)\b"""), " ")
+            .replace(Regex("""\s+"""), " ")
             .trim()
 
     private fun loadEpg() {
