@@ -1,309 +1,341 @@
 package com.streamflixvip.tv.ui.livetv
 
 import android.app.Activity
-import android.view.KeyEvent
+import android.view.KeyEvent as AKeyEvent
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
+import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AspectRatio
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.LiveTv
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
-import androidx.media3.common.MediaItem
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import androidx.tv.material3.Border
-import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.Icon
-import androidx.tv.material3.Surface
+import androidx.tv.foundation.lazy.list.TvLazyColumn
+import androidx.tv.foundation.lazy.list.itemsIndexed
+import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
+import com.streamflixvip.tv.data.RecentStore
 import com.streamflixvip.tv.network.LiveChannel
-import com.streamflixvip.tv.network.LiveStreamOption
+import com.streamflixvip.tv.ui.components.FadeImage
+import com.streamflixvip.tv.ui.components.LocalToaster
+import com.streamflixvip.tv.ui.components.PanelItem
+import com.streamflixvip.tv.ui.components.SidePanel
+import com.streamflixvip.tv.ui.components.TvButton
+import com.streamflixvip.tv.ui.home.FocusTargetBox
+import com.streamflixvip.tv.ui.theme.LocalPalette
 import kotlinx.coroutines.delay
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
+@OptIn(UnstableApi::class)
 private enum class LiveAspect(val label: String, val mode: Int) {
-    FIT("Ajustar", AspectRatioFrameLayout.RESIZE_MODE_FIT),
-    FILL("Preencher", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
-    STRETCH("Esticar", AspectRatioFrameLayout.RESIZE_MODE_FILL),
+    FIT("Original", AspectRatioFrameLayout.RESIZE_MODE_FIT),
+    ZOOM("Preencher (zoom)", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
+    FILL("Esticar", AspectRatioFrameLayout.RESIZE_MODE_FILL),
 }
 
+private const val LIVE_START_TIMEOUT_MS = 14_000L
+
+@OptIn(UnstableApi::class)
+@kotlin.OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LivePlayerTvScreen(
-    channelName: String,
-    streams: List<LiveStreamOption>,
+    channels: List<LiveChannel>,
+    initialIndex: Int,
+    epgNow: Map<String, String>,
+    epgNext: Map<String, String>,
+    onChannelChanged: (index: Int) -> Unit,
     onBack: () -> Unit,
-    channelList: List<LiveChannel> = emptyList(),
-    initialChannelIndex: Int = 0,
-    onChannelChanged: ((LiveChannel) -> Unit)? = null,
 ) {
-    val view = LocalView.current
     val context = LocalContext.current
-    val activity = context as? Activity
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val p = LocalPalette.current
+    val toaster = LocalToaster.current
+    val recent = remember { RecentStore(context) }
 
-    DisposableEffect(Unit) {
-        val window = activity?.window
-        val insets = window?.let { WindowCompat.getInsetsController(it, view) }
-        insets?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        insets?.hide(WindowInsetsCompat.Type.systemBars())
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose {
-            insets?.show(WindowInsetsCompat.Type.systemBars())
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    var index by remember { mutableIntStateOf(initialIndex.coerceIn(0, (channels.size - 1).coerceAtLeast(0))) }
+    val channel = channels.getOrNull(index)
+    val streams = remember(channel?.id) { channel?.let { orderStreams(it.streams) }.orEmpty() }
+    val streamsNow by rememberUpdatedState(streams)
+    var streamIndex by remember { mutableIntStateOf(0) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var reloadNonce by remember { mutableIntStateOf(0) }
+    var infoVisible by remember { mutableStateOf(true) }
+    var infoTick by remember { mutableIntStateOf(0) }
+    var listVisible by remember { mutableStateOf(false) }
+    var optionsVisible by remember { mutableStateOf(false) }
+    var aspect by remember { mutableStateOf(LiveAspect.FIT) }
+    var digits by remember { mutableStateOf("") }
+    var isFavorite by remember(channel?.id) { mutableStateOf(channel?.let { LiveTvFavoritesStore.isFavorite(context, it.id) } ?: false) }
+
+    val rootFocus = remember { FocusRequester() }
+    val optionsFirst = remember { FocusRequester() }
+    val errorFocus = remember { FocusRequester() }
+    var listFocusTarget by remember { mutableStateOf<String?>(null) }
+    var listFocusNonce by remember { mutableIntStateOf(0) }
+    val listState = rememberTvLazyListState()
+
+    val exo = remember {
+        ExoPlayer.Builder(context).setLoadControl(liveLoadControl()).build().apply { playWhenReady = true }
+    }
+
+    fun showInfo() {
+        infoVisible = true
+        infoTick++
+    }
+
+    fun zap(delta: Int) {
+        if (channels.isEmpty()) return
+        index = (index + delta).mod(channels.size)
+        showInfo()
+    }
+
+    fun goTo(i: Int) {
+        if (i in channels.indices) {
+            index = i
+            showInfo()
         }
     }
 
-    var currentIndex by remember(initialChannelIndex) {
-        mutableIntStateOf(initialChannelIndex.coerceIn(0, (channelList.size - 1).coerceAtLeast(0)))
+    DisposableEffect(Unit) {
+        (context as? Activity)?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) {
+                    loading = false
+                    error = null
+                }
+                if (state == Player.STATE_BUFFERING) loading = true
+            }
+
+            override fun onPlayerError(e: PlaybackException) {
+                if (streamIndex + 1 < streamsNow.size) {
+                    streamIndex++
+                    toaster.show("Fonte falhou — tentando outra")
+                } else {
+                    loading = false
+                    error = "Este canal não abriu em nenhuma fonte agora."
+                }
+            }
+        }
+        exo.addListener(listener)
+        val observer = LifecycleEventObserver { _, e ->
+            when (e) {
+                Lifecycle.Event.ON_STOP -> exo.pause()
+                Lifecycle.Event.ON_START -> exo.play()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            exo.removeListener(listener)
+            exo.release()
+            (context as? Activity)?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
-    val activeChannel = channelList.getOrNull(currentIndex)
-    val activeName = activeChannel?.name ?: channelName
-    val qualityRank = mapOf(
-        "4K" to 0, "UHD" to 0, "FHD" to 1, "FULLHD" to 1, "HD" to 2, "SD" to 3, "STD" to 3,
-    )
-    val orderedStreams = (activeChannel?.streams?.takeIf { it.isNotEmpty() } ?: streams)
-        .sortedWith(
-            compareBy<com.streamflixvip.tv.network.LiveStreamOption> {
-                qualityRank[(it.quality ?: "").uppercase().replace(" ", "")] ?: 5
-            }.thenBy { it.priority ?: 100 }
-        )
-    val activeStreams = orderedStreams
 
-    var streamIndex by remember { mutableIntStateOf(0) }
-    var selectedQuality by remember { mutableStateOf<String?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var sourceLabel by remember { mutableStateOf("") }
-    var controlsVisible by remember { mutableStateOf(true) }
-    var channelListVisible by remember { mutableStateOf(false) }
-    var aspectMenuVisible by remember { mutableStateOf(false) }
-    var aspect by remember { mutableStateOf(LiveAspect.FIT) }
-    var hideToken by remember { mutableIntStateOf(0) }
-    var isFavorite by remember { mutableStateOf(false) }
-
-    LaunchedEffect(activeChannel?.id) {
-        val id = activeChannel?.id
-        isFavorite = if (id != null) LiveTvFavoritesStore.isFavorite(context, id) else false
+    // troca de canal
+    LaunchedEffect(channel?.id) {
+        val ch = channel ?: return@LaunchedEffect
+        streamIndex = 0
+        reloadNonce++
+        recent.addLiveChannel(ch.id)
+        onChannelChanged(index)
     }
 
-    val rootFocus = remember { FocusRequester() }
-    val aspectFocus = remember { FocusRequester() }
+    // abre a fonte atual (com tempo limite)
+    LaunchedEffect(reloadNonce, streamIndex) {
+        if (reloadNonce == 0) return@LaunchedEffect
+        val opt = streams.getOrNull(streamIndex)
+        if (opt == null) {
+            loading = false
+            error = "Canal sem fonte de vídeo."
+            return@LaunchedEffect
+        }
+        loading = true
+        error = null
+        runCatching {
+            exo.setMediaSource(buildLiveMediaSource(opt.url))
+            exo.prepare()
+            exo.playWhenReady = true
+        }
+        delay(LIVE_START_TIMEOUT_MS)
+        if (loading && error == null) {
+            if (streamIndex + 1 < streams.size) {
+                streamIndex++
+                toaster.show("Fonte lenta — tentando outra")
+            } else {
+                loading = false
+                error = "O canal demorou demais para responder."
+            }
+        }
+    }
+
+    LaunchedEffect(infoVisible, infoTick) {
+        if (infoVisible) {
+            delay(5000)
+            infoVisible = false
+        }
+    }
+
+    // numero do canal pelo controle
+    LaunchedEffect(digits) {
+        if (digits.isEmpty()) return@LaunchedEffect
+        delay(1500)
+        val n = digits.toIntOrNull()
+        digits = ""
+        if (n != null && n in 1..channels.size) goTo(n - 1) else toaster.show("Canal $n não existe nesta lista")
+    }
+
+    LaunchedEffect(listVisible) {
+        if (listVisible) {
+            runCatching { listState.scrollToItem((index - 3).coerceAtLeast(0)) }
+            listFocusTarget = channels.getOrNull(index)?.id
+            listFocusNonce++
+        } else if (!optionsVisible) {
+            delay(40)
+            runCatching { rootFocus.requestFocus() }
+        }
+    }
+    LaunchedEffect(optionsVisible) {
+        if (optionsVisible) {
+            delay(90)
+            runCatching { optionsFirst.requestFocus() }
+        } else if (!listVisible) {
+            delay(40)
+            runCatching { rootFocus.requestFocus() }
+        }
+    }
+    LaunchedEffect(error) {
+        if (error != null) {
+            delay(80)
+            runCatching { errorFocus.requestFocus() }
+        } else {
+            runCatching { rootFocus.requestFocus() }
+        }
+    }
+    LaunchedEffect(Unit) {
+        delay(60)
+        runCatching { rootFocus.requestFocus() }
+    }
 
     BackHandler {
         when {
-            channelListVisible -> channelListVisible = false
-            aspectMenuVisible -> aspectMenuVisible = false
+            listVisible -> listVisible = false
+            digits.isNotEmpty() -> digits = ""
             else -> onBack()
         }
     }
 
-    // Auto-hide. Nao roubar foco do chip atual a cada interacao —
-    // so foca Aspect na PRIMEIRA vez que os controles abrem.
-    var didInitialChipFocus by remember { mutableStateOf(false) }
-    LaunchedEffect(controlsVisible, hideToken, channelListVisible, aspectMenuVisible) {
-        if (controlsVisible && !channelListVisible && !aspectMenuVisible) {
-            if (!didInitialChipFocus) {
-                delay(40)
-                runCatching { aspectFocus.requestFocus() }
-                didInitialChipFocus = true
-            }
-            delay(10000)
-            controlsVisible = false
-            aspectMenuVisible = false
-            didInitialChipFocus = false
-            runCatching { rootFocus.requestFocus() }
-        }
-    }
-    LaunchedEffect(controlsVisible, channelListVisible) {
-        if (!controlsVisible && !channelListVisible) {
-            didInitialChipFocus = false
-            delay(30)
-            runCatching { rootFocus.requestFocus() }
-        }
-    }
-    LaunchedEffect(Unit) { runCatching { rootFocus.requestFocus() } }
-
-    val exoPlayer = remember { ExoPlayer.Builder(context).build().apply { playWhenReady = true } }
-
-    DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) { isLoading = false; errorMessage = null }
-            }
-            override fun onPlayerError(error: PlaybackException) {
-                val next = streamIndex + 1
-                if (next < activeStreams.size) {
-                    streamIndex = next; isLoading = true; errorMessage = null
-                } else {
-                    isLoading = false
-                    errorMessage = "Nao foi possivel abrir este canal em nenhuma fonte."
-                }
-            }
-        }
-        exoPlayer.addListener(listener)
-        onDispose { exoPlayer.removeListener(listener) }
-    }
-
-    LaunchedEffect(currentIndex) {
-        streamIndex = 0; isLoading = true; errorMessage = null
-        activeChannel?.let { onChannelChanged?.invoke(it) }
-    }
-
-    LaunchedEffect(streamIndex, activeStreams, currentIndex) {
-        if (activeStreams.isEmpty()) {
-            errorMessage = "Canal sem URL de stream"; isLoading = false; return@LaunchedEffect
-        }
-        val option = activeStreams.getOrNull(streamIndex) ?: return@LaunchedEffect
-        isLoading = true; errorMessage = null
-        sourceLabel = buildString {
-            val q = option.quality?.takeIf { it.isNotBlank() }
-            val lab = option.label?.takeIf { it.isNotBlank() }
-            if (q != null) append(q)
-            if (q != null && lab != null) append(" · ")
-            append(lab ?: "Fonte ${streamIndex + 1}")
-        }
-        selectedQuality = option.quality ?: selectedQuality
-        val url = option.url
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("VLC/3.0.4 LibVLC/3.0.4")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(10000)
-            .setReadTimeoutMs(12000)
-            .setDefaultRequestProperties(mapOf("Referer" to url, "Connection" to "keep-alive", "Icy-MetaData" to "1"))
-        val mediaItem = MediaItem.fromUri(url)
-        val source = if (url.contains(".m3u8") || url.contains("/live/")) {
-            HlsMediaSource.Factory(httpFactory).createMediaSource(mediaItem)
-        } else {
-            ProgressiveMediaSource.Factory(httpFactory, DefaultExtractorsFactory()).createMediaSource(mediaItem)
-        }
-        exoPlayer.setMediaSource(source); exoPlayer.prepare(); exoPlayer.playWhenReady = true
-
-        // Timeout: se nao ficar READY em 14s, tenta proxima fonte
-        delay(14000)
-        if (isLoading && streamIndex < activeStreams.size - 1) {
-            streamIndex += 1
-        } else if (isLoading && streamIndex >= activeStreams.size - 1) {
-            isLoading = false
-            errorMessage = "Nao foi possivel abrir este canal em nenhuma fonte."
-        }
-    }
-
-    DisposableEffect(Unit) { onDispose { exoPlayer.release() } }
-
-    fun showControls() { controlsVisible = true; hideToken++ }
-    fun switchChannel(delta: Int) {
-        if (channelList.isEmpty()) return
-        currentIndex = (currentIndex + delta).mod(channelList.size)
-        showControls(); channelListVisible = false
-    }
-
     Box(
-        Modifier.fillMaxSize().background(Color.Black).focusRequester(rootFocus).focusable()
-            .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action != KeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
-                val code = event.nativeKeyEvent.keyCode
-                if (channelListVisible) {
-                    if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE) {
-                        channelListVisible = false; return@onPreviewKeyEvent true
-                    }
-                    return@onPreviewKeyEvent false
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .onPreviewKeyEvent { ev ->
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val code = ev.nativeKeyEvent.keyCode
+                if (code in AKeyEvent.KEYCODE_0..AKeyEvent.KEYCODE_9) {
+                    if (digits.length < 4) digits += (code - AKeyEvent.KEYCODE_0).toString()
+                    return@onPreviewKeyEvent true
                 }
                 when (code) {
-          KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-              if (!controlsVisible) {
-                  showControls()
-                  true
-              } else {
-                  false // deixa Surface/onClick do chip receber OK
-              }
-          }
-          KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-              if (!controlsVisible) showControls()
-              true
-          }
-          KeyEvent.KEYCODE_CHANNEL_UP -> {
-              switchChannel(+1); true
-          }
-          KeyEvent.KEYCODE_CHANNEL_DOWN -> {
-              switchChannel(-1); true
-          }
-          KeyEvent.KEYCODE_DPAD_UP -> {
-              if (!controlsVisible) { switchChannel(+1); true } else false
-          }
-          KeyEvent.KEYCODE_DPAD_DOWN -> {
-              if (!controlsVisible) { switchChannel(-1); true } else false
-          }
-          KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
-              if (!controlsVisible) { showControls(); true } else false
-          }
-          KeyEvent.KEYCODE_INFO, KeyEvent.KEYCODE_MENU -> {
-              aspectMenuVisible = false
-              channelListVisible = !channelListVisible
-              if (channelListVisible) controlsVisible = false
-              true
-          }
-          else -> if (!controlsVisible) { showControls(); true } else false
-      }
-            },
+                    AKeyEvent.KEYCODE_CHANNEL_UP -> { zap(1); return@onPreviewKeyEvent true }
+                    AKeyEvent.KEYCODE_CHANNEL_DOWN -> { zap(-1); return@onPreviewKeyEvent true }
+                }
+                if (listVisible || optionsVisible || error != null) return@onPreviewKeyEvent false
+                when (code) {
+                    AKeyEvent.KEYCODE_DPAD_UP -> { zap(-1); true }
+                    AKeyEvent.KEYCODE_DPAD_DOWN -> { zap(1); true }
+                    AKeyEvent.KEYCODE_DPAD_CENTER, AKeyEvent.KEYCODE_ENTER, AKeyEvent.KEYCODE_NUMPAD_ENTER, AKeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (ev.nativeKeyEvent.repeatCount == 0) listVisible = true
+                        true
+                    }
+                    AKeyEvent.KEYCODE_DPAD_RIGHT, AKeyEvent.KEYCODE_MENU, AKeyEvent.KEYCODE_INFO -> {
+                        optionsVisible = true
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .focusRequester(rootFocus)
+            .focusable(),
     ) {
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
-                    player = exoPlayer
+                    player = exo
                     useController = false
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
                     isFocusable = false
-                    isFocusableInTouchMode = false
-                    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                    resizeMode = aspect.mode
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 }
             },
@@ -311,194 +343,177 @@ fun LivePlayerTvScreen(
             modifier = Modifier.fillMaxSize(),
         )
 
-        Row(
-            Modifier.align(Alignment.TopEnd).padding(20.dp).clip(RoundedCornerShape(20.dp))
-                .background(Color(0xE0EF4444)).padding(horizontal = 12.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(Color.White))
-            Spacer(Modifier.width(8.dp))
-            Text("AO VIVO", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        if (loading && error == null) {
+            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(color = p.accent, strokeWidth = 3.dp, modifier = Modifier.size(42.dp))
+                if (streams.size > 1) {
+                    Spacer(Modifier.height(10.dp))
+                    Text("Fonte ${streamIndex + 1} de ${streams.size}", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                }
+            }
         }
 
+        // numero digitado
+        if (digits.isNotEmpty()) {
+            Text(
+                digits,
+                color = Color.White,
+                fontSize = 54.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.align(Alignment.TopEnd).padding(40.dp).clip(RoundedCornerShape(14.dp))
+                    .background(Color.Black.copy(alpha = 0.6f)).padding(horizontal = 22.dp, vertical = 6.dp),
+            )
+        }
+
+        // faixa de informacoes (aparece ao trocar de canal)
         AnimatedVisibility(
-            visible = controlsVisible, enter = fadeIn(), exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            visible = infoVisible && !listVisible && channel != null,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            Column(
-                Modifier.fillMaxWidth().background(
-                    Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.88f))),
-                ).padding(start = 32.dp, end = 32.dp, top = 48.dp, bottom = 28.dp),
+            val ch = channel ?: return@AnimatedVisibility
+            Box(
+                Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f))))
+                    .padding(start = 48.dp, end = 48.dp, top = 60.dp, bottom = 32.dp),
             ) {
-                Text(activeName, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    buildString {
-                        append(sourceLabel)
-                        if (activeStreams.size > 1) append("  ·  ${streamIndex + 1}/${activeStreams.size}")
-                        if (channelList.size > 1) append("  ·  ${currentIndex + 1}/${channelList.size} canais")
-                        append("  ·  OK controles · ↑↓ canal · MENU lista")
-                    },
-                    color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, maxLines = 2,
-                )
-                val qualities = remember(orderedStreams) {
-                    listOf("4K", "FHD", "HD", "SD").filter { q ->
-                        orderedStreams.any { (it.quality ?: "").uppercase() == q }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "%03d".format(index + 1),
+                        color = p.accent,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Black,
+                    )
+                    Spacer(Modifier.width(18.dp))
+                    Box(Modifier.size(width = 96.dp, height = 60.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
+                        if (!ch.logo.isNullOrBlank()) FadeImage(ch.logo, Modifier.fillMaxSize().padding(6.dp), contentScale = ContentScale.Fit)
+                        else androidx.tv.material3.Icon(Icons.Filled.LiveTv, null, tint = Color.White)
                     }
-                }
-                if (qualities.size > 1) {
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        qualities.forEach { q ->
-                            LiveTvChip(Icons.Filled.LiveTv, q) {
-                                selectedQuality = q
-                                val idx = orderedStreams.indexOfFirst { (it.quality ?: "").uppercase() == q }
-                                if (idx >= 0) { streamIndex = idx; isLoading = true; errorMessage = null }
-                                showControls()
+                    Spacer(Modifier.width(18.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(ch.name, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (isFavorite) {
+                                Spacer(Modifier.width(8.dp))
+                                androidx.tv.material3.Icon(Icons.Filled.Star, null, tint = p.star, modifier = Modifier.size(18.dp))
                             }
                         }
-                    }
-                }
-                Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    LiveTvChip(
-                        Icons.Filled.AspectRatio,
-                        aspect.label,
-                        Modifier.focusRequester(aspectFocus),
-                    ) {
-                        aspect = LiveAspect.entries[(aspect.ordinal + 1) % LiveAspect.entries.size]
-                        aspectMenuVisible = false
-                        showControls()
-                    }
-                    if (channelList.isNotEmpty()) {
-                        if (channelList.size > 1) {
-                            LiveTvChip(Icons.Filled.KeyboardArrowUp, "CH+") {
-                                aspectMenuVisible = false
-                                switchChannel(+1)
-                            }
-                            LiveTvChip(Icons.Filled.KeyboardArrowDown, "CH-") {
-                                aspectMenuVisible = false
-                                switchChannel(-1)
-                            }
+                        epgNow[ch.id]?.let {
+                            Text("Agora: $it", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        LiveTvChip(Icons.Filled.List, "Lista") {
-                            aspectMenuVisible = false
-                            channelListVisible = true
-                            controlsVisible = false
+                        epgNext[ch.id]?.let {
+                            Text("A seguir: $it", color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        streams.getOrNull(streamIndex)?.let {
+                            Text(streamLabel(it, streamIndex), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
                         }
                     }
-                    if (activeStreams.size > 1) {
-                        LiveTvChip(
-                            Icons.Filled.SwapHoriz,
-                            "Fonte " + (streamIndex + 1).toString() + "/" + activeStreams.size.toString(),
-                        ) {
-                            streamIndex = (streamIndex + 1) % activeStreams.size
-                            isLoading = true
-                            errorMessage = null
-                            showControls()
-                        }
-                    }
-                    LiveTvChip(
-                        if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                        "Favorito",
-                        selected = isFavorite,
-                    ) {
-                        val id = activeChannel?.id
-                        if (id != null) {
-                            isFavorite = LiveTvFavoritesStore.toggle(context, id)
-                        } else {
-                            // fallback: abre pela lista filtrada vazia — nao deve acontecer
-                        }
-                        showControls()
-                    }
-                    LiveTvChip(Icons.Filled.Refresh, "Reload") {
-                        val cur = streamIndex
-                        streamIndex = -1
-                        streamIndex = cur.coerceAtLeast(0)
-                        isLoading = true
-                        errorMessage = null
-                        showControls()
+                    Column(horizontalAlignment = Alignment.End) {
+                        LiveClock()
+                        Spacer(Modifier.height(6.dp))
+                        Text("▲▼ trocar  ·  OK lista  ·  ▶ opções", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
                     }
                 }
             }
         }
 
+        // lista de canais (esquerda)
         AnimatedVisibility(
-            visible = channelListVisible && channelList.isNotEmpty(),
+            visible = listVisible,
             enter = slideInHorizontally { -it } + fadeIn(),
             exit = slideOutHorizontally { -it } + fadeOut(),
-            modifier = Modifier.align(Alignment.CenterStart).fillMaxHeight().width(360.dp),
+            modifier = Modifier.align(Alignment.CenterStart),
         ) {
-            val listState = rememberLazyListState()
-            val firstFocus = remember { FocusRequester() }
-            LaunchedEffect(channelListVisible, currentIndex) {
-                if (!channelListVisible) return@LaunchedEffect
-                runCatching { listState.scrollToItem(currentIndex.coerceIn(0, channelList.lastIndex.coerceAtLeast(0))) }
-                delay(120)
-                runCatching { firstFocus.requestFocus() }
-            }
             Column(
-                Modifier.fillMaxSize().background(Color(0xF00B0B14))
-                    .border(1.dp, Color.White.copy(alpha = 0.08f)).padding(vertical = 16.dp),
+                Modifier.width(400.dp).fillMaxHeight()
+                    .background(Brush.horizontalGradient(listOf(p.bg.copy(alpha = 0.97f), p.bg.copy(alpha = 0.85f))))
+                    .padding(horizontal = 18.dp, vertical = 22.dp)
+                    .focusProperties { exit = { FocusRequester.Cancel } }
+                    .focusGroup(),
             ) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.List, null, tint = Color(0xFF00E5FF), modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Canais", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.weight(1f))
-                    Text("${currentIndex + 1}/${channelList.size}", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp)
-                }
-                LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp), modifier = Modifier.weight(1f)) {
-                    itemsIndexed(channelList, key = { _, ch -> ch.id }) { index, ch ->
-                        val selected = index == currentIndex
-                        Surface(
-                            onClick = { currentIndex = index; channelListVisible = false; showControls() },
-                            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(10.dp)),
-                            colors = ClickableSurfaceDefaults.colors(
-                                containerColor = if (selected) Color(0xFF00E5FF).copy(alpha = 0.22f) else Color.White.copy(alpha = 0.04f),
-                                focusedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.35f),
-                            ),
-                            border = ClickableSurfaceDefaults.border(
-                                focusedBorder = Border(border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF00E5FF)), shape = RoundedCornerShape(10.dp)),
-                            ),
-                            modifier = if (selected) Modifier.focusRequester(firstFocus) else Modifier,
-                        ) {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-                                    if (!ch.logo.isNullOrBlank()) {
-                                        AsyncImage(model = ch.logo, contentDescription = null, modifier = Modifier.fillMaxSize().padding(3.dp), contentScale = ContentScale.Fit)
-                                    } else {
-                                        Icon(Icons.Filled.LiveTv, null, tint = Color(0xFF22D3EE), modifier = Modifier.size(18.dp))
-                                    }
-                                }
-                                Spacer(Modifier.width(10.dp))
-                                Text(ch.name, color = Color.White, fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            }
+                Text("Canais", color = p.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("${channels.size} nesta lista", color = p.textMuted, fontSize = 12.sp)
+                Spacer(Modifier.height(12.dp))
+                TvLazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    itemsIndexed(channels, key = { _, c -> c.id }) { i, c ->
+                        FocusTargetBox(c.id, listFocusTarget, listFocusNonce, { listFocusTarget = null }) { m ->
+                            PanelItem(
+                                title = "%03d  ${c.name}".format(i + 1),
+                                subtitle = epgNow[c.id],
+                                selected = i == index,
+                                modifier = m,
+                                onClick = {
+                                    listVisible = false
+                                    if (i != index) goTo(i)
+                                },
+                            )
                         }
                     }
                 }
-                Text("OK seleciona · Voltar fecha", color = Color.White.copy(alpha = 0.4f), fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
         }
 
-        if (isLoading && errorMessage == null) {
-            CircularProgressIndicator(color = Color(0xFF00E5FF), modifier = Modifier.align(Alignment.Center))
+        // erro
+        val err = error
+        if (err != null) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(channel?.name ?: "Canal", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(err, color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp)
+                    Spacer(Modifier.height(18.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        TvButton("Tentar de novo", onClick = {
+                            streamIndex = 0
+                            reloadNonce++
+                        }, icon = Icons.Filled.Refresh, primary = true, modifier = Modifier.focusRequester(errorFocus))
+                        TvButton("Próximo canal", onClick = { zap(1) })
+                        TvButton("Lista de canais", onClick = {
+                            error = null
+                            listVisible = true
+                        }, icon = Icons.AutoMirrored.Filled.ViewList)
+                    }
+                }
+            }
         }
-        errorMessage?.let { msg ->
-            Column(
-                Modifier.align(Alignment.Center).padding(32.dp).clip(RoundedCornerShape(16.dp))
-                    .background(Color.Black.copy(alpha = 0.9f)).border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp)).padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(msg, color = Color.White, textAlign = TextAlign.Center, fontSize = 16.sp)
-                Spacer(Modifier.height(16.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (activeStreams.size > 1) {
-                        LiveTvChip(Icons.Filled.Refresh, "Tentar de novo") { streamIndex = 0; isLoading = true; errorMessage = null }
+
+        SidePanel(
+            visible = optionsVisible,
+            title = channel?.name ?: "Opções",
+            subtitle = "Fonte, tela e favoritos",
+            onDismiss = { optionsVisible = false },
+        ) {
+            TvLazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                item {
+                    PanelItem(
+                        if (isFavorite) "Tirar dos favoritos" else "Adicionar aos favoritos",
+                        leading = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                        modifier = Modifier.focusRequester(optionsFirst),
+                        onClick = {
+                            val ch = channel ?: return@PanelItem
+                            isFavorite = LiveTvFavoritesStore.toggle(context, ch.id)
+                            toaster.show(if (isFavorite) "Adicionado aos favoritos" else "Removido dos favoritos")
+                        },
+                    )
+                }
+                if (streams.size > 1) {
+                    item { OptionHeader("Fonte") }
+                    itemsIndexed(streams) { i, s ->
+                        PanelItem(
+                            streamLabel(s, i),
+                            selected = i == streamIndex,
+                            leading = Icons.Filled.Dns,
+                            onClick = {
+                                streamIndex = i
+                                reloadNonce++
+                                optionsVisible = false
+                            },
+                        )
                     }
-                    if (channelList.size > 1) {
-                        LiveTvChip(Icons.Filled.KeyboardArrowUp, "Prox. canal") { switchChannel(+1) }
-                    }
-                    LiveTvChip(Icons.Filled.Refresh, "Voltar", onClick = onBack)
+                }
+                item { OptionHeader("Tela") }
+                itemsIndexed(LiveAspect.entries) { _, a ->
+                    PanelItem(a.label, selected = aspect == a, leading = Icons.Filled.AspectRatio, onClick = { aspect = a })
                 }
             }
         }
@@ -506,39 +521,27 @@ fun LivePlayerTvScreen(
 }
 
 @Composable
-private fun LiveTvChip(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    modifier: Modifier = Modifier,
-    selected: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Surface(
-        onClick = onClick,
-        shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(24.dp)),
-        colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) Color(0xFF00E5FF).copy(alpha = 0.28f) else Color.White.copy(alpha = 0.12f),
-            focusedContainerColor = Color(0xFF00E5FF).copy(alpha = 0.40f),
-        ),
-        border = ClickableSurfaceDefaults.border(
-            focusedBorder = Border(border = androidx.compose.foundation.BorderStroke(2.dp, Color(0xFF00E5FF)), shape = RoundedCornerShape(24.dp)),
-        ),
-        modifier = modifier,
-    ) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                icon,
-                null,
-                tint = if (selected) Color(0xFF00E5FF) else Color.White,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                label,
-                color = if (selected) Color(0xFF00E5FF) else Color.White,
-                fontSize = 14.sp,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            )
+private fun OptionHeader(text: String) {
+    val p = LocalPalette.current
+    Text(
+        text.uppercase(),
+        color = p.accent,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(start = 14.dp, top = 14.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun LiveClock() {
+    var now by remember { mutableStateOf(Date()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Date()
+            delay(15_000)
         }
     }
+    val fmt = remember { SimpleDateFormat("HH:mm", Locale("pt", "BR")) }
+    Text(fmt.format(now), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
 }

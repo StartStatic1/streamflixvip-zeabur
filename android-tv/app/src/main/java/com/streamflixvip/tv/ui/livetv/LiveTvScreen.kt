@@ -1,565 +1,554 @@
 package com.streamflixvip.tv.ui.livetv
 
+import android.app.Application
+import android.view.ViewGroup
+import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.Border
-import androidx.tv.material3.Card
-import androidx.tv.material3.CardDefaults
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import androidx.tv.foundation.lazy.list.TvLazyColumn
+import androidx.tv.foundation.lazy.list.itemsIndexed
+import androidx.tv.foundation.lazy.list.rememberTvLazyListState
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import coil.compose.AsyncImage
+import com.streamflixvip.tv.data.TvSettingsStore
 import com.streamflixvip.tv.network.LiveCategory
 import com.streamflixvip.tv.network.LiveChannel
-import com.streamflixvip.tv.network.NetworkModule
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
+import com.streamflixvip.tv.ui.components.FadeImage
+import com.streamflixvip.tv.ui.components.LoadingBox
+import com.streamflixvip.tv.ui.components.LocalToaster
+import com.streamflixvip.tv.ui.components.MessageBox
+import com.streamflixvip.tv.ui.components.MetaTag
+import com.streamflixvip.tv.ui.home.FocusTargetBox
+import com.streamflixvip.tv.ui.shell.FocusSignal
+import com.streamflixvip.tv.ui.theme.LocalPalette
+import kotlinx.coroutines.delay
 
-private val Bg = Color(0xFF0B0B14)
-private val Accent = Color(0xFF00E5FF)
-private val AccentSoft = Color(0xFF22D3EE)
-private val CardBg = Color(0xFF151522)
-private val TextMuted = Color(0xFFA1A1B5)
-private val SideBg = Color(0xFF10101C)
-
-data class LiveTvUiState(
-    val isLoading: Boolean = true,
-    val categories: List<LiveCategory> = emptyList(),
-    val channels: List<LiveChannel> = emptyList(),
-    val selectedCategoryId: String = "all",
-    val searchQuery: String = "",
-    val sourcesUsed: Int = 0,
-    val error: String? = null,
-    val favoriteIds: Set<String> = emptySet(),
-    val showFavoritesOnly: Boolean = false,
-) {
-    val filteredChannels: List<LiveChannel>
-        get() {
-            var list = when {
-                selectedCategoryId == "all" -> channels.filter { it.categoryId != "000" }
-                else -> channels.filter { it.categoryId == selectedCategoryId }
-            }
-            if (showFavoritesOnly) {
-                list = list.filter { favoriteIds.contains(it.id) }
-            }
-            val q = searchQuery.trim()
-            if (q.isNotEmpty()) {
-                list = list.filter { it.name.contains(q, ignoreCase = true) }
-            }
-            if (!showFavoritesOnly && favoriteIds.isNotEmpty()) {
-                list = list.sortedByDescending { favoriteIds.contains(it.id) }
-            }
-            return list
-        }
-}
-
-class LiveTvViewModel : ViewModel() {
-    private val _uiState = MutableStateFlow(LiveTvUiState())
-    val uiState: StateFlow<LiveTvUiState> = _uiState.asStateFlow()
-
-    fun syncFavorites(ids: Set<String>) {
-        _uiState.update { it.copy(favoriteIds = ids) }
-    }
-    fun toggleShowFavorites() {
-        _uiState.update { it.copy(showFavoritesOnly = !it.showFavoritesOnly) }
-    }
-    fun setFavoriteIds(ids: Set<String>) {
-        _uiState.update { it.copy(favoriteIds = ids) }
-    }
-
-    init { load() }
-
-    fun load() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            runCatching { NetworkModule.liveTvApi.getLiveTv() }
-                .onSuccess { res ->
-                    fun isAdultCat(id: String?, name: String?): Boolean {
-                        val n = (name ?: "").lowercase()
-                        if (id == "000" || id == "00") return true
-                        val keys = listOf("adult", "xxx", "porn", "erotic", "onlyfans", "+18", "18+", "adulto", "sexy")
-                        return keys.any { n.contains(it) }
-                    }
-                    // Manuais / VIP no topo da sidebar (depois de Todos)
-                    val cats = res.categories
-                        .filter { !isAdultCat(it.id, it.name) }
-                        .sortedWith(
-                            compareBy(
-                                { if (it.id == "all") 0 else 1 },
-                                { val n = it.name.lowercase()
-                                  when {
-                                      n.contains("manual") -> 1
-                                      n.contains("vip") -> 2
-                                      else -> 3
-                                  }
-                                },
-                                { it.name.lowercase() },
-                            ),
-                        )
-                        .ifEmpty { listOf(LiveCategory("all", "Todos")) }
-                    val chans = res.channels.filter { !isAdultCat(it.categoryId, it.name) }
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            categories = cats,
-                            channels = chans,
-                            sourcesUsed = res.sourcesUsed,
-                            error = if (chans.isEmpty()) "Nenhum canal disponivel." else null,
-                        )
-                    }
-                }
-                .onFailure { e ->
-                    _uiState.update {
-                        it.copy(isLoading = false, error = e.message ?: "Erro ao carregar canais")
-                    }
-                }
-        }
-    }
-
-    fun selectCategory(id: String) {
-        _uiState.update { it.copy(selectedCategoryId = id) }
-    }
-
-    fun setSearch(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
-    }
-}
-
+@kotlin.OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun LiveTvScreen(
-    viewModel: LiveTvViewModel = viewModel(),
-    onChannelClick: (channel: LiveChannel, filteredList: List<LiveChannel>, indexInList: Int) -> Unit,
-    onBack: () -> Unit,
+    focusSignal: FocusSignal,
+    kidsMode: Boolean,
+    onChannelClick: (channel: LiveChannel, list: List<LiveChannel>, index: Int, epgNow: Map<String, String>, epgNext: Map<String, String>) -> Unit,
 ) {
-    val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    LaunchedEffect(Unit) {
-        viewModel.syncFavorites(LiveTvFavoritesStore.getIds(context))
-    }
-    val list = state.filteredChannels
-    val firstChannelFocus = remember { FocusRequester() }
-    val searchFocus = remember { FocusRequester() }
-    val listState = rememberLazyListState()
-    val catListState = rememberLazyListState()
+    val p = LocalPalette.current
+    val toaster = LocalToaster.current
+    val settings by TvSettingsStore.state.collectAsState()
+    val vm: LiveTvViewModel = viewModel(factory = androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.getInstance(context.applicationContext as Application))
+    val state by vm.uiState.collectAsState()
 
-    LaunchedEffect(state.selectedCategoryId, state.searchQuery, list.size) {
-        if (list.isNotEmpty()) {
-            listState.scrollToItem(0)
-            runCatching { firstChannelFocus.requestFocus() }
+    LaunchedEffect(kidsMode) { vm.start(kidsMode) }
+
+    val channels = state.visibleChannels
+    var focusedChannel by remember { mutableStateOf<LiveChannel?>(null) }
+    var restoreKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var focusTarget by remember { mutableStateOf<String?>(null) }
+    var focusNonce by remember { mutableIntStateOf(0) }
+    var handledToken by remember { mutableIntStateOf(0) }
+    val retryFocus = remember { FocusRequester() }
+    val searchFocus = remember { FocusRequester() }
+    val listState = rememberTvLazyListState()
+
+    // categorias: virtuais (favoritos, recentes, todos) + as da API
+    val cats: List<LiveCategory> = remember(state.categories, state.favoriteIds, state.recentIds, state.channels) {
+        buildList {
+            if (state.countFor(CAT_FAV) > 0) add(LiveCategory(CAT_FAV, "Favoritos"))
+            if (state.countFor(CAT_RECENT) > 0) add(LiveCategory(CAT_RECENT, "Recentes"))
+            add(LiveCategory(CAT_ALL, "Todos os canais"))
+            addAll(state.categories)
         }
     }
 
-    Row(
-        Modifier
-            .fillMaxSize()
-            .background(Bg),
-    ) {
-        Column(
-            Modifier
-                .width(220.dp)
-                .fillMaxHeight()
-                .background(SideBg)
-                .padding(vertical = 16.dp),
-        ) {
-            Row(
-                Modifier.padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(
-                    onClick = onBack,
-                    shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(10.dp)),
-                    colors = ClickableSurfaceDefaults.colors(
-                        containerColor = Color.White.copy(alpha = 0.08f),
-                        focusedContainerColor = Accent.copy(alpha = 0.25f),
-                    ),
-                    border = ClickableSurfaceDefaults.border(
-                        focusedBorder = Border(
-                            border = androidx.compose.foundation.BorderStroke(2.dp, Accent),
-                            shape = RoundedCornerShape(10.dp),
-                        ),
-                    ),
-                    modifier = Modifier.size(40.dp),
-                ) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Icon(Icons.Filled.ArrowBack, "Voltar", tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
-                }
-                Spacer(Modifier.width(10.dp))
-                Text("TV ao vivo", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            }
+    // foco pedido pelo menu lateral / ao voltar do player
+    val firstKey = channels.firstOrNull()?.let { "ch:${it.id}" }
+    LaunchedEffect(focusSignal.token, firstKey, state.error) {
+        if (handledToken == focusSignal.token) return@LaunchedEffect
+        if (state.error != null && channels.isEmpty()) {
+            delay(60)
+            if (runCatching { retryFocus.requestFocus() }.isSuccess) handledToken = focusSignal.token
+            return@LaunchedEffect
+        }
+        if (firstKey == null) return@LaunchedEffect
+        handledToken = focusSignal.token
+        vm.refreshRecents()
+        val k = restoreKey?.takeIf { key -> channels.any { "ch:${it.id}" == key } } ?: firstKey
+        val idx = channels.indexOfFirst { "ch:${it.id}" == k }.coerceAtLeast(0)
+        runCatching { listState.scrollToItem(idx) }
+        focusTarget = k
+        focusNonce++
+    }
 
-            Spacer(Modifier.height(12.dp))
-            Surface(
-                onClick = { viewModel.toggleShowFavorites() },
-                shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(10.dp)),
-                colors = ClickableSurfaceDefaults.colors(
-                    containerColor = if (state.showFavoritesOnly) Accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.06f),
-                    focusedContainerColor = Accent.copy(alpha = 0.35f),
-                ),
-                border = ClickableSurfaceDefaults.border(
-                    focusedBorder = Border(
-                        border = androidx.compose.foundation.BorderStroke(2.dp, Accent),
-                        shape = RoundedCornerShape(10.dp),
-                    ),
-                ),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(44.dp),
-            ) {
-                Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(if (state.showFavoritesOnly) Icons.Filled.Star else Icons.Filled.StarBorder, null, tint = if (state.showFavoritesOnly) Accent else Color.White, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Favoritos", color = Color.White, fontSize = 14.sp, fontWeight = if (state.showFavoritesOnly) FontWeight.Bold else FontWeight.Medium)
-                    Spacer(Modifier.weight(1f))
-                    if (state.favoriteIds.isNotEmpty()) {
-                        Text("${state.favoriteIds.size}", color = Accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+    var lastFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.selectedCategoryId, state.query) {
+        val f = state.selectedCategoryId + "|" + state.query
+        if (lastFilter != null && lastFilter != f) runCatching { listState.scrollToItem(0) }
+        lastFilter = f
+    }
+
+    Column(Modifier.fillMaxSize().padding(start = 28.dp, top = 22.dp, end = 28.dp, bottom = 16.dp)) {
+        // ── topo ─────────────────────────────────────────────────────────
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.LiveTv, null, tint = p.live, modifier = Modifier.size(26.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("TV ao vivo", color = p.text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(12.dp))
+            if (state.channels.isNotEmpty()) {
+                Text("${state.channels.size} canais", color = p.textMuted, fontSize = 13.sp)
+            }
+            if (kidsMode) {
+                Spacer(Modifier.width(10.dp))
+                MetaTag("INFANTIL", highlight = true)
+            }
+            Spacer(Modifier.weight(1f))
+            ChannelSearchField(
+                query = state.query,
+                onQuery = vm::setQuery,
+                modifier = Modifier.width(300.dp).padding(end = 70.dp).focusRequester(searchFocus),
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+
+        when {
+            state.isLoading && state.channels.isEmpty() -> LoadingBox(Modifier.fillMaxSize(), "Carregando canais…")
+            state.channels.isEmpty() -> MessageBox(
+                title = "Sem canais",
+                message = state.error,
+                actionLabel = "Tentar de novo",
+                actionFocus = retryFocus,
+                onAction = { vm.load() },
+                modifier = Modifier.fillMaxSize(),
+            )
+            else -> Row(Modifier.fillMaxSize()) {
+                // categorias
+                TvLazyColumn(
+                    modifier = Modifier.width(210.dp).fillMaxHeight().focusRestorer(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                ) {
+                    itemsIndexed(cats, key = { _, c -> c.id }) { _, c ->
+                        CategoryItem(
+                            category = c,
+                            count = state.countFor(c.id),
+                            selected = c.id == state.selectedCategoryId,
+                            onSelect = {
+                                if (c.id != state.selectedCategoryId) {
+                                    vm.selectCategory(c.id)
+                                }
+                            },
+                        )
                     }
                 }
-            }
-            Spacer(Modifier.height(8.dp))
-            if (state.categories.isNotEmpty()) {
-                LazyColumn(
-                    state = catListState,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    items(state.categories, key = { it.id }) { cat ->
-                        val selected = state.selectedCategoryId == cat.id
-                        val count = when (cat.id) {
-                            "all" -> state.channels.count { it.categoryId != "000" }
-                            else -> state.channels.count { it.categoryId == cat.id }
-                        }
-                        Surface(
-                            onClick = { viewModel.selectCategory(cat.id) },
-                            shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(10.dp)),
-                            colors = ClickableSurfaceDefaults.colors(
-                                containerColor = when {
-                                    selected -> Accent.copy(alpha = 0.28f)
-                                    else -> Color.Transparent
-                                },
-                                focusedContainerColor = Accent.copy(alpha = 0.4f),
-                            ),
-                            border = ClickableSurfaceDefaults.border(
-                                focusedBorder = Border(
-                                    border = androidx.compose.foundation.BorderStroke(2.dp, Accent),
-                                    shape = RoundedCornerShape(10.dp),
-                                ),
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
+                Spacer(Modifier.width(14.dp))
+
+                // canais
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    if (channels.isEmpty()) {
+                        Text(
+                            if (state.query.isNotBlank()) "Nenhum canal com “${state.query}”." else "Nenhum canal nesta categoria.",
+                            color = p.textMuted,
+                            modifier = Modifier.padding(16.dp),
+                        )
+                    } else {
+                        TvLazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize().focusRestorer(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp),
                         ) {
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    cat.name,
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                if (count > 0) {
-                                    Text(
-                                        "$count",
-                                        color = if (selected) Accent else TextMuted,
-                                        fontSize = 12.sp,
+                            itemsIndexed(channels, key = { _, ch -> ch.id }) { index, ch ->
+                                val key = "ch:${ch.id}"
+                                FocusTargetBox(key, focusTarget, focusNonce, { focusTarget = null }) { m ->
+                                    ChannelRow(
+                                        number = index + 1,
+                                        channel = ch,
+                                        now = state.epgNow[ch.id],
+                                        favorite = ch.id in state.favoriteIds,
+                                        modifier = m,
+                                        onFocus = {
+                                            focusedChannel = ch
+                                            restoreKey = key
+                                        },
+                                        onClick = { onChannelClick(ch, channels, index, state.epgNow, state.epgNext) },
+                                        onLongClick = {
+                                            val fav = vm.toggleFavorite(ch)
+                                            toaster.show(if (fav) "${ch.name} nos favoritos" else "${ch.name} saiu dos favoritos")
+                                        },
                                     )
                                 }
                             }
                         }
                     }
                 }
-            }
-        }
-
-        Column(
-            Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .padding(horizontal = 24.dp, vertical = 18.dp),
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                SearchField(
-                    query = state.searchQuery,
-                    onQueryChange = { viewModel.setSearch(it) },
-                    onClear = { viewModel.setSearch("") },
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(searchFocus),
-                )
                 Spacer(Modifier.width(16.dp))
-                if (!state.isLoading) {
-                    Text(
-                        "${list.size} canais" +
-                            if (state.sourcesUsed > 0) " · ${state.sourcesUsed} fontes" else "",
-                        color = TextMuted,
-                        fontSize = 13.sp,
-                    )
-                }
-            }
 
-            Spacer(Modifier.height(14.dp))
-
-            when {
-                state.isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = Accent)
-                }
-                state.error != null && list.isEmpty() && state.searchQuery.isBlank() -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(state.error ?: "", color = TextMuted, fontSize = 15.sp)
-                            Spacer(Modifier.height(12.dp))
-                            Surface(
-                                onClick = { viewModel.load() },
-                                shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(12.dp)),
-                                colors = ClickableSurfaceDefaults.colors(
-                                    containerColor = Accent.copy(alpha = 0.3f),
-                                    focusedContainerColor = Accent.copy(alpha = 0.5f),
-                                ),
-                            ) {
-                                Text(
-                                    "Tentar de novo",
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-                list.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        if (state.searchQuery.isNotBlank()) "Nenhum canal para \"${state.searchQuery}\""
-                        else "Nenhum canal nesta categoria",
-                        color = TextMuted,
-                    )
-                }
-                else -> {
-                    LazyColumn(
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 24.dp),
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        itemsIndexed(list, key = { _, ch -> ch.id }) { index, ch ->
-                            ChannelRow(
-                                channel = ch,
-                                isFavorite = state.favoriteIds.contains(ch.id),
-                                modifier = if (index == 0) Modifier.focusRequester(firstChannelFocus) else Modifier,
-                                onClick = { onChannelClick(ch, list, index) },
-                                onLongClick = {
-                                    LiveTvFavoritesStore.toggle(context, ch.id)
-                                    viewModel.setFavoriteIds(LiveTvFavoritesStore.getIds(context))
-                                },
-                            )
-                        }
-                    }
-                }
+                // previa
+                PreviewPane(
+                    channel = focusedChannel?.takeIf { f -> channels.any { it.id == f.id } } ?: channels.firstOrNull(),
+                    now = focusedChannel?.let { state.epgNow[it.id] },
+                    next = focusedChannel?.let { state.epgNext[it.id] },
+                    livePreview = settings.livePreview,
+                    modifier = Modifier.width(300.dp).fillMaxHeight(),
+                )
             }
         }
     }
 }
 
 @Composable
-private fun SearchField(
-    query: String,
-    onQueryChange: (String) -> Unit,
-    onClear: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun CategoryItem(category: LiveCategory, count: Int, selected: Boolean, onSelect: () -> Unit) {
+    val p = LocalPalette.current
     var focused by remember { mutableStateOf(false) }
-    Row(
-        modifier
-            .height(48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (focused) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.06f))
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Accent else Color.White.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(12.dp),
-            )
-            .padding(horizontal = 14.dp)
-            .onFocusChanged { focused = it.isFocused },
-        verticalAlignment = Alignment.CenterVertically,
+    // escolhe a categoria ao parar o foco nela (sem precisar apertar OK)
+    LaunchedEffect(focused) {
+        if (focused && !selected) {
+            delay(350)
+            onSelect()
+        }
+    }
+    val icon = when (category.id) {
+        CAT_FAV -> Icons.Filled.Star
+        CAT_RECENT -> Icons.Filled.History
+        CAT_ALL -> Icons.AutoMirrored.Filled.ViewList
+        else -> null
+    }
+    Surface(
+        onClick = onSelect,
+        modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = if (selected) p.accent.copy(alpha = 0.18f) else Color.Transparent,
+            contentColor = if (selected) p.accent else p.text,
+            focusedContainerColor = Color.White,
+            focusedContentColor = Color.Black,
+        ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
-        Icon(Icons.Filled.Search, null, tint = if (focused) Accent else TextMuted, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(10.dp))
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            singleLine = true,
-            textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-            cursorBrush = SolidColor(Accent),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { }),
-            modifier = Modifier.weight(1f),
-            decorationBox = { inner ->
-                if (query.isEmpty()) {
-                    Text("Pesquisar canal…", color = TextMuted, fontSize = 15.sp)
-                }
-                inner()
-            },
-        )
-        if (query.isNotEmpty()) {
-            Surface(
-                onClick = onClear,
-                shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(8.dp)),
-                colors = ClickableSurfaceDefaults.colors(
-                    containerColor = Color.Transparent,
-                    focusedContainerColor = Accent.copy(alpha = 0.25f),
-                ),
-                modifier = Modifier.size(32.dp),
-            ) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Filled.Clear, "Limpar", tint = Color.White, modifier = Modifier.size(18.dp))
-                }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
             }
+            Text(
+                category.name,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text("$count", fontSize = 11.sp, color = if (focused) Color.Black.copy(alpha = 0.6f) else p.textDim)
         }
     }
 }
 
 @Composable
 private fun ChannelRow(
+    number: Int,
     channel: LiveChannel,
-    isFavorite: Boolean = false,
-    modifier: Modifier = Modifier,
+    now: String?,
+    favorite: Boolean,
+    modifier: Modifier,
+    onFocus: () -> Unit,
     onClick: () -> Unit,
-    onLongClick: () -> Unit = {},
+    onLongClick: () -> Unit,
 ) {
-    val streamCount = channel.streams.size
-    val qualities = channel.streams
-        .mapNotNull { it.quality?.takeIf { q -> q.isNotBlank() } }
-        .distinct()
-        .take(4)
-    val hasManual = channel.streams.any { (it.label ?: "").contains("manual", ignoreCase = true) }
-    val subText = buildString {
-        if (isFavorite) append("Favorito")
-        if (streamCount > 0) {
-            if (isNotEmpty()) append(" · ")
-            append(if (streamCount == 1) "1 fonte" else "$streamCount fontes")
-        }
-        if (qualities.isNotEmpty()) {
-            if (isNotEmpty()) append(" · ")
-            append(qualities.joinToString("/"))
-        }
-        if (hasManual) {
-            if (isNotEmpty()) append(" · ")
-            append("Manual")
-        }
-        if (isEmpty()) append(if (isFavorite) "Favorito · segure OK para tirar" else "Segure OK para favoritar")
-    }
-
-    Card(
+    val p = LocalPalette.current
+    var focused by remember { mutableStateOf(false) }
+    Surface(
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier.fillMaxWidth().height(72.dp),
-        shape = CardDefaults.shape(shape = RoundedCornerShape(14.dp)),
-        scale = CardDefaults.scale(focusedScale = 1.02f),
-        colors = CardDefaults.colors(
-            containerColor = CardBg,
-            focusedContainerColor = Color(0xFF1C1C2E),
+        modifier = modifier.fillMaxWidth().height(62.dp).onFocusChanged {
+            focused = it.isFocused
+            if (it.isFocused) onFocus()
+        },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = p.surface.copy(alpha = 0.7f),
+            contentColor = p.text,
+            focusedContainerColor = p.surfaceHi,
+            focusedContentColor = p.text,
         ),
-        border = CardDefaults.border(
-            focusedBorder = Border(
-                border = androidx.compose.foundation.BorderStroke(2.dp, Accent),
-                shape = RoundedCornerShape(14.dp),
-            ),
+        border = ClickableSurfaceDefaults.border(
+            focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(2.dp, p.accent), shape = RoundedCornerShape(12.dp)),
         ),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
     ) {
-        Row(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Row(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "%03d".format(number),
+                color = if (focused) p.accent else p.textDim,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.width(38.dp),
+            )
             Box(
-                Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color.White.copy(alpha = 0.08f)),
+                Modifier.size(width = 64.dp, height = 40.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.06f)),
                 contentAlignment = Alignment.Center,
             ) {
                 if (!channel.logo.isNullOrBlank()) {
-                    AsyncImage(
-                        model = channel.logo,
-                        contentDescription = channel.name,
-                        modifier = Modifier.fillMaxSize().padding(4.dp),
-                        contentScale = ContentScale.Fit,
-                    )
+                    FadeImage(channel.logo, Modifier.fillMaxSize().padding(4.dp), contentScale = ContentScale.Fit)
                 } else {
-                    Icon(Icons.Filled.LiveTv, null, tint = AccentSoft, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Filled.LiveTv, null, tint = p.textDim, modifier = Modifier.size(20.dp))
                 }
             }
-            Spacer(Modifier.width(14.dp))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    channel.name,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    subText,
-                    color = if (isFavorite || hasManual) Accent else TextMuted,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Text(channel.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (!now.isNullOrBlank()) {
+                    Text(now, fontSize = 12.sp, color = p.textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (favorite) {
+                Icon(Icons.Filled.Star, null, tint = p.star, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+private fun PreviewPane(
+    channel: LiveChannel?,
+    now: String?,
+    next: String?,
+    livePreview: Boolean,
+    modifier: Modifier,
+) {
+    val p = LocalPalette.current
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var previewReady by remember { mutableStateOf(false) }
+    val exo = remember(livePreview) {
+        if (!livePreview) null else ExoPlayer.Builder(context).setLoadControl(liveLoadControl()).build().apply {
+            volume = 0f
+            playWhenReady = true
+        }
+    }
+    DisposableEffect(exo) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_READY) previewReady = true
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                previewReady = false
+            }
+        }
+        exo?.addListener(listener)
+        val observer = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_STOP) exo?.stop()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            exo?.removeListener(listener)
+            exo?.release()
+        }
+    }
+    // espera o foco parar no canal antes de abrir a previa (economiza rede)
+    LaunchedEffect(channel?.id, exo) {
+        val player = exo ?: return@LaunchedEffect
+        previewReady = false
+        player.stop()
+        val stream = channel?.let { orderStreams(it.streams).firstOrNull() } ?: return@LaunchedEffect
+        delay(900)
+        runCatching {
+            player.setMediaSource(buildLiveMediaSource(stream.url))
+            player.prepare()
+        }
+    }
+
+    Column(modifier) {
+        Box(
+            Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(14.dp)).background(p.surface)
+                .border(1.dp, p.glassBorder, RoundedCornerShape(14.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (channel != null && !channel.logo.isNullOrBlank()) {
+                FadeImage(channel.logo, Modifier.fillMaxSize().padding(28.dp), contentScale = ContentScale.Fit)
+            } else {
+                Icon(Icons.Filled.LiveTv, null, tint = p.textDim, modifier = Modifier.size(40.dp))
+            }
+            if (exo != null) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = exo
+                            useController = false
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                            setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
+                            isFocusable = false
+                            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize().then(if (previewReady) Modifier else Modifier.size(1.dp)),
                 )
             }
-            if (isFavorite) {
-                Icon(Icons.Filled.Star, null, tint = Accent, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(8.dp))
+            if (exo != null) {
+                Row(
+                    Modifier.align(Alignment.TopStart).padding(8.dp).clip(RoundedCornerShape(4.dp)).background(p.live)
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(if (previewReady) "● AO VIVO" else "PRÉVIA", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
             }
-            Icon(Icons.Filled.PlayArrow, null, tint = Accent, modifier = Modifier.size(28.dp))
+        }
+        Spacer(Modifier.height(14.dp))
+        if (channel != null) {
+            Text(channel.name, color = p.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(10.dp))
+            EpgLine("AGORA", now ?: "Programação indisponível", highlight = true)
+            if (!next.isNullOrBlank()) {
+                Spacer(Modifier.height(8.dp))
+                EpgLine("A SEGUIR", next, highlight = false)
+            }
+            Spacer(Modifier.height(12.dp))
+            val qualities = channel.streams.mapNotNull { it.quality?.uppercase()?.takeIf { q -> q.isNotBlank() } }.distinct()
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                qualities.take(4).forEach { MetaTag(it) }
+                if (channel.streams.size > 1) MetaTag("${channel.streams.size} fontes")
+            }
+            Spacer(Modifier.weight(1f))
+            Text("OK assistir  ·  segure OK para favoritar", color = p.textDim, fontSize = 11.sp)
+        }
+    }
+}
+
+@Composable
+private fun EpgLine(label: String, text: String, highlight: Boolean) {
+    val p = LocalPalette.current
+    Column {
+        Text(label, color = if (highlight) p.live else p.textDim, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+        Text(text, color = if (highlight) p.text else p.textMuted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Campo de busca: so abre o teclado quando o usuario aperta OK. */
+@kotlin.OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun ChannelSearchField(query: String, onQuery: (String) -> Unit, modifier: Modifier) {
+    val p = LocalPalette.current
+    var editing by remember { mutableStateOf(false) }
+    val fieldFocus = remember { FocusRequester() }
+    val boxFocus = remember { FocusRequester() }
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(editing) {
+        if (editing) {
+            delay(30)
+            runCatching { fieldFocus.requestFocus() }
+        }
+    }
+    Surface(
+        onClick = { editing = true },
+        modifier = modifier.focusRequester(boxFocus).onFocusChanged { focused = it.hasFocus },
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(50)),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = p.glass,
+            contentColor = p.text,
+            focusedContainerColor = p.surfaceHi,
+            focusedContentColor = p.text,
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(1.dp, p.glassBorder), shape = RoundedCornerShape(50)),
+            focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(2.dp, p.accent), shape = RoundedCornerShape(50)),
+        ),
+    ) {
+        Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Search, null, Modifier.size(18.dp), tint = p.textMuted)
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.weight(1f)) {
+                if (query.isEmpty() && !editing) Text("Buscar canal", color = p.textMuted, fontSize = 13.sp)
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQuery,
+                    singleLine = true,
+                    textStyle = TextStyle(color = p.text, fontSize = 13.sp),
+                    cursorBrush = SolidColor(p.accent),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        editing = false
+                        runCatching { boxFocus.requestFocus() }
+                    }, onDone = {
+                        editing = false
+                        runCatching { boxFocus.requestFocus() }
+                    }),
+                    modifier = Modifier.fillMaxWidth()
+                        .focusRequester(fieldFocus)
+                        .focusProperties { canFocus = editing }
+                        .onFocusChanged { if (!it.isFocused && editing) editing = false },
+                )
+            }
+            if (query.isNotEmpty() && !editing) {
+                Icon(Icons.Filled.Close, null, Modifier.size(16.dp), tint = p.textMuted)
+            }
         }
     }
 }
