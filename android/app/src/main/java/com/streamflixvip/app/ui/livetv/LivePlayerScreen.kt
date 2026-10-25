@@ -55,6 +55,7 @@ import androidx.media3.ui.PlayerView
 import com.streamflixvip.app.network.LiveStreamOption
 import kotlinx.coroutines.delay
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private enum class LiveAspect(val label: String, val mode: Int) {
     FIT("Ajustar", AspectRatioFrameLayout.RESIZE_MODE_FIT),
     FILL("Preencher", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
@@ -70,6 +71,7 @@ private fun isHlsUrl(url: String): Boolean {
     return false
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
 fun LivePlayerScreen(
     channelName: String,

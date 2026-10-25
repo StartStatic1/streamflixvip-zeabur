@@ -121,6 +121,7 @@ import kotlinx.coroutines.launch
 
 private const val PROGRESS_SAVE_INTERVAL_MS = 15_000L
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private enum class AspectMode(val label: String, val resizeMode: Int) {
     FIT("Ajustar", AspectRatioFrameLayout.RESIZE_MODE_FIT),
     ZOOM("Zoom", AspectRatioFrameLayout.RESIZE_MODE_ZOOM),
@@ -154,6 +155,7 @@ private fun playbackHeaders(url: String): Map<String, String> {
     )
 }
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun playbackHttpFactory(url: String): DefaultHttpDataSource.Factory =
     DefaultHttpDataSource.Factory()
         .setUserAgent("VLC/3.0.20 LibVLC/3.0.20")
