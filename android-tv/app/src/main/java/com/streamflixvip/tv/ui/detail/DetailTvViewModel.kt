@@ -15,6 +15,7 @@ import com.streamflixvip.tv.network.VipSource
 import com.streamflixvip.tv.network.fetchSourcesProgressively
 import com.streamflixvip.tv.network.sourcesMessage
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -227,6 +228,8 @@ class DetailTvViewModel(
                     },
                 )
             }
+            // cancelado (painel fechado/reaberto): nao mexe no painel novo
+            ensureActive()
             val final = result.getOrNull() ?: last
             val sources = order(final?.sources.orEmpty(), preferred)
             updatePanel(season, episode) { p ->
