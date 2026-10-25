@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
@@ -65,6 +66,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalContext
@@ -459,6 +470,15 @@ private fun NativePlayer(
     var playbackSpeed by remember { mutableStateOf(1f) }
     var settingsPanel by remember { mutableStateOf(SettingsPanel.NONE) }
     var controlsVisible by remember { mutableStateOf(false) }
+    // Controle remoto (TV): so muda o comportamento depois que uma tecla do controle e usada
+    var usingRemote by remember { mutableStateOf(false) }
+    var rootFocused by remember { mutableStateOf(false) }
+    var focusChipsPending by remember { mutableStateOf(false) }
+    val rootFocus = remember { FocusRequester() }
+    val chipsFocus = remember { FocusRequester() }
+    val panelFocus = remember { FocusRequester() }
+    val errorFocus = remember { FocusRequester() }
+    val nextFocus = remember { FocusRequester() }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var retryAttempt by remember { mutableStateOf(0) }
     var playbackErrorTick by remember { mutableStateOf(0) }
@@ -1034,13 +1054,128 @@ private fun NativePlayer(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    // ---- Controle remoto / D-pad ----
+    fun showControlsFromRemote() {
+        playerViewRef?.showController()
+        controlsVisible = true
+        focusChipsPending = true
+    }
+    LaunchedEffect(Unit) { runCatching { rootFocus.requestFocus() } }
+    LaunchedEffect(controlsVisible, focusChipsPending) {
+        if (controlsVisible && focusChipsPending && settingsPanel == SettingsPanel.NONE) {
+            delay(120)
+            runCatching { chipsFocus.requestFocus() }
+            focusChipsPending = false
+        }
+    }
+    LaunchedEffect(controlsVisible, settingsPanel, errorMessage, showNextPrompt) {
+        // menu escondeu sozinho / fechou: foco volta para o video (senao o controle "some")
+        if (settingsPanel == SettingsPanel.NONE && !controlsVisible && errorMessage == null && !showNextPrompt) {
+            runCatching { rootFocus.requestFocus() }
+        }
+    }
+    LaunchedEffect(settingsPanel) {
+        if (settingsPanel != SettingsPanel.NONE && usingRemote) {
+            delay(80)
+            runCatching { panelFocus.requestFocus() }
+        } else if (settingsPanel == SettingsPanel.NONE && usingRemote && controlsVisible) {
+            delay(80)
+            runCatching { chipsFocus.requestFocus() }
+        }
+    }
+    LaunchedEffect(errorMessage) {
+        if (errorMessage != null && usingRemote) {
+            delay(120)
+            runCatching { errorFocus.requestFocus() }
+        }
+    }
+    LaunchedEffect(showNextPrompt) {
+        if (showNextPrompt && usingRemote) {
+            delay(120)
+            runCatching { nextFocus.requestFocus() }
+        }
+    }
+    // Voltar: fecha submenu -> menu -> controles (no controle remoto) -> sai do player
+    BackHandler(enabled = settingsPanel != SettingsPanel.NONE) {
+        settingsPanel = when (settingsPanel) {
+            SettingsPanel.MAIN, SettingsPanel.SOURCES -> SettingsPanel.NONE
+            else -> SettingsPanel.MAIN
+        }
+    }
+    BackHandler(enabled = settingsPanel == SettingsPanel.NONE && controlsVisible && usingRemote) {
+        playerViewRef?.hideController()
+        controlsVisible = false
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { ev ->
+                val code = ev.nativeKeyEvent.keyCode
+                val isRemoteKey = ev.key in REMOTE_KEYS
+                if (!isRemoteKey) return@onPreviewKeyEvent false
+                if (ev.type == KeyEventType.KeyDown) {
+                    usingRemote = true
+                    if (controlsVisible) playerViewRef?.showController() // segura o auto-esconder
+                }
+                // teclas de midia funcionam sempre
+                when (code) {
+                    android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
+                        if (ev.type == KeyEventType.KeyDown) { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() }
+                        return@onPreviewKeyEvent true
+                    }
+                    android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                        if (ev.type == KeyEventType.KeyDown) exoPlayer.play()
+                        return@onPreviewKeyEvent true
+                    }
+                    android.view.KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                        if (ev.type == KeyEventType.KeyDown) exoPlayer.pause()
+                        return@onPreviewKeyEvent true
+                    }
+                    android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                        if (ev.type == KeyEventType.KeyDown) seekBy(SEEK_STEP_MS)
+                        return@onPreviewKeyEvent true
+                    }
+                    android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                        if (ev.type == KeyEventType.KeyDown) seekBy(-SEEK_STEP_MS)
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                // menus, erro e "proximo episodio": as setas andam entre os botoes
+                if (settingsPanel != SettingsPanel.NONE || errorMessage != null || showNextPrompt) {
+                    return@onPreviewKeyEvent false
+                }
+                // um botao da barra esta com foco: setas/OK sao dele
+                if (controlsVisible && !rootFocused) return@onPreviewKeyEvent false
+                if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent true
+                when (ev.key) {
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
+                        if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                        playerViewRef?.showController()
+                        controlsVisible = true
+                        true
+                    }
+                    Key.DirectionLeft -> { seekBy(-SEEK_STEP_MS); true }
+                    Key.DirectionRight -> { seekBy(SEEK_STEP_MS); true }
+                    Key.DirectionUp, Key.DirectionDown -> { showControlsFromRemote(); true }
+                    else -> false
+                }
+            }
+            .focusRequester(rootFocus)
+            .onFocusChanged { rootFocused = it.isFocused }
+            .focusable(),
+        contentAlignment = Alignment.Center,
+    ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = {
                 PlayerView(context).apply {
                     player = exoPlayer
                     playerViewRef = this
+                    // o controle remoto e tratado em Compose; a view nativa nao rouba o foco
+                    isFocusable = false
+                    isFocusableInTouchMode = false
+                    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     useController = true
                     controllerAutoShow = true
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -1261,12 +1396,12 @@ private fun NativePlayer(
                         Text("Nao foi possivel reproduzir", color = Color.White, fontSize = 16.sp, textAlign = TextAlign.Center)
                         Text(errorMessage ?: "", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp), textAlign = TextAlign.Center)
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)), modifier = Modifier.clickable {
+                            Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)), modifier = Modifier.focusRequester(errorFocus).tvFocus(RoundedCornerShape(8.dp)).clickable {
                                 retryAttempt = 0; triedUrls.clear(); errorMessage = null; isRecovering = true; reloadWithUrl(activeUrl)
                             }) {
                                 Text("Tentar de novo", color = Color.White, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
                             }
-                            Surface(color = Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(8.dp), modifier = Modifier.clickable {
+                            Surface(color = Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(8.dp), modifier = Modifier.tvFocus(RoundedCornerShape(8.dp)).clickable {
                                 MainScope().launch {
                                     if (alternateSources.isEmpty()) loadAlternateSources()
                                     if (alternateSources.isEmpty()) { errorMessage = "Sem outra fonte disponivel"; return@launch }
@@ -1336,29 +1471,29 @@ private fun NativePlayer(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.focusRequester(chipsFocus).tvFocus(RoundedCornerShape(16.dp)).clickable {
                         aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
                     }) {
                         Text(aspectMode.label, color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                     }
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
                         settingsPanel = SettingsPanel.SPEED
                     }) {
                         Text("${playbackSpeed}x", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                     }
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
                         settingsPanel = SettingsPanel.SUBTITLE
                     }) {
                         Text("Legendas", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                     }
                     if (audioOptions.isNotEmpty()) {
-                        Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                        Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
                             settingsPanel = SettingsPanel.AUDIO
                         }) {
                             Text("Audio", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                         }
                     }
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
                         MainScope().launch {
                             if (alternateSources.isEmpty()) loadAlternateSources()
                             if (alternateSources.isEmpty()) {
@@ -1375,7 +1510,7 @@ private fun NativePlayer(
                             color = Color.White.copy(alpha = 0.16f),
                             shape = RoundedCornerShape(16.dp),
                             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)),
-                            modifier = Modifier.clickable { if (!isLoadingNext) MainScope().launch { playNextEpisode() } },
+                            modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable { if (!isLoadingNext) MainScope().launch { playNextEpisode() } },
                         ) {
                             Text(
                                 if (isLoadingNext) "…" else "Proximo",
@@ -1385,7 +1520,7 @@ private fun NativePlayer(
                             )
                         }
                     }
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.clickable {
+                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
                         settingsPanel = SettingsPanel.MAIN
                     }) {
                         Text("Mais", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
@@ -1410,14 +1545,14 @@ private fun NativePlayer(
                         color = Color.White.copy(alpha = 0.18f),
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                        modifier = Modifier.clickable { MainScope().launch { playNextEpisode() } },
+                        modifier = Modifier.focusRequester(nextFocus).tvFocus(RoundedCornerShape(8.dp)).clickable { MainScope().launch { playNextEpisode() } },
                     ) {
                         Text("Sim", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                     }
                     Surface(
                         color = Color.White.copy(alpha = 0.1f),
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.clickable { showNextPrompt = false },
+                        modifier = Modifier.tvFocus(RoundedCornerShape(8.dp)).clickable { showNextPrompt = false },
                     ) {
                         Text("Nao", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
                     }
@@ -1426,7 +1561,7 @@ private fun NativePlayer(
         }
 
         if (settingsPanel != SettingsPanel.NONE) {
-            Box(modifier = Modifier.fillMaxSize().clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { settingsPanel = SettingsPanel.NONE })
+            Box(modifier = Modifier.fillMaxSize().focusProperties { canFocus = false }.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { settingsPanel = SettingsPanel.NONE })
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -1435,12 +1570,13 @@ private fun NativePlayer(
                     .width(280.dp)
                     .heightIn(max = 320.dp)
                     .background(Color.Black.copy(alpha = 0.92f), RoundedCornerShape(12.dp))
+                    .focusProperties { canFocus = false }
                     .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
             ) {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp)) {
                     when (settingsPanel) {
                         SettingsPanel.MAIN -> {
-                            SettingsRow("Tela", aspectMode.label) {
+                            SettingsRow("Tela", aspectMode.label, Modifier.focusRequester(panelFocus)) {
                                 aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
                             }
                             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
@@ -1454,7 +1590,7 @@ private fun NativePlayer(
                                 Text("Sync legenda", color = Color.White, fontSize = 14.sp)
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Surface(color = Color.White.copy(alpha = 0.12f), shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.clickable { reapplySubtitleOffset(subtitleOffsetMs - 500L) }) {
+                                        modifier = Modifier.tvFocus(RoundedCornerShape(8.dp)).clickable { reapplySubtitleOffset(subtitleOffsetMs - 500L) }) {
                                         Text("−0.5s", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                                     }
                                     Text(
@@ -1466,7 +1602,7 @@ private fun NativePlayer(
                                         fontSize = 13.sp,
                                     )
                                     Surface(color = Color.White.copy(alpha = 0.12f), shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.clickable { reapplySubtitleOffset(subtitleOffsetMs + 500L) }) {
+                                        modifier = Modifier.tvFocus(RoundedCornerShape(8.dp)).clickable { reapplySubtitleOffset(subtitleOffsetMs + 500L) }) {
                                         Text("+0.5s", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                                     }
                                 }
@@ -1497,7 +1633,7 @@ private fun NativePlayer(
                             }
                         }
                         SettingsPanel.SUBTITLE -> {
-                            SubmenuHeader("Legenda") { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuHeader("Legenda", panelFocus) { settingsPanel = SettingsPanel.MAIN }
                             SubmenuItem("Desligada", selectedSubtitleLabel == "Desligada" && !onlineSubtitleApplied) {
                                 selectSubtitle(null); settingsPanel = SettingsPanel.MAIN
                             }
@@ -1553,21 +1689,21 @@ private fun NativePlayer(
                             }
                         }
                         SettingsPanel.AUDIO -> {
-                            SubmenuHeader("Audio") { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuHeader("Audio", panelFocus) { settingsPanel = SettingsPanel.MAIN }
                             SubmenuItem("Padrao", selectedAudioLabel == "Padrao") { selectAudio(null); settingsPanel = SettingsPanel.MAIN }
                             audioOptions.forEach { o ->
                                 SubmenuItem(o.label, selectedAudioLabel == o.label) { selectAudio(o); settingsPanel = SettingsPanel.MAIN }
                             }
                         }
                         SettingsPanel.QUALITY -> {
-                            SubmenuHeader("Qualidade") { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuHeader("Qualidade", panelFocus) { settingsPanel = SettingsPanel.MAIN }
                             SubmenuItem("Automatico", selectedQualityLabel == "Automatico") { selectQuality(null); settingsPanel = SettingsPanel.MAIN }
                             qualityOptions.forEach { o ->
                                 SubmenuItem(o.label, selectedQualityLabel == o.label) { selectQuality(o); settingsPanel = SettingsPanel.MAIN }
                             }
                         }
                         SettingsPanel.SPEED -> {
-                            SubmenuHeader("Velocidade") { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuHeader("Velocidade", panelFocus) { settingsPanel = SettingsPanel.MAIN }
                             PLAYBACK_SPEEDS.forEach { speed ->
                                 SubmenuItem("${speed}x", playbackSpeed == speed) {
                                     playbackSpeed = speed; exoPlayer.setPlaybackSpeed(speed); settingsPanel = SettingsPanel.MAIN
@@ -1575,7 +1711,7 @@ private fun NativePlayer(
                             }
                         }
                         SettingsPanel.SOURCES -> {
-                            SubmenuHeader("Fontes") { settingsPanel = SettingsPanel.NONE }
+                            SubmenuHeader("Fontes", panelFocus) { settingsPanel = SettingsPanel.NONE }
                             if (alternateSources.isEmpty()) {
                                 Text(
                                     "Nenhuma outra fonte",
@@ -1596,7 +1732,7 @@ private fun NativePlayer(
                             }
                         }
                         SettingsPanel.SUB_STYLE -> {
-                            SubmenuHeader("Aparência da legenda") { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuHeader("Aparência da legenda", panelFocus) { settingsPanel = SettingsPanel.MAIN }
                             SettingsRow("Tamanho", subStyle.size.label) {
                                 subStyle = subStyle.copy(size = nextOf(subStyle.size, SubSize.entries))
                                 SubtitleStylePrefs.save(context, subStyle)
@@ -1636,6 +1772,27 @@ private fun prettyFonteLabel(url: String, index: Int): String {
     }
 }
 
+private val REMOTE_KEYS = setOf(
+    Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar,
+    Key.DirectionLeft, Key.DirectionRight, Key.DirectionUp, Key.DirectionDown,
+    Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause, Key.MediaFastForward, Key.MediaRewind,
+)
+
+/** Fundo/borda quando o item esta com foco do controle remoto (no toque nao aparece). */
+@Composable
+private fun Modifier.tvFocus(shape: androidx.compose.ui.graphics.Shape): Modifier {
+    var focused by remember { mutableStateOf(false) }
+    return this
+        .onFocusChanged { focused = it.isFocused }
+        .then(
+            if (focused) {
+                Modifier
+                    .background(Color.White.copy(alpha = 0.22f), shape)
+                    .border(2.dp, Color.White, shape)
+            } else Modifier,
+        )
+}
+
 private enum class SettingsPanel { NONE, MAIN, SUBTITLE, AUDIO, QUALITY, SPEED, SOURCES, SUB_STYLE }
 
 private fun formatPlayerTime(ms: Long): String {
@@ -1654,9 +1811,11 @@ private fun parseSubtitleCues(content: String): List<SubtitleCue> = parseSubtitl
 
 
 @Composable
-private fun SubmenuHeader(title: String, onBack: () -> Unit) {
+private fun SubmenuHeader(title: String, focus: FocusRequester? = null, onBack: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onBack() }.padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth()
+            .then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
+            .tvFocus(RoundedCornerShape(6.dp)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { onBack() }.padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text("\u2190", color = Color.White, fontSize = 18.sp, modifier = Modifier.padding(end = 12.dp))
@@ -1668,7 +1827,7 @@ private fun SubmenuHeader(title: String, onBack: () -> Unit) {
 @Composable
 private fun SubmenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick).padding(vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().tvFocus(RoundedCornerShape(6.dp)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick).padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1678,9 +1837,9 @@ private fun SubmenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun SettingsRow(label: String, value: String, onClick: () -> Unit) {
+private fun SettingsRow(label: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick).padding(vertical = 10.dp),
+        modifier = modifier.fillMaxWidth().tvFocus(RoundedCornerShape(6.dp)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick).padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.padding(end = 12.dp))
