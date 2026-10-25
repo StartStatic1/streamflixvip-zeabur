@@ -88,6 +88,7 @@ import com.streamflixvip.tv.ui.components.PanelItem
 import com.streamflixvip.tv.ui.components.SidePanel
 import com.streamflixvip.tv.ui.components.TvButton
 import com.streamflixvip.tv.ui.home.FocusTargetBox
+import com.streamflixvip.tv.ui.player.isNetworkError
 import com.streamflixvip.tv.ui.theme.LocalPalette
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -102,6 +103,7 @@ private enum class LiveAspect(val label: String, val mode: Int) {
 }
 
 private const val LIVE_START_TIMEOUT_MS = 14_000L
+private const val LIVE_STALL_MS = 10_000L
 
 @OptIn(UnstableApi::class)
 @kotlin.OptIn(ExperimentalComposeUiApi::class)
@@ -165,6 +167,24 @@ fun LivePlayerTvScreen(
         }
     }
 
+    // Fora da tela (HOME do Fire TV, outro app): nada toca nem troca de fonte.
+    // O aviso vem direto do ciclo de vida (com o app parado o Compose nao recompoe).
+    val foreground = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
+    var playedOk by remember { mutableStateOf(false) }
+    var errorRetries by remember { mutableIntStateOf(0) }
+
+    fun nextSourceOrFail(msgToast: String, msgFinal: String) {
+        if (!foreground.get()) return
+        streamsNow.getOrNull(streamIndex)?.let { LiveHostHealth.markFail(it.url) }
+        if (streamIndex + 1 < streamsNow.size) {
+            streamIndex++
+            toaster.show(msgToast)
+        } else {
+            loading = false
+            error = msgFinal
+        }
+    }
+
     DisposableEffect(Unit) {
         (context as? Activity)?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val listener = object : Player.Listener {
@@ -172,27 +192,43 @@ fun LivePlayerTvScreen(
                 if (state == Player.STATE_READY) {
                     loading = false
                     error = null
+                    playedOk = true
                     streamsNow.getOrNull(streamIndex)?.let { LiveHostHealth.markOk(it.url) }
                 }
                 if (state == Player.STATE_BUFFERING) loading = true
             }
 
             override fun onPlayerError(e: PlaybackException) {
-                streamsNow.getOrNull(streamIndex)?.let { LiveHostHealth.markFail(it.url) }
-                if (streamIndex + 1 < streamsNow.size) {
-                    streamIndex++
-                    toaster.show("Fonte falhou — tentando outra")
-                } else {
-                    loading = false
-                    error = "Este canal não abriu em nenhuma fonte agora."
+                if (!foreground.get()) return
+                // ficou para tras da janela ao vivo: volta para o ponto ao vivo, mesma fonte
+                if (e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                    exo.seekToDefaultPosition()
+                    exo.prepare()
+                    return
                 }
+                // ja estava tocando e caiu a rede: reconecta na mesma fonte (2x) antes de trocar
+                if (playedOk && errorRetries < 2 && isNetworkError(e.errorCode)) {
+                    errorRetries++
+                    toaster.show("Reconectando…")
+                    reloadNonce++
+                    return
+                }
+                nextSourceOrFail("Fonte falhou — tentando outra", "Este canal não abriu em nenhuma fonte agora.")
             }
         }
         exo.addListener(listener)
         val observer = LifecycleEventObserver { _, e ->
             when (e) {
-                Lifecycle.Event.ON_STOP -> exo.pause()
-                Lifecycle.Event.ON_START -> exo.play()
+                Lifecycle.Event.ON_STOP -> {
+                    foreground.set(false)
+                    exo.playWhenReady = false
+                    exo.stop() // solta rede e decodificador; nada de audio na HOME
+                }
+                Lifecycle.Event.ON_START -> if (!foreground.getAndSet(true)) {
+                    // volta ao vivo do zero na mesma fonte
+                    errorRetries = 0
+                    reloadNonce++
+                }
                 else -> Unit
             }
         }
@@ -209,14 +245,16 @@ fun LivePlayerTvScreen(
     LaunchedEffect(channel?.id) {
         val ch = channel ?: return@LaunchedEffect
         streamIndex = 0
+        errorRetries = 0
         reloadNonce++
         recent.addLiveChannel(ch.id)
         onChannelChanged(index)
     }
 
-    // abre a fonte atual (com tempo limite)
+    // abre a fonte atual (tempo limite para comecar) e vigia travadas
     LaunchedEffect(reloadNonce, streamIndex) {
         if (reloadNonce == 0) return@LaunchedEffect
+        if (!foreground.get()) return@LaunchedEffect
         val opt = streams.getOrNull(streamIndex)
         if (opt == null) {
             loading = false
@@ -225,20 +263,55 @@ fun LivePlayerTvScreen(
         }
         loading = true
         error = null
-        runCatching {
+        playedOk = false
+        val opened = runCatching {
             exo.setMediaSource(buildLiveMediaSource(opt.url))
             exo.prepare()
             exo.playWhenReady = true
+        }.isSuccess
+        if (!opened) {
+            nextSourceOrFail("Fonte falhou — tentando outra", "Este canal não abriu em nenhuma fonte agora.")
+            return@LaunchedEffect
         }
-        delay(LIVE_START_TIMEOUT_MS)
-        if (loading && error == null) {
-            LiveHostHealth.markFail(opt.url)
-            if (streamIndex + 1 < streams.size) {
-                streamIndex++
-                toaster.show("Fonte lenta — tentando outra")
+        val startedAt = System.currentTimeMillis()
+        var stalledSince = 0L
+        var reconnects = 0
+        while (true) {
+            delay(1_000)
+            if (!foreground.get()) return@LaunchedEffect
+            val now = System.currentTimeMillis()
+            val state = exo.playbackState
+            if (!playedOk) {
+                if (now - startedAt > LIVE_START_TIMEOUT_MS && error == null) {
+                    nextSourceOrFail("Fonte lenta — tentando outra", "O canal demorou demais para responder.")
+                    return@LaunchedEffect
+                }
+                continue
+            }
+            if (state == Player.STATE_READY && exo.isPlaying) {
+                stalledSince = 0L
+                continue
+            }
+            if (state == Player.STATE_BUFFERING || (state == Player.STATE_READY && exo.playWhenReady && !exo.isPlaying)) {
+                if (stalledSince == 0L) stalledSince = now
+                if (now - stalledSince > LIVE_STALL_MS) {
+                    stalledSince = 0L
+                    if (reconnects < 2) {
+                        // travou: reconecta no ponto ao vivo
+                        reconnects++
+                        toaster.show("Sinal travou — reconectando")
+                        runCatching {
+                            exo.setMediaSource(buildLiveMediaSource(opt.url))
+                            exo.prepare()
+                            exo.playWhenReady = true
+                        }
+                    } else {
+                        nextSourceOrFail("Sinal instável — tentando outra fonte", "O canal está travando em todas as fontes.")
+                        return@LaunchedEffect
+                    }
+                }
             } else {
-                loading = false
-                error = "O canal demorou demais para responder."
+                stalledSince = 0L
             }
         }
     }

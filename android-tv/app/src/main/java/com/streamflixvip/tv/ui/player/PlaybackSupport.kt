@@ -56,10 +56,13 @@ internal fun playbackHeaders(url: String): Map<String, String> {
     return mapOf("Referer" to origin, "Accept" to "*/*", "Connection" to "keep-alive")
 }
 
+/** Mesmo User-Agent em todo lugar (VOD, ao vivo e previa): os paineis Xtream liberam VLC. */
+internal const val PLAYER_USER_AGENT = "VLC/3.0.20 LibVLC/3.0.20"
+
 @OptIn(UnstableApi::class)
 internal fun playbackHttpFactory(url: String): DefaultHttpDataSource.Factory =
     DefaultHttpDataSource.Factory()
-        .setUserAgent("VLC/3.0.20 LibVLC/3.0.20")
+        .setUserAgent(PLAYER_USER_AGENT)
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(15_000)
         .setReadTimeoutMs(20_000)

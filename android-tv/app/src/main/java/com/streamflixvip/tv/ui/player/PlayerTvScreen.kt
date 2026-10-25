@@ -209,6 +209,8 @@ private fun PlayerSession(
     var isBuffering by remember { mutableStateOf(true) }
     var ended by remember { mutableStateOf(false) }
     var pendingError by remember { mutableStateOf<PlaybackException?>(null) }
+    // fora da tela (HOME): nao volta a tocar sozinho por troca de servidor/reconexao
+    val vodForeground = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
     var fatalError by remember { mutableStateOf<String?>(null) }
     var positionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
@@ -295,7 +297,7 @@ private fun PlayerSession(
             exo.setMediaSource(buildPlaybackMediaSource(url, hls))
             exo.prepare()
             if (positionMs > 0) exo.seekTo(positionMs)
-            exo.playWhenReady = true
+            exo.playWhenReady = vodForeground.get()
         }.onFailure { fatalError = "Não foi possível abrir este servidor." }
         loadNonce++
     }
@@ -366,7 +368,11 @@ private fun PlayerSession(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> persist()
-                Lifecycle.Event.ON_STOP -> exo.pause()
+                Lifecycle.Event.ON_STOP -> {
+                    vodForeground.set(false)
+                    exo.pause()
+                }
+                Lifecycle.Event.ON_START -> vodForeground.set(true)
                 else -> Unit
             }
         }
@@ -391,6 +397,7 @@ private fun PlayerSession(
     // delay da reconexao e o video ficava parado no erro.
     LaunchedEffect(pendingError) {
         val err = pendingError ?: return@LaunchedEffect
+        if (!vodForeground.get()) return@LaunchedEffect
         val code = err.errorCode
         val url = current?.resolvedPlaybackUrl(NetworkModule.ZEABUR_BASE_URL).orEmpty()
         val pos = if (everReady) exo.currentPosition.coerceAtLeast(0L) else startPositionMs
@@ -420,7 +427,7 @@ private fun PlayerSession(
     LaunchedEffect(loadNonce) {
         if (loadNonce == 0) return@LaunchedEffect
         delay(START_TIMEOUT_MS)
-        if (!firstReady && fatalError == null) {
+        if (!firstReady && fatalError == null && vodForeground.get()) {
             failed.value = failed.value + sourceIndex
             val next = nextUntried()
             if (next != null) switchTo(next, "Servidor lento — tentando ${sources[next].displayName}")

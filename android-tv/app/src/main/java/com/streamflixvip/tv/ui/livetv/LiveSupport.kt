@@ -73,36 +73,75 @@ internal object LiveHostHealth {
 }
 
 internal fun streamLabel(option: LiveStreamOption, index: Int): String = buildString {
-    val q = option.quality?.takeIf { it.isNotBlank() }
+    val q = option.quality?.takeIf { it.isNotBlank() && !it.equals("Padrao", true) }
     val lab = option.label?.takeIf { it.isNotBlank() }
     if (q != null) append(q)
     if (option.leg == true) append(if (isEmpty()) "Legendado" else " · Legendado")
     if (lab != null) append(if (isEmpty()) lab else " · $lab")
     if (isEmpty()) append("Fonte ${index + 1}")
+    append(if (isLiveTs(option.url)) " · TS" else if (isLiveHls(option.url)) " · HLS" else "")
 }
 
+internal fun isLiveHls(url: String): Boolean {
+    val l = url.lowercase().substringBefore('#')
+    val path = l.substringBefore('?')
+    return path.endsWith(".m3u8") || path.endsWith(".m3u") || l.contains("output=m3u8") ||
+        l.contains("type=m3u8") || l.contains("format=m3u8") || l.contains("/hls/")
+}
+
+internal fun isLiveTs(url: String): Boolean {
+    val l = url.lowercase()
+    return l.substringBefore('?').endsWith(".ts") || l.contains("output=ts") || l.contains("output=mpegts")
+}
+
+/**
+ * HLS so quando e HLS de verdade. Antes todo link com "/live/" ia como HLS, entao a
+ * reserva .ts do Xtream (/live/u/p/123.ts) nunca abria. .ts e link sem extensao vao
+ * como fluxo continuo (MPEG-TS detectado pelo extrator).
+ */
 @OptIn(UnstableApi::class)
 internal fun buildLiveMediaSource(url: String): MediaSource {
+    val headers = buildMap {
+        put("Connection", "keep-alive")
+        put("Accept", "*/*")
+        if (!isLiveHls(url)) put("Icy-MetaData", "1")
+    }
     val http = DefaultHttpDataSource.Factory()
-        .setUserAgent("VLC/3.0.20 LibVLC/3.0.20")
+        .setUserAgent(com.streamflixvip.tv.ui.player.PLAYER_USER_AGENT)
         .setAllowCrossProtocolRedirects(true)
+        .setKeepPostFor302Redirects(true)
         .setConnectTimeoutMs(10_000)
-        .setReadTimeoutMs(15_000)
-        .setDefaultRequestProperties(mapOf("Referer" to url, "Connection" to "keep-alive", "Icy-MetaData" to "1"))
-    val lower = url.lowercase()
-    return if (lower.contains(".m3u8") || lower.contains("/live/") || lower.contains("m3u")) {
-        HlsMediaSource.Factory(http).createMediaSource(
-            MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).build(),
-        )
+        .setReadTimeoutMs(20_000)
+        .setDefaultRequestProperties(headers)
+    val live = MediaItem.LiveConfiguration.Builder()
+        // fica ~20s atras do ao vivo: sobra folga para a rede oscilar sem travar
+        .setTargetOffsetMs(20_000)
+        .setMinOffsetMs(8_000)
+        .setMinPlaybackSpeed(0.97f)
+        .setMaxPlaybackSpeed(1.03f)
+        .build()
+    return if (isLiveHls(url)) {
+        HlsMediaSource.Factory(http)
+            .setAllowChunklessPreparation(true)
+            .createMediaSource(
+                MediaItem.Builder().setUri(url).setMimeType(MimeTypes.APPLICATION_M3U8).setLiveConfiguration(live).build(),
+            )
     } else {
-        ProgressiveMediaSource.Factory(http, DefaultExtractorsFactory()).createMediaSource(MediaItem.fromUri(url))
+        ProgressiveMediaSource.Factory(
+            http,
+            DefaultExtractorsFactory().setTsExtractorFlags(androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES),
+        )
+            .setContinueLoadingCheckIntervalBytes(256 * 1024)
+            .createMediaSource(MediaItem.Builder().setUri(url).setLiveConfiguration(live).build())
     }
 }
 
-/** Ao vivo: comeca rapido (1s) e segura 30s de folga. */
+/** Ao vivo: comeca com 2,5s, volta de travada com 5s e segura ate 50s de folga. */
 @OptIn(UnstableApi::class)
 internal fun liveLoadControl(): DefaultLoadControl = DefaultLoadControl.Builder()
-    .setBufferDurationsMs(15_000, 30_000, 1_000, 2_500)
-    .setTargetBufferBytes(com.streamflixvip.tv.util.DeviceProfile.playerBufferBytes / 2)
-    .setPrioritizeTimeOverSizeThresholds(false)
+    .setBufferDurationsMs(if (com.streamflixvip.tv.util.DeviceProfile.isLowRam) 20_000 else 30_000, 50_000, 2_500, 5_000)
+    // teto de memoria do aparelho (Fire TV fraco fecha o app se o buffer crescer demais)
+    .setTargetBufferBytes(com.streamflixvip.tv.util.DeviceProfile.playerBufferBytes)
+    .setPrioritizeTimeOverSizeThresholds(!com.streamflixvip.tv.util.DeviceProfile.isLowRam)
+    .setBackBuffer(0, false)
     .build()

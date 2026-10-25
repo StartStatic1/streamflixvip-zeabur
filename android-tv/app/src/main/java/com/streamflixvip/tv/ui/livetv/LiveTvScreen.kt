@@ -396,6 +396,8 @@ private fun PreviewPane(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var previewReady by remember { mutableStateOf(false) }
+    val previewForeground = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
+    var previewNonce by remember { mutableIntStateOf(0) }
     val exo = remember(livePreview) {
         if (!livePreview) null else ExoPlayer.Builder(context).setLoadControl(liveLoadControl()).build().apply {
             volume = 0f
@@ -414,7 +416,17 @@ private fun PreviewPane(
         }
         exo?.addListener(listener)
         val observer = LifecycleEventObserver { _, e ->
-            if (e == Lifecycle.Event.ON_STOP) exo?.stop()
+            when (e) {
+                Lifecycle.Event.ON_STOP -> {
+                    previewForeground.set(false)
+                    previewReady = false
+                    exo?.playWhenReady = false
+                    exo?.stop()
+                }
+                // de volta: abre a previa de novo
+                Lifecycle.Event.ON_START -> if (!previewForeground.getAndSet(true)) previewNonce++
+                else -> Unit
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
@@ -424,15 +436,17 @@ private fun PreviewPane(
         }
     }
     // espera o foco parar no canal antes de abrir a previa (economiza rede)
-    LaunchedEffect(channel?.id, exo) {
+    LaunchedEffect(channel?.id, exo, previewNonce) {
         val player = exo ?: return@LaunchedEffect
         previewReady = false
         player.stop()
         val stream = channel?.let { orderStreams(it.streams).firstOrNull() } ?: return@LaunchedEffect
         delay(900)
+        if (!previewForeground.get()) return@LaunchedEffect // HOME apertado no meio: nao abre
         runCatching {
             player.setMediaSource(buildLiveMediaSource(stream.url))
             player.prepare()
+            player.playWhenReady = true
         }
     }
 
