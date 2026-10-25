@@ -1,5 +1,6 @@
 package com.streamflixvip.tv.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -43,6 +45,8 @@ import com.streamflixvip.tv.ui.components.PosterCard
 import com.streamflixvip.tv.ui.theme.LocalPalette
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -123,7 +127,23 @@ fun CategoryTvScreen(
         }
     }
 
-    Column(Modifier.fillMaxSize().padding(start = 48.dp, top = 30.dp, end = 40.dp)) {
+    // Mais uma pagina so quando a ultima linha visivel chega perto do fim (1 pedido por pagina)
+    LaunchedEffect(gridState) {
+        snapshotFlow {
+            val info = gridState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            info.totalItemsCount > 0 && last >= info.totalItemsCount - 14
+        }.distinctUntilChanged().filter { it }.collect { vm.loadMore() }
+    }
+    LaunchedEffect(state.items.size, state.loading) {
+        // pagina veio so com repetidos (ou poucos itens): ainda perto do fim -> tenta a proxima
+        if (state.loading || state.items.isEmpty()) return@LaunchedEffect
+        val info = gridState.layoutInfo
+        val last = info.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
+        if (last >= info.totalItemsCount - 14) vm.loadMore()
+    }
+
+    Column(Modifier.fillMaxSize().background(p.bg).padding(start = 48.dp, top = 30.dp, end = 40.dp)) {
         Row(verticalAlignment = Alignment.Bottom) {
             Text(spec.title, color = p.text, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
             Spacer(Modifier.width(14.dp))
@@ -150,11 +170,8 @@ fun CategoryTvScreen(
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                itemsIndexed(state.items, key = { _, it -> "${it.id}_${it.resolvedMediaType}" }) { index, item ->
+                itemsIndexed(state.items, key = { _, it -> "${it.id}_${it.resolvedMediaType}" }) { _, item ->
                     val key = "${item.id}_${item.resolvedMediaType}"
-                    if (index >= state.items.size - 14) {
-                        LaunchedEffect(state.items.size) { vm.loadMore() }
-                    }
                     FocusTargetBox(key, focusTarget, focusNonce, { focusTarget = null }) { m ->
                         Column {
                             PosterCard(

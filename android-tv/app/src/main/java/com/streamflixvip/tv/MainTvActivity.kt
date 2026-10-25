@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
@@ -41,6 +44,7 @@ import com.streamflixvip.tv.ui.player.PlayerArgs
 import com.streamflixvip.tv.ui.player.PlayerTvScreen
 import com.streamflixvip.tv.ui.shell.MainShell
 import com.streamflixvip.tv.ui.splash.SplashTvScreen
+import com.streamflixvip.tv.ui.theme.LocalPalette
 import com.streamflixvip.tv.ui.theme.StreamFlixTvTheme
 import com.streamflixvip.tv.ui.update.UpdateRequiredTvScreen
 import com.streamflixvip.tv.update.ApkInstaller
@@ -63,7 +67,9 @@ class MainTvActivity : ComponentActivity() {
             StreamFlixTvTheme {
                 val toaster = remember { Toaster() }
                 CompositionLocalProvider(LocalToaster provides toaster) {
-                    Box(Modifier.fillMaxSize()) {
+                    // fundo opaco SEMPRE: sem ele algumas TVs/Fire TV nao limpam a tela
+                    // e ficam "rastros" (cartoes e titulos repetidos, tela tremendo)
+                    Box(Modifier.fillMaxSize().background(LocalPalette.current.bg)) {
                         AppRoot(toaster)
                         ToastHost(toaster)
                     }
@@ -248,7 +254,15 @@ class MainTvActivity : ComponentActivity() {
             }
         }
 
-        NavHost(navController = navController, startDestination = "splash") {
+        // Sem animacao entre telas: a tela antiga nao fica por baixo da nova e TV box fraca agradece
+        NavHost(
+            navController = navController,
+            startDestination = "splash",
+            enterTransition = { EnterTransition.None },
+            exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None },
+            popExitTransition = { ExitTransition.None },
+        ) {
             composable("splash") {
                 SplashTvScreen(
                     activationManager = activationManager,
