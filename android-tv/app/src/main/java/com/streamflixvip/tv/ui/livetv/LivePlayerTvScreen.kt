@@ -428,7 +428,7 @@ fun LivePlayerTvScreen(
                 Modifier.width(400.dp).fillMaxHeight()
                     .background(Brush.horizontalGradient(listOf(p.bg.copy(alpha = 0.97f), p.bg.copy(alpha = 0.85f))))
                     .padding(horizontal = 18.dp, vertical = 22.dp)
-                    .focusProperties { exit = { FocusRequester.Cancel } }
+                    .focusProperties { exit = { com.streamflixvip.tv.ui.components.trapArrows(it) } }
                     .focusGroup(),
             ) {
                 Text("Canais", color = p.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)

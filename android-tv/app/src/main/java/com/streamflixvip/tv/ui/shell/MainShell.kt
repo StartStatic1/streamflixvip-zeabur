@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -130,17 +131,37 @@ fun MainShell(
     var railFocused by remember { mutableStateOf(false) }
     var lastBack by remember { mutableLongStateOf(0L) }
     val stateHolder = rememberSaveableStateHolder()
+    val contentRequester = remember { FocusRequester() }
+    var contentFocusNonce by remember { mutableIntStateOf(0) }
+
+    /** Leva o foco para a secao aberta (ultimo cartao / primeiro item). */
+    fun goToContent() {
+        focusSignal.request()
+        contentFocusNonce++
+    }
 
     fun select(s: ShellSection) {
         sectionName = s.name
         TvSettingsStore.update { it.copy(lastSection = s.name) }
-        focusSignal.request()
+        goToContent()
+    }
+
+    // Rede de seguranca: se a secao nao pegou o foco (ainda carregando, cartao
+    // lembrado fora da tela...), entra no primeiro item focavel do conteudo.
+    LaunchedEffect(contentFocusNonce) {
+        if (contentFocusNonce == 0) return@LaunchedEffect
+        repeat(4) {
+            delay(if (it == 0) 450 else 600)
+            if (!railFocused) return@LaunchedEffect
+            runCatching { contentRequester.requestFocus() }
+        }
     }
 
     BackHandler {
         when {
-            !railFocused -> runCatching { railRequesters.getValue(section).requestFocus() }
-            section != ShellSection.HOME -> select(ShellSection.HOME)
+            railFocused && section != ShellSection.HOME -> select(ShellSection.HOME)
+            railFocused -> goToContent()
+            section != ShellSection.HOME -> runCatching { railRequesters.getValue(section).requestFocus() }
             else -> {
                 val now = System.currentTimeMillis()
                 if (now - lastBack < 2200) {
@@ -155,7 +176,11 @@ fun MainShell(
 
     Box(Modifier.fillMaxSize().background(p.bg)) {
         // Conteudo da secao (abaixo do menu)
-        Box(Modifier.fillMaxSize().padding(start = RAIL_COLLAPSED)) {
+        Box(
+            Modifier.fillMaxSize().padding(start = RAIL_COLLAPSED)
+                .focusRequester(contentRequester)
+                .focusGroup(),
+        ) {
             stateHolder.SaveableStateProvider(section.name + if (settings.kidsMode) "_kids" else "") {
                 when (section) {
                     ShellSection.HOME -> HomeTvScreen(
@@ -232,9 +257,17 @@ fun MainShell(
                 .onFocusChanged { railFocused = it.hasFocus }
                 .focusProperties {
                     enter = { railRequesters.getValue(section) }
+                    // So bloqueia as setas. Pedidos de foco do codigo (troca de aba,
+                    // voltar do player) PRECISAM passar, senao o foco fica preso aqui.
                     exit = { dir ->
-                        if (dir == FocusDirection.Right) focusSignal.request()
-                        FocusRequester.Cancel
+                        when (dir) {
+                            FocusDirection.Right -> {
+                                goToContent()
+                                FocusRequester.Cancel
+                            }
+                            FocusDirection.Left, FocusDirection.Up, FocusDirection.Down -> FocusRequester.Cancel
+                            else -> FocusRequester.Default
+                        }
                     }
                 }
                 .focusGroup(),

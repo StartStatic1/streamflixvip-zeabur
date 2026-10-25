@@ -10,6 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -375,7 +376,8 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier, trailing: String? 
 @Composable
 fun LoadingBox(modifier: Modifier = Modifier, text: String? = null) {
     val p = LocalPalette.current
-    Box(modifier, contentAlignment = Alignment.Center) {
+    // focavel: enquanto carrega o foco tem onde ficar (nao prende no menu)
+    Box(modifier.focusable(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(color = p.accent, strokeWidth = 3.dp, modifier = Modifier.size(36.dp))
             if (text != null) {
@@ -417,6 +419,21 @@ fun MessageBox(
 }
 
 /**
+ * Prende so as SETAS dentro de um grupo (painel, lista). Pedidos de foco feitos
+ * pelo codigo (direcao Enter/Exit) passam — se cancelados, o foco fica preso
+ * num item que esta sumindo e o controle para de responder.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+fun trapArrows(direction: androidx.compose.ui.focus.FocusDirection): FocusRequester = when (direction) {
+    androidx.compose.ui.focus.FocusDirection.Left,
+    androidx.compose.ui.focus.FocusDirection.Right,
+    androidx.compose.ui.focus.FocusDirection.Up,
+    androidx.compose.ui.focus.FocusDirection.Down,
+    -> FocusRequester.Cancel
+    else -> FocusRequester.Default
+}
+
+/**
  * Painel lateral (direita) para escolhas: servidores, legendas, audio...
  * O foco fica preso dentro dele enquanto aberto; Voltar fecha.
  */
@@ -452,7 +469,7 @@ fun SidePanel(
                     )
                     .border(BorderStroke(1.dp, p.glassBorder))
                     .padding(horizontal = 20.dp, vertical = 24.dp)
-                    .focusProperties { exit = { FocusRequester.Cancel } }
+                    .focusProperties { exit = { trapArrows(it) } }
                     .focusGroup(),
             ) {
                 Text(title, color = p.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)

@@ -1,5 +1,6 @@
 package com.streamflixvip.tv.ui.account
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,7 +76,8 @@ fun MyListTvScreen(
         }
         Spacer(Modifier.height(18.dp))
         if (favorites.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // focavel para o foco nao ficar preso no menu quando a lista esta vazia
+            Box(Modifier.fillMaxSize().focusable(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Filled.BookmarkBorder, null, tint = p.accent, modifier = Modifier.size(54.dp))
                     Spacer(Modifier.height(14.dp))
