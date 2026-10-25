@@ -17,6 +17,7 @@
 //   VIP válido (JWT Supabase, userId com vip_status ativo, ou deviceId TV).
 
 const { enforceVipOrReject } = require('../lib/vip-gate');
+const liveCategories = require('../lib/live-categories');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const MAX_SOURCES = 8;
@@ -229,7 +230,7 @@ async function loadFromSource(source) {
   };
 }
 
-const MAX_BRIDGES = 8;
+const MAX_BRIDGES = 16;
 
 async function loadBridgeRows(serviceKey) {
   try {
@@ -449,9 +450,27 @@ function cleanCategoryName(name) {
   return s || String(name || '').trim() || 'Outros';
 }
 
-const MAX_STREAMS_PER_CHANNEL = 6;
+const MAX_STREAMS_PER_CHANNEL = 8;
+
+/** Fonte cujos links testados nao tocaram nenhum (404/HTML/timeout). */
+function isDeadSource(entryKey) {
+  const h = entryKey && playbackHealth.get(entryKey);
+  return !!(h && h.total >= 3 && h.ok === 0);
+}
+
+/** Xtream: alem do .m3u8, o mesmo canal em .ts (MPEG-TS) como reserva. */
+function tsVariant(url) {
+  return /\/live\/[^/]+\/[^/]+\/[^/]+\.m3u8$/.test(url) ? url.replace(/\.m3u8$/, '.ts') : null;
+}
 
 function mergeResults(results, manuals) {
+  // Fonte morta (nenhum link toca) nao entra; se TODAS parecerem mortas
+  // (ex.: rede do VPS caiu), mantem tudo para nao zerar a lista.
+  const alive = results.filter((r) => !isDeadSource(r.entryKey));
+  if (alive.length && alive.length < results.length) {
+    console.log('[live-tv] fontes ignoradas (links nao tocam):', results.filter((r) => isDeadSource(r.entryKey)).map((r) => r.sourceName).join(', '));
+    results = alive;
+  }
   const adultCatIds = new Set();
   for (const r of results) {
     for (const c of r.categories) {
@@ -492,7 +511,7 @@ function mergeResults(results, manuals) {
 
       let ch = channelMap.get(key);
       if (!ch) {
-        ch = { id: key, name: s.name, logo: s.logo, categoryId: catKey, streams: [] };
+        ch = { id: key, name: s.name, logo: s.logo, categoryId: catKey, rawCategory: rawCatName, streams: [] };
         channelMap.set(key, ch);
       } else if (isAdult) {
         ch.categoryId = ADULT_CATEGORY_ID;
@@ -504,15 +523,17 @@ function mergeResults(results, manuals) {
         ch.name = String(s.name || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim() || s.name;
       }
       if (!ch.streams.some((x) => x.url === s.url)) {
+        // Prioridade da fonte manda (1 = melhor); qualidade so desempata dentro
+        // da mesma fonte (antes +80 por nome sem "HD" jogava a melhor fonte
+        // para tras das pontes).
         const basePri = (r.priority ?? 100) + playbackPenalty(r.entryKey);
         const q = qualityScore(s.name);
-        ch.streams.push({
-          url: s.url,
-          label: s.sourceLabel,
-          priority: basePri + (q >= 30 ? 0 : q <= 5 ? 400 : 80),
-          quality: q,
-          leg: sLeg,
-        });
+        const pri = basePri + (q >= 30 ? 0 : q <= 5 ? 6 : 2);
+        ch.streams.push({ url: s.url, label: s.sourceLabel, priority: pri, quality: q, leg: sLeg });
+        const ts = tsVariant(s.url);
+        if (ts && !ch.streams.some((x) => x.url === ts)) {
+          ch.streams.push({ url: ts, label: s.sourceLabel, priority: pri + 0.5, quality: q, leg: sLeg });
+        }
       }
     }
   }
@@ -529,7 +550,7 @@ function mergeResults(results, manuals) {
     }
     let ch = channelMap.get(key);
     if (!ch) {
-      ch = { id: key, name, logo: m.logo || '', categoryId: catKey, streams: [] };
+      ch = { id: key, name, logo: m.logo || '', categoryId: catKey, rawCategory: groupRaw, streams: [] };
       channelMap.set(key, ch);
     } else if (!ch.logo && m.logo) {
       ch.logo = m.logo;
@@ -598,14 +619,11 @@ function mergeResults(results, manuals) {
     channels = channels.filter((ch) => (ids.has(ch.id) ? false : (ids.add(ch.id), true)));
   }
 
-  channels.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-
-  const usedCats = new Set(channels.map((c) => c.categoryId));
-  const categories = Array.from(categoryMap.values())
-    .filter((c) => usedCats.has(c.id) && c.id !== ADULT_CATEGORY_ID)
-    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
-
-  return { channels, categories };
+  // Categorias fixas e limpas (Canais, Regionais, Capitais, HBO, Telecine...);
+  // canais 24h e "series avulsas" saem. Ver lib/live-categories.js.
+  const organized = liveCategories.organize(channels.filter((ch) => ch.streams.length));
+  channels = organized.channels.map(({ rawCategory, ...ch }) => ch);
+  return { channels, categories: organized.categories };
 }
 
 // ---------------------------------------------------------------------------
@@ -793,12 +811,14 @@ function refreshLiveTv(serviceKey) {
     if (hasChannels(payload)) {
       const prev = liveTvCache.payload;
       const prevCount = hasChannels(prev) ? prev.channels.length : 0;
-      const shrunk = prevCount > 200 && payload.channels.length < prevCount * 0.4 &&
+      const shrunk = !allowShrinkOnce && prevCount > 200 && payload.channels.length < prevCount * 0.4 &&
         Date.now() - liveTvCache.at < 2 * 60 * 60 * 1000;
       if (shrunk) {
         console.warn(`[live-tv] lista nova muito menor (${payload.channels.length} vs ${prevCount}) — mantendo a anterior`);
         return prev;
       }
+      allowShrinkOnce = false;
+      payload.version = listVersion(payload);
       liveTvCache = { at: Date.now(), payload };
       console.log(`[live-tv] cache atualizado: ${payload.channels.length} canais, TTL ${Math.round(CACHE_TTL_MS / 60000)} min`);
     }
@@ -807,6 +827,36 @@ function refreshLiveTv(serviceKey) {
     refreshInflight = null;
   });
   return refreshInflight;
+}
+
+/**
+ * Admin mudou fontes/pontes/canais: a proxima lista sai do zero (sem a trava
+ * de "lista muito menor" — apagar uma fonte grande e intencional).
+ */
+let allowShrinkOnce = false;
+let invalidateTimer = null;
+function invalidateLiveTv(reason) {
+  allowShrinkOnce = true;
+  liveTvCache = { at: 0, payload: liveTvCache.payload };
+  for (const k of Array.from(playbackHealth.keys())) playbackHealth.delete(k);
+  console.log('[live-tv] cache invalidado:', reason || 'admin');
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key || process.env.NODE_ENV === 'test') return;
+  clearTimeout(invalidateTimer);
+  invalidateTimer = setTimeout(() => {
+    refreshLiveTv(key).catch((e) => console.warn('[live-tv] refresh apos admin', e && e.message));
+  }, 3000);
+  if (invalidateTimer.unref) invalidateTimer.unref();
+}
+
+function listVersion(payload) {
+  const chans = (payload && payload.channels) || [];
+  let h = 0;
+  for (const c of chans) {
+    const str = c.id + ':' + c.categoryId + ':' + (c.streams || []).length;
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
+  }
+  return `${chans.length}-${(h >>> 0).toString(36)}`;
 }
 
 function sendCached(res, xCache, extra = {}) {
@@ -881,7 +931,11 @@ async function handler(req, res) {
 }
 
 module.exports = handler;
+module.exports.invalidate = invalidateLiveTv;
 module.exports._test = {
+  isDeadSource,
+  tsVariant,
+  listVersion,
   sourceKey,
   backoffMs,
   loadWithHealth,

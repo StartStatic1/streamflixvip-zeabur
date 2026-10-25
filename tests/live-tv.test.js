@@ -85,10 +85,11 @@ test('pedidos simultaneos fazem uma unica atualizacao e fontes repetidas carrega
   const names = body.channels.map((ch) => ch.name).sort();
   assert.deepStrictEqual(names, ['ESPN', 'Globo', 'SporTV'].sort());
   const globo = body.channels.find((ch) => ch.name === 'Globo');
-  assert.strictEqual(globo.streams.length, 2, 'Globo junta as duas fontes');
+  assert.strictEqual(new Set(globo.streams.map((x) => x.label)).size, 2, 'Globo junta as duas fontes');
   assert.ok(globo.logo);
   const catIds = body.categories.map((x) => x.id);
-  assert.deepStrictEqual(catIds.sort(), ['abertos', 'all', 'esportes'].sort(), 'categorias iguais viram uma so');
+  assert.deepStrictEqual(catIds, ['all', 'canais', 'sportv', 'espn'], 'categorias fixas, na ordem');
+  assert.ok(body.version, 'lista tem versao para o app saber quando mudou');
   assert.ok(!JSON.stringify(body).includes('XXX'));
   assert.strictEqual(body.sourcesUsed, 2);
 });
@@ -177,7 +178,7 @@ test('fonte cujos links nao tocam vai para o fim da ordem', () => {
   });
   const { channels } = mergeResults([mk('morta', 1, 'http://m/1.m3u8'), mk('boa', 5, 'http://b/1.m3u8')], []);
   assert.strictEqual(channels[0].streams[0].url, 'http://b/1.m3u8');
-  assert.strictEqual(channels[0].streams.length, 2, 'a fonte morta continua como reserva');
+  assert.ok(channels[0].streams.every((x) => x.url.startsWith('http://b/')), 'fonte morta sai da lista');
   playbackHealth.delete('morta');
 });
 
@@ -189,4 +190,39 @@ test('"ESPN 1" junta com "ESPN", mas "ESPN 2" continua separado', () => {
   };
   const names = mergeResults([r], []).channels.map((c) => c.name).sort();
   assert.deepStrictEqual(names, ['ESPN', 'ESPN 2']);
+});
+
+test('categorias organizadas: 24h sai, Telecine Pipoca vai para Telecine, ordem natural', () => {
+  const { mergeResults } = require('../api/live-tv.js')._test;
+  const r = {
+    entryKey: 'org', priority: 1,
+    categories: [
+      { id: '1', name: '4K - Canais' }, { id: '2', name: 'Desenhos 24h' }, { id: '3', name: 'Sportv' },
+      { id: '4', name: 'Globo Sudeste' }, { id: '5', name: 'Hbo Max (Ppv)' }, { id: '6', name: 'Séries Avulsas' },
+    ],
+    streams: [
+      ['Telecine Pipoca', '1'], ['100 Lobo', '2'], ['SporTV3', '3'], ['SporTV', '3'], ['SporTV 2', '3'],
+      ['GLOBO EPTV CAMPINAS', '4'], ['-REDE GLOBO SÃO PAULO', '4'], ['Globo', '4'], ['HBO MAX 1', '5'], ['Serie X', '6'],
+    ].map(([name, categoryId], i) => ({ name, categoryId, url: `http://h/live/u/p/${i}.m3u8`, sourceLabel: 'O' })),
+  };
+  const { channels, categories } = mergeResults([r], []);
+  const by = (id) => channels.filter((c) => c.categoryId === id).map((c) => c.name);
+  assert.deepStrictEqual(categories.map((c) => c.id), ['canais', 'regionais', 'capitais', 'hbo', 'telecine', 'sportv']);
+  assert.deepStrictEqual(by('telecine'), ['Telecine Pipoca']);
+  assert.deepStrictEqual(by('sportv'), ['SporTV', 'SporTV 2', 'SporTV 3']);
+  assert.deepStrictEqual(by('canais'), ['Globo']);
+  assert.deepStrictEqual(by('capitais'), ['Rede Globo São Paulo']);
+  assert.ok(!channels.some((c) => /^100 lobo|serie x/i.test(c.name)), '24h e avulsas saem');
+  const pip = channels.find((c) => c.name === 'Telecine Pipoca');
+  assert.ok(pip.streams.some((x) => x.url.endsWith('.ts')), 'reserva em .ts');
+});
+
+test('melhor fonte (prioridade 1) fica na frente mesmo sem "HD" no nome', () => {
+  const { mergeResults } = require('../api/live-tv.js')._test;
+  const mk = (key, pri, name) => ({
+    entryKey: key, priority: pri, categories: [{ id: '1', name: 'Filmes' }],
+    streams: [{ name, categoryId: '1', url: `http://${key}/live/u/p/1.m3u8`, sourceLabel: key }],
+  });
+  const { channels } = mergeResults([mk('ponte', 80, 'AXN FHD'), mk('melhor', 1, 'AXN')], []);
+  assert.strictEqual(channels[0].streams[0].label, 'melhor');
 });
