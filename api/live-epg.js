@@ -36,10 +36,21 @@ function normalize(s) {
     .trim();
 }
 
+// "20261025120000 +0000" -> respeita o fuso do feed (sem fuso: horario de Brasilia).
 function parseXmlTvTime(raw) {
-  const m = String(raw || '').match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+  const m = String(raw || '').trim().match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?:\s*([+-])(\d{2}):?(\d{2}))?/);
   if (!m) return null;
-  return new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}-03:00`);
+  const tz = m[7] ? `${m[7]}${m[8]}:${m[9]}` : '-03:00';
+  const d = new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}${tz}`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// "São.Paulo/SP..SBT.HD.br" -> "SBT HD" (ids de feeds tipo epgshare/epg.lat)
+function aliasFromId(id) {
+  let s = String(id || '');
+  if (s.includes('..')) s = s.slice(s.lastIndexOf('..') + 2);
+  s = s.replace(/\.(br|pt|us|uk|ar|mx)$/i, '').replace(/[._]+/g, ' ').trim();
+  return s;
 }
 
 function decodeXml(s) {
@@ -100,6 +111,8 @@ function parseFeed(xml) {
     const dnRe = /<display-name[^>]*>([^<]*)<\/display-name>/g;
     let d;
     while ((d = dnRe.exec(block))) dn.push(decodeXml(d[1]));
+    const alias = aliasFromId(id);
+    if (alias && !dn.some((x) => normalize(x) === normalize(alias))) dn.push(alias);
     namesById.set(id, dn.length ? dn : [id]);
   }
 
@@ -115,7 +128,7 @@ function parseFeed(xml) {
     const titleM = m[2].match(/<title[^>]*>([^<]*)<\/title>/);
     const title = decodeXml(titleM ? titleM[1] : '').trim();
     if (!title) continue;
-    const labels = namesById.get(chId) || [chId];
+    const labels = namesById.get(chId) || [chId, aliasFromId(chId)].filter(Boolean);
     for (const label of labels) {
       const key = normalize(label);
       if (!key || key.length < 2) continue;
@@ -125,10 +138,33 @@ function parseFeed(xml) {
         byKey.set(key, row);
       }
       if (start.getTime() <= now && stop.getTime() > now) row.now = title;
-      else if (start.getTime() > now && !row.next) row.next = title;
+      else if (start.getTime() > now && (!row.next || start.getTime() < row.nextAt)) {
+        row.next = title;
+        row.nextAt = start.getTime();
+      }
     }
   }
-  return Array.from(byKey.values()).filter((p) => p.now || p.next);
+  return Array.from(byKey.values())
+    .filter((p) => p.now || p.next)
+    .map(({ name, now: n, next }) => ({ name, now: n, next }));
+}
+
+// Feed que falha ou vem vazio/desatualizado fica pausado (1 h, 2 h... ate 12 h).
+const feedHealth = new Map();
+const FEED_BACKOFF_BASE_MS = 60 * 60 * 1000;
+const FEED_BACKOFF_MAX_MS = 12 * 60 * 60 * 1000;
+
+function feedPaused(url, now = Date.now()) {
+  const st = feedHealth.get(url);
+  return !!(st && st.until > now);
+}
+
+function markFeed(url, ok) {
+  if (ok) { feedHealth.delete(url); return; }
+  const st = feedHealth.get(url) || { fails: 0, until: 0 };
+  st.fails += 1;
+  st.until = Date.now() + Math.min(FEED_BACKOFF_MAX_MS, FEED_BACKOFF_BASE_MS * 2 ** (st.fails - 1));
+  feedHealth.set(url, st);
 }
 
 async function buildEpg() {
@@ -138,10 +174,13 @@ async function buildEpg() {
   for (const url of feeds) {
     if (seenUrl.has(url)) continue;
     seenUrl.add(url);
+    if (feedPaused(url)) continue;
     try {
-      const xml = await fetchFeed(url);
+      let xml = await fetchFeed(url);
       const parsed = parseFeed(xml);
-      console.log(`[live-epg] ${url.split('?')[0]} -> ${parsed.length} canais`);
+      xml = null;
+      markFeed(url, parsed.length > 0);
+      console.log(`[live-epg] ${url.split('?')[0]} -> ${parsed.length} canais${parsed.length ? '' : ' (pausado)'}`);
       for (const p of parsed) {
         const key = normalize(p.name);
         const prev = merged.get(key);
@@ -152,10 +191,24 @@ async function buildEpg() {
         }
       }
     } catch (e) {
+      markFeed(url, false);
       console.warn('[live-epg] feed falhou', url.split('?')[0], e.message);
     }
   }
   return Array.from(merged.values());
+}
+
+// Uma montagem por vez; grade vencida responde na hora e atualiza por tras.
+let epgInflight = null;
+function refreshEpg() {
+  if (epgInflight) return epgInflight;
+  epgInflight = buildEpg()
+    .then((programmes) => {
+      if (programmes.length) epgCache = { at: Date.now(), programmes };
+      return programmes;
+    })
+    .finally(() => { epgInflight = null; });
+  return epgInflight;
 }
 
 async function handler(req, res) {
@@ -163,21 +216,38 @@ async function handler(req, res) {
     res.status(405).json({ error: 'Metodo nao permitido' });
     return;
   }
-  const force = String(req.query?.refresh || '') === '1';
   const now = Date.now();
-  if (!force && epgCache.programmes.length && now - epgCache.at < EPG_TTL_MS) {
+  const age = now - epgCache.at;
+  const has = epgCache.programmes.length > 0;
+  const force = String(req.query?.refresh || '') === '1' && !(has && age < 5 * 60 * 1000);
+  if (!force && has && age < EPG_TTL_MS) {
     res.setHeader('X-Cache', 'HIT');
     res.status(200).json({
       programmes: epgCache.programmes,
       cached: true,
       count: epgCache.programmes.length,
-      cacheAgeSec: Math.round((now - epgCache.at) / 1000),
+      cacheAgeSec: Math.round(age / 1000),
+    });
+    return;
+  }
+  if (!force && has) {
+    refreshEpg().catch((e) => console.warn('[live-epg] atualizacao em segundo plano', e && e.message));
+    res.setHeader('X-Cache', 'STALE');
+    res.status(200).json({
+      programmes: epgCache.programmes,
+      cached: true,
+      stale: true,
+      count: epgCache.programmes.length,
+      cacheAgeSec: Math.round(age / 1000),
     });
     return;
   }
   try {
-    const programmes = await buildEpg();
-    if (programmes.length) epgCache = { at: Date.now(), programmes };
+    const programmes = await refreshEpg();
+    if (!programmes.length && epgCache.programmes.length) {
+      res.status(200).json({ programmes: epgCache.programmes, cached: true, stale: true, count: epgCache.programmes.length });
+      return;
+    }
     res.setHeader('X-Cache', force ? 'BYPASS' : 'MISS');
     res.status(200).json({ programmes, cached: false, count: programmes.length });
   } catch (e) {
@@ -190,3 +260,4 @@ async function handler(req, res) {
 }
 
 module.exports = handler;
+module.exports._test = { parseXmlTvTime, parseFeed, aliasFromId, normalize };
