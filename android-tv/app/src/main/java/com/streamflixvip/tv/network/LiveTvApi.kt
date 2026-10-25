@@ -34,6 +34,8 @@ data class LiveTvResponse(
     val categories: List<LiveCategory> = emptyList(),
     val channels: List<LiveChannel> = emptyList(),
     val sourcesUsed: Int = 0,
+    /** muda quando a lista muda no servidor */
+    val version: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

@@ -67,7 +67,7 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
     val uiState: StateFlow<LiveTvUiState> = _uiState.asStateFlow()
 
     private val recent = RecentStore(app)
-    private val cacheFile = File(app.cacheDir, "live_tv_v1.json")
+    private val cacheFile = File(app.cacheDir, "live_tv_v2.json") // v2: categorias novas do servidor
     private val adapter = NetworkModule.moshi.adapter(LiveTvResponse::class.java)
     private var raw: LiveTvResponse? = null
     private var loaded = false
@@ -99,8 +99,14 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
             if (cached != null && _uiState.value.channels.isEmpty()) apply(cached)
             runCatching { NetworkModule.liveTvApi.getLiveTv() }
                 .onSuccess { res ->
-                    apply(res)
-                    withContext(Dispatchers.IO) { runCatching { cacheFile.writeText(adapter.toJson(res)) } }
+                    // lista mudou no servidor (fonte apagada no admin etc.): troca tudo e regrava o cache
+                    val same = res.version != null && res.version == raw?.version && _uiState.value.channels.isNotEmpty()
+                    if (!same) {
+                        apply(res)
+                        withContext(Dispatchers.IO) { runCatching { cacheFile.writeText(adapter.toJson(res)) } }
+                    } else {
+                        _uiState.update { it.copy(isLoading = false) }
+                    }
                     loadEpg()
                 }
                 .onFailure {
@@ -128,19 +134,8 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
             chans = chans.filter { it.categoryId in kidsCatIds || isKidsName(it.name) }
             cats.filter { c -> chans.any { it.categoryId == c.id } }
         } else cats
-        val sortedCats = catsUsed.sortedWith(
-            compareBy(
-                {
-                    val n = it.name.lowercase()
-                    when {
-                        n.contains("manual") -> 1
-                        n.contains("vip") -> 2
-                        else -> 3
-                    }
-                },
-                { it.name.lowercase() },
-            ),
-        )
+        // ordem vem pronta do servidor (Canais, Regionais, Capitais, HBO, Telecine...)
+        val sortedCats = catsUsed
         _uiState.update {
             it.copy(
                 isLoading = false,
