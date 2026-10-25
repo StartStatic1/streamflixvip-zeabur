@@ -155,7 +155,8 @@ fun DetailScreen(
             return@LaunchedEffect
         }
         if (s.mediaType == "movie") {
-            if (s.isLoadingMovieSources && s.movieSources.isEmpty()) return@LaunchedEffect
+            // espera a lista completa (servidores chegam aos poucos) para retomar no melhor
+            if (s.isLoadingMovieSources) return@LaunchedEffect
             val src = s.movieSources.firstOrNull() ?: return@LaunchedEffect
             autoResumedContinue = true
             onPlaySource(src, 0, 0, title, posterPath)

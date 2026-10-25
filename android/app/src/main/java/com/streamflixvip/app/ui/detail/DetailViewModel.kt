@@ -113,7 +113,20 @@ class DetailViewModel(
                         var fromApiConfig: VipTitleConfig? = null
                         var requiredByApi = false
                         try {
-                            val res = NetworkModule.mediaSourcesApi.getMovieSources(tmdbId)
+                            val res = com.streamflixvip.app.network.fetchSourcesProgressively(
+                                fetch = { NetworkModule.mediaSourcesApi.getMovieSources(tmdbId, fast = 1) },
+                                onPartial = { partial ->
+                                    // mostra os servidores que ja chegaram; o resto vem em seguida
+                                    val cur = _uiState.value as? DetailUiState.Success
+                                    if (cur != null && cur.tmdbId == tmdbId) {
+                                        _uiState.value = cur.copy(
+                                            movieSources = partial.sources,
+                                            isLoadingMovieSources = true,
+                                            vipConfig = partial.vipConfig ?: cur.vipConfig,
+                                        )
+                                    }
+                                },
+                            )
                             if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED") {
                                 requiredByApi = true
                                 fromApiConfig = res.vipConfig
@@ -274,13 +287,37 @@ class DetailViewModel(
             isLoadingEpisodeSources = true,
         )
         viewModelScope.launch {
+            var pickerOpenedEarly = false
             val sources = try {
-                repository.getSourcesForEpisode(tmdbId, season, episode)
+                repository.getSourcesForEpisodeProgressive(tmdbId, season, episode) { partial ->
+                    // 2+ servidores ja chegaram: abre a lista e vai completando
+                    val cur = _uiState.value as? DetailUiState.Success
+                    if (cur != null && cur.selectedSeason == season && cur.selectedEpisode == episode &&
+                        !forceAutoPlay && partial.size >= 2 &&
+                        (!pickerOpenedEarly || cur.showServerPickerForEpisode == episode)
+                    ) {
+                        _uiState.value = cur.copy(
+                            episodeSources = partial,
+                            isLoadingEpisodeSources = true,
+                            showServerPickerForEpisode = episode,
+                        )
+                        pickerOpenedEarly = true
+                    }
+                }
             } catch (_: Exception) {
                 emptyList()
             }
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             if (stillCurrent.selectedSeason != season || stillCurrent.selectedEpisode != episode) return@launch
+
+            if (pickerOpenedEarly) {
+                // lista ja aberta (ou fechada pelo usuario): so completa, sem tocar sozinho
+                _uiState.value = stillCurrent.copy(
+                    episodeSources = if (sources.size >= stillCurrent.episodeSources.size) sources else stillCurrent.episodeSources,
+                    isLoadingEpisodeSources = false,
+                )
+                return@launch
+            }
 
             when {
                 sources.size == 1 -> {

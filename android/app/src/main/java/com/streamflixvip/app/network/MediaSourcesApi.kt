@@ -13,6 +13,9 @@ data class MediaSourcesResponse(
     val error: String? = null,
     val code: String? = null,
     val episodesWithSources: List<Int> = emptyList(),
+    /** true = ainda chegando servidores; pedir de novo depois de pollAfterMs (so com fast=1) */
+    val partial: Boolean = false,
+    val pollAfterMs: Long? = null,
 )
 
 interface MediaSourcesApi {
@@ -20,6 +23,7 @@ interface MediaSourcesApi {
     suspend fun getMovieSources(
         @Query("tmdb_id") tmdbId: Int,
         @Query("type") type: String = "movie",
+        @Query("fast") fast: Int? = null,
     ): MediaSourcesResponse
 
     @GET("api/media-sources")
@@ -28,6 +32,7 @@ interface MediaSourcesApi {
         @Query("type") type: String = "tv",
         @Query("season") season: Int,
         @Query("episode") episode: Int,
+        @Query("fast") fast: Int? = null,
     ): MediaSourcesResponse
 
     @GET("api/media-sources")

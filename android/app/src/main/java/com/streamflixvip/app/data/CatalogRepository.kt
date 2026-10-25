@@ -154,6 +154,43 @@ class CatalogRepository {
         }
     }
 
+    /**
+     * Igual a getSourcesForEpisode, mas avisa os servidores que ja chegaram (onPartial)
+     * enquanto o resto ainda carrega. Mesmo fallback no banco se a API falhar/vier vazia.
+     */
+    suspend fun getSourcesForEpisodeProgressive(
+        tmdbId: Int,
+        season: Int,
+        episode: Int,
+        onPartial: suspend (List<VipSource>) -> Unit,
+    ): List<VipSource> {
+        try {
+            val res = com.streamflixvip.app.network.fetchSourcesProgressively(
+                fetch = { mediaSources.getEpisodeSources(tmdbId, season = season, episode = episode, fast = 1) },
+                onPartial = { onPartial(prioritize(it.sources)) },
+            )
+            if (res.code == "VIP_REQUIRED" || res.code == "AUTH_REQUIRED") return emptyList()
+            if (res.sources.isNotEmpty()) return prioritize(res.sources)
+        } catch (e: HttpException) {
+            if (e.code() == 401 || e.code() == 403) return emptyList()
+        } catch (_: Exception) {
+        }
+        val config = getVipTitleConfig(tmdbId, "tv")
+        if (requiresVip(config, episode) && !VipStatusHolder.isVipNow()) return emptyList()
+        return try {
+            prioritize(
+                supabase.getSourcesForEpisode(
+                    apiKey = anonKey,
+                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
+                    seasonFilter = PostgrestFilter.eq(season),
+                    episodeFilter = PostgrestFilter.eq(episode),
+                ),
+            )
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     private fun prioritize(sources: List<VipSource>): List<VipSource> =
         sources.sortedByDescending { it.source_label == "MegaEmbed VIP" }
 
