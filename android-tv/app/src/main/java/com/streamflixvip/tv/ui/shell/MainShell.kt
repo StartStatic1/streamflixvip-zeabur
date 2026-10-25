@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -324,32 +325,30 @@ private fun RailItem(
     val p = LocalPalette.current
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(12.dp)
+    // Pilula compacta: so do tamanho do icone + nome (nao a largura toda do menu)
     Surface(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(46.dp).onFocusChanged { focused = it.isFocused },
+        modifier = modifier.wrapContentWidth(Alignment.Start).height(44.dp).onFocusChanged { focused = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(shape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected && !expanded) p.accent.copy(alpha = 0.16f) else Color.Transparent,
+            containerColor = if (selected) p.accent.copy(alpha = 0.16f) else Color.Transparent,
             contentColor = if (selected) p.accent else p.textMuted,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
+            focusedContainerColor = p.accent,
+            focusedContentColor = p.onAccent,
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.03f),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
-        Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxHeight().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(section.icon, section.label, Modifier.size(22.dp))
             if (expanded) {
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(14.dp))
                 Text(
                     section.label,
                     fontSize = 15.sp,
                     fontWeight = if (selected || focused) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1,
-                    modifier = Modifier.weight(1f),
                 )
-                if (selected) {
-                    Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(if (focused) Color.Black else p.accent))
-                }
+                Spacer(Modifier.width(4.dp))
             }
         }
     }
