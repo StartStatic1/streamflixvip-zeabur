@@ -27,6 +27,7 @@ class LocalLibraryStore(context: Context) {
         if (entry.durationSeconds <= 0 || entry.positionSeconds < 5) return
         val fraction = entry.positionSeconds.toFloat() / entry.durationSeconds
         if (fraction >= 0.95f) {
+            markWatched(entry.tmdbId, entry.mediaType, entry.season, entry.episode)
             removeProgress(entry.tmdbId, entry.mediaType, entry.season, entry.episode)
             return
         }
@@ -58,8 +59,48 @@ class LocalLibraryStore(context: Context) {
     }
 
     fun clearAllProgress() {
-        prefs.edit().remove(KEY_PROGRESS).apply()
+        prefs.edit().remove(KEY_PROGRESS).remove(KEY_WATCHED).apply()
     }
+
+    /** Tira o titulo inteiro do "Continuar assistindo" (todas as entradas dele). */
+    fun removeTitleProgress(tmdbId: Int, mediaType: String) {
+        saveProgressRaw(loadProgressRaw().filterNot { it.tmdbId == tmdbId && it.mediaType == mediaType })
+    }
+
+    /** Entrada mais recente desse titulo (qualquer episodio). */
+    fun getLatestProgressForTitle(tmdbId: Int, mediaType: String): LocalWatchProgress? =
+        loadProgressRaw().filter { it.tmdbId == tmdbId && it.mediaType == mediaType }
+            .maxByOrNull { it.updatedAt }
+
+    /** Todos os progressos desse titulo (para barrinhas nos episodios). */
+    fun getProgressListForTitle(tmdbId: Int, mediaType: String): List<LocalWatchProgress> =
+        loadProgressRaw().filter { it.tmdbId == tmdbId && it.mediaType == mediaType }
+
+    // ── Assistidos (>= 95%) ────────────────────────────────────────────────
+
+    fun markWatched(tmdbId: Int, mediaType: String, season: Int, episode: Int) {
+        val set = watchedRaw().toMutableList()
+        val key = progressKey(tmdbId, mediaType, season, episode)
+        set.remove(key)
+        set.add(0, key)
+        prefs.edit().putString(KEY_WATCHED, JSONArray(set.take(600)).toString()).apply()
+    }
+
+    /** Pares (temporada, episodio) ja assistidos desse titulo. */
+    fun watchedEpisodes(tmdbId: Int, mediaType: String): Set<Pair<Int, Int>> {
+        val prefix = "$tmdbId|$mediaType|"
+        return watchedRaw().filter { it.startsWith(prefix) }.mapNotNull {
+            val parts = it.split("|")
+            val s = parts.getOrNull(2)?.toIntOrNull()
+            val e = parts.getOrNull(3)?.toIntOrNull()
+            if (s != null && e != null) s to e else null
+        }.toSet()
+    }
+
+    private fun watchedRaw(): List<String> = runCatching {
+        val arr = JSONArray(prefs.getString(KEY_WATCHED, "[]") ?: "[]")
+        (0 until arr.length()).map { arr.getString(it) }
+    }.getOrDefault(emptyList())
 
     fun getProgressFor(
         tmdbId: Int,
@@ -133,6 +174,7 @@ class LocalLibraryStore(context: Context) {
                     positionSeconds = o.optInt("positionSeconds"),
                     durationSeconds = o.optInt("durationSeconds"),
                     updatedAt = o.optLong("updatedAt", 0L),
+                    backdropPath = o.optString("backdropPath").takeIf { it.isNotBlank() && it != "null" },
                 )
             }
         }.getOrDefault(emptyList())
@@ -151,6 +193,7 @@ class LocalLibraryStore(context: Context) {
                 put("positionSeconds", e.positionSeconds)
                 put("durationSeconds", e.durationSeconds)
                 put("updatedAt", e.updatedAt)
+                put("backdropPath", e.backdropPath ?: JSONObject.NULL)
             })
         }
         prefs.edit().putString(KEY_PROGRESS, arr.toString()).apply()
@@ -191,6 +234,7 @@ class LocalLibraryStore(context: Context) {
         private const val PREFS_NAME = "sfv_tv_library"
         private const val KEY_PROGRESS = "watch_progress"
         private const val KEY_FAVORITES = "favorites"
+        private const val KEY_WATCHED = "watched"
     }
 }
 
@@ -204,7 +248,11 @@ data class LocalWatchProgress(
     val positionSeconds: Int,
     val durationSeconds: Int,
     val updatedAt: Long = System.currentTimeMillis(),
+    val backdropPath: String? = null,
 ) {
+    val remainingMinutes: Int
+        get() = ((durationSeconds - positionSeconds).coerceAtLeast(0) / 60)
+
     val progressFraction: Float
         get() = if (durationSeconds > 0) {
             (positionSeconds.toFloat() / durationSeconds).coerceIn(0f, 1f)

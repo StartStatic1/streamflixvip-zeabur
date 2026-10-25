@@ -91,12 +91,21 @@ object NetworkModule {
         .readTimeout(45, TimeUnit.SECONDS)
         .build()
 
+    /** Fontes (media-sources) e legendas: o servidor pode demorar um pouco mais. */
+    private val mediaOkHttp = OkHttpClient.Builder()
+        .addInterceptor(sessionAuthInterceptor)
+        .addInterceptor(loggingInterceptor)
+        .authenticator(tokenAuthenticator)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
     val fastProbeClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.SECONDS)
         .build()
 
-    private val moshi = Moshi.Builder().build()
+    val moshi: Moshi = Moshi.Builder().build()
 
     val tmdbApi: TmdbApi by lazy {
         Retrofit.Builder()
@@ -110,10 +119,19 @@ object NetworkModule {
     val vipApi: VipApi by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL)
-            .client(okHttpClient)
+            .client(mediaOkHttp)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(VipApi::class.java)
+    }
+
+    val subtitlesApi: SubtitlesApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.API_BASE_URL)
+            .client(mediaOkHttp)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(SubtitlesApi::class.java)
     }
 
     val liveTvApi: LiveTvApi by lazy {

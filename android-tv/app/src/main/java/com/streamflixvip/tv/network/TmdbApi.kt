@@ -3,6 +3,7 @@ package com.streamflixvip.tv.network
 import com.squareup.moshi.JsonClass
 import retrofit2.http.GET
 import retrofit2.http.Query
+import retrofit2.http.QueryMap
 
 interface TmdbApi {
 
@@ -20,6 +21,13 @@ interface TmdbApi {
 
     @GET("api/tmdb")
     suspend fun requestSeasonDetail(@Query("path") path: String): TmdbSeasonDetail
+
+    /** Pedido generico (qualquer filtro do TMDB: sort_by, with_genres, page...). */
+    @GET("api/tmdb")
+    suspend fun requestMap(
+        @Query("path") path: String,
+        @QueryMap params: Map<String, String> = emptyMap(),
+    ): TmdbResponse
 }
 
 @JsonClass(generateAdapter = true)
@@ -43,7 +51,35 @@ data class TmdbResponse(
     val original_language: String? = null,
     val videos: TmdbVideosResponse? = null,
     val credits: TmdbCredits? = null,
+    val total_pages: Int? = null,
+    val number_of_episodes: Int? = null,
+    val status: String? = null,
+    val images: TmdbImages? = null,
+    val recommendations: TmdbPage? = null,
+    val similar: TmdbPage? = null,
+    val content_ratings: TmdbContentRatings? = null,
+    val release_dates: TmdbReleaseDates? = null,
+    val imdb_id: String? = null,
+    val external_ids: TmdbExternalIds? = null,
 ) {
+    /** Logo (PNG transparente) em pt, senao en, senao qualquer. */
+    val logoPath: String?
+        get() {
+            val logos = images?.logos.orEmpty().filter { !it.file_path.isNullOrBlank() && !it.file_path.endsWith(".svg") }
+            return (logos.firstOrNull { it.iso_639_1 == "pt" }
+                ?: logos.firstOrNull { it.iso_639_1 == "en" }
+                ?: logos.firstOrNull())?.file_path
+        }
+
+    /** Classificacao indicativa BR (ex.: "14", "L"). */
+    val ageRating: String?
+        get() {
+            content_ratings?.results?.firstOrNull { it.iso_3166_1 == "BR" }?.rating
+                ?.takeIf { it.isNotBlank() }?.let { return it }
+            return release_dates?.results?.firstOrNull { it.iso_3166_1 == "BR" }
+                ?.release_dates?.mapNotNull { it.certification?.takeIf { c -> c.isNotBlank() } }?.firstOrNull()
+        }
+
     val displayRuntime: String?
         get() = runtime?.takeIf { it > 0 }?.let {
             val h = it / 60
@@ -58,6 +94,33 @@ data class TmdbResponse(
                 ?: results.firstOrNull { it.type == "Teaser" }?.key
         }
 }
+
+@JsonClass(generateAdapter = true)
+data class TmdbImages(val logos: List<TmdbImageFile>? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbImageFile(val file_path: String? = null, val iso_639_1: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbPage(val results: List<TmdbItem>? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbContentRatings(val results: List<TmdbCountryRating>? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbCountryRating(val iso_3166_1: String? = null, val rating: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbReleaseDates(val results: List<TmdbCountryRelease>? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbCountryRelease(val iso_3166_1: String? = null, val release_dates: List<TmdbReleaseDate>? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbReleaseDate(val certification: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class TmdbExternalIds(val imdb_id: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class TmdbVideosResponse(val results: List<TmdbVideo>? = null)
@@ -93,7 +156,13 @@ data class TmdbItem(
     val media_type: String? = null,
     val popularity: Double? = null,
     val original_language: String? = null,
+    val genre_ids: List<Int>? = null,
+    val adult: Boolean? = null,
 ) {
+    /** Conteudo infantil/familia (para o Modo Infantil). */
+    val isKidsFriendly: Boolean
+        get() = adult != true && genre_ids.orEmpty().any { it == 16 || it == 10751 || it == 10762 }
+
     val displayTitle: String get() = title ?: name ?: "Sem título"
     val resolvedMediaType: String get() = media_type ?: if (title != null) "movie" else "tv"
     val displayYear: String? get() = (release_date ?: first_air_date)?.take(4)?.takeIf { it.length == 4 }
@@ -112,8 +181,8 @@ data class TmdbGenre(val id: Int, val name: String)
 @JsonClass(generateAdapter = true)
 data class TmdbSeason(
     val season_number: Int,
-    val episode_count: Int,
-    val name: String,
+    val episode_count: Int = 0,
+    val name: String? = null,
 )
 
 @JsonClass(generateAdapter = true)

@@ -45,6 +45,7 @@ interface VipApi {
         @Query("type") type: String,
         @Query("season") season: Int? = null,
         @Query("episode") episode: Int? = null,
+        @Query("fast") fast: Int? = null,
     ): MediaSourcesResponse
 }
 
@@ -55,6 +56,9 @@ data class MediaSourcesResponse(
     val code: String? = null,
     val requiresVip: Boolean? = null,
     val isVip: Boolean? = null,
+    /** true = ainda chegando servidores; pedir de novo depois de pollAfterMs (so com fast=1) */
+    val partial: Boolean = false,
+    val pollAfterMs: Long? = null,
 )
 
 @JsonClass(generateAdapter = true)

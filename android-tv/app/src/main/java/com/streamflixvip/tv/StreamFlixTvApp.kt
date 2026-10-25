@@ -3,6 +3,7 @@ package com.streamflixvip.tv
 import android.app.Application
 import com.streamflixvip.tv.data.SessionStore
 import com.streamflixvip.tv.data.TvActivationManager
+import com.streamflixvip.tv.data.TvSettingsStore
 import com.streamflixvip.tv.network.NetworkModule
 
 /**
@@ -16,6 +17,7 @@ class StreamFlixTvApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        TvSettingsStore.init(this)
         sessionStore = SessionStore(this)
         NetworkModule.sessionStore = sessionStore
         // VIP na TV e por device_id (tv_activations), nao por e-mail JWT
