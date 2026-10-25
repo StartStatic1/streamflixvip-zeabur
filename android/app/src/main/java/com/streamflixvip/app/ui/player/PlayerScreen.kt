@@ -277,9 +277,9 @@ private fun saveSeriesPref(context: android.content.Context, tmdbId: Int, key: S
     seriesPrefs(context).edit().putString("${tmdbId}_$key", value).apply()
 }
 
-private data class TrackOption(val label: String, val group: TrackGroup, val trackIndex: Int)
+private data class TrackOption(val label: String, val group: TrackGroup, val trackIndex: Int, val language: String? = null)
 
-data class SubtitleCue(val startMs: Long, val endMs: Long, val text: String)
+data class SubtitleCue(val startMs: Long, val endMs: Long, val text: String, val top: Boolean = false)
 
 private fun humanTrackLabel(label: String?, language: String?, index: Int): String {
     val raw = (label ?: language ?: "").trim()
@@ -420,7 +420,17 @@ private fun NativePlayer(
 ) {
     val context = LocalContext.current
     val progressRepository = remember { ProgressRepository() }
-    val trackSelector = remember { DefaultTrackSelector(context) }
+    // Portugues primeiro (audio e legenda) quando o video tem mais de uma faixa
+    val trackSelector = remember {
+        DefaultTrackSelector(context).apply {
+            parameters = buildUponParameters()
+                .setPreferredAudioLanguages("pt-BR", "pt", "por")
+                .setPreferredTextLanguages("pt-BR", "pt", "por")
+                .build()
+        }
+    }
+    var subStyle by remember { mutableStateOf(SubtitleStylePrefs.load(context)) }
+    var currentAudioLang by remember { mutableStateOf<String?>(null) }
 
     var aspectMode by remember { mutableStateOf(AspectMode.FIT) }
     var subtitleOptions by remember { mutableStateOf(listOf<TrackOption>()) }
@@ -437,6 +447,7 @@ private fun NativePlayer(
     var onlineSubtitleRaw by remember { mutableStateOf<String?>(null) }
     var overlayCues by remember { mutableStateOf(listOf<SubtitleCue>()) }
     var overlaySubText by remember { mutableStateOf<String?>(null) }
+    var overlaySubTop by remember { mutableStateOf(false) }
     var scrubPosition by remember { mutableStateOf(0L) }
     var scrubDuration by remember { mutableStateOf(0L) }
     var isScrubbing by remember { mutableStateOf(false) }
@@ -515,7 +526,21 @@ private fun NativePlayer(
         if (!onlineSubtitleApplied) {
             val subPref = preferredSubtitleKey
             when {
-                subPref.isBlank() || subPref == "off" -> {
+                subPref.isBlank() -> {
+                    // Sem escolha salva: audio estrangeiro + legenda PT no video = liga sozinha
+                    val lang = currentAudioLang?.lowercase().orEmpty()
+                    val audioForeign = lang.isNotBlank() && lang != "und" && !lang.startsWith("pt") && !lang.startsWith("por")
+                    val ptSub = if (audioForeign) subs.firstOrNull { isPortugueseTrack(it.language, it.label) } else null
+                    if (ptSub != null) {
+                        builder.setOverrideForType(TrackSelectionOverride(ptSub.group, ptSub.trackIndex))
+                            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                        selectedSubtitleLabel = "Stream: ${ptSub.label}"
+                    } else {
+                        builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                        selectedSubtitleLabel = "Desligada"
+                    }
+                }
+                subPref == "off" -> {
                     builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                     selectedSubtitleLabel = "Desligada"
                 }
@@ -594,10 +619,11 @@ private fun NativePlayer(
                         when (group.type) {
                             C.TRACK_TYPE_TEXT -> for (i in 0 until group.length) {
                                 val f = group.getTrackFormat(i)
-                                subtitles += TrackOption(humanTrackLabel(f.label, f.language, i), group.mediaTrackGroup, i)
+                                subtitles += TrackOption(humanTrackLabel(f.label, f.language, i), group.mediaTrackGroup, i, f.language)
                             }
                             C.TRACK_TYPE_AUDIO -> for (i in 0 until group.length) {
                                 val f = group.getTrackFormat(i)
+                                if (group.isTrackSelected(i)) currentAudioLang = f.language
                                 audios += TrackOption(humanTrackLabel(f.label, f.language, i), group.mediaTrackGroup, i)
                             }
                             C.TRACK_TYPE_VIDEO -> for (i in 0 until group.length) {
@@ -785,15 +811,10 @@ private fun NativePlayer(
             Toast.makeText(context, "Sync só para legenda online", Toast.LENGTH_SHORT).show()
             return
         }
-        MainScope().launch {
-            try {
-                overlayCues = parseSubtitleCues(shiftSrtContent(raw, newOffset))
-                val sign = if (newOffset >= 0) "+" else ""
-                Toast.makeText(context, "Sync ${sign}${newOffset / 1000.0}s", Toast.LENGTH_SHORT).show()
-            } catch (_: Exception) {
-                Toast.makeText(context, "Falha no sync", Toast.LENGTH_SHORT).show()
-            }
-        }
+        // O atraso e aplicado na hora de mostrar (antes o ajuste reescrevia o texto
+        // com uma regex que nunca casava, entao o Sync nao fazia nada).
+        val sign = if (newOffset >= 0) "+" else ""
+        Toast.makeText(context, "Sync ${sign}${newOffset / 1000.0}s", Toast.LENGTH_SHORT).show()
     }
 
     fun selectSubtitle(option: TrackOption?) {
@@ -866,7 +887,7 @@ private fun NativePlayer(
             }
             onlineSubtitleRaw = content
             // Overlay: nao remonta o video (evita tela preta)
-            overlayCues = parseSubtitleCues(shiftSrtContent(content, subtitleOffsetMs))
+            overlayCues = parseSubtitleCues(content)
             onlineSubtitleApplied = true
             persistSubtitleKey("online")
             val short = (item.release ?: "PT-BR").let { if (it.length > 28) it.take(28) + "…" else it }
@@ -929,9 +950,11 @@ private fun NativePlayer(
     LaunchedEffect(exoPlayer, overlayCues, onlineSubtitleApplied) {
         while (true) {
             if (onlineSubtitleApplied && overlayCues.isNotEmpty()) {
-                val pos = exoPlayer.currentPosition
-                val cue = overlayCues.firstOrNull { pos >= it.startMs && pos < it.endMs }
-                overlaySubText = cue?.text
+                // atraso positivo = legenda aparece depois
+                val pos = exoPlayer.currentPosition - subtitleOffsetMs
+                val active = overlayCues.filter { pos >= it.startMs && pos < it.endMs }
+                overlaySubText = if (active.isEmpty()) null else active.joinToString("\n") { it.text }
+                overlaySubTop = active.any { it.top }
             } else if (overlaySubText != null) {
                 overlaySubText = null
             }
@@ -1022,20 +1045,8 @@ private fun NativePlayer(
                     controllerHideOnTouch = true
                     post { hideController() }
                     subtitleView?.let { sub ->
-                        sub.setApplyEmbeddedStyles(false)
-                        sub.setApplyEmbeddedFontSizes(false)
                         sub.setBottomPaddingFraction(0.08f)
-                        sub.setStyle(
-                            androidx.media3.ui.CaptionStyleCompat(
-                                android.graphics.Color.WHITE,
-                                android.graphics.Color.TRANSPARENT,
-                                android.graphics.Color.TRANSPARENT,
-                                androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE,
-                                android.graphics.Color.BLACK,
-                                null,
-                            ),
-                        )
-                        sub.setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 18f)
+                        applySubtitleStyle(sub, subStyle)
                     }
                     fun hideNativeSettingsButton() {
                         findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)?.visibility = android.view.View.GONE
@@ -1057,7 +1068,10 @@ private fun NativePlayer(
                     )
                 }
             },
-            update = { v -> v.resizeMode = aspectMode.resizeMode },
+            update = { v ->
+                v.resizeMode = aspectMode.resizeMode
+                v.subtitleView?.let { applySubtitleStyle(it, subStyle) }
+            },
         )
 
         // Legenda online em overlay (sem remount / sem tela preta)
@@ -1066,23 +1080,11 @@ private fun NativePlayer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(bottom = 72.dp)
+                    .padding(top = if (overlaySubTop) 36.dp else 0.dp, bottom = if (overlaySubTop) 0.dp else 72.dp)
                     .navigationBarsPadding(),
-                contentAlignment = Alignment.BottomCenter,
+                contentAlignment = if (overlaySubTop) Alignment.TopCenter else Alignment.BottomCenter,
             ) {
-                Surface(
-                    color = Color.Black.copy(alpha = 0.55f),
-                    shape = RoundedCornerShape(6.dp),
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                ) {
-                    Text(
-                        text = subLine,
-                        color = Color.White,
-                        fontSize = 17.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    )
-                }
+                OverlaySubtitleText(subLine, subStyle)
             }
         }
 
@@ -1467,6 +1469,10 @@ private fun NativePlayer(
                                 }
                             }
                             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                            SettingsRow("Aparência da legenda", "${subStyle.size.label} · ${subStyle.color.label}") {
+                                settingsPanel = SettingsPanel.SUB_STYLE
+                            }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                             if (audioOptions.isNotEmpty()) {
                                 SettingsRow("Áudio", selectedAudioLabel) { settingsPanel = SettingsPanel.AUDIO }
                                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
@@ -1586,6 +1592,26 @@ private fun NativePlayer(
                                 }
                             }
                         }
+                        SettingsPanel.SUB_STYLE -> {
+                            SubmenuHeader("Aparência da legenda") { settingsPanel = SettingsPanel.MAIN }
+                            SettingsRow("Tamanho", subStyle.size.label) {
+                                subStyle = subStyle.copy(size = nextOf(subStyle.size, SubSize.entries))
+                                SubtitleStylePrefs.save(context, subStyle)
+                            }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                            SettingsRow("Cor", subStyle.color.label) {
+                                subStyle = subStyle.copy(color = nextOf(subStyle.color, SubColor.entries))
+                                SubtitleStylePrefs.save(context, subStyle)
+                            }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                            SettingsRow("Fundo", subStyle.background.label) {
+                                subStyle = subStyle.copy(background = nextOf(subStyle.background, SubBackground.entries))
+                                SubtitleStylePrefs.save(context, subStyle)
+                            }
+                            Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                                OverlaySubtitleText("Exemplo de <i>legenda</i>", subStyle)
+                            }
+                        }
                         SettingsPanel.NONE -> {}
                     }
                 }
@@ -1607,7 +1633,7 @@ private fun prettyFonteLabel(url: String, index: Int): String {
     }
 }
 
-private enum class SettingsPanel { NONE, MAIN, SUBTITLE, AUDIO, QUALITY, SPEED, SOURCES }
+private enum class SettingsPanel { NONE, MAIN, SUBTITLE, AUDIO, QUALITY, SPEED, SOURCES, SUB_STYLE }
 
 private fun formatPlayerTime(ms: Long): String {
     if (ms <= 0L) return "0:00"
@@ -1618,72 +1644,9 @@ private fun formatPlayerTime(ms: Long): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
-private fun parseTsToMs(ts: String): Long {
-    val clean = ts.trim().replace('.', ',')
-    val parts = clean.split(",", limit = 2)
-    val hms = parts[0].split(":")
-    if (hms.size < 3) return 0L
-    val mill = parts.getOrNull(1)?.padEnd(3, '0')?.take(3)?.toLongOrNull() ?: 0L
-    var total = (hms[0].toLongOrNull() ?: 0L) * 3_600_000L
-    total += (hms[1].toLongOrNull() ?: 0L) * 60_000L
-    total += (hms[2].toLongOrNull() ?: 0L) * 1_000L
-    total += mill
-    return total.coerceAtLeast(0L)
-}
 
-private fun parseSubtitleCues(content: String): List<SubtitleCue> {
-    val text = content.replace("\r", "")
-    val cues = mutableListOf<SubtitleCue>()
-    val re = Regex("""(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[,.]\d{1,3})""")
-    val lines = text.lineSequence().toList()
-    var i = 0
-    while (i < lines.size) {
-        val line = lines[i]
-        val m = re.find(line)
-        if (m != null) {
-            val start = parseTsToMs(m.groupValues[1])
-            val end = parseTsToMs(m.groupValues[2])
-            val buf = mutableListOf<String>()
-            i++
-            while (i < lines.size && lines[i].isNotBlank() && re.find(lines[i]) == null) {
-                val l = lines[i].trim()
-                if (l.isNotEmpty() && !l.all { it.isDigit() }) buf.add(l)
-                i++
-            }
-            if (buf.isNotEmpty() && end > start) {
-                cues.add(SubtitleCue(start, end, buf.joinToString("\n")))
-            }
-            continue
-        }
-        i++
-    }
-    return cues
-}
+private fun parseSubtitleCues(content: String): List<SubtitleCue> = parseSubtitleText(content)
 
-private fun shiftSrtContent(content: String, offsetMs: Long): String {
-    if (offsetMs == 0L) return content
-    fun shiftTs(ts: String): String {
-        val clean = ts.trim().replace('.', ',')
-        val parts = clean.split(",", limit = 2)
-        val hms = parts[0].split(":")
-        if (hms.size < 3) return ts
-        val mill = parts.getOrNull(1)?.padEnd(3, '0')?.take(3)?.toLongOrNull() ?: 0L
-        var total = hms[0].toLongOrNull()?.times(3600000) ?: return ts
-        total += (hms[1].toLongOrNull() ?: 0L) * 60000
-        total += (hms[2].toLongOrNull() ?: 0L) * 1000
-        total += mill
-        total = (total + offsetMs).coerceAtLeast(0L)
-        val nh = total / 3600000
-        val nm = (total % 3600000) / 60000
-        val ns = (total % 60000) / 1000
-        val nms = total % 1000
-        return "%02d:%02d:%02d,%03d".format(nh, nm, ns, nms)
-    }
-    val re = Regex("""(\\d{1,2}:\\d{2}:\\d{2}[,.]\\d{1,3})\\s*-->\\s*(\\d{1,2}:\\d{2}:\\d{2}[,.]\\d{1,3})""")
-    return re.replace(content) { m ->
-        "${shiftTs(m.groupValues[1])} --> ${shiftTs(m.groupValues[2])}"
-    }
-}
 
 
 
@@ -1748,5 +1711,45 @@ private fun EmbedWebView(url: String) {
                 CircularProgressIndicator()
             }
         }
+    }
+}
+
+private fun isPortugueseTrack(language: String?, label: String?): Boolean {
+    val l = language?.lowercase().orEmpty()
+    return l.startsWith("pt") || l.startsWith("por") || l == "pob" ||
+        (label ?: "").contains("portugu", ignoreCase = true)
+}
+
+@Composable
+private fun OverlaySubtitleText(text: String, style: SubtitleStyle) {
+    val annotated = cueToAnnotated(text)
+    val size = style.size.sp.sp
+    val shadow = when (style.background) {
+        SubBackground.SHADOW -> androidx.compose.ui.graphics.Shadow(Color.Black, androidx.compose.ui.geometry.Offset(3f, 3f), 6f)
+        else -> null
+    }
+    val base = androidx.compose.ui.text.TextStyle(fontSize = size, textAlign = TextAlign.Center, shadow = shadow)
+    val content: @Composable () -> Unit = {
+        Box(contentAlignment = Alignment.Center) {
+            if (style.background == SubBackground.OUTLINE) {
+                Text(
+                    text = annotated,
+                    color = Color.Black,
+                    style = base.copy(drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = 5f)),
+                )
+            }
+            Text(text = annotated, color = style.composeColor, style = base)
+        }
+    }
+    if (style.background == SubBackground.BOX) {
+        Surface(
+            color = Color.Black.copy(alpha = 0.7f),
+            shape = RoundedCornerShape(6.dp),
+            modifier = Modifier.padding(horizontal = 16.dp),
+        ) {
+            Box(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) { content() }
+        }
+    } else {
+        Box(Modifier.padding(horizontal = 16.dp)) { content() }
     }
 }
