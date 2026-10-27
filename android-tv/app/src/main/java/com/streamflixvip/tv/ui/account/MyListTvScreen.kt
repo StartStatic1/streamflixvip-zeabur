@@ -98,7 +98,7 @@ fun MyListTvScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                itemsIndexed(favorites, key = { _, it -> "${it.tmdbId}_${it.mediaType}" }) { index, fav ->
+                itemsIndexed(favorites.distinctBy { "${it.tmdbId}_${it.mediaType}" }, key = { _, it -> "${it.tmdbId}_${it.mediaType}" }) { index, fav ->
                     Column {
                         PosterCard(
                             title = fav.title,

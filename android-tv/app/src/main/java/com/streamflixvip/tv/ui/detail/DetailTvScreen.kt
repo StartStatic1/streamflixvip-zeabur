@@ -346,7 +346,7 @@ fun DetailTvScreen(
                                     contentPadding = PaddingValues(horizontal = 56.dp, vertical = 8.dp),
                                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                                 ) {
-                                    items(recs, key = { it.id }) { item ->
+                                    items(recs.distinctBy { it.id }, key = { it.id }) { item ->
                                         PosterCard(
                                             title = item.displayTitle,
                                             posterPath = item.poster_path,
@@ -395,7 +395,8 @@ fun DetailTvScreen(
                     )
                 } else {
                     TvLazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.weight(1f, fill = false)) {
-                        itemsIndexed(sp.sources, key = { _, s -> s.source_url }) { index, s ->
+                        // mesma URL vinda de 2 fontes repetia a chave (crash): indice entra na chave
+                        itemsIndexed(sp.sources, key = { i, s -> "$i:${s.source_url}" }) { index, s ->
                             val tags = sourceTags(s.displayName)
                             PanelItem(
                                 title = s.displayName,
@@ -551,7 +552,7 @@ private fun EpisodesBlock(
                     contentPadding = PaddingValues(horizontal = 56.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    items(episodes, key = { "$selectedSeason:${it.episode_number}" }) { ep ->
+                    items(episodes.distinctBy { it.episode_number }, key = { "$selectedSeason:${it.episode_number}" }) { ep ->
                         val key = "ep:$selectedSeason:${ep.episode_number}"
                         val isWatched = (selectedSeason to ep.episode_number) in watched
                         val isNext = target.season == selectedSeason && target.episode == ep.episode_number

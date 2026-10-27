@@ -395,9 +395,11 @@ private fun HomeRowView(
         ) {
             when (row) {
                 is HomeRow.Catalog -> {
-                    val list = row.items.take(20)
-                    itemsIndexed(list, key = { _, it -> it.id }) { index, item ->
-                        val key = "${row.key}:${item.id}"
+                    // filme e serie podem ter o mesmo id no TMDB (linha "Destaques" = trending/all):
+                    // chave so com id repetia e derrubava o app ao rolar a fileira
+                    val list = row.items.distinctBy { "${it.resolvedMediaType}_${it.id}" }.take(20)
+                    itemsIndexed(list, key = { _, it -> "${it.resolvedMediaType}_${it.id}" }) { index, item ->
+                        val key = "${row.key}:${item.resolvedMediaType}_${item.id}"
                         FocusTargetBox(key, focusTarget, focusNonce, onFocusConsumed) { mod ->
                             when (row.spec.style) {
                                 RowStyle.FEATURED -> LandscapeCard(
@@ -452,7 +454,7 @@ private fun HomeRowView(
                     }
                 }
                 is HomeRow.Continue -> {
-                    itemsIndexed(row.entries, key = { _, it -> "${it.tmdbId}_${it.mediaType}" }) { _, entry ->
+                    itemsIndexed(row.entries.distinctBy { "${it.tmdbId}_${it.mediaType}" }, key = { _, it -> "${it.tmdbId}_${it.mediaType}" }) { _, entry ->
                         val key = "${row.key}:${entry.tmdbId}_${entry.mediaType}"
                         FocusTargetBox(key, focusTarget, focusNonce, onFocusConsumed) { mod ->
                             LandscapeCard(
@@ -474,7 +476,7 @@ private fun HomeRowView(
                     }
                 }
                 is HomeRow.MyList -> {
-                    itemsIndexed(row.favorites, key = { _, it -> "${it.tmdbId}_${it.mediaType}" }) { _, fav ->
+                    itemsIndexed(row.favorites.distinctBy { "${it.tmdbId}_${it.mediaType}" }, key = { _, it -> "${it.tmdbId}_${it.mediaType}" }) { _, fav ->
                         val key = "${row.key}:${fav.tmdbId}_${fav.mediaType}"
                         FocusTargetBox(key, focusTarget, focusNonce, onFocusConsumed) { mod ->
                             PosterCard(

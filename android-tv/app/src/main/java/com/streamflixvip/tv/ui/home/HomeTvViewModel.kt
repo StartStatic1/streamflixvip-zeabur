@@ -103,6 +103,7 @@ class HomeTvViewModel(application: Application) : AndroidViewModel(application) 
                 .filter { it.media_type == null || it.media_type == "movie" || it.media_type == "tv" }
                 .map { if (it.media_type == null && spec.mediaType != null) it.copy(media_type = spec.mediaType) else it }
                 .filter { !it.poster_path.isNullOrBlank() || !it.backdrop_path.isNullOrBlank() }
+                .distinctBy { "${it.resolvedMediaType}_${it.id}" }
         }.getOrDefault(emptyList())
     }
 }

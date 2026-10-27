@@ -112,6 +112,8 @@ fun SearchTvScreen(
             NetworkModule.tmdbApi.requestMap(path, params).results.orEmpty()
                 .filter { it.media_type == null || it.media_type == "movie" || it.media_type == "tv" }
                 .map { if (kidsMode && it.media_type == null) it.copy(media_type = "movie") else it }
+                // TMDB as vezes repete o mesmo titulo: chave repetida derruba a grade (crash)
+                .distinctBy { "${it.resolvedMediaType}_${it.id}" }
         }.getOrDefault(emptyList())
     }
 
@@ -123,6 +125,7 @@ fun SearchTvScreen(
         }
         loading = true
         delay(380)
+        com.streamflixvip.tv.util.CrashLog.action("busca \"${q.take(30)}\" ${type.name}")
         val path = when (type) {
             SearchType.ALL -> "/search/multi"
             SearchType.MOVIE -> "/search/movie"
@@ -138,6 +141,7 @@ fun SearchTvScreen(
                 if (it.media_type == null) it.copy(media_type = if (type == SearchType.TV) "tv" else "movie") else it
             }
             .filter { !it.poster_path.isNullOrBlank() }
+            .distinctBy { "${it.resolvedMediaType}_${it.id}" }
             .let { list -> if (kidsMode) Catalog.kidsSafe(list).filter { it.isKidsFriendly } else list }
             .sortedByDescending { it.popularity ?: 0.0 }
         loading = false

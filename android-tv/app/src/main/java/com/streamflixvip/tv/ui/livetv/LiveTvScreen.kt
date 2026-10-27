@@ -47,7 +47,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -106,7 +105,8 @@ fun LiveTvScreen(
 
     LaunchedEffect(kidsMode) { vm.start(kidsMode) }
 
-    val channels = state.visibleChannels
+    // id repetido na lista = "Key was already used" (crash): fica so o primeiro
+    val channels = remember(state.visibleChannels) { state.visibleChannels.distinctBy { it.id } }
     var focusedChannel by remember { mutableStateOf<LiveChannel?>(null) }
     var restoreKey by rememberSaveable { mutableStateOf<String?>(null) }
     var focusTarget by remember { mutableStateOf<String?>(null) }
@@ -131,7 +131,7 @@ fun LiveTvScreen(
             if (state.countFor(CAT_RECENT) > 0) add(LiveCategory(CAT_RECENT, "Recentes"))
             add(LiveCategory(CAT_ALL, "Todos os canais"))
             addAll(state.categories)
-        }
+        }.distinctBy { it.id }
     }
 
     // foco pedido pelo menu lateral / ao voltar do player
@@ -196,7 +196,7 @@ fun LiveTvScreen(
             else -> Row(Modifier.fillMaxSize()) {
                 // categorias
                 TvLazyColumn(
-                    modifier = Modifier.width(210.dp).fillMaxHeight().focusRestorer(),
+                    modifier = Modifier.width(210.dp).fillMaxHeight(),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                     contentPadding = PaddingValues(vertical = 4.dp),
                 ) {
@@ -226,7 +226,7 @@ fun LiveTvScreen(
                     } else {
                         TvLazyColumn(
                             state = listState,
-                            modifier = Modifier.fillMaxSize().focusRestorer(),
+                            modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                             contentPadding = PaddingValues(vertical = 4.dp, horizontal = 4.dp),
                         ) {
