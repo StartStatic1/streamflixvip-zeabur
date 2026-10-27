@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex"/>
+  <title>Erros do app TV — StreamFlixVIP</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    :root{--bg:#08080f;--surface:#111119;--surface2:#1a1a26;--border:rgba(255,255,255,.08);--text:#f0f0f8;--muted:#8888aa;--gold:#f5c518;--red:#f87171}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100dvh}
+    header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
+    header a{color:var(--gold);text-decoration:none;font-size:.85rem}
+    main{max-width:1080px;margin:0 auto;padding:20px}
+    button{font:inherit;cursor:pointer;border:none;border-radius:10px;padding:9px 14px;font-weight:700;background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+    .btn-red{background:#3a1212;color:#ffb4b4}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px}
+    .muted{color:var(--muted);font-size:.8rem}
+    h2{font-size:1.05rem;margin:18px 0 10px}
+    .title{font-weight:700;color:var(--red);word-break:break-word}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+    .pill{font-size:.72rem;background:var(--surface2);border:1px solid var(--border);padding:2px 8px;border-radius:999px}
+    pre{white-space:pre-wrap;word-break:break-word;font-size:.72rem;background:#0b0b12;border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:8px;max-height:340px;overflow:auto}
+    details summary{cursor:pointer;color:var(--gold);font-size:.8rem;margin-top:6px}
+  </style>
+</head>
+<body>
+<header><strong>🐞 Erros do app TV</strong><a href="/admin-hub.html">← Painéis</a></header>
+<main>
+  <div class="row"><button onclick="load()">Atualizar</button><button class="btn-red" onclick="clearAll()">Limpar lista</button><span id="msg" class="muted"></span></div>
+  <h2>Agrupados (mesmo erro)</h2>
+  <div id="groups"><p class="muted">Carregando…</p></div>
+  <h2>Últimos relatórios</h2>
+  <div id="recent"></div>
+</main>
+<script>
+const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: 'sfv-admin-auth-token', storage: window.localStorage }
+});
+let token = '';
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ESC[c]; }); }
+function when(iso) { try { return new Date(iso).toLocaleString('pt-BR'); } catch (_) { return iso || ''; } }
+function msg(t) { document.getElementById('msg').textContent = t || ''; }
+async function api(action) {
+  const r = await fetch('/api/crash-report', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ action: action, limit: 150 }),
+  });
+  return r.json();
+}
+function counts(obj) {
+  return Object.keys(obj || {}).sort(function (a, b) { return obj[b] - obj[a]; })
+    .map(function (k) { return '<span class="pill">' + esc(k) + ' ×' + obj[k] + '</span>'; }).join(' ');
+}
+async function load() {
+  msg('Carregando…');
+  const d = await api('list');
+  if (d.error) { msg(String(d.error)); return; }
+  msg(d.total + ' relatório(s) guardado(s)');
+  document.getElementById('groups').innerHTML = (d.groups || []).map(function (g) {
+    return '<div class="card"><div class="title">' + esc(g.title) + '</div>' +
+      '<div class="row"><span class="pill">' + g.count + ' vez(es)</span><span class="muted">último: ' + esc(when(g.last)) + ' · primeiro: ' + esc(when(g.first)) + '</span></div>' +
+      '<div class="row">' + counts(g.models) + '</div><div class="row">' + counts(g.versions) + '</div></div>';
+  }).join('') || '<p class="muted">Nenhum erro recebido. 🎉</p>';
+  document.getElementById('recent').innerHTML = (d.recent || []).map(function (r) {
+    return '<div class="card"><div class="title">' + esc(String(r.stack || r.message || '').split('\n')[0]) + '</div>' +
+      '<div class="row"><span class="pill">' + esc(when(r.ts)) + '</span>' +
+      '<span class="pill">v' + esc(r.appVersion) + ' (' + esc(r.versionCode) + ')</span>' +
+      '<span class="pill">' + esc([r.manufacturer, r.model].filter(Boolean).join(' ')) + ' / ' + esc(r.device) + '</span>' +
+      '<span class="pill">Android ' + esc(r.android) + ' (SDK ' + esc(r.sdk) + ')</span>' +
+      (r.ram ? '<span class="pill">RAM ' + esc(r.ram) + '</span>' : '') +
+      (r.kind ? '<span class="pill">' + esc(r.kind) + '</span>' : '') + '</div>' +
+      '<div class="muted">Tela: ' + esc(r.screen || '?') + ' · Ação: ' + esc(r.action || '?') + ' · Thread: ' + esc(r.thread || '?') + '</div>' +
+      '<details><summary>Ver stacktrace</summary><pre>' + esc(r.stack || r.message) + '</pre></details></div>';
+  }).join('');
+}
+async function clearAll() {
+  if (!confirm('Limpar todos os relatórios? (fica um backup no servidor)')) return;
+  await api('clear');
+  load();
+}
+(async function () {
+  const s = await db.auth.getSession();
+  token = s.data && s.data.session && s.data.session.access_token;
+  if (!token) { location.href = '/admin.html'; return; }
+  load();
+})();
+</script>
+</body>
+</html>

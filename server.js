@@ -97,6 +97,7 @@ const liveEpg = require('./api/live-epg.js');
 const mediaSources = require('./api/media-sources.js');
 const freeCatalog = require('./api/free-catalog.js');
 const reels = require('./api/reels.js');
+const crashReport = require('./api/crash-report.js');
 
 const wrap = (handler) => (req, res) => {
   Promise.resolve(handler(req, res)).catch((err) => {
@@ -159,6 +160,7 @@ app.all('/api/live-epg', wrap(liveEpg));
 app.all('/api/media-sources', wrap(mediaSources));
 app.all('/api/free-catalog', wrap(freeCatalog));
 app.all('/api/reels', wrap(reels));
+app.all('/api/crash-report', wrap(crashReport));
 
 app.use(
   express.static(STATIC_DIR, {
