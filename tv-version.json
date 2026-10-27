@@ -1,7 +1,7 @@
 {
-  "versionCode": 18,
-  "versionName": "3.0.3",
+  "versionCode": 19,
+  "versionName": "3.0.4",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Novidades: aba Explorar com filtros por gênero, ano/década e ordem para filmes e séries. TV ao vivo: canais organizados (Canais, Regionais, Capitais, HBO, Telecine, Filmes e Séries, Notícias, Premiere, SporTV, ESPN, PPV, Discovery e mais), sem canais 24h nem repetidos; menos travadas (buffer maior, reconecta sozinho e volta ao ponto ao vivo); a melhor fonte fica em primeiro; ao apertar HOME o canal para de tocar; lista atualiza na hora quando uma fonte é removida."
+  "releaseNotes": "Correção de fechamentos ao navegar e na busca (listas com itens repetidos); erros agora são enviados ao servidor automaticamente."
 }
