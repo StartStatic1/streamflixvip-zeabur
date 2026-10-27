@@ -133,6 +133,7 @@ fun MainShell(
     }
     val section = ShellSection.entries.firstOrNull { it.name == sectionName }
         ?.takeIf { it in visibleSections } ?: ShellSection.HOME
+    LaunchedEffect(section) { com.streamflixvip.tv.util.CrashLog.screen("main/${section.name}") }
 
     val focusSignal = remember { FocusSignal() }
     val railRequesters = remember { ShellSection.entries.associateWith { FocusRequester() } }

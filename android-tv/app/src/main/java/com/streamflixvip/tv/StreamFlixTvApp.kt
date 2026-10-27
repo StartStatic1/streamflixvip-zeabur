@@ -47,5 +47,15 @@ class StreamFlixTvApp : Application(), ImageLoaderFactory {
         NetworkModule.sessionStore = sessionStore
         // VIP na TV e por device_id (tv_activations), nao por e-mail JWT
         NetworkModule.deviceId = TvActivationManager.resolveStableDeviceId(this)
+        if (CrashLog.consumeNotice(this)) {
+            runCatching {
+                android.widget.Toast.makeText(
+                    this,
+                    "O app fechou por um erro. Ele foi registrado e enviado para correção.",
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+        CrashLog.uploadPendingAsync(this)
     }
 }

@@ -254,6 +254,18 @@ class MainTvActivity : ComponentActivity() {
             }
         }
 
+        // Tela atual vai junto no relatorio de erro (rota + id, nada pessoal)
+        androidx.compose.runtime.DisposableEffect(navController) {
+            val listener = androidx.navigation.NavController.OnDestinationChangedListener { _, dest, args ->
+                val route = dest.route ?: "?"
+                val id = args?.let { a -> listOf("mediaType", "tmdbId", "key").mapNotNull { k -> a.get(k)?.toString() } }
+                    ?.joinToString("/").orEmpty()
+                com.streamflixvip.tv.util.CrashLog.screen(if (id.isEmpty()) route else "$route [$id]")
+            }
+            navController.addOnDestinationChangedListener(listener)
+            onDispose { navController.removeOnDestinationChangedListener(listener) }
+        }
+
         // Sem animacao entre telas: a tela antiga nao fica por baixo da nova e TV box fraca agradece
         NavHost(
             navController = navController,
