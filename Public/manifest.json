@@ -4,12 +4,15 @@
   "description": "Filmes, séries e animes dublado e legendado. Streaming gratuito com qualidade HD.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#08080f",
-  "theme_color": "#6d28d9",
+  "background_color": "#050505",
+  "theme_color": "#e50914",
   "orientation": "portrait-primary",
   "scope": "/",
   "lang": "pt-BR",
-  "categories": ["entertainment", "video"],
+  "categories": [
+    "entertainment",
+    "video"
+  ],
   "icons": [
     {
       "src": "/icons/icon-72x72.png",
@@ -76,14 +79,24 @@
       "short_name": "Filmes",
       "description": "Ver filmes",
       "url": "/?tab=movies",
-      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "/icons/icon-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
     },
     {
       "name": "Séries",
       "short_name": "Séries",
       "description": "Ver séries",
       "url": "/?tab=series",
-      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
+      "icons": [
+        {
+          "src": "/icons/icon-96x96.png",
+          "sizes": "96x96"
+        }
+      ]
     }
   ]
 }

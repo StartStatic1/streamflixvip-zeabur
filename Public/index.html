@@ -3,15 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>StreamFlixVIP — App de filmes e séries</title>
-  <meta name="description" content="Baixe o app StreamFlixVIP: filmes, séries e TV no celular. Ative no mobile e use também na TV. Comunidade no Telegram e WhatsApp." />
-  <meta name="theme-color" content="#05080c" />
+  <title>StreamFlix VIP — Filmes, séries e TV ao vivo no celular e na TV</title>
+  <meta name="description" content="Baixe o StreamFlix VIP: filmes, séries, animes e TV ao vivo no celular, Android TV, Fire TV e TV Box. Perfis, player novo e comunidade." />
+  <meta name="theme-color" content="#050505" />
   <meta name="monetag" content="f464b97ca874b4ae3a06b21b7b7408b0" />
-  <link rel="icon" href="/icons/icon-192x192.png" />
-  <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <meta property="og:title" content="StreamFlix VIP" />
+  <meta property="og:description" content="Filmes, séries e TV ao vivo no celular e na TV." />
+  <meta property="og:image" content="/img/og-1024.jpg" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/icons/icon-192x192.png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
   <script type="text/javascript">
     (function(c,l,a,r,i,t,y){
       c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -20,461 +23,278 @@
     })(window, document, "clarity", "script", "xjr3uw8ou4");
   </script>
   <style>
-    :root {
-      --bg: #05080c;
-      --card: rgba(14, 22, 32, 0.9);
-      --border: rgba(46, 230, 214, 0.14);
-      --text: #f0f7fa;
-      --muted: #8a9bab;
-      --cyan: #2ee6d6;
-      --blue: #0ea5e9;
-      --glow: rgba(46, 230, 214, 0.35);
-      --radius: 18px;
-      --font: "Outfit", system-ui, sans-serif;
-      --display: "Fraunces", Georgia, serif;
+    :root{
+      --bg:#050505;--bg2:#0d0b0b;--card:#121010;--line:rgba(255,255,255,.08);
+      --text:#f6f2ee;--muted:#a59e98;--red:#e50914;--red2:#ff3b30;--gold:#f5b942;--gold2:#ffd77a;
+      --r:18px;--font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: var(--font);
-      color: var(--text);
-      background:
-        radial-gradient(ellipse 900px 500px at 15% -10%, rgba(14,165,233,0.18), transparent 55%),
-        radial-gradient(ellipse 700px 450px at 90% 10%, rgba(46,230,214,0.12), transparent 50%),
-        radial-gradient(ellipse 800px 500px at 50% 100%, rgba(14,165,233,0.08), transparent 55%),
-        var(--bg);
-      min-height: 100vh;
-      line-height: 1.5;
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+    a{color:inherit;text-decoration:none}
+    img{display:block;max-width:100%}
+    .wrap{width:min(1180px,92vw);margin:0 auto}
+    /* header */
+    header{position:fixed;inset:0 0 auto 0;z-index:50;transition:background .25s,border-color .25s;border-bottom:1px solid transparent}
+    header.scrolled{background:rgba(5,5,5,.86);backdrop-filter:blur(12px);border-color:var(--line)}
+    .nav{display:flex;align-items:center;justify-content:space-between;height:68px}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:.3px}
+    .brand img{width:38px;height:38px;border-radius:10px}
+    .brand b{color:var(--red)}
+    .nav-links{display:flex;gap:26px;font-size:15px;color:var(--muted)}
+    .nav-links a:hover{color:var(--text)}
+    .nav-cta{padding:10px 18px;border-radius:999px;background:var(--red);font-weight:700;font-size:14px;box-shadow:0 6px 24px rgba(229,9,20,.35)}
+    /* hero */
+    .hero{position:relative;min-height:100vh;display:flex;align-items:center;padding:110px 0 70px;overflow:hidden}
+    .wall{position:absolute;inset:-10% -5%;display:grid;grid-template-columns:repeat(8,1fr);gap:12px;transform:rotate(-8deg) scale(1.15);opacity:.42;z-index:0}
+    .wall div{aspect-ratio:2/3;border-radius:10px;background:linear-gradient(160deg,#2a0b0b,#120707);background-size:cover;background-position:center}
+    .hero::before{content:"";position:absolute;inset:0;z-index:1;background:radial-gradient(ellipse at 30% 45%,rgba(5,5,5,.55) 0,rgba(5,5,5,.92) 55%,#050505 85%),linear-gradient(180deg,rgba(5,5,5,.2),#050505 96%)}
+    .hero-in{position:relative;z-index:2;display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid rgba(245,185,66,.35);border-radius:999px;color:var(--gold2);font-size:13px;font-weight:600;background:rgba(245,185,66,.06)}
+    .eyebrow i{width:8px;height:8px;border-radius:50%;background:var(--red2);box-shadow:0 0 10px var(--red2)}
+    h1{font-size:clamp(38px,5.6vw,68px);line-height:1.04;font-weight:850;letter-spacing:-1.5px;margin:18px 0 16px}
+    h1 em{font-style:normal;background:linear-gradient(90deg,var(--red2),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
+    .lead{font-size:clamp(16px,1.6vw,19px);color:#d6cfc9;max-width:560px}
+    .ctas{display:flex;flex-wrap:wrap;gap:14px;margin-top:30px}
+    .btn{display:inline-flex;align-items:center;gap:12px;padding:16px 24px;border-radius:14px;font-weight:750;font-size:16px;transition:transform .15s,box-shadow .2s}
+    .btn:hover{transform:translateY(-2px)}
+    .btn svg{width:22px;height:22px;flex:none}
+    .btn small{display:block;font-weight:500;font-size:12px;opacity:.8}
+    .btn-red{background:linear-gradient(180deg,#ff1f2b,#c40711);box-shadow:0 10px 34px rgba(229,9,20,.45)}
+    .btn-gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#1b1206;box-shadow:0 10px 30px rgba(245,185,66,.25)}
+    .codes{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
+    .code{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:rgba(18,16,16,.8)}
+    .code span{font-size:12px;color:var(--muted);line-height:1.2}
+    .code b{font-size:22px;letter-spacing:2px;color:var(--gold2);font-variant-numeric:tabular-nums}
+    .hero-art{position:relative;display:flex;justify-content:center}
+    .hero-art img{width:min(400px,80%);border-radius:22%;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 30px 80px rgba(229,9,20,.35),0 0 120px rgba(229,9,20,.25);animation:float 6s ease-in-out infinite}
+    @keyframes float{50%{transform:translateY(-10px)}}
+    @media (prefers-reduced-motion:reduce){.hero-art img{animation:none}}
+    /* sections */
+    section{padding:90px 0}
+    .kicker{color:var(--red2);font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase}
+    h2{font-size:clamp(28px,3.4vw,42px);line-height:1.12;letter-spacing:-.8px;margin:10px 0 14px}
+    .sub{color:var(--muted);max-width:640px}
+    .grid{display:grid;gap:18px}
+    .g4{grid-template-columns:repeat(4,1fr)}
+    .card{background:linear-gradient(180deg,#141111,#0d0b0b);border:1px solid var(--line);border-radius:var(--r);padding:26px;transition:border-color .2s,transform .2s}
+    .card:hover{border-color:rgba(229,9,20,.45);transform:translateY(-3px)}
+    .ico{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:rgba(229,9,20,.12);border:1px solid rgba(229,9,20,.3);margin-bottom:16px}
+    .ico svg{width:24px;height:24px;stroke:var(--red2);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .card h3{font-size:19px;margin-bottom:6px}
+    .card p{color:var(--muted);font-size:15px}
+    .devices .card{text-align:center}
+    .devices .ico{margin:0 auto 14px;background:rgba(245,185,66,.1);border-color:rgba(245,185,66,.3)}
+    .devices .ico svg{stroke:var(--gold)}
+    /* install */
+    .install{background:linear-gradient(180deg,#050505,#0e0808 50%,#050505)}
+    .tabs{display:inline-flex;gap:6px;padding:6px;border:1px solid var(--line);border-radius:999px;background:#0e0c0c;margin:22px 0 26px}
+    .tabs button{border:0;background:none;color:var(--muted);font:600 15px var(--font);padding:10px 20px;border-radius:999px;cursor:pointer}
+    .tabs button[aria-selected=true]{background:var(--red);color:#fff}
+    .steps{counter-reset:s;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .step{position:relative;padding:24px 22px 22px;border:1px solid var(--line);border-radius:var(--r);background:#100d0d}
+    .step::before{counter-increment:s;content:counter(s);position:absolute;top:-14px;left:20px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;background:var(--gold);color:#1b1206}
+    .step h4{font-size:16px;margin:6px 0 6px}
+    .step p{font-size:14px;color:var(--muted)}
+    .step b{color:var(--gold2)}
+    .panel[hidden]{display:none}
+    .note{margin-top:18px;font-size:14px;color:var(--muted)}
+    /* community */
+    .comm{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
+    .comm a{display:flex;align-items:center;gap:14px;padding:22px;border-radius:var(--r);border:1px solid var(--line);background:#100d0d;transition:border-color .2s}
+    .comm a:hover{border-color:rgba(245,185,66,.5)}
+    .comm .dot{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;flex:none}
+    .comm .dot svg{width:24px;height:24px;fill:#fff}
+    .comm strong{display:block}
+    .comm span{color:var(--muted);font-size:14px}
+    /* final cta */
+    .final{text-align:center;padding:80px 0;border-top:1px solid var(--line);background:radial-gradient(ellipse at 50% 0,rgba(229,9,20,.18),transparent 60%)}
+    .final .ctas{justify-content:center}
+    /* faq */
+    details{border:1px solid var(--line);border-radius:14px;background:#0f0c0c;margin-top:12px}
+    summary{cursor:pointer;padding:18px 20px;font-weight:650;list-style:none;display:flex;justify-content:space-between}
+    summary::after{content:"+";color:var(--red2);font-weight:800}
+    details[open] summary::after{content:"–"}
+    details p{padding:0 20px 18px;color:var(--muted)}
+    footer{border-top:1px solid var(--line);padding:34px 0 46px;color:var(--muted);font-size:14px}
+    .foot{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:center}
+    .foot nav{display:flex;flex-wrap:wrap;gap:18px}
+    .foot nav a:hover{color:var(--text)}
+    @media (max-width:980px){
+      .hero-in{grid-template-columns:1fr;text-align:left}
+      .hero-art{order:-1}.hero-art img{width:160px}
+      .g4,.steps{grid-template-columns:repeat(2,1fr)}
+      .comm{grid-template-columns:1fr}
+      .wall{grid-template-columns:repeat(5,1fr)}
+      .nav-links{display:none}
     }
-    a { color: inherit; text-decoration: none; }
-    .wrap { width: min(1080px, 100% - 2rem); margin: 0 auto; }
-
-    header {
-      position: sticky; top: 0; z-index: 50;
-      backdrop-filter: blur(16px);
-      background: rgba(5,8,12,0.75);
-      border-bottom: 1px solid transparent;
+    @media (max-width:560px){
+      .g4,.steps{grid-template-columns:1fr}
+      .btn{width:100%;justify-content:center}
+      .code{flex:1 1 100%;justify-content:space-between}
+      section{padding:64px 0}
+      .hero{padding-top:96px}
+      .wall{grid-template-columns:repeat(4,1fr)}
+      .tabs{display:flex;width:100%}.tabs button{flex:1;padding:10px 8px}
     }
-    header.scrolled { border-bottom-color: var(--border); }
-    .nav {
-      display: flex; align-items: center; justify-content: space-between;
-      height: 64px; gap: 12px;
-    }
-    .brand {
-      display: flex; align-items: center; gap: 10px;
-      font-weight: 700; font-size: 1.15rem; letter-spacing: -0.02em;
-    }
-    .brand-mark {
-      width: 36px; height: 36px; border-radius: 10px;
-      background: linear-gradient(135deg, var(--blue), var(--cyan));
-      display: grid; place-items: center;
-      font-weight: 800; color: #041018; font-size: 1rem;
-      box-shadow: 0 0 20px var(--glow);
-    }
-    .brand em {
-      font-style: italic;
-      background: linear-gradient(90deg, var(--blue), var(--cyan), var(--blue));
-      background-size: 200% auto;
-      -webkit-background-clip: text; background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .nav-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      border-radius: 999px; padding: 11px 18px;
-      font-weight: 700; font-size: 0.92rem;
-      border: 1px solid transparent;
-      transition: transform .15s, box-shadow .15s, background .15s;
-      cursor: pointer;
-    }
-    .btn:active { transform: scale(0.98); }
-    .btn-primary {
-      background: linear-gradient(135deg, var(--blue), var(--cyan));
-      color: #041018;
-      box-shadow: 0 8px 28px rgba(14,165,233,0.35);
-    }
-    .btn-ghost {
-      background: rgba(255,255,255,0.04);
-      border-color: var(--border);
-      color: var(--text);
-    }
-    .btn-ghost:hover { background: rgba(46,230,214,0.08); }
-    .btn-lg { padding: 16px 28px; font-size: 1.05rem; }
-
-    .hero {
-      padding: 48px 0 40px;
-      max-width: 720px;
-    }
-    @media (min-width: 900px) { .hero { padding: 72px 0 48px; } }
-    .eyebrow {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-size: 0.8rem; font-weight: 600; color: var(--cyan);
-      letter-spacing: 0.04em; text-transform: uppercase;
-      margin-bottom: 14px;
-    }
-    .eyebrow::before {
-      content: ""; width: 8px; height: 8px; border-radius: 50%;
-      background: var(--cyan); box-shadow: 0 0 12px var(--cyan);
-    }
-    h1 {
-      font-family: var(--display);
-      font-size: clamp(2.1rem, 5vw, 3.2rem);
-      line-height: 1.12;
-      letter-spacing: -0.03em;
-      margin-bottom: 16px;
-    }
-    h1 span {
-      background: linear-gradient(120deg, #fff 20%, var(--cyan));
-      -webkit-background-clip: text; background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .lead {
-      color: var(--muted);
-      font-size: 1.1rem;
-      max-width: 40ch;
-      margin-bottom: 28px;
-    }
-    .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 22px; }
-    .meta {
-      display: flex; flex-wrap: wrap; gap: 16px;
-      color: var(--muted); font-size: 0.9rem;
-    }
-    .meta strong { color: var(--text); font-weight: 600; }
-
-    section { padding: 52px 0; }
-    .section-title {
-      font-family: var(--display);
-      font-size: clamp(1.55rem, 3vw, 2rem);
-      letter-spacing: -0.02em;
-      margin-bottom: 10px;
-    }
-    .section-sub {
-      color: var(--muted); margin-bottom: 28px; max-width: 52ch;
-    }
-
-    .grid-3 {
-      display: grid; gap: 16px;
-      grid-template-columns: 1fr;
-    }
-    @media (min-width: 700px) {
-      .grid-3 { grid-template-columns: repeat(3, 1fr); }
-    }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 22px;
-      transition: border-color .2s, transform .2s;
-    }
-    .card:hover { border-color: rgba(46,230,214,0.35); transform: translateY(-2px); }
-    .card-icon {
-      width: 44px; height: 44px; border-radius: 12px;
-      display: grid; place-items: center;
-      background: rgba(46,230,214,0.1);
-      color: var(--cyan);
-      font-size: 1.25rem;
-      margin-bottom: 14px;
-    }
-    .card h3 { font-size: 1.1rem; margin-bottom: 8px; }
-    .card p { color: var(--muted); font-size: 0.95rem; }
-
-    .steps { display: grid; gap: 14px; }
-    @media (min-width: 800px) { .steps { grid-template-columns: repeat(3, 1fr); } }
-    .step {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 20px;
-    }
-    .step-num {
-      font-family: var(--display);
-      font-size: 2rem;
-      color: var(--cyan);
-      line-height: 1;
-      margin-bottom: 10px;
-    }
-    .step h3 { margin-bottom: 6px; }
-    .step p { color: var(--muted); font-size: 0.92rem; }
-
-    .tv-box {
-      background:
-        linear-gradient(135deg, rgba(14,165,233,0.1), rgba(46,230,214,0.05)),
-        var(--card);
-      border: 1px solid rgba(46,230,214,0.25);
-      border-radius: 24px;
-      padding: 26px;
-    }
-    .tv-box h2 { font-family: var(--display); font-size: 1.55rem; margin-bottom: 10px; }
-    .tv-box p { color: var(--muted); margin-bottom: 10px; }
-    .tv-box .soft-note {
-      font-size: 0.92rem; color: var(--muted);
-      border-left: 3px solid var(--cyan);
-      padding-left: 14px; margin-top: 14px;
-    }
-
-    .vip-box {
-      background:
-        linear-gradient(135deg, rgba(14,165,233,0.12), rgba(46,230,214,0.06)),
-        var(--card);
-      border: 1px solid rgba(46,230,214,0.28);
-      border-radius: 24px;
-      padding: 28px;
-      display: grid; gap: 20px;
-    }
-    @media (min-width: 800px) {
-      .vip-box { grid-template-columns: 1.2fr 0.8fr; align-items: center; }
-    }
-    .vip-box h2 { font-family: var(--display); font-size: 1.7rem; margin-bottom: 8px; }
-    .vip-box p { color: var(--muted); }
-    .vip-list { list-style: none; margin: 14px 0 0; display: grid; gap: 8px; }
-    .vip-list li {
-      display: flex; gap: 10px; align-items: flex-start;
-      font-size: 0.95rem;
-    }
-    .vip-list li::before {
-      content: "✓"; color: var(--cyan); font-weight: 800;
-    }
-
-    .community {
-      display: grid; gap: 16px;
-    }
-    @media (min-width: 700px) { .community { grid-template-columns: 1fr 1fr; } }
-    .soft-note {
-      font-size: 0.9rem; color: var(--muted);
-      border-left: 3px solid var(--cyan);
-      padding-left: 14px; margin-top: 8px;
-    }
-    .link-stack { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-
-    details {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px 18px;
-      margin-bottom: 10px;
-    }
-    summary {
-      cursor: pointer; font-weight: 600;
-      list-style: none;
-      display: flex; justify-content: space-between; align-items: center;
-      gap: 12px;
-    }
-    summary::-webkit-details-marker { display: none; }
-    summary::after { content: "+"; color: var(--cyan); font-size: 1.2rem; }
-    details[open] summary::after { content: "−"; }
-    details p { color: var(--muted); margin-top: 12px; font-size: 0.95rem; }
-
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 36px 0 48px;
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-    .footer-row {
-      display: flex; flex-wrap: wrap; gap: 16px;
-      justify-content: space-between; align-items: center;
-    }
-    .footer-links { display: flex; flex-wrap: wrap; gap: 14px; }
-    .footer-links a:hover { color: var(--cyan); }
   </style>
 </head>
 <body>
-  <header id="top">
+  <header>
     <div class="wrap nav">
-      <a class="brand" href="/">
-        <span class="brand-mark">S</span>
-        <span>Stream<em>Flix</em>VIP</span>
-      </a>
-      <div class="nav-actions">
-        <a class="btn btn-ghost" href="https://t.me/streamflixofc" target="_blank" rel="noopener">Telegram</a>
-        <a class="btn btn-primary" href="/downloads/app-latest.apk">Baixar app</a>
-      </div>
+      <a class="brand" href="/"><img src="/img/logo-256.webp" alt="" width="38" height="38" />Stream<b>Flix</b></a>
+      <nav class="nav-links">
+        <a href="#recursos">Recursos</a><a href="#aparelhos">Aparelhos</a><a href="#instalar">Como instalar</a><a href="#comunidade">Suporte</a>
+      </nav>
+      <a class="nav-cta" href="#baixar">Baixar</a>
     </div>
   </header>
 
   <main>
-    <section class="wrap hero">
-      <div class="eyebrow">App Android · atualização direta</div>
-      <h1>Seu catálogo de <span>filmes e séries</span> no bolso</h1>
-      <p class="lead">
-        StreamFlixVIP reúne fontes em um app limpo e rápido — no celular primeiro,
-        e na TV depois da ativação no mobile.
-      </p>
-      <div class="hero-cta">
-        <a class="btn btn-primary btn-lg" href="/downloads/app-latest.apk">⬇ Baixar APK</a>
-        <a class="btn btn-ghost btn-lg" href="#como-instalar">Como instalar</a>
-      </div>
-      <div class="meta">
-        <span><strong>Android</strong> 7+</span>
-        <span><strong>TV</strong> após ativar no celular</span>
-        <span><strong>Atualize</strong> pelo próprio app</span>
-      </div>
-    </section>
-
-    <section class="wrap" id="recursos">
-      <h2 class="section-title">Feito para assistir sem complicação</h2>
-      <p class="section-sub">Poucos toques entre abrir o app e escolher a fonte.</p>
-      <div class="grid-3">
-        <article class="card">
-          <div class="card-icon">🎬</div>
-          <h3>Filmes e séries</h3>
-          <p>Catálogo organizado, busca rápida e várias opções de fonte por título.</p>
-        </article>
-        <article class="card">
-          <div class="card-icon">📱</div>
-          <h3>Começa no celular</h3>
-          <p>Instale e ative no mobile. É a base da conta e do acesso VIP.</p>
-        </article>
-        <article class="card">
-          <div class="card-icon">⚡</div>
-          <h3>Multi-fonte</h3>
-          <p>Se uma fonte falhar, troque de servidor sem sair do player.</p>
-        </article>
-      </div>
-    </section>
-
-    <section class="wrap" id="tv">
-      <div class="tv-box">
-        <h2>App para TV</h2>
-        <p>
-          A versão de TV é <strong>outro aplicativo</strong>, pensado para controle remoto e tela grande.
-          Ela só libera depois que você <strong>ativa a conta no app do celular</strong>.
-        </p>
-        <p>
-          Fluxo simples: baixe e entre no mobile → ative (login / VIP se for o caso) →
-          use a mesma conta no app de TV.
-        </p>
-        <p class="soft-note">
-          Sem ativação no celular, o app de TV permanece bloqueado. Isso protege a conta e evita uso sem vínculo.
-        </p>
-        <div class="link-stack">
-          <a class="btn btn-primary" href="/downloads/app-latest.apk">1º passo: app mobile</a>
-          <a class="btn btn-ghost" href="https://t.me/streamflixofc" target="_blank" rel="noopener">Dúvidas no Telegram</a>
-        </div>
-      </div>
-    </section>
-
-    <section class="wrap" id="como-instalar">
-      <h2 class="section-title">Instalar em 3 passos</h2>
-      <p class="section-sub">No Android, permita instalar de fontes desconhecidas só para este arquivo.</p>
-      <div class="steps">
-        <div class="step">
-          <div class="step-num">01</div>
-          <h3>Baixe o APK</h3>
-          <p>Toque em <strong>Baixar APK</strong> e aguarde o download terminar.</p>
-        </div>
-        <div class="step">
-          <div class="step-num">02</div>
-          <h3>Abra o arquivo</h3>
-          <p>Nas notificações ou em Downloads, abra o StreamFlixVIP e confirme a instalação.</p>
-        </div>
-        <div class="step">
-          <div class="step-num">03</div>
-          <h3>Atualize pelo app</h3>
-          <p>Nas próximas versões, o próprio app avisa quando houver atualização.</p>
-        </div>
-      </div>
-      <div style="margin-top:24px">
-        <a class="btn btn-primary" href="/downloads/app-latest.apk">Baixar versão mais recente</a>
-      </div>
-    </section>
-
-    <section class="wrap" id="vip">
-      <div class="vip-box">
+    <section class="hero" id="baixar">
+      <div class="wall" id="wall" aria-hidden="true"></div>
+      <div class="wrap hero-in">
         <div>
-          <h2>VIP no app</h2>
-          <p>Quem apoia o projeto libera benefícios no aplicativo — planos e pagamento ficam dentro do próprio StreamFlixVIP.</p>
-          <ul class="vip-list">
-            <li>Ativação pela conta no app mobile</li>
-            <li>Pix e cartão quando disponíveis no app</li>
-            <li>Ajuda a manter servidores e atualizações</li>
-          </ul>
+          <span class="eyebrow"><i></i>Nova versão · visual renovado</span>
+          <h1>Filmes, séries e <em>TV ao vivo</em> no celular e na sua TV.</h1>
+          <p class="lead">Perfis para toda a família, um player novinho e centenas de canais com a melhor qualidade disponível. Tudo em um app leve, feito para celular, Android TV, Fire TV e TV Box.</p>
+          <div class="ctas">
+            <a class="btn btn-red" href="/downloads/app-latest.apk" download>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M12 7v7m-3-3 3 3 3-3"/></svg>
+              <span>Baixar para Celular<small>Android · APK</small></span>
+            </a>
+            <a class="btn btn-gold" href="/downloads/tv-latest.apk" download>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 8v5m-3-2 3 3 3-3"/></svg>
+              <span>Baixar para TV<small>Android TV · Fire TV · TV Box</small></span>
+            </a>
+          </div>
+          <div class="codes" aria-label="Códigos do app Downloader">
+            <div class="code"><span>Código Downloader<br>Celular</span><b>6085325</b></div>
+            <div class="code"><span>Código Downloader<br>TV / Firestick</span><b>3422972</b></div>
+          </div>
         </div>
-        <div style="text-align:center">
-          <a class="btn btn-primary btn-lg" href="/downloads/app-latest.apk">Baixar e ver planos</a>
-          <p style="margin-top:12px;color:var(--muted);font-size:0.85rem">Valores e opções aparecem na área VIP do app.</p>
+        <div class="hero-art"><img src="/img/logo-256.webp" srcset="/img/logo-256.webp 256w, /icons/icon-512x512.png 512w" sizes="(max-width:980px) 160px, 400px" alt="Ícone StreamFlix" width="400" height="400" /></div>
+      </div>
+    </section>
+
+    <section id="recursos">
+      <div class="wrap">
+        <div class="kicker">Recursos</div>
+        <h2>Tudo novo, do jeito que você assiste.</h2>
+        <p class="sub">Redesenhamos o app inteiro para ficar mais bonito, mais rápido e mais fácil — no toque ou no controle remoto.</p>
+        <div class="grid g4" style="margin-top:34px">
+          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 2 5.3 4.9"/></svg></div><h3>Perfis</h3><p>"Quem está assistindo?" com avatares, perfil infantil e PIN. Cada um com sua lista.</p></div>
+          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="m10 8 5 3-5 3z"/><path d="M5 21h14"/></svg></div><h3>Player novo</h3><p>Linha do tempo precisa, legendas, áudio, servidores, toque duplo ±10s e timer para dormir.</p></div>
+          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="m8 2 4 4 4-4"/></svg></div><h3>TV ao vivo</h3><p>Canais com programação, qualidades SD/HD/FHD/4K juntas e troca de fonte em um toque.</p></div>
+          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.5 7.2L3 21l1.8-6.5A8 8 0 1 1 21 12z"/></svg></div><h3>Comentários</h3><p>Opine, responda e veja o que a comunidade achou — com aviso de spoiler.</p></div>
         </div>
       </div>
     </section>
 
-    <section class="wrap" id="comunidade">
-      <h2 class="section-title">Comunidade e suporte</h2>
-      <p class="section-sub">Novidades, APK e conversa com quem usa o app.</p>
-      <div class="community">
-        <article class="card">
-          <div class="card-icon">💬</div>
-          <h3>Telegram oficial</h3>
-          <p>Canal principal com avisos e suporte da equipe StreamFlixVIP.</p>
-          <div class="link-stack">
-            <a class="btn btn-primary" href="https://t.me/streamflixofc" target="_blank" rel="noopener">@streamflixofc</a>
-          </div>
-        </article>
-        <article class="card">
-          <div class="card-icon">🎬</div>
-          <h3>Canal cinema</h3>
-          <p>Indicações, postagens de filmes e séries e botões para baixar o app.</p>
-          <div class="link-stack">
-            <a class="btn btn-primary" href="https://t.me/+jPjv75TOACplMmYx" target="_blank" rel="noopener">Entrar no canal</a>
-          </div>
-        </article>
-        <article class="card">
-          <div class="card-icon">🟢</div>
-          <h3>WhatsApp oficial</h3>
-          <p>Grupo oficial para avisos e conversa rápida com a comunidade.</p>
-          <div class="link-stack">
-            <a class="btn btn-primary" href="https://chat.whatsapp.com/HwROmfEeCgk3IqDfeB5iEm" target="_blank" rel="noopener">Entrar no WhatsApp</a>
-          </div>
-        </article>
-        <article class="card">
-          <div class="card-icon">🧩</div>
-          <h3>Outros apps e setups</h3>
-          <p>Usa Nuvio, Stremio ou outra tela em casa? Fale no Telegram — orientamos no privado, sem link público de add-on neste site.</p>
-          <p class="soft-note">Preferimos atender quem já faz parte da comunidade.</p>
-        </article>
+    <section id="aparelhos" class="devices">
+      <div class="wrap">
+        <div class="kicker">Aparelhos</div>
+        <h2>Funciona onde você estiver.</h2>
+        <p class="sub">Um app para o celular e outro feito sob medida para o controle remoto da TV.</p>
+        <div class="grid g4" style="margin-top:34px">
+          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></div><h3>Celular</h3><p>Android 7 ou superior.</p></div>
+          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/></svg></div><h3>Android TV</h3><p>Smart TVs com Android/Google TV.</p></div>
+          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="20" rx="3"/><circle cx="12" cy="7" r="1.2"/><path d="M11 12h2m-2 3h2"/></svg></div><h3>Fire TV / Firestick</h3><p>Instale pelo app Downloader.</p></div>
+          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="9" rx="2"/><path d="M7 12.5h.01M17 12.5h-4"/></svg></div><h3>TV Box</h3><p>Aparelhos Android, inclusive os mais antigos.</p></div>
+        </div>
       </div>
     </section>
 
-    <section class="wrap" id="faq">
-      <h2 class="section-title">Perguntas frequentes</h2>
-      <details>
-        <summary>O app é gratuito?</summary>
-        <p>Sim, você pode baixar e usar. O VIP é opcional e libera benefícios descritos dentro do aplicativo.</p>
-      </details>
-      <details>
-        <summary>Como funciona o app de TV?</summary>
-        <p>É outro aplicativo. Só libera depois da ativação no app do celular, com a mesma conta.</p>
-      </details>
-      <details>
-        <summary>Onde baixo a versão mais nova?</summary>
-        <p>Neste site, no botão <strong>Baixar APK</strong>, ou pelo aviso de atualização dentro do próprio app.</p>
-      </details>
-      <details>
-        <summary>Como falo com o suporte?</summary>
-        <p>Telegram oficial, canal cinema ou WhatsApp oficial — links na seção Comunidade.</p>
-      </details>
+    <section id="instalar" class="install">
+      <div class="wrap">
+        <div class="kicker">Como instalar</div>
+        <h2>Pronto em menos de 2 minutos.</h2>
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" aria-controls="p-cel" id="t-cel">Celular</button>
+          <button role="tab" aria-selected="false" aria-controls="p-tv" id="t-tv">TV / Firestick</button>
+        </div>
+        <div class="panel" id="p-cel" role="tabpanel">
+          <div class="steps">
+            <div class="step"><h4>Baixe o APK</h4><p>Toque em <b>Baixar para Celular</b> no topo desta página.</p></div>
+            <div class="step"><h4>Permita a instalação</h4><p>Se o Android pedir, ative <b>Permitir desta fonte</b> para o navegador.</p></div>
+            <div class="step"><h4>Instale e abra</h4><p>Abra o arquivo baixado, toque em <b>Instalar</b> e depois em <b>Abrir</b>.</p></div>
+            <div class="step"><h4>Entre na conta</h4><p>Crie sua conta ou entre com o código que chega no seu e-mail.</p></div>
+          </div>
+        </div>
+        <div class="panel" id="p-tv" role="tabpanel" hidden>
+          <div class="steps">
+            <div class="step"><h4>Instale o Downloader</h4><p>Na loja da TV/Fire TV, procure <b>Downloader</b> (ícone laranja) e instale.</p></div>
+            <div class="step"><h4>Libere apps desconhecidos</h4><p>Em Configurações › Minha Fire TV › Opções do desenvolvedor, permita o <b>Downloader</b>.</p></div>
+            <div class="step"><h4>Digite o código</h4><p>No Downloader, digite <b>3422972</b> e confirme. O download começa sozinho.</p></div>
+            <div class="step"><h4>Ative sem digitar</h4><p>Abra o app e leia o <b>QR code</b> com o celular logado — ou use seu código VIP.</p></div>
+          </div>
+        </div>
+        <p class="note">Prefere o navegador? No celular, o código do Downloader é <b style="color:var(--gold2)">6085325</b>. Em TV Box antigo, se o download pelo site falhar, peça o link no grupo de suporte.</p>
+      </div>
+    </section>
+
+    <section id="comunidade">
+      <div class="wrap">
+        <div class="kicker">Suporte e comunidade</div>
+        <h2>Estamos por perto.</h2>
+        <p class="sub">Novidades, pedidos de filmes e ajuda rápida nos nossos canais oficiais.</p>
+        <div class="comm">
+          <a href="https://chat.whatsapp.com/HwROmfEeCgk3IqDfeB5iEm" target="_blank" rel="noopener"><span class="dot" style="background:#1fa855"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg></span><span><strong>WhatsApp oficial</strong><span>Suporte e avisos</span></span></a>
+          <a href="https://t.me/streamflixofc" target="_blank" rel="noopener"><span class="dot" style="background:#229ed9"><svg viewBox="0 0 24 24"><path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.3-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.2 13 1.4 11.5c-1-.3-1-1 .2-1.5L20.5 2.8c.9-.3 1.6.2 1.4 1.5z"/></svg></span><span><strong>Telegram oficial</strong><span>Comunidade StreamFlix</span></span></a>
+          <a href="https://t.me/+jPjv75TOACplMmYx" target="_blank" rel="noopener"><span class="dot" style="background:var(--red)"><svg viewBox="0 0 24 24"><path d="M4 5h16v12H4zM8 21h8" fill="none" stroke="#fff" stroke-width="2"/><path d="m10 8 5 3-5 3z"/></svg></span><span><strong>Canal cinema</strong><span>Lançamentos e pedidos</span></span></a>
+        </div>
+        <div style="margin-top:48px;max-width:820px">
+          <details><summary>O app é gratuito?</summary><p>Sim, você pode baixar e usar. O VIP é opcional e libera benefícios descritos dentro do aplicativo.</p></details>
+          <details><summary>Como ativo o app da TV?</summary><p>Abra o app na TV e leia o QR code com o celular onde você já está logado (Perfil › Conectar TV), ou digite seu código VIP.</p></details>
+          <details><summary>Onde baixo a versão mais nova?</summary><p>Aqui no site, pelos botões de download, ou pelo aviso de atualização dentro do próprio app.</p></details>
+          <details><summary>Como falo com o suporte?</summary><p>Pelo WhatsApp oficial ou pelo Telegram — links logo acima.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section class="final">
+      <div class="wrap">
+        <h2>Comece a assistir agora.</h2>
+        <p class="sub" style="margin:0 auto">Escolha seu aparelho e instale em poucos toques.</p>
+        <div class="ctas">
+          <a class="btn btn-red" href="/downloads/app-latest.apk" download><span>Baixar para Celular<small>Código Downloader 6085325</small></span></a>
+          <a class="btn btn-gold" href="/downloads/tv-latest.apk" download><span>Baixar para TV<small>Código Downloader 3422972</small></span></a>
+        </div>
+      </div>
     </section>
   </main>
 
   <footer>
-    <div class="wrap footer-row">
-      <div>© 2026 StreamFlixVIP</div>
-      <div class="footer-links">
+    <div class="wrap foot">
+      <a class="brand" href="/"><img src="/img/logo-256.webp" alt="" width="30" height="30" style="width:30px;height:30px" />Stream<b>Flix</b> <span style="font-weight:400;color:var(--muted);font-size:14px;margin-left:8px">© 2026</span></a>
+      <nav>
         <a href="/termos.html">Termos</a>
         <a href="/privacidade.html">Privacidade</a>
-        <a href="/contato.html">Contato</a>
         <a href="/dmca.html">DMCA</a>
-        <a href="https://t.me/streamflixofc" target="_blank" rel="noopener">Telegram</a>
-        <a href="https://t.me/+jPjv75TOACplMmYx" target="_blank" rel="noopener">Canal cinema</a>
-        <a href="https://chat.whatsapp.com/HwROmfEeCgk3IqDfeB5iEm" target="_blank" rel="noopener">WhatsApp</a>
-      </div>
+        <a href="/contato.html">Contato</a>
+      </nav>
     </div>
   </footer>
 
   <script>
-    const header = document.querySelector("header");
-    window.addEventListener("scroll", () => {
-      header.classList.toggle("scrolled", window.scrollY > 8);
-    }, { passive: true });
+    (function(){
+      var h=document.querySelector("header");
+      addEventListener("scroll",function(){h.classList.toggle("scrolled",scrollY>8)},{passive:true});
+      // abas do guia
+      var tabs=[["t-cel","p-cel"],["t-tv","p-tv"]];
+      tabs.forEach(function(t){document.getElementById(t[0]).addEventListener("click",function(){
+        tabs.forEach(function(o){var on=o===t;document.getElementById(o[0]).setAttribute("aria-selected",on);document.getElementById(o[1]).hidden=!on;});
+      });});
+      // mural de pôsteres (em alta) — se falhar, fica o fundo em gradiente
+      var wall=document.getElementById("wall"),n=innerWidth<560?28:innerWidth<980?35:48;
+      for(var i=0;i<n;i++)wall.appendChild(document.createElement("div"));
+      function load(p){return fetch("/api/tmdb?path="+encodeURIComponent(p)).then(function(r){return r.ok?r.json():{results:[]}}).catch(function(){return{results:[]}})}
+      Promise.all([load("/trending/movie/week"),load("/trending/tv/week")]).then(function(a){
+        var posters=[];(a[0].results||[]).concat(a[1].results||[]).forEach(function(x){if(x.poster_path)posters.push(x.poster_path)});
+        if(!posters.length)return;
+        [].forEach.call(wall.children,function(d,i){d.style.backgroundImage="url(https://image.tmdb.org/t/p/w185"+posters[i%posters.length]+")"});
+      });
+    })();
   </script>
 </body>
 </html>
