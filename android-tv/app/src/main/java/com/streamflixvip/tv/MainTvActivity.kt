@@ -82,6 +82,7 @@ class MainTvActivity : ComponentActivity() {
     private fun AppRoot(toaster: Toaster) {
         val navController = rememberNavController()
         val activationManager = remember { TvActivationManager(applicationContext) }
+        remember { com.streamflixvip.tv.profiles.ProfileStore.init(applicationContext, null, "Sala"); true }
         val recent = remember { RecentStore(applicationContext) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
@@ -279,7 +280,12 @@ class MainTvActivity : ComponentActivity() {
                 SplashTvScreen(
                     activationManager = activationManager,
                     onFinished = { isActivated ->
-                        navController.navigate(if (isActivated) "main" else "activation") {
+                        val next = when {
+                            !isActivated -> "activation"
+                            com.streamflixvip.tv.profiles.ProfileStore.shouldAsk() -> "profiles"
+                            else -> "main"
+                        }
+                        navController.navigate(next) {
                             popUpTo("splash") { inclusive = true }
                         }
                     },
@@ -293,9 +299,17 @@ class MainTvActivity : ComponentActivity() {
                     },
                 )
             }
+            composable("profiles") {
+                com.streamflixvip.tv.profiles.ProfilePickerTvScreen(
+                    onPicked = {
+                        navController.navigate("main") { popUpTo(0) { inclusive = true } }
+                    },
+                )
+            }
             composable("main") {
                 MainShell(
                     activationManager = activationManager,
+                    onSwitchProfile = { navController.navigate("profiles") { popUpTo(0) { inclusive = true } } },
                     onItemClick = { id, type -> navController.navigate("detail/$type/$id") },
                     onContinueClick = { resumeContinueWatching(it) },
                     onSeeAll = { key -> navController.navigate("category/$key") },

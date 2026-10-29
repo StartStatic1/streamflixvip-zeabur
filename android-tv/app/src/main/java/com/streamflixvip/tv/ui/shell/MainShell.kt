@@ -108,6 +108,7 @@ private val RAIL_EXPANDED = 224.dp
 @Composable
 fun MainShell(
     activationManager: TvActivationManager,
+    onSwitchProfile: () -> Unit = {},
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
     onContinueClick: (LocalWatchProgress) -> Unit,
     onSeeAll: (rowKey: String) -> Unit,
@@ -238,6 +239,7 @@ fun MainShell(
                     ShellSection.SETTINGS -> SettingsTvScreen(
                         focusSignal = focusSignal,
                         activationManager = activationManager,
+                        onSwitchProfile = onSwitchProfile,
                         onDeactivated = onDeactivated,
                     )
                 }
