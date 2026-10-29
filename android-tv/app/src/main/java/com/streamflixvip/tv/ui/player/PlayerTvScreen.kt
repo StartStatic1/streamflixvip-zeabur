@@ -213,6 +213,10 @@ private fun PlayerSession(
     val vodForeground = remember { java.util.concurrent.atomic.AtomicBoolean(true) }
     var fatalError by remember { mutableStateOf<String?>(null) }
     var positionMs by remember { mutableLongStateOf(0L) }
+    var bufferedMs by remember { mutableLongStateOf(0L) }
+    var scrubStep by remember { mutableLongStateOf(10_000L) }
+    var sleepMinutes by remember { mutableStateOf(0) } // 0 = desligado, -1 = fim do episódio
+    var sleepEndsAt by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
     var scrubMs by remember { mutableStateOf<Long?>(null) }
     var scrubNonce by remember { mutableIntStateOf(0) }
@@ -440,6 +444,7 @@ private fun PlayerSession(
         var lastSave = System.currentTimeMillis()
         while (isActive) {
             positionMs = exo.currentPosition.coerceAtLeast(0L)
+            bufferedMs = exo.bufferedPosition.coerceAtLeast(0L)
             val d = exo.duration
             if (d > 0 && d != C.TIME_UNSET) durationMs = d
             if (onlineCues.isNotEmpty()) currentCue = cueAt(onlineCues, positionMs - subOffsetMs) else if (currentCue != null) currentCue = null
@@ -496,11 +501,14 @@ private fun PlayerSession(
     }
 
     fun scrub(forward: Boolean, repeat: Int) {
+        // segurar a seta acelera: 10 s → 30 s → 1 min → 2 min
         val step = when {
+            repeat > 40 -> 120_000L
             repeat > 20 -> 60_000L
             repeat > 6 -> 30_000L
             else -> 10_000L
         }
+        scrubStep = step
         val dur = durationMs.takeIf { it > 0 } ?: return seekBy(if (forward) step else -step)
         val base = scrubMs ?: exo.currentPosition
         scrubMs = (base + if (forward) step else -step).coerceIn(0L, dur)
@@ -620,10 +628,26 @@ private fun PlayerSession(
     }
 
     // fim: filme sai, serie vai pro proximo (se ligado)
+    // timer para dormir (minutos)
+    LaunchedEffect(sleepMinutes, sleepEndsAt) {
+        if (sleepMinutes > 0 && sleepEndsAt > 0) {
+            val wait = sleepEndsAt - android.os.SystemClock.elapsedRealtime()
+            if (wait > 0) delay(wait)
+            runCatching { exo.pause() }
+            sleepMinutes = 0
+            sleepEndsAt = 0L
+            showControls()
+        }
+    }
+
     LaunchedEffect(ended) {
         if (!ended) return@LaunchedEffect
         persist()
-        if (isSeries && onNextEpisode != null && settings.autoplayNext && !nextDismissed) {
+        if (sleepMinutes == -1) {
+            // timer "fim do episódio": para aqui
+            sleepMinutes = 0
+            showControls()
+        } else if (isSeries && onNextEpisode != null && settings.autoplayNext && !nextDismissed) {
             goNext()
         } else if (!isSeries) {
             delay(800)
@@ -808,6 +832,8 @@ private fun PlayerSession(
                         positionMs = scrubMs ?: positionMs,
                         durationMs = durationMs,
                         scrubbing = scrubMs != null,
+                        bufferedMs = bufferedMs,
+                        stepMs = scrubStep,
                         modifier = Modifier.focusRequester(seekFocus),
                         onScrub = { fwd, rep -> scrub(fwd, rep) },
                     )
@@ -1132,6 +1158,18 @@ private fun PlayerSession(
                         })
                     }
                 }
+                item { PanelHeader("Timer para dormir") }
+                items(listOf(0, 15, 30, 60, -1)) { m ->
+                    PanelItem(
+                        when (m) { 0 -> "Desligado"; -1 -> "Fim do episódio"; else -> "$m min" },
+                        selected = sleepMinutes == m,
+                        leading = Icons.Filled.Settings,
+                        onClick = {
+                            sleepMinutes = m
+                            sleepEndsAt = if (m > 0) android.os.SystemClock.elapsedRealtime() + m * 60_000L else 0L
+                        },
+                    )
+                }
                 item { PanelHeader("Reprodução") }
                 item {
                     PanelItem(
@@ -1172,16 +1210,19 @@ private fun SeekBar(
     durationMs: Long,
     scrubbing: Boolean,
     modifier: Modifier,
+    bufferedMs: Long = 0L,
+    stepMs: Long = 10_000L,
     onScrub: (forward: Boolean, repeat: Int) -> Unit,
 ) {
     val p = LocalPalette.current
     var focused by remember { mutableStateOf(false) }
     val fraction = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+    val bufFraction = if (durationMs > 0) (bufferedMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
     Column(Modifier.fillMaxWidth()) {
         BoxWithConstraints(
             modifier
                 .fillMaxWidth()
-                .height(28.dp)
+                .height(if (scrubbing) 64.dp else 30.dp)
                 .onFocusChanged { focused = it.isFocused }
                 .onKeyEvent { ev ->
                     if (ev.type != KeyEventType.KeyDown) return@onKeyEvent false
@@ -1192,36 +1233,61 @@ private fun SeekBar(
                     }
                 }
                 .focusable(),
-            contentAlignment = Alignment.CenterStart,
+            contentAlignment = Alignment.BottomStart,
         ) {
-            val barH = if (focused) 8.dp else 4.dp
-            Box(Modifier.fillMaxWidth().height(barH).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.25f))) {
+            val barH = if (focused || scrubbing) 8.dp else 5.dp
+            val thumb = if (focused || scrubbing) 22.dp else 14.dp
+            Box(Modifier.padding(bottom = (thumb - barH) / 2 + 4.dp).fillMaxWidth().height(barH).clip(RoundedCornerShape(4.dp)).background(Color.White.copy(alpha = 0.22f))) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(bufFraction).background(Color.White.copy(alpha = 0.40f)))
                 Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(p.accent))
             }
-            if (focused) {
-                val thumb = 18.dp
-                Box(
-                    Modifier.offset(x = (maxWidth - thumb) * fraction).size(thumb).clip(CircleShape)
-                        .background(Color.White).border(BorderStroke(3.dp, p.accent), CircleShape),
-                )
+            Box(
+                Modifier.padding(bottom = 4.dp).offset(x = (maxWidth - thumb) * fraction).size(thumb).clip(CircleShape)
+                    .background(Color.White).border(BorderStroke(if (focused || scrubbing) 4.dp else 3.dp, p.accent), CircleShape),
+            )
+            if (scrubbing) {
+                // bolha com o tempo de destino e a velocidade (segurar acelera)
+                val bubbleW = 132.dp
+                Column(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .offset(x = ((maxWidth - thumb) * fraction + thumb / 2 - bubbleW / 2).coerceIn(0.dp, maxWidth - bubbleW))
+                        .width(bubbleW)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Black.copy(alpha = 0.85f))
+                        .border(1.dp, p.accent, RoundedCornerShape(10.dp))
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(formatTime(positionMs), color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        when {
+                            stepMs >= 120_000L -> "»»»» 2 min"
+                            stepMs >= 60_000L -> "»»» 1 min"
+                            stepMs >= 30_000L -> "»» 30 s"
+                            else -> "» 10 s"
+                        },
+                        color = p.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
             Text(
                 formatTime(positionMs),
                 color = if (scrubbing) p.accent else Color.White,
-                fontSize = if (scrubbing) 16.sp else 13.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.weight(1f))
             if (focused && !scrubbing) {
-                Text("◀ ▶ para avançar ou voltar", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
+                Text("◀ ▶ avançar/voltar · segure para ir mais rápido", color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
                 Spacer(Modifier.weight(1f))
             }
             Text(
                 if (durationMs > 0) "-" + formatTime((durationMs - positionMs).coerceAtLeast(0)) else "--:--",
                 color = Color.White.copy(alpha = 0.7f),
-                fontSize = 13.sp,
+                fontSize = 14.sp,
             )
         }
     }
