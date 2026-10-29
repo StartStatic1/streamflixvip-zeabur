@@ -2,6 +2,8 @@ package com.streamflixvip.tv.ui.search
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,6 +75,11 @@ private val KEYS = listOf(
     "5", "6", "7", "8", "9", "0",
 )
 
+private val GENRES = listOf(
+    0 to "Em alta", 28 to "Ação", 35 to "Comédia", 27 to "Terror", 18 to "Drama",
+    10749 to "Romance", 878 to "Ficção", 16 to "Animação", 80 to "Crime", 99 to "Documentário",
+)
+
 private enum class SearchType(val label: String) { ALL("Tudo"), MOVIE("Filmes"), TV("Séries") }
 
 /**
@@ -96,6 +103,7 @@ fun SearchTvScreen(
     var loading by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     var recents by remember { mutableStateOf(recentStore.searches()) }
+    var genreId by rememberSaveable { mutableIntStateOf(0) }
     val firstKey = remember { FocusRequester() }
     var handledToken by remember { mutableIntStateOf(0) }
 
@@ -105,13 +113,17 @@ fun SearchTvScreen(
         if (runCatching { firstKey.requestFocus() }.isSuccess) handledToken = focusSignal.token
     }
 
-    LaunchedEffect(kidsMode) {
+    LaunchedEffect(kidsMode, genreId) {
         trending = runCatching {
-            val path = if (kidsMode) "/discover/movie" else "/trending/all/day"
-            val params = if (kidsMode) mapOf("with_genres" to "16", "sort_by" to "popularity.desc") else emptyMap()
+            val path = if (kidsMode || genreId != 0) "/discover/movie" else "/trending/all/day"
+            val params = when {
+                kidsMode -> mapOf("with_genres" to "16", "sort_by" to "popularity.desc")
+                genreId != 0 -> mapOf("with_genres" to genreId.toString(), "sort_by" to "popularity.desc", "include_adult" to "false")
+                else -> emptyMap()
+            }
             NetworkModule.tmdbApi.requestMap(path, params).results.orEmpty()
                 .filter { it.media_type == null || it.media_type == "movie" || it.media_type == "tv" }
-                .map { if (kidsMode && it.media_type == null) it.copy(media_type = "movie") else it }
+                .map { if ((kidsMode || genreId != 0) && it.media_type == null) it.copy(media_type = "movie") else it }
                 // TMDB as vezes repete o mesmo titulo: chave repetida derruba a grade (crash)
                 .distinctBy { "${it.resolvedMediaType}_${it.id}" }
         }.getOrDefault(emptyList())
@@ -225,7 +237,8 @@ fun SearchTvScreen(
             val showingResults = query.trim().length >= 2
             Text(
                 when {
-                    !showingResults -> if (kidsMode) "Sugestões para a criançada" else "Em alta hoje"
+                    !showingResults -> if (kidsMode) "Sugestões para a criançada"
+                        else GENRES.firstOrNull { it.first == genreId && it.first != 0 }?.second ?: "Em alta hoje"
                     loading -> "Buscando “${query.trim()}”…"
                     results.isEmpty() -> "Nada encontrado"
                     else -> "${results.size} resultados para “${query.trim()}”"
@@ -237,6 +250,16 @@ fun SearchTvScreen(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (!showingResults && !kidsMode) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    GENRES.forEach { (id, label) ->
+                        TvChip(label, selected = id == genreId, onClick = { genreId = id })
+                    }
+                }
+            }
             val list = if (showingResults) results else trending
             when {
                 showingResults && loading && results.isEmpty() -> LoadingBox(Modifier.fillMaxSize())

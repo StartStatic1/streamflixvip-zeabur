@@ -1133,7 +1133,7 @@ private fun CommentsModal(
                             val roots = visible.filter { it.parent_id == null || it.parent_id !in ids }
                                 .let { r -> if (sortTop) r.sortedByDescending { it.up_count - it.down_count } else r }
                             val byParent = visible.filter { it.parent_id != null && it.parent_id in ids }.groupBy { it.parent_id }
-                            val ordered = roots.flatMap { r -> listOf(r) + byParent[r.id].orEmpty().sortedBy { it.created_at } }
+                            val ordered = roots.flatMap { r -> listOf(r) + byParent[r.id].orEmpty().sortedBy { it.created_at } }.distinctBy { it.id }
                             items(ordered, key = { it.id }) { comment ->
                                 val isReply = comment.parent_id != null && comment.parent_id in ids
                                 val raw = comment.comment_text

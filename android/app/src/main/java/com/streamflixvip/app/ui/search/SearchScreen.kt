@@ -66,8 +66,11 @@ import com.streamflixvip.app.network.TmdbItem
 fun SearchScreen(
     viewModel: SearchViewModel,
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
+    onGenreClick: (genreId: Int, genreName: String) -> Unit = { _, _ -> },
 ) {
     val state by viewModel.uiState.collectAsState()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.attach(ctx) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
@@ -125,7 +128,13 @@ fun SearchScreen(
         }
 
         when {
-            state.query.isBlank() -> SearchInstruction()
+            state.query.isBlank() -> SearchHome(
+                recent = state.recent,
+                onRecent = viewModel::useRecent,
+                onRemoveRecent = viewModel::removeRecent,
+                onClearRecent = viewModel::clearRecent,
+                onGenreClick = onGenreClick,
+            )
             state.isLoading -> SearchLoadingState()
             state.errorMessage != null -> SearchErrorState(
                 message = state.errorMessage.orEmpty(),
@@ -341,6 +350,79 @@ private fun SearchResultCard(item: TmdbItem, onClick: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun SearchHome(
+    recent: List<String>,
+    onRecent: (String) -> Unit,
+    onRemoveRecent: (String) -> Unit,
+    onClearRecent: () -> Unit,
+    onGenreClick: (Int, String) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        if (recent.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Buscas recentes",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                androidx.compose.material3.TextButton(onClick = onClearRecent) { Text("Limpar") }
+            }
+            recent.forEach { q ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onRecent(q) }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(q, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    IconButton(onClick = { onRemoveRecent(q) }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Remover", modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+        }
+        Text("Explorar por gênero", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(10.dp))
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            com.streamflixvip.app.data.TMDB_GENRES.forEach { g ->
+                androidx.compose.material3.AssistChip(
+                    onClick = { onGenreClick(g.id, g.displayName) },
+                    label = { Text(g.displayName) },
+                )
+            }
+        }
+        if (recent.isEmpty()) {
+            Spacer(Modifier.height(24.dp))
+            Text(
+                text = "Digite o nome de um filme, série, anime, ator ou franquia. Os resultados aparecem enquanto você digita.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

@@ -382,6 +382,10 @@ private fun MainAppScaffold(
                 SearchScreen(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
+                    onGenreClick = { genreId, genreName ->
+                        val encodedName = java.net.URLEncoder.encode(genreName, "UTF-8")
+                        navController.navigate("genre_detail/$genreId/${com.streamflixvip.app.data.GenreCategory.ALL.name}?name=$encodedName")
+                    },
                 )
             }
 

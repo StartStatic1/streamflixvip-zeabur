@@ -88,7 +88,7 @@ fun ProfilePickerScreen(onPicked: (Profile) -> Unit, onChanged: () -> Unit = {},
                 verticalArrangement = Arrangement.spacedBy(18.dp),
                 modifier = Modifier.widthIn(max = 560.dp).heightIn(max = 460.dp),
             ) {
-                items(profiles, key = { it.id }) { p ->
+                items(profiles.distinctBy { it.id }, key = { "p_" + it.id }) { p ->
                     ProfileTile(p, manage) {
                         when {
                             manage -> editing = p
