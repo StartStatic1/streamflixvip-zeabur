@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Notifications
@@ -105,12 +106,18 @@ fun ProfileScreen(
                         .background(StreamFlixColors.SurfaceRaised),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        Icons.Filled.Person,
-                        contentDescription = null,
-                        tint = Accent,
-                        modifier = Modifier.size(48.dp),
-                    )
+                    val activeProfile by com.streamflixvip.app.profiles.ProfileStore.active.collectAsState()
+                    val ap = activeProfile
+                    if (ap != null) {
+                        com.streamflixvip.app.profiles.ProfileAvatar(ap.avatar, ap.name, 96.dp)
+                    } else {
+                        Icon(
+                            Icons.Filled.Person,
+                            contentDescription = null,
+                            tint = Accent,
+                            modifier = Modifier.size(48.dp),
+                        )
+                    }
                 }
                 Box(
                     modifier = Modifier
@@ -147,8 +154,17 @@ fun ProfileScreen(
                 iconTint = Accent,
                 onClick = onMyListClick,
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
+
+        ProfileInfoCard(
+            icon = Icons.Filled.Tv,
+            title = "Conectar TV",
+            subtitle = "Digite o código que aparece na TV (ou leia o QR com a câmera)",
+            iconTint = Accent,
+            onClick = { com.streamflixvip.app.tvpair.TvPair.pending.value = "" },
+        )
+        Spacer(modifier = Modifier.height(24.dp))
 
         if (notificationsEnabled && announcements.isNotEmpty()) {
             SectionTitle("Avisos")

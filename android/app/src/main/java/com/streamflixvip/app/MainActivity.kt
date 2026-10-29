@@ -87,6 +87,12 @@ import com.startapp.sdk.adsbase.StartAppAd
 import com.startapp.sdk.adsbase.StartAppSDK
 
 class MainActivity : ComponentActivity() {
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        com.streamflixvip.app.tvpair.TvPair.handleUri(intent.data)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -95,11 +101,13 @@ class MainActivity : ComponentActivity() {
         StartAppAd.disableSplash()
 
         enableEdgeToEdge()
+        com.streamflixvip.app.tvpair.TvPair.handleUri(intent?.data)
         setContent {
             CompositionLocalProvider(LocalLifecycleOwner provides this) {
                 StreamFlixTheme {
                     Surface(modifier = Modifier.fillMaxSize()) {
                         AppRoot()
+                        com.streamflixvip.app.tvpair.TvPairDialogHost()
                     }
                 }
             }
@@ -293,6 +301,7 @@ private fun MainAppScaffold(
                     onFavoritesClick = {
                         navController.navigate("mylist") { launchSingleTop = true }
                     },
+                    onProfileClick = onSwitchProfile,
                 )
             }
         },

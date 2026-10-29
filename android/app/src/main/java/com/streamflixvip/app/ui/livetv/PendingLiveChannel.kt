@@ -10,6 +10,13 @@ object PendingLiveChannel {
     @Volatile
     private var pending: LiveChannel? = null
 
+    @Volatile var epgNow: String? = null
+        private set
+    @Volatile var epgNext: String? = null
+        private set
+
+    fun setEpg(now: String?, next: String?) { epgNow = now; epgNext = next }
+
     fun set(channel: LiveChannel) {
         pending = channel
     }

@@ -143,6 +143,7 @@ fun LiveTvScreen(
             onFullscreen = {
                 selected?.let {
                     viewModel.markWatched(it)
+                    PendingLiveChannel.setEpg(if (state.hasEpg(it)) state.nowTitle(it) else null, state.nextTitle(it))
                     onChannelClick(it)
                 }
             },
@@ -302,6 +303,7 @@ fun LiveTvScreen(
                             onToggleFavorite = { viewModel.toggleFavorite(channel.id) },
                             onOpenFullscreen = {
                                 viewModel.markWatched(channel)
+                                PendingLiveChannel.setEpg(if (state.hasEpg(channel)) state.nowTitle(channel) else null, state.nextTitle(channel))
                                 onChannelClick(channel)
                             },
                         )
@@ -614,8 +616,8 @@ private fun ChannelRow(
     Row(
         Modifier
             .fillMaxWidth()
-            .height(70.dp)
-            .focusRing(RoundedCornerShape(14.dp))
+            .height(78.dp)
+            .focusRing(RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
             .border(1.dp, border, RoundedCornerShape(14.dp))
@@ -623,13 +625,13 @@ private fun ChannelRow(
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ChannelLogo(channel, size = 46.dp)
-        Spacer(Modifier.width(10.dp))
+        ChannelLogo(channel, size = 54.dp)
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(
                 channel.name,
                 color = Color.White,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -675,22 +677,31 @@ private fun ChannelRow(
 @Composable
 private fun ChannelLogo(channel: LiveChannel, size: androidx.compose.ui.unit.Dp) {
     val logo = channel.logo
+    // logo quebrado/sem logo: iniciais coloridas (nunca uma caixa branca vazia)
+    var loaded by remember(logo) { mutableStateOf(false) }
+    val base = colorFor(channel.name)
     Box(
         Modifier
             .size(size)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (logo.isNullOrBlank()) colorFor(channel.name) else LogoPlate),
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (loaded) Brush.linearGradient(listOf(LogoPlate, LogoPlate))
+                else Brush.linearGradient(listOf(base, base.copy(alpha = 0.55f))),
+            ),
         contentAlignment = Alignment.Center,
     ) {
+        if (!loaded) {
+            Text(initialsOf(channel.name), color = Color.White, fontWeight = FontWeight.Black, fontSize = (size.value * 0.32f).sp)
+        }
         if (!logo.isNullOrBlank()) {
             AsyncImage(
                 model = logo,
                 contentDescription = null,
-                modifier = Modifier.fillMaxSize().padding(4.dp),
+                modifier = Modifier.fillMaxSize().padding(5.dp),
                 contentScale = ContentScale.Fit,
+                onSuccess = { loaded = true },
+                onError = { loaded = false },
             )
-        } else {
-            Text(initialsOf(channel.name), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
     }
 }

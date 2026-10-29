@@ -259,14 +259,14 @@ fun HomeTvScreen(
                 TvLazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp),
+                    contentPadding = PaddingValues(top = 6.dp, bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                     pivotOffsets = PivotOffsets(parentFraction = 0.0f),
                 ) {
                     rows.forEachIndexed { rowIndex, row ->
                         item(key = row.key, contentType = row.contentType) {
                           // fileira em foco sempre inteira no topo (titulo + cartoes), nos dois sentidos
-                          Box(Modifier.onFocusChanged {
+                          Box(Modifier.padding(top = 10.dp).onFocusChanged {
                               if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(rowIndex) } }
                           }) {
                             HomeRowView(
@@ -397,7 +397,8 @@ private fun HomeRowView(
                 is HomeRow.Catalog -> {
                     // filme e serie podem ter o mesmo id no TMDB (linha "Destaques" = trending/all):
                     // chave so com id repetia e derrubava o app ao rolar a fileira
-                    val list = row.items.distinctBy { "${it.resolvedMediaType}_${it.id}" }.take(20)
+                    val list = row.items.distinctBy { "${it.resolvedMediaType}_${it.id}" }
+                        .take(if (row.spec.style == RowStyle.TOP10) 10 else 20)
                     itemsIndexed(list, key = { _, it -> "${it.resolvedMediaType}_${it.id}" }) { index, item ->
                         val key = "${row.key}:${item.resolvedMediaType}_${item.id}"
                         FocusTargetBox(key, focusTarget, focusNonce, onFocusConsumed) { mod ->
@@ -447,7 +448,7 @@ private fun HomeRowView(
                             }
                         }
                     }
-                    if (row.items.size >= 8) {
+                    if (row.items.size >= 8 && row.spec.style != RowStyle.TOP10) {
                         item(key = "see_all") {
                             SeeAllCard(featured = row.spec.style == RowStyle.FEATURED) { onSeeAll(row.spec.key) }
                         }
@@ -517,18 +518,24 @@ fun FocusTargetBox(
 @Composable
 private fun Top10Card(rank: Int, poster: @Composable () -> Unit) {
     val p = LocalPalette.current
-    Box(Modifier.width(if (rank >= 10) 196.dp else 172.dp)) {
-        Text(
-            "$rank",
-            style = TextStyle(
-                brush = Brush.verticalGradient(listOf(p.accent, p.accent.copy(alpha = 0.05f))),
-                fontSize = 120.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-8).sp,
-            ),
-            modifier = Modifier.align(Alignment.BottomStart).offset(y = 22.dp),
-        )
-        Box(Modifier.align(Alignment.CenterEnd)) { poster() }
+    // número e pôster lado a lado (sem sobrepor), largura fixa por posição
+    Row(verticalAlignment = Alignment.Bottom) {
+        Box(Modifier.width(if (rank >= 10) 104.dp else 62.dp).height(180.dp), contentAlignment = Alignment.BottomEnd) {
+            Text(
+                "$rank",
+                style = TextStyle(
+                    brush = Brush.verticalGradient(listOf(p.accent, p.accent.copy(alpha = 0.15f))),
+                    fontSize = 104.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-6).sp,
+                ),
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.offset(y = 14.dp),
+            )
+        }
+        Spacer(Modifier.width(4.dp))
+        poster()
     }
 }
 

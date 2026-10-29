@@ -60,6 +60,25 @@ private data class LiveSession(
 
 class MainTvActivity : ComponentActivity() {
 
+    /**
+     * Rede de segurança do D-pad: no Fire TV (AFTSSS) a busca de foco do Compose às vezes
+     * mede um cartão que acabou de sair da tela e lança
+     * "LayoutCoordinate operations are only valid when isAttached is true", fechando o app.
+     * Aqui engolimos só esse erro de foco: a tecla é ignorada e o app continua aberto.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        try {
+            super.dispatchKeyEvent(event)
+        } catch (e: IllegalStateException) {
+            val msg = e.message.orEmpty()
+            if (msg.contains("isAttached") || msg.contains("focus", ignoreCase = true) ||
+                e.stackTrace.any { it.className.contains("androidx.compose.ui.focus") }
+            ) {
+                runCatching { com.streamflixvip.tv.util.CrashLog.action("foco ignorado: ${msg.take(80)}") }
+                true
+            } else throw e
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

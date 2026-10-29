@@ -1647,8 +1647,11 @@ private fun NativePlayer(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .fillMaxHeight()
-                    .widthIn(max = 380.dp)
-                    .fillMaxWidth(0.46f)
+                    .width(
+                        androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.let { sw ->
+                            (sw * 0.4f).coerceAtLeast(320f).coerceAtMost(sw * 0.92f).coerceAtMost(460f).dp
+                        },
+                    )
                     .background(Color(0xF20E0F13))
                     .border(1.dp, Color.White.copy(alpha = 0.08f))
                     .focusProperties { canFocus = false }
@@ -1924,7 +1927,7 @@ private fun SubmenuItem(label: String, selected: Boolean, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = if (selected) Color.White else Color.White.copy(alpha = 0.75f), fontSize = 15.sp)
+        Text(label, color = if (selected) Color.White else Color.White.copy(alpha = 0.75f), fontSize = 15.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (selected) Text("\u2713", color = Color.White, fontSize = 15.sp)
     }
 }
@@ -1934,9 +1937,11 @@ private fun SettingsRow(label: String, value: String, modifier: Modifier = Modif
     Row(
         modifier = modifier.fillMaxWidth().tvFocus(RoundedCornerShape(6.dp)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick).padding(vertical = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.padding(end = 12.dp))
-        Text(value, color = Color.White.copy(alpha = 0.6f), fontSize = 15.sp)
+        Text(label, color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(end = 12.dp))
+        Text(value, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 170.dp))
+        Text("  ›", color = Color.White.copy(alpha = 0.4f), fontSize = 16.sp)
     }
 }
 

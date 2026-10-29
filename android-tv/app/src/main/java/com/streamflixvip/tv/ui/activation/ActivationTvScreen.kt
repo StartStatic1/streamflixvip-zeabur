@@ -65,6 +65,28 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
         runCatching { firstKeyFocusRequester.requestFocus() }
     }
 
+    // Ativar sem digitar: QR + código de 6 números confirmados pelo celular logado.
+    var pair by remember { mutableStateOf<com.streamflixvip.tv.data.TvPairClient.Session?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val s = runCatching { com.streamflixvip.tv.data.TvPairClient.start(activationManager.deviceId) }.getOrNull()
+            pair = s
+            if (s == null) { kotlinx.coroutines.delay(60_000); continue }
+            val started = System.currentTimeMillis()
+            var renew = false
+            while (!renew) {
+                kotlinx.coroutines.delay(3000)
+                when (runCatching { com.streamflixvip.tv.data.TvPairClient.poll(s, activationManager.deviceId) }.getOrNull()) {
+                    "done" -> {
+                        if (runCatching { activationManager.revalidate() }.getOrDefault(false)) { onActivated(); return@LaunchedEffect }
+                    }
+                    "expired" -> renew = true
+                }
+                if (System.currentTimeMillis() - started > 9 * 60_000) renew = true
+            }
+        }
+    }
+
     fun submit() {
         if (code.isBlank() || isLoading) return
         isLoading = true
@@ -124,11 +146,35 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
                     }
                 }
 
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(16.dp))
+
+                pair?.let { pp ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                            .background(Glass).border(1.dp, AccentSoft.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(112.dp).clip(RoundedCornerShape(10.dp)).background(Color.White).padding(6.dp)) {
+                            com.streamflixvip.tv.ui.components.QrCode(pp.url, Modifier.fillMaxSize())
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text("Entrar sem digitar", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Leia o QR com o celular (app StreamFlix com sua conta) ou, no app, vá em Perfil → Conectar TV e digite:",
+                                color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(pp.pin.chunked(3).joinToString(" "), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(18.dp))
+                }
 
                 Text(
-                    "Digite seu código VIP",
-                    fontSize = 28.sp,
+                    if (pair != null) "Ou digite seu código VIP" else "Digite seu código VIP",
+                    fontSize = if (pair != null) 20.sp else 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
                 )
@@ -140,7 +186,7 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
                     lineHeight = 20.sp,
                 )
 
-                Spacer(Modifier.height(28.dp))
+                Spacer(Modifier.height(16.dp))
 
                 // Display do código
                 Box(
@@ -222,6 +268,7 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
                     lineHeight = 17.sp,
                 )
 
+                if (pair == null) {
                 Spacer(Modifier.height(12.dp))
                 // Sem código: QR abre o WhatsApp do suporte no celular, já com o ID da TV
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -238,6 +285,7 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
                             color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp,
                         )
                     }
+                }
                 }
             }
 

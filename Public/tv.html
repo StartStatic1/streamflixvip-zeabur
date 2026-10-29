@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conectar TV · StreamFlix</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0b0b0f;color:#fff;display:flex;min-height:100vh;align-items:center;justify-content:center}
+.c{max-width:380px;padding:28px;text-align:center}
+h1{font-size:22px;margin:0 0 8px}p{color:#bbb;line-height:1.5}
+a.b{display:block;margin:22px 0 10px;padding:16px;border-radius:14px;background:#e50914;color:#fff;text-decoration:none;font-weight:700;font-size:17px}
+small{color:#888}
+</style></head><body><div class="c">
+<h1>📺 Conectar a TV</h1>
+<p>Toque no botão abaixo para abrir o app StreamFlix no seu celular e confirmar a TV.</p>
+<a class="b" id="open" href="#">Abrir no app StreamFlix</a>
+<small>Não abriu? No app vá em <b>Perfil → Conectar TV</b> e digite o código de 6 números que aparece na TV.</small>
+</div>
+<script>
+var p=(new URLSearchParams(location.search).get('p')||'').replace(/[^a-f0-9]/g,'');
+var url='intent://tvpair?p='+p+'#Intent;scheme=streamflixvip;package=com.streamflixvip.app;end';
+if(!/android/i.test(navigator.userAgent)) url='streamflixvip://tvpair?p='+p;
+document.getElementById('open').href=url;
+</script></body></html>
