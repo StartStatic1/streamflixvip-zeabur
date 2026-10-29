@@ -59,6 +59,7 @@ fun ProfileScreen(
     onSignedOut: () -> Unit,
     onMyListClick: (() -> Unit)? = null,
     onAnnouncementClick: ((tmdbId: Int, mediaType: String) -> Unit)? = null,
+    onSwitchProfile: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -233,6 +234,31 @@ fun ProfileScreen(
         )
 
         Spacer(modifier = Modifier.height(28.dp))
+
+        onSwitchProfile?.let { switch ->
+            val activeProfile by com.streamflixvip.app.profiles.ProfileStore.active.collectAsState()
+            SectionTitle("Perfil")
+            androidx.compose.foundation.layout.Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                    .background(com.streamflixvip.app.ui.theme.StreamFlixColors.Glass)
+                    .clickable { switch() }
+                    .padding(14.dp),
+            ) {
+                activeProfile?.let { com.streamflixvip.app.profiles.ProfileAvatar(it.avatar, it.name, 48.dp) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(activeProfile?.name ?: "Perfil", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (activeProfile?.kids == true) "Perfil infantil" else "Trocar ou gerenciar perfis",
+                        color = Color(0xFF8A94A6), fontSize = 12.sp,
+                    )
+                }
+                Text("Trocar", color = com.streamflixvip.app.ui.theme.StreamFlixColors.Accent, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(16.dp))
+        }
 
         SectionTitle("Aparência")
         com.streamflixvip.app.ui.common.AccentPicker()

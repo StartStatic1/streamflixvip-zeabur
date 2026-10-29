@@ -198,13 +198,42 @@ private fun AppRoot() {
     } else if (!isLoggedIn) {
         AuthScreen(viewModel = authViewModel, onLoggedIn = { isLoggedIn = true })
     } else {
-        MainAppScaffold(
-            authViewModel = authViewModel,
-            userId = sessionStore.userId,
-            userEmail = sessionStore.userEmail,
-            accessToken = sessionStore.accessToken,
-            onSignedOut = { isLoggedIn = false },
-        )
+        // Perfis: carrega os desta conta e pergunta "Quem está assistindo?" quando há mais de um.
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val accountId = sessionStore.userId
+        var profilesReady by remember(accountId) { mutableStateOf(false) }
+        var askProfile by remember(accountId) { mutableStateOf(false) }
+        var manageProfiles by remember { mutableStateOf(false) }
+        LaunchedEffect(accountId) {
+            com.streamflixvip.app.profiles.ProfileStore.init(ctx, accountId, sessionStore.userEmail)
+            if (accountId != null) {
+                kotlinx.coroutines.withTimeoutOrNull(3_000) { com.streamflixvip.app.profiles.ProfileSync.pull(accountId) }
+            }
+            askProfile = com.streamflixvip.app.profiles.ProfileStore.shouldAsk()
+            profilesReady = true
+        }
+        val profileScope = rememberCoroutineScope()
+        val activeProfile by com.streamflixvip.app.profiles.ProfileStore.active.collectAsState()
+        when {
+            !profilesReady -> Box(Modifier.fillMaxSize().background(Color(0xFF070B12)))
+            askProfile || manageProfiles -> com.streamflixvip.app.profiles.ProfilePickerScreen(
+                startInManage = manageProfiles,
+                onPicked = { askProfile = false; manageProfiles = false },
+                onChanged = {
+                    accountId?.let { id -> profileScope.launch { com.streamflixvip.app.profiles.ProfileSync.push(id) } }
+                },
+            )
+            else -> androidx.compose.runtime.key(activeProfile?.id) {
+                MainAppScaffold(
+                    authViewModel = authViewModel,
+                    userId = sessionStore.userId,
+                    userEmail = sessionStore.userEmail,
+                    accessToken = sessionStore.accessToken,
+                    onSignedOut = { isLoggedIn = false },
+                    onSwitchProfile = { askProfile = true },
+                )
+            }
+        }
     }
 }
 
@@ -215,6 +244,7 @@ private fun MainAppScaffold(
     userEmail: String?,
     accessToken: String?,
     onSignedOut: () -> Unit,
+    onSwitchProfile: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -488,6 +518,7 @@ private fun MainAppScaffold(
                     onMyListClick = {
                         navController.navigate("mylist") { launchSingleTop = true }
                     },
+                    onSwitchProfile = onSwitchProfile,
                     onAnnouncementClick = { tmdbId, mediaType ->
                         navController.navigate("detail/$tmdbId/$mediaType")
                     },
