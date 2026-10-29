@@ -73,7 +73,16 @@ module.exports = async function handler(req, res) {
   if (action === 'poll') {
     const p = pairs.get(String(body.pairId || ''));
     if (!p || p.deviceId !== String(body.deviceId || '').trim()) { res.status(200).json({ status: 'expired' }); return; }
-    res.status(200).json({ status: p.status });
+    res.status(200).json(p.status === 'done' && p.expiresAt ? { status: p.status, expiresAt: p.expiresAt, planLabel: p.planLabel || null } : { status: p.status });
+    return;
+  }
+
+  // Página /tv (QR): mostra o código de 6 números quando o app não abre.
+  if (action === 'info') {
+    if (limited(ip, 30)) { res.status(429).json({ error: 'Muitas tentativas' }); return; }
+    const p = pairs.get(String(body.pairId || ''));
+    if (!p) { res.status(200).json({ status: 'expired' }); return; }
+    res.status(200).json({ status: p.status, pin: p.status === 'waiting' ? p.pin : null });
     return;
   }
 
@@ -83,7 +92,8 @@ module.exports = async function handler(req, res) {
     if (!serviceKey) { res.status(500).json({ error: 'Servidor sem configuração' }); return; }
     const pairId = body.pairId ? String(body.pairId) : byPin.get(String(body.pin || '').replace(/\D/g, ''));
     const p = pairId ? pairs.get(pairId) : null;
-    if (!p || p.status !== 'waiting') { res.status(404).json({ error: 'Código da TV expirado. Abra a tela de ativação na TV de novo.' }); return; }
+    if (p && p.status === 'done') { res.status(200).json({ success: true, expiresAt: p.expiresAt || null, already: true }); return; }
+    if (!p || p.status !== 'waiting') { console.log('[tv-pair] confirm sem par', body.pairId ? 'qr' : 'pin'); res.status(404).json({ error: 'Código da TV expirado. Abra a tela de ativação na TV de novo.' }); return; }
 
     const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!token) { res.status(401).json({ error: 'Entre na sua conta no app primeiro.' }); return; }
@@ -119,8 +129,12 @@ module.exports = async function handler(req, res) {
         }),
       });
       if (!up.ok) { console.error('tv-pair upsert', up.status); res.status(502).json({ error: 'Falha ao ativar. Tente de novo.' }); return; }
+      const expIso = new Date(vip.expires_at).toISOString();
       p.status = 'done';
-      res.status(200).json({ success: true, expiresAt: vip.expires_at });
+      p.expiresAt = expIso;
+      p.planLabel = vip.plan_label || null;
+      console.log('[tv-pair] confirmado', body.pairId ? 'qr' : 'pin', 'device', String(p.deviceId).slice(0, 6) + '…');
+      res.status(200).json({ success: true, expiresAt: expIso });
     } catch (err) {
       console.error('tv-pair error:', err && err.message);
       res.status(500).json({ error: 'Erro interno. Tente de novo.' });

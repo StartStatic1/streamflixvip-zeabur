@@ -35,7 +35,15 @@ object TvPairClient {
         return if (id.isNotBlank() && pin.length == 6 && url.startsWith("http")) Session(id, pin, url) else null
     }
 
-    /** "waiting" | "done" | "expired" | null (sem rede) */
-    suspend fun poll(s: Session, deviceId: String): String? =
-        post(JSONObject().put("action", "poll").put("pairId", s.pairId).put("deviceId", deviceId))?.optString("status")
+    data class Poll(val status: String, val expiresAt: String?, val planLabel: String?)
+
+    /** status "waiting" | "done" | "expired"; null = sem rede */
+    suspend fun poll(s: Session, deviceId: String): Poll? {
+        val j = post(JSONObject().put("action", "poll").put("pairId", s.pairId).put("deviceId", deviceId)) ?: return null
+        return Poll(
+            j.optString("status"),
+            j.optString("expiresAt").takeIf { it.isNotBlank() && it != "null" },
+            j.optString("planLabel").takeIf { it.isNotBlank() && it != "null" },
+        )
+    }
 }

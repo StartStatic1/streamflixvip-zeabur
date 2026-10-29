@@ -58,9 +58,11 @@ module.exports = async function handler(req, res) {
     const expiresAt = new Date(row.expires_at);
     const active = expiresAt > new Date();
 
+    // Sempre ISO com "Z": o Supabase devolve "+00:00" e o Instant.parse das TVs
+    // Android 9-11 (Fire TV) não entende offset — a TV achava que não estava ativa.
     res.status(200).json({
       active,
-      expiresAt: row.expires_at,
+      expiresAt: isNaN(expiresAt.getTime()) ? row.expires_at : expiresAt.toISOString(),
       planLabel: row.plan_label || null,
     });
   } catch (err) {

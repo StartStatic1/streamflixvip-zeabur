@@ -1,21 +1,49 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
 <title>Conectar TV · StreamFlix</title>
+<link rel="icon" href="/favicon.ico?v=5">
 <style>
-body{margin:0;font-family:system-ui,sans-serif;background:#0b0b0f;color:#fff;display:flex;min-height:100vh;align-items:center;justify-content:center}
-.c{max-width:380px;padding:28px;text-align:center}
-h1{font-size:22px;margin:0 0 8px}p{color:#bbb;line-height:1.5}
-a.b{display:block;margin:22px 0 10px;padding:16px;border-radius:14px;background:#e50914;color:#fff;text-decoration:none;font-weight:700;font-size:17px}
-small{color:#888}
+:root{--red:#e50914;--gold:#f5b942}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(700px 420px at 50% -60px,rgba(229,9,20,.32),transparent 70%),#050505;color:#f6f2ee;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.c{width:100%;max-width:400px;padding:28px;text-align:center}
+.logo{width:88px;height:88px;border-radius:22px;box-shadow:0 0 50px rgba(229,9,20,.45)}
+h1{font-size:24px;margin:18px 0 8px}
+p{color:#c9c2bc;line-height:1.5;margin:0 0 6px}
+a.b,button.b{display:block;width:100%;margin:22px 0 10px;padding:16px;border:0;border-radius:14px;background:linear-gradient(180deg,#ff2a36,#c40812);color:#fff;text-decoration:none;font-weight:800;font-size:17px;cursor:pointer}
+.pin{margin:18px 0 6px;padding:16px;border:1px solid rgba(255,215,122,.4);border-radius:16px;background:#120f0f}
+.pin b{display:block;font:800 40px/1 ui-monospace,monospace;letter-spacing:8px;color:var(--gold)}
+.pin span{font-size:13px;color:#a59e98}
+small{color:#8f8882;line-height:1.5;display:block;margin-top:10px}
+.hide{display:none}
 </style></head><body><div class="c">
-<h1>📺 Conectar a TV</h1>
-<p>Toque no botão abaixo para abrir o app StreamFlix no seu celular e confirmar a TV.</p>
+<img class="logo" src="/img/logo-256.webp?v=5" alt="StreamFlix" width="88" height="88">
+<h1>Conectar a TV</h1>
+<p id="lead">Abra o app StreamFlix neste celular para liberar a TV.</p>
 <a class="b" id="open" href="#">Abrir no app StreamFlix</a>
-<small>Não abriu? No app vá em <b>Perfil → Conectar TV</b> e digite o código de 6 números que aparece na TV.</small>
+<div class="pin hide" id="pinbox"><span>Código da TV</span><b id="pin">······</b><span>No app: <b style="font:inherit;color:#fff;letter-spacing:0">Perfil › Conectar TV</b> e digite este código.</span></div>
+<p class="hide" id="msg"></p>
+<small id="help">Não abriu? Você precisa do app StreamFlix instalado e logado neste celular. Baixe em <a href="/" style="color:#ff6b6b">streamflixvip.online</a> e depois use o código acima.</small>
 </div>
 <script>
-var p=(new URLSearchParams(location.search).get('p')||'').replace(/[^a-f0-9]/g,'');
-var url='intent://tvpair?p='+p+'#Intent;scheme=streamflixvip;package=com.streamflixvip.app;end';
-if(!/android/i.test(navigator.userAgent)) url='streamflixvip://tvpair?p='+p;
-document.getElementById('open').href=url;
+(function(){
+  var p=(new URLSearchParams(location.search).get('p')||'').replace(/[^a-f0-9]/g,'').slice(0,64);
+  var open=document.getElementById('open'), box=document.getElementById('pinbox'), msg=document.getElementById('msg');
+  var android=/android/i.test(navigator.userAgent);
+  var back=location.origin+'/tv?p='+p+'&semapp=1';
+  // Fallback volta para esta página (nunca loja nem download)
+  open.href=android
+    ? 'intent://tvpair?p='+p+'#Intent;scheme=streamflixvip;package=com.streamflixvip.app;S.browser_fallback_url='+encodeURIComponent(back)+';end'
+    : 'streamflixvip://tvpair?p='+p;
+  function show(t){msg.textContent=t;msg.className='';}
+  if(!p){open.className='hide';show('Link incompleto. Leia o QR code da TV de novo.');return;}
+  if(/semapp=1/.test(location.search)){document.getElementById('lead').textContent='O app não abriu neste celular. Use o código abaixo dentro do app.';}
+  fetch('/api/tv-pair',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'info',pairId:p})})
+    .then(function(r){return r.json()}).then(function(j){
+      if(j.status==='waiting'&&j.pin){document.getElementById('pin').textContent=j.pin.slice(0,3)+' '+j.pin.slice(3);box.className='pin';}
+      else if(j.status==='done'){open.className='hide';show('Esta TV já foi conectada. Pode voltar para a TV.');}
+      else{open.className='hide';show('Este QR code expirou. Na TV, abra a tela de ativação de novo para gerar outro.');}
+    }).catch(function(){});
+})();
 </script></body></html>

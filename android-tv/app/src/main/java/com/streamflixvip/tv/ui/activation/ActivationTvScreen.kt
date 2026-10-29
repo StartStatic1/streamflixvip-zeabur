@@ -67,6 +67,7 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
 
     // Ativar sem digitar: QR + código de 6 números confirmados pelo celular logado.
     var pair by remember { mutableStateOf<com.streamflixvip.tv.data.TvPairClient.Session?>(null) }
+    var paired by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         while (true) {
             val s = runCatching { com.streamflixvip.tv.data.TvPairClient.start(activationManager.deviceId) }.getOrNull()
@@ -76,9 +77,20 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
             var renew = false
             while (!renew) {
                 kotlinx.coroutines.delay(3000)
-                when (runCatching { com.streamflixvip.tv.data.TvPairClient.poll(s, activationManager.deviceId) }.getOrNull()) {
+                val r = runCatching { com.streamflixvip.tv.data.TvPairClient.poll(s, activationManager.deviceId) }.getOrNull()
+                when (r?.status) {
                     "done" -> {
-                        if (runCatching { activationManager.revalidate() }.getOrDefault(false)) { onActivated(); return@LaunchedEffect }
+                        paired = true
+                        // 1) validade que veio no poll; 2) confere no servidor (algumas tentativas)
+                        var ok = runCatching { activationManager.applyPaired(r.expiresAt, r.planLabel) }.getOrDefault(false)
+                        var tries = 0
+                        while (!ok && tries < 5) {
+                            ok = runCatching { activationManager.revalidate() }.getOrDefault(false)
+                            if (!ok) { tries++; kotlinx.coroutines.delay(2000) }
+                        }
+                        if (ok) { onActivated(); return@LaunchedEffect }
+                        paired = false
+                        renew = true
                     }
                     "expired" -> renew = true
                 }
@@ -99,219 +111,106 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
         }
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(LocalPalette.current.bgElevated, Bg, Color(0xFF05070C)),
-                ),
-            ),
-    ) {
-        // vinheta cinema
+    Box(Modifier.fillMaxSize().background(BrandBlack)) {
+        // brilho neon vermelho no topo
         Box(
             Modifier.fillMaxSize().background(
-                Brush.radialGradient(
-                    colors = listOf(Accent.copy(alpha = 0.12f), Color.Transparent),
-                    radius = 900f,
-                ),
+                Brush.radialGradient(listOf(BrandRed.copy(alpha = 0.22f), Color.Transparent), radius = 1100f, center = androidx.compose.ui.geometry.Offset(300f, 0f)),
             ),
         )
-
         Row(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 48.dp, vertical = 36.dp),
-            horizontalArrangement = Arrangement.spacedBy(40.dp),
+            Modifier.fillMaxSize().padding(horizontal = 56.dp, vertical = 40.dp),
+            horizontalArrangement = Arrangement.spacedBy(44.dp),
         ) {
-            // Esquerda — marca + código
-            Column(
-                Modifier.weight(0.9f).fillMaxHeight(),
-                verticalArrangement = Arrangement.Center,
-            ) {
+            // Esquerda: marca + QR grande
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Brush.linearGradient(listOf(Accent, Cyan.copy(alpha = 0.8f)))),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Filled.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp))
-                    }
+                    androidx.compose.foundation.Image(
+                        painter = androidx.compose.ui.res.painterResource(com.streamflixvip.tv.R.drawable.ic_launcher_fg),
+                        contentDescription = null,
+                        modifier = Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)),
+                    )
                     Spacer(Modifier.width(14.dp))
                     Column {
-                        Text("StreamFlix VIP", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                        Text("Ativação do aparelho", color = TextMuted, fontSize = 13.sp)
+                        Row {
+                            Text("Stream", color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Black)
+                            Text("Flix", color = BrandRed, fontSize = 26.sp, fontWeight = FontWeight.Black)
+                        }
+                        Text("ATIVAR ESTA TV", color = BrandGold, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                     }
                 }
-
-                Spacer(Modifier.height(16.dp))
-
-                pair?.let { pp ->
-                    Row(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                            .background(Glass).border(1.dp, AccentSoft.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(Modifier.size(112.dp).clip(RoundedCornerShape(10.dp)).background(Color.White).padding(6.dp)) {
-                            com.streamflixvip.tv.ui.components.QrCode(pp.url, Modifier.fillMaxSize())
-                        }
-                        Spacer(Modifier.width(16.dp))
-                        Column {
-                            Text("Entrar sem digitar", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                "Leia o QR com o celular (app StreamFlix com sua conta) ou, no app, vá em Perfil → Conectar TV e digite:",
-                                color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp,
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(pp.pin.chunked(3).joinToString(" "), color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black, letterSpacing = 4.sp)
-                        }
-                    }
-                    Spacer(Modifier.height(18.dp))
-                }
-
-                Text(
-                    if (pair != null) "Ou digite seu código VIP" else "Digite seu código VIP",
-                    fontSize = if (pair != null) 20.sp else 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "Use o controle remoto no teclado ao lado. O mesmo código do app mobile ou o enviado pelo suporte.",
-                    fontSize = 14.sp,
-                    color = TextMuted,
-                    lineHeight = 20.sp,
-                )
-
-                Spacer(Modifier.height(16.dp))
-
-                // Display do código
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Glass)
-                        .border(1.dp, if (code.isNotEmpty()) AccentSoft.copy(alpha = 0.5f) else GlassBorder, RoundedCornerShape(16.dp))
-                        .padding(horizontal = 22.dp, vertical = 20.dp),
+                Spacer(Modifier.height(26.dp))
+                val pp = pair
+                Row(
+                    Modifier.clip(RoundedCornerShape(22.dp)).background(Color(0xFF121010))
+                        .border(1.dp, BrandRed.copy(alpha = 0.45f), RoundedCornerShape(22.dp)).padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        text = code.ifEmpty { "••••••••" },
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (code.isEmpty()) Color.White.copy(alpha = 0.25f) else Color.White,
-                        letterSpacing = 4.sp,
-                    )
-                }
-
-                if (errorMessage != null) {
-                    Spacer(Modifier.height(14.dp))
-                    Text(errorMessage!!, color = Color(0xFFF87171), fontSize = 14.sp)
-                }
-
-                Spacer(Modifier.height(24.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(
-                        onClick = { submit() },
-                        enabled = code.isNotBlank() && !isLoading,
-                        colors = ButtonDefaults.colors(
-                            containerColor = Accent,
-                            focusedContainerColor = AccentSoft,
-                            contentColor = Color.White,
-                            focusedContentColor = Color.White,
-                            disabledContainerColor = Accent.copy(alpha = 0.35f),
-                            disabledContentColor = Color.White.copy(alpha = 0.5f),
-                        ),
+                    Box(
+                        Modifier.size(210.dp).clip(RoundedCornerShape(14.dp)).background(Color.White).padding(10.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        if (isLoading) {
-                            CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Ativando…")
-                        } else {
-                            Icon(Icons.Filled.Check, null, Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Ativar", fontWeight = FontWeight.Bold)
-                        }
+                        if (pp != null) com.streamflixvip.tv.ui.components.QrCode(pp.url, Modifier.fillMaxSize())
+                        else CircularProgressIndicator(Modifier.size(36.dp), color = BrandRed)
                     }
-                    Button(
-                        onClick = { if (code.isNotEmpty()) code = code.dropLast(1) },
-                        colors = ButtonDefaults.colors(
-                            containerColor = Glass,
-                            focusedContainerColor = Color.White.copy(alpha = 0.16f),
-                            contentColor = Color.White,
-                            focusedContentColor = Color.White,
-                        ),
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Apagar")
-                    }
-                    Button(
-                        onClick = { code = "" },
-                        colors = ButtonDefaults.colors(
-                            containerColor = Glass,
-                            focusedContainerColor = Color.White.copy(alpha = 0.16f),
-                            contentColor = Color.White,
-                            focusedContentColor = Color.White,
-                        ),
-                    ) {
-                        Text("Limpar", fontSize = 13.sp)
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-                Text(
-                    "Este aparelho fica vinculado automaticamente. Após ativar, não precisa digitar de novo ao reinstalar.",
-                    color = TextMuted.copy(alpha = 0.8f),
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp,
-                )
-
-                if (pair == null) {
-                Spacer(Modifier.height(12.dp))
-                // Sem código: QR abre o WhatsApp do suporte no celular, já com o ID da TV
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val waText = "Olá! Quero ativar o StreamFlix na minha TV. ID: ${activationManager.deviceId}"
-                    com.streamflixvip.tv.ui.components.QrCode(
-                        "https://wa.me/558498334731?text=" + java.net.URLEncoder.encode(waText, "UTF-8"),
-                        Modifier.size(84.dp),
-                    )
-                    Spacer(Modifier.width(16.dp))
-                    Column {
-                        Text("Não tem código?", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(22.dp))
+                    Column(Modifier.widthIn(max = 260.dp)) {
+                        Text(if (paired) "Conectando…" else "Entrar com o celular", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(6.dp))
                         Text(
-                            "Aponte a câmera do celular para o QR e fale com o suporte no WhatsApp.",
-                            color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp,
+                            "1. Leia o QR com a câmera do celular\n2. Ou no app: Perfil › Conectar TV e digite:",
+                            color = Color(0xFFB9B1AB), fontSize = 13.sp, lineHeight = 19.sp,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            pp?.pin?.chunked(3)?.joinToString(" ") ?: "··· ···",
+                            color = BrandGold, fontSize = 40.sp, fontWeight = FontWeight.Black, letterSpacing = 5.sp,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (paired) "Recebido! Liberando a TV…" else "A TV entra sozinha quando o celular confirmar.",
+                            color = if (paired) Color(0xFF34D399) else Color(0xFF8F8882), fontSize = 12.sp,
                         )
                     }
                 }
+                if (pair == null) {
+                    Spacer(Modifier.height(16.dp))
+                    Text("Gerando QR… se demorar, confira a internet da TV.", color = Color(0xFF8F8882), fontSize = 12.sp)
                 }
             }
 
-            // Direita — teclado D-pad
+            // Direita: código VIP no teclado (D-pad)
             Column(
-                Modifier
-                    .weight(1.1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.White.copy(alpha = 0.04f))
-                    .border(1.dp, GlassBorder, RoundedCornerShape(20.dp))
-                    .padding(16.dp),
+                Modifier.weight(1f).fillMaxHeight()
+                    .clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = 0.035f))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(22.dp)).padding(22.dp),
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text(
-                    "Teclado",
-                    color = TextMuted,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.padding(start = 4.dp, bottom = 12.dp),
-                )
+                Text("Ou digite seu código VIP", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(4.dp))
+                Text("O mesmo código do app ou o enviado pelo suporte.", color = Color(0xFF8F8882), fontSize = 12.sp)
+                Spacer(Modifier.height(14.dp))
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF121010))
+                        .border(1.dp, if (code.isNotEmpty()) BrandRed.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 18.dp, vertical = 14.dp),
+                ) {
+                    Text(
+                        code.ifEmpty { "••••••••" },
+                        fontSize = 24.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp,
+                        color = if (code.isEmpty()) Color.White.copy(alpha = 0.25f) else Color.White,
+                    )
+                }
+                if (errorMessage != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(errorMessage!!, color = Color(0xFFF87171), fontSize = 13.sp)
+                }
+                Spacer(Modifier.height(14.dp))
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(5),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    columns = GridCells.Fixed(10),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp),
                 ) {
                     items(KEYS.size) { index ->
                         val key = KEYS[index]
@@ -322,10 +221,54 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
                         )
                     }
                 }
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = { submit() },
+                        enabled = code.isNotBlank() && !isLoading,
+                        colors = ButtonDefaults.colors(
+                            containerColor = BrandRed, focusedContainerColor = Color(0xFFFF2A36),
+                            contentColor = Color.White, focusedContentColor = Color.White,
+                            disabledContainerColor = BrandRed.copy(alpha = 0.3f), disabledContentColor = Color.White.copy(alpha = 0.5f),
+                        ),
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp)); Text("Ativando…")
+                        } else {
+                            Icon(Icons.Filled.Check, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                            Text("Ativar", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Button(
+                        onClick = { if (code.isNotEmpty()) code = code.dropLast(1) },
+                        colors = ButtonDefaults.colors(containerColor = Color.White.copy(alpha = 0.07f), focusedContainerColor = Color.White.copy(alpha = 0.18f), contentColor = Color.White, focusedContentColor = Color.White),
+                    ) { Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Apagar") }
+                    Button(
+                        onClick = { code = "" },
+                        colors = ButtonDefaults.colors(containerColor = Color.White.copy(alpha = 0.07f), focusedContainerColor = Color.White.copy(alpha = 0.18f), contentColor = Color.White, focusedContentColor = Color.White),
+                    ) { Text("Limpar", fontSize = 13.sp) }
+                }
+                Spacer(Modifier.height(16.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val waText = "Olá! Quero ativar o StreamFlix na minha TV. ID: ${activationManager.deviceId}"
+                    Box(Modifier.size(64.dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(4.dp)) {
+                        com.streamflixvip.tv.ui.components.QrCode(
+                            "https://wa.me/558498334731?text=" + java.net.URLEncoder.encode(waText, "UTF-8"),
+                            Modifier.fillMaxSize(),
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text("Não tem código? Leia este QR para falar com o suporte no WhatsApp.", color = Color(0xFF8F8882), fontSize = 12.sp, lineHeight = 17.sp)
+                }
             }
         }
     }
 }
+
+private val BrandRed = Color(0xFFE50914)
+private val BrandGold = Color(0xFFF5B942)
+private val BrandBlack = Color(0xFF050505)
 
 @Composable
 private fun KeyButton(label: String, focusRequester: FocusRequester?, onClick: () -> Unit) {
@@ -333,25 +276,25 @@ private fun KeyButton(label: String, focusRequester: FocusRequester?, onClick: (
     Card(
         onClick = onClick,
         modifier = Modifier
-            .aspectRatio(1.15f)
+            .aspectRatio(1.0f)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .onFocusChanged { isFocused = it.isFocused }
             .border(
                 1.5.dp,
-                if (isFocused) AccentSoft else GlassBorder,
+                if (isFocused) BrandGold else Color.White.copy(alpha = 0.08f),
                 RoundedCornerShape(12.dp),
             ),
         shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
         scale = CardDefaults.scale(focusedScale = 1.08f),
         colors = CardDefaults.colors(
-            containerColor = if (isFocused) Accent.copy(alpha = 0.45f) else Glass,
-            focusedContainerColor = Accent.copy(alpha = 0.55f),
+            containerColor = Color(0xFF151212),
+            focusedContainerColor = BrandRed,
         ),
     ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 label,
-                fontSize = 18.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 textAlign = TextAlign.Center,
