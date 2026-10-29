@@ -211,7 +211,8 @@ fun DetailScreen(
                 onPostComment = { text, onResult -> viewModel.postComment(text, isVip = com.streamflixvip.app.data.VipStatusHolder.isVip.value, onResult = onResult) },
                 onDeleteComment = { id, done -> viewModel.deleteComment(id, done) },
                 onVoteComment = { id, v -> viewModel.voteComment(id, v) },
-                onReplyComment = { parentId -> /* set reply target */ },
+                onReplyComment = { parentId, text, done -> viewModel.replyComment(parentId, text, com.streamflixvip.app.data.VipStatusHolder.isVip.value, done) },
+                onReportComment = { id, done -> viewModel.reportComment(id, done) },
                 onToggleFavorite = viewModel::toggleFavorite,
                 onTicketClick = {
                     if (!userId.isNullOrBlank()) showTicketPay = true
@@ -299,7 +300,8 @@ private fun DetailContent(
     onPostComment: (text: String, onResult: (Boolean) -> Unit) -> Unit,
     onDeleteComment: (Long, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
     onVoteComment: (Long, Int) -> Unit = { _, _ -> },
-    onReplyComment: (Long) -> Unit = {},
+    onReplyComment: (Long, String, (Boolean) -> Unit) -> Unit = { _, _, done -> done(false) },
+    onReportComment: (Long, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
     onToggleFavorite: () -> Unit,
     onTicketClick: () -> Unit = {},
     skipHeroLoading: Boolean = false,
@@ -679,7 +681,8 @@ private fun DetailContent(
             onPost = onPostComment,
             onDelete = onDeleteComment,
             onVote = onVoteComment,
-            onReply = { id, _ -> onReplyComment(id) },
+            onReplyPost = onReplyComment,
+            onReport = onReportComment,
         )
     }
 
@@ -1018,9 +1021,18 @@ private fun CommentsModal(
     onPost: (text: String, onResult: (Boolean) -> Unit) -> Unit,
     onDelete: (Long, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
     onVote: (Long, Int) -> Unit = { _, _ -> },
-    onReply: (Long, String) -> Unit = { _, _ -> },
+    onReplyPost: (Long, String, (Boolean) -> Unit) -> Unit = { _, _, done -> done(false) },
+    onReport: (Long, (Boolean) -> Unit) -> Unit = { _, done -> done(false) },
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    var replyTo by remember { mutableStateOf<com.streamflixvip.app.network.TitleComment?>(null) }
+    var sortTop by remember { mutableStateOf(false) }
+    val hiddenPrefs = remember { context.getSharedPreferences("comment_hidden", android.content.Context.MODE_PRIVATE) }
+    var hiddenIds by remember { mutableStateOf(hiddenPrefs.getStringSet("ids", emptySet()).orEmpty().toSet()) }
+    fun hideLocally(id: Long) {
+        hiddenIds = hiddenIds + id.toString()
+        runCatching { hiddenPrefs.edit().putStringSet("ids", hiddenIds).apply() }
+    }
     var draft by remember { mutableStateOf("") }
     var rate by remember { mutableStateOf(0) }
     var spoiler by remember { mutableStateOf(false) }
@@ -1052,6 +1064,13 @@ private fun CommentsModal(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Comentários", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            if (sortTop) "Mais curtidos ▾" else "Recentes ▾",
+                            fontSize = 12.sp,
+                            color = com.streamflixvip.app.ui.theme.StreamFlixColors.Accent,
+                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { sortTop = !sortTop }.padding(horizontal = 6.dp, vertical = 4.dp),
+                        )
                         if (comments.isNotEmpty()) {
                             val prefs = context.getSharedPreferences("comment_votes", android.content.Context.MODE_PRIVATE)
                             val totalUp = comments.sumOf { c -> c.up_count + (if (prefs.getInt("c_${c.id}", 0) == 1) 1 else 0) }
@@ -1108,7 +1127,15 @@ private fun CommentsModal(
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 100.dp),
                         ) {
-                            items(comments) { comment ->
+                            // Respostas logo abaixo do comentário original; ocultos por mim somem.
+                            val visible = comments.filter { it.id.toString() !in hiddenIds }
+                            val ids = visible.map { it.id }.toSet()
+                            val roots = visible.filter { it.parent_id == null || it.parent_id !in ids }
+                                .let { r -> if (sortTop) r.sortedByDescending { it.up_count - it.down_count } else r }
+                            val byParent = visible.filter { it.parent_id != null && it.parent_id in ids }.groupBy { it.parent_id }
+                            val ordered = roots.flatMap { r -> listOf(r) + byParent[r.id].orEmpty().sortedBy { it.created_at } }
+                            items(ordered, key = { it.id }) { comment ->
+                                val isReply = comment.parent_id != null && comment.parent_id in ids
                                 val raw = comment.comment_text
                                 val rate = when {
                                     raw.startsWith("👍 ") -> 1
@@ -1131,8 +1158,14 @@ private fun CommentsModal(
                                 var myRate by remember(comment.id) { mutableStateOf(prefs.getInt("c_${comment.id}", 0)) }
                                 var up by remember(comment.id) { mutableStateOf(prefs.getInt("up_${comment.id}", 0)) }
                                 var down by remember(comment.id) { mutableStateOf(prefs.getInt("down_${comment.id}", 0)) }
-                                Column(Modifier.padding(vertical = 10.dp)) {
+                                Column(Modifier.padding(start = if (isReply) 30.dp else 0.dp, top = 10.dp, bottom = 10.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (isReply) Text("↳ ", fontSize = 13.sp, color = Color(0xFF8A8A8A))
+                                        val av = comment.author_avatar
+                                        if (!av.isNullOrBlank()) {
+                                            com.streamflixvip.app.profiles.ProfileAvatar(av, comment.displayAuthor, 22.dp)
+                                            Spacer(Modifier.width(6.dp))
+                                        }
                                         Text(comment.displayAuthor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                         if (comment.is_vip_author) {
                                             Spacer(Modifier.width(6.dp))
@@ -1205,7 +1238,17 @@ private fun CommentsModal(
                                         )
                                         Text(" ${comment.down_count + (if (myRate == -1) 1 else 0)}", fontSize = 12.sp, color = Color(0xFFB5B5B5))
                                         Spacer(Modifier.width(12.dp))
-                                        Text("Responder", fontSize = 12.sp, color = Color(0xFFB5B5B5), modifier = Modifier.clickable { onReply(comment.id, "") })
+                                        Text("Responder", fontSize = 12.sp, color = Color(0xFFB5B5B5), modifier = Modifier.clickable { replyTo = comment })
+                                        if (currentUserId != comment.user_id) {
+                                            Spacer(Modifier.width(12.dp))
+                                            Text("Ocultar", fontSize = 12.sp, color = Color(0xFFB5B5B5), modifier = Modifier.clickable { hideLocally(comment.id) })
+                                            Spacer(Modifier.width(12.dp))
+                                            Text("Denunciar", fontSize = 12.sp, color = Color(0xFFB5B5B5), modifier = Modifier.clickable {
+                                                onReport(comment.id) { _ -> }
+                                                hideLocally(comment.id)
+                                                android.widget.Toast.makeText(ctx, "Obrigado! Vamos analisar este comentário.", android.widget.Toast.LENGTH_SHORT).show()
+                                            })
+                                        }
                                         if (canDelete) {
                                             Spacer(Modifier.weight(1f))
                                             Text(
@@ -1236,6 +1279,16 @@ private fun CommentsModal(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     if (canPost) {
+                      Column {
+                        replyTo?.let { target ->
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp),
+                            ) {
+                                Text("Respondendo a ${target.displayAuthor}", fontSize = 12.sp, color = com.streamflixvip.app.ui.theme.StreamFlixColors.Accent, modifier = Modifier.weight(1f))
+                                Text("✕", fontSize = 14.sp, color = Color(0xFFB5B5B5), modifier = Modifier.clickable { replyTo = null }.padding(6.dp))
+                            }
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1300,12 +1353,18 @@ private fun CommentsModal(
                                                 else -> draft
                                             }
                                             val marked = if (spoiler) "🔒 SPOILER $base" else base
-                                            onPost(marked) { success -> if (success) { draft = ""; rate = 0; spoiler = false } }
+                                            val target = replyTo
+                                            val done: (Boolean) -> Unit = { success ->
+                                                if (success) { draft = ""; rate = 0; spoiler = false; replyTo = null }
+                                                else android.widget.Toast.makeText(context, "Não foi possível enviar. Aguarde alguns segundos e tente de novo.", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                            if (target != null) onReplyPost(target.id, marked, done) else onPost(marked, done)
                                         }
                                         .padding(4.dp),
                                 )
                             }
                         }
+                      }
                     } else {
                         Text(
                             "Entre na sua conta para comentar.",

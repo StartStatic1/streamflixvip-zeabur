@@ -302,10 +302,20 @@ interface CommentsApi {
         @Header("apikey") apiKey: String,
         @Query("tmdb_id") tmdbIdFilter: String,
         @Query("media_type") mediaTypeFilter: String,
-        @Query("select") select: String = "id,user_id,user_display_name,is_vip_author,comment_text,created_at,up_count,down_count",
+        @Query("select") select: String = "id,user_id,user_display_name,is_vip_author,comment_text,created_at,up_count,down_count,parent_id",
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 100,
+        /** "is.false" só quando a coluna existe (migration 2026-10_comments). */
+        @Query("is_hidden") hiddenFilter: String? = null,
     ): List<TitleComment>
+
+    @retrofit2.http.Headers("Content-Type: application/json", "Prefer: return=minimal")
+    @POST("rest/v1/comment_reports")
+    suspend fun reportComment(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @retrofit2.http.Body body: CommentReport,
+    )
 
     @retrofit2.http.Headers("Content-Type: application/json", "Prefer: return=minimal")
     @retrofit2.http.HTTP(method = "DELETE", path = "rest/v1/title_comments", hasBody = false)
@@ -342,6 +352,7 @@ data class TitleComment(
     val up_count: Int = 0,
     val down_count: Int = 0,
     val parent_id: Long? = null,
+    val author_avatar: String? = null,
 ) {
     val displayAuthor: String get() = user_display_name?.takeIf { it.isNotBlank() } ?: "Usuário"
 }
@@ -355,6 +366,15 @@ data class TitleCommentInsert(
     val is_vip_author: Boolean,
     val comment_text: String,
     val parent_id: Long? = null,
+    /** Só enviado quando a coluna existe (Moshi omite null). */
+    val author_avatar: String? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class CommentReport(
+    val comment_id: Long,
+    val reporter_id: String,
+    val reason: String,
 )
 
 

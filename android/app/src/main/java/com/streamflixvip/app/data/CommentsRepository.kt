@@ -12,12 +12,31 @@ import com.streamflixvip.app.network.TitleCommentInsert
  * (RLS usa auth.uid() = user_id na policy de INSERT).
  */
 class CommentsRepository {
+    companion object {
+        /** null = ainda não sabemos se a migration de comentários foi aplicada. */
+        @Volatile var extended: Boolean? = null
+    }
 
     private val api = NetworkModule.commentsApi
     private val anonKey = NetworkModule.supabaseAnonKey
 
-    suspend fun getComments(tmdbId: Int, mediaType: String): List<TitleComment> =
-        try {
+    suspend fun getComments(tmdbId: Int, mediaType: String): List<TitleComment> {
+        // 1º tenta com as colunas novas (avatar + esconder moderados). Se a migration ainda não
+        // foi aplicada o servidor responde 400 — aí volta para a consulta antiga, sem erro.
+        if (extended != false) {
+            try {
+                return api.getComments(
+                    apiKey = anonKey,
+                    tmdbIdFilter = PostgrestFilter.eq(tmdbId),
+                    mediaTypeFilter = PostgrestFilter.eq(mediaType),
+                    select = "id,user_id,user_display_name,is_vip_author,comment_text,created_at,up_count,down_count,parent_id,author_avatar",
+                    hiddenFilter = "is.false",
+                ).also { extended = true }
+            } catch (e: retrofit2.HttpException) {
+                if (e.code() == 400) extended = false
+            } catch (_: Exception) { }
+        }
+        return try {
             api.getComments(
                 apiKey = anonKey,
                 tmdbIdFilter = PostgrestFilter.eq(tmdbId),
@@ -26,6 +45,14 @@ class CommentsRepository {
         } catch (_: Exception) {
             emptyList()
         }
+    }
+
+    /** Denuncia (tabela comment_reports). Devolve false se a tabela ainda não existir. */
+    suspend fun report(accessToken: String, userId: String, commentId: Long, reason: String): Boolean =
+        try {
+            api.reportComment(anonKey, "Bearer $accessToken", com.streamflixvip.app.network.CommentReport(commentId, userId, reason.take(200)))
+            true
+        } catch (_: Exception) { false }
 
     /** Retorna true se o comentário foi publicado com sucesso. */
     suspend fun postComment(
@@ -50,6 +77,7 @@ class CommentsRepository {
                     is_vip_author = isVipAuthor,
                     comment_text = text,
                     parent_id = parentId,
+                    author_avatar = if (extended == true) com.streamflixvip.app.profiles.ProfileStore.active.value?.avatar else null,
                 ),
             )
             true

@@ -433,7 +433,18 @@ class DetailViewModel(
         _uiState.value = current.copy(showComments = false)
     }
 
-    fun postComment(text: String, isVip: Boolean, onResult: (Boolean) -> Unit) {
+    private var lastPostAt = 0L
+
+    fun reportComment(commentId: Long, onResult: (Boolean) -> Unit) {
+        val uid = userId; val token = accessToken
+        if (uid == null || token == null) { onResult(false); return }
+        viewModelScope.launch { onResult(commentsRepository.report(token, uid, commentId, "app")) }
+    }
+
+    fun postComment(text: String, isVip: Boolean, parentId: Long? = null, onResult: (Boolean) -> Unit) {
+        // anti-flood simples no app (o servidor também limita, após a migration)
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastPostAt < 15_000 && lastPostAt != 0L) { onResult(false); return }
         val trimmed = text.trim()
         if (trimmed.isEmpty() || userId == null || accessToken == null) {
             onResult(false)
@@ -450,7 +461,9 @@ class DetailViewModel(
                 tmdbId = tmdbId,
                 mediaType = mediaType,
                 text = trimmed,
+                parentId = parentId,
             )
+            if (success) lastPostAt = android.os.SystemClock.elapsedRealtime()
             val stillCurrent = _uiState.value as? DetailUiState.Success ?: return@launch
             if (success) {
                 val comments = commentsRepository.getComments(tmdbId, mediaType)
@@ -473,9 +486,8 @@ class DetailViewModel(
         }
     }
 
-    fun replyComment(parentId: Long, text: String, isVip: Boolean) {
-        postComment(text, isVip) { }
-        // note: postComment currently doesn't pass parent; will fix in repo call below
+    fun replyComment(parentId: Long, text: String, isVip: Boolean, onResult: (Boolean) -> Unit = {}) {
+        postComment(text, isVip, parentId, onResult)
     }
 
     fun deleteComment(commentId: Long, onResult: (Boolean) -> Unit) {
