@@ -37,6 +37,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.composed
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -232,48 +235,20 @@ fun DetailTvScreen(
                 val recs = (details.recommendations?.results.orEmpty().ifEmpty { details.similar?.results.orEmpty() })
                     .filter { it.poster_path != null }.take(20)
                 val episodes = state.seasonEpisodes[state.selectedSeason].orEmpty()
-                // Filme: ao descer para "Você também pode gostar" o cabeçalho vira compacto
-                // (título + infos) e tudo cabe na tela — sem rolar, sem pular, sem cortar a sinopse.
-                var recsFocused by remember { mutableStateOf(false) }
-                val compactHeader = !isSeries && recsFocused
-
                 TvLazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 24.dp, bottom = if (isSeries) 96.dp else 32.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (isSeries) 40.dp else 24.dp),
+                    contentPadding = PaddingValues(top = 0.dp, bottom = 48.dp),
+                    verticalArrangement = Arrangement.spacedBy(28.dp),
                     pivotOffsets = PivotOffsets(parentFraction = 0.0f),
                 ) {
                     item(key = "header") {
+                        Column(Modifier.wholeItemIntoView()) {
                         Column(
-                            Modifier.onFocusChanged {
-                                if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(0) } }
-                            },
-                        ) {
-                        if (compactHeader) {
-                            Column(Modifier.fillMaxWidth().padding(start = DetailH, end = DetailH, top = 8.dp)) {
-                                Text(
-                                    details.title ?: details.name ?: "",
-                                    color = p.text, fontSize = 30.sp, fontWeight = FontWeight.Black,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    listOfNotNull(
-                                        details.vote_average?.takeIf { it > 0 }?.let { "★ %.1f".format(it) },
-                                        (details.release_date ?: details.first_air_date)?.take(4),
-                                        details.displayRuntime,
-                                        details.genres?.take(3)?.joinToString(", ") { it.name }?.ifBlank { null },
-                                    ).joinToString("  ·  "),
-                                    color = p.textMuted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        } else
-                        Column(
-                            Modifier.fillParentMaxHeight(if (isSeries || recs.isNotEmpty()) 0.84f else 1f)
-                                .fillMaxWidth()
-                                .padding(start = DetailH, end = DetailH, top = 36.dp),
-                            verticalArrangement = Arrangement.Bottom,
+                            // Cabeçalho inteiro (título, infos, sinopse, botões) cabe na tela de uma vez
+                            // em 1080p e 720p (~540dp de altura); a fileira de baixo aparece por baixo.
+                            Modifier.fillMaxWidth()
+                                .padding(start = DetailH, end = DetailH, top = 56.dp),
                         ) {
                             Header(details = details, isSeries = isSeries)
                             Spacer(Modifier.height(22.dp))
@@ -341,9 +316,7 @@ fun DetailTvScreen(
 
                     if (isSeries) {
                         item(key = "episodes") {
-                          Box(Modifier.onFocusChanged {
-                              if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(1) } }
-                          }) {
+                          Box(Modifier.wholeItemIntoView()) {
                             EpisodesBlock(
                                 seasons = state.seasons,
                                 selectedSeason = state.selectedSeason,
@@ -376,21 +349,13 @@ fun DetailTvScreen(
 
                     if (recs.isNotEmpty()) {
                         item(key = "recs") {
-                            Column(Modifier.onFocusChanged {
-                                if (isSeries) {
-                                    if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(2) } }
-                                } else {
-                                    recsFocused = it.hasFocus
-                                    if (it.hasFocus) scope.launch { runCatching { listState.scrollToItem(0) } }
-                                }
-                            }) {
+                            Column(Modifier.wholeItemIntoView()) {
                                 SectionTitle("Você também pode gostar", Modifier.padding(start = DetailH, bottom = 14.dp))
                                 TvLazyRow(
                                     modifier = if (isSeries) Modifier else Modifier.onPreviewKeyEvent { ev ->
                                         if (ev.key == Key.DirectionUp) {
                                             if (ev.type == KeyEventType.KeyDown) scope.launch {
-                                                recsFocused = false
-                                                runCatching { listState.scrollToItem(0) }
+                                                runCatching { listState.animateScrollToItem(0) }
                                                 focus(KEY_PLAY)
                                                 delay(300)
                                                 if (focusTarget == KEY_PLAY) focus(KEY_PLAY)
@@ -485,7 +450,7 @@ private fun Header(details: com.streamflixvip.tv.network.TmdbResponse, isSeries:
     if (logo != null) {
         FadeImage(
             TmdbImg.LOGO + logo,
-            Modifier.widthIn(max = 420.dp).heightIn(max = 130.dp),
+            Modifier.widthIn(max = 380.dp).heightIn(max = 96.dp),
             contentScale = ContentScale.Fit,
             contentDescription = title,
         )
@@ -493,15 +458,15 @@ private fun Header(details: com.streamflixvip.tv.network.TmdbResponse, isSeries:
         Text(
             title,
             color = p.text,
-            fontSize = 40.sp,
+            fontSize = 36.sp,
             fontWeight = FontWeight.Black,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(0.6f),
-            lineHeight = 44.sp,
+            lineHeight = 40.sp,
         )
     }
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(12.dp))
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         details.vote_average?.takeIf { it > 0 }?.let {
             Icon(Icons.Filled.Star, null, tint = p.star, modifier = Modifier.size(16.dp))
@@ -517,12 +482,8 @@ private fun Header(details: com.streamflixvip.tv.network.TmdbResponse, isSeries:
         MetaTag(if (isSeries) (if (details.original_language == "ja") "ANIME" else "SÉRIE") else "FILME", highlight = true)
     }
     details.genres?.takeIf { it.isNotEmpty() }?.let { g ->
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
         Text(g.take(4).joinToString("  •  ") { it.name }, color = p.textMuted, fontSize = 13.sp)
-    }
-    details.tagline?.takeIf { it.isNotBlank() }?.let {
-        Spacer(Modifier.height(10.dp))
-        Text("“$it”", color = p.accent2, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     details.overview?.takeIf { it.isNotBlank() }?.let {
         Spacer(Modifier.height(10.dp))
@@ -533,7 +494,7 @@ private fun Header(details: com.streamflixvip.tv.network.TmdbResponse, isSeries:
             lineHeight = 20.sp,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth(0.5f),
+            modifier = Modifier.widthIn(max = 600.dp).fillMaxWidth(0.55f),
         )
     }
     details.credits?.cast?.take(5)?.takeIf { it.isNotEmpty() }?.let { cast ->
@@ -685,4 +646,23 @@ private fun openTrailer(context: android.content.Context, key: String): Boolean 
         }
     }
     return false
+}
+
+/**
+ * Quando algo dentro do bloco ganha foco, a lista rola para mostrar o BLOCO inteiro (alinhado no
+ * topo, pivot 0) em vez de só o botão focado — assim o título nunca some acima da tela e não há
+ * duas rolagens brigando (era isso que fazia a tela pular/piscar).
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private fun Modifier.wholeItemIntoView(): Modifier = composed {
+    val size = remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val responder = remember {
+        object : androidx.compose.foundation.relocation.BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: androidx.compose.ui.geometry.Rect) =
+                androidx.compose.ui.geometry.Rect(0f, 0f, size.value.width.toFloat(), size.value.height.toFloat())
+            override suspend fun bringChildIntoView(localRect: () -> androidx.compose.ui.geometry.Rect?) {}
+        }
+    }
+    this.onSizeChanged { size.value = it }
+        .bringIntoViewResponder(responder)
 }
