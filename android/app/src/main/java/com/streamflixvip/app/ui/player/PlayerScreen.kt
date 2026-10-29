@@ -63,6 +63,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPictureAlt
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -497,6 +516,7 @@ private fun NativePlayer(
     var isLoadingNext by remember { mutableStateOf(false) }
 
     var showNextPrompt by remember { mutableStateOf(false) }
+    var nextDismissedFor by remember { mutableStateOf(-1) }
 
     // Gestos: esquerda = brilho, direita = volume
     val audioManager = remember {
@@ -784,12 +804,11 @@ private fun NativePlayer(
         }
     }
 
-    suspend fun playNextEpisode() {
+    suspend fun playEpisodeFrom(tries: List<Pair<Int, Int>>) {
         if (mediaType != "tv" || currentSeason <= 0 || currentEpisode <= 0) return
         isLoadingNext = true
         showNextPrompt = false
         try {
-            val tries = listOf(currentSeason to (currentEpisode + 1), (currentSeason + 1) to 1)
             var played = false
             for ((s, e) in tries) {
                 val resp = try {
@@ -819,11 +838,16 @@ private fun NativePlayer(
                 played = true
                 break
             }
-            if (!played) errorMessage = "Sem proximo episodio disponivel"
+            if (!played) errorMessage = "Episódio sem fonte disponível no momento"
+        } catch (e: Exception) {
+            errorMessage = "Não foi possível abrir o episódio"
         } finally {
             isLoadingNext = false
         }
     }
+
+    suspend fun playNextEpisode() = playEpisodeFrom(listOf(currentSeason to (currentEpisode + 1), (currentSeason + 1) to 1))
+    suspend fun playEpisode(s: Int, e: Int) = playEpisodeFrom(listOf(s to e))
 
 
     fun reapplySubtitleOffset(newOffset: Long) {
@@ -1003,7 +1027,8 @@ private fun NativePlayer(
             if (mediaType == "tv" && currentEpisode > 0) {
                 val dur = exoPlayer.duration
                 val pos = exoPlayer.currentPosition
-                if (dur > 0 && (dur - pos) in 1..30_000L && !showNextPrompt && !isLoadingNext) {
+                if (dur > 0 && (dur - pos) in 1..30_000L && !showNextPrompt && !isLoadingNext &&
+                    nextDismissedFor != currentSeason * 10_000 + currentEpisode) {
                     showNextPrompt = true
                 }
             }
@@ -1054,22 +1079,144 @@ private fun NativePlayer(
         }
     }
 
-    // ---- Controle remoto / D-pad ----
-    fun showControlsFromRemote() {
-        playerViewRef?.showController()
-        controlsVisible = true
-        focusChipsPending = true
+    // ---- Estado da interface nova (controles próprios, sem a barra nativa do Exo) ----
+    val accent = com.streamflixvip.app.ui.theme.AccentStore.current.accent
+    var locked by remember { mutableStateOf(false) }
+    var lockHintVisible by remember { mutableStateOf(false) }
+    var interactionTick by remember { mutableStateOf(0) }
+    var isPlayingUi by remember { mutableStateOf(true) }
+    var isBufferingUi by remember { mutableStateOf(true) }
+    var bufferedUi by remember { mutableStateOf(0L) }
+    var scrubTarget by remember { mutableStateOf(0L) }
+    var inPip by remember { mutableStateOf(false) }
+    var sleepTimer by remember { mutableStateOf(SleepTimer.OFF) }
+    var sleepEndsAt by remember { mutableStateOf(0L) }
+    var nextCountdown by remember { mutableStateOf(0) }
+    var episodeList by remember { mutableStateOf(listOf<com.streamflixvip.app.network.TmdbEpisode>()) }
+    var episodesLoading by remember { mutableStateOf(false) }
+    var seekRippleLeft by remember { mutableStateOf(false) }
+    var seekRippleTick by remember { mutableStateOf(0) }
+    val playFocus = remember { FocusRequester() }
+    val isSeries = mediaType == "tv" && currentEpisode > 0
+    val NEXT_COUNTDOWN = 10
+
+    fun poke() { interactionTick += 1 }
+    fun showControls() { controlsVisible = true; poke() }
+    fun togglePlay() { runCatching { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() }; poke() }
+    fun openPanel(p: SettingsPanel) { settingsPanel = p; poke() }
+
+    // estado do player para os controles (barato: 4x por segundo)
+    LaunchedEffect(exoPlayer) {
+        while (true) {
+            runCatching {
+                isPlayingUi = exoPlayer.isPlaying || (exoPlayer.playWhenReady && exoPlayer.playbackState == Player.STATE_BUFFERING)
+                isBufferingUi = exoPlayer.playbackState == Player.STATE_BUFFERING
+                bufferedUi = exoPlayer.bufferedPosition.coerceAtLeast(0L)
+            }
+            delay(250)
+        }
     }
+    // esconde os controles sozinho (4 s parado, tocando, sem menu aberto)
+    LaunchedEffect(controlsVisible, interactionTick, settingsPanel, isScrubbing, isPlayingUi) {
+        if (controlsVisible && settingsPanel == SettingsPanel.NONE && !isScrubbing && isPlayingUi) {
+            delay(4_000)
+            controlsVisible = false
+        }
+    }
+    LaunchedEffect(lockHintVisible) { if (lockHintVisible) { delay(2_500); lockHintVisible = false } }
+
+    // Picture-in-picture: some com os controles enquanto está na janelinha
+    DisposableEffect(activityOf(context)) {
+        val act = activityOf(context) as? androidx.activity.ComponentActivity
+        val listener = androidx.core.util.Consumer<androidx.core.app.PictureInPictureModeChangedInfo> { info ->
+            inPip = info.isInPictureInPictureMode
+            if (inPip) { controlsVisible = false; settingsPanel = SettingsPanel.NONE }
+        }
+        runCatching { act?.addOnPictureInPictureModeChangedListener(listener) }
+        onDispose { runCatching { act?.removeOnPictureInPictureModeChangedListener(listener) } }
+    }
+    fun enterPip() {
+        val act = activityOf(context) ?: return
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.O) {
+            Toast.makeText(context, "Janela flutuante precisa do Android 8 ou mais novo", Toast.LENGTH_SHORT).show(); return
+        }
+        runCatching {
+            val fmt = exoPlayer.videoFormat
+            val ratio = if (fmt != null && fmt.width > 0 && fmt.height > 0) {
+                android.util.Rational(fmt.width, fmt.height).let { r ->
+                    // o Android só aceita entre 1:2,39 e 2,39:1
+                    val v = r.toFloat()
+                    if (v in 0.42f..2.39f) r else android.util.Rational(16, 9)
+                }
+            } else android.util.Rational(16, 9)
+            act.enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().setAspectRatio(ratio).build())
+        }.onFailure { Toast.makeText(context, "Janela flutuante indisponível neste aparelho", Toast.LENGTH_SHORT).show() }
+    }
+
+    // timer para dormir
+    LaunchedEffect(sleepTimer, sleepEndsAt) {
+        if (sleepTimer.minutes > 0 && sleepEndsAt > 0) {
+            val wait = sleepEndsAt - android.os.SystemClock.elapsedRealtime()
+            if (wait > 0) delay(wait)
+            runCatching { exoPlayer.pause() }
+            sleepTimer = SleepTimer.OFF; sleepEndsAt = 0L
+            Toast.makeText(context, "Timer: vídeo pausado. Boa noite!", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // episódios da temporada (aba Episódios)
+    LaunchedEffect(settingsPanel, currentSeason) {
+        if (settingsPanel == SettingsPanel.EPISODES && isSeries && episodeList.isEmpty() && !episodesLoading) {
+            episodesLoading = true
+            episodeList = runCatching { com.streamflixvip.app.data.CatalogRepository().getSeasonEpisodes(tmdbId, currentSeason) }.getOrDefault(emptyList())
+            episodesLoading = false
+        }
+    }
+    LaunchedEffect(currentSeason) { episodeList = emptyList() }
+
+    // próximo episódio: contagem regressiva e toca sozinho
+    LaunchedEffect(showNextPrompt) {
+        if (!showNextPrompt || !isSeries) return@LaunchedEffect
+        if (sleepTimer == SleepTimer.END) {
+            // timer "fim do episódio": não emenda o próximo
+            showNextPrompt = false
+            return@LaunchedEffect
+        }
+        nextCountdown = NEXT_COUNTDOWN
+        while (nextCountdown > 0 && showNextPrompt) { delay(1_000); nextCountdown -= 1 }
+        if (showNextPrompt && !isLoadingNext) playNextEpisode()
+    }
+    // fim do vídeo: série emenda o próximo; timer "fim do episódio" pausa
+    DisposableEffect(exoPlayer) {
+        val l = object : Player.Listener {
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED) {
+                    if (sleepTimer == SleepTimer.END) {
+                        sleepTimer = SleepTimer.OFF
+                        Toast.makeText(context, "Timer: fim do episódio. Boa noite!", Toast.LENGTH_LONG).show()
+                    } else if (isSeries && !isLoadingNext) {
+                        showNextPrompt = false
+                        MainScope().launch { playNextEpisode() }
+                    } else {
+                        controlsVisible = true
+                    }
+                }
+            }
+        }
+        exoPlayer.addListener(l)
+        onDispose { runCatching { exoPlayer.removeListener(l) } }
+    }
+
+    // ---- Controle remoto / D-pad ----
     LaunchedEffect(Unit) { runCatching { rootFocus.requestFocus() } }
     LaunchedEffect(controlsVisible, focusChipsPending) {
         if (controlsVisible && focusChipsPending && settingsPanel == SettingsPanel.NONE) {
             delay(120)
-            runCatching { chipsFocus.requestFocus() }
+            runCatching { playFocus.requestFocus() }
             focusChipsPending = false
         }
     }
     LaunchedEffect(controlsVisible, settingsPanel, errorMessage, showNextPrompt) {
-        // menu escondeu sozinho / fechou: foco volta para o video (senao o controle "some")
         if (settingsPanel == SettingsPanel.NONE && !controlsVisible && errorMessage == null && !showNextPrompt) {
             runCatching { rootFocus.requestFocus() }
         }
@@ -1080,7 +1227,7 @@ private fun NativePlayer(
             runCatching { panelFocus.requestFocus() }
         } else if (settingsPanel == SettingsPanel.NONE && usingRemote && controlsVisible) {
             delay(80)
-            runCatching { chipsFocus.requestFocus() }
+            runCatching { playFocus.requestFocus() }
         }
     }
     LaunchedEffect(errorMessage) {
@@ -1095,33 +1242,39 @@ private fun NativePlayer(
             runCatching { nextFocus.requestFocus() }
         }
     }
-    // Voltar: fecha submenu -> menu -> controles (no controle remoto) -> sai do player
+    // Voltar: painel -> (tela travada: só avisa) -> controles (remoto) -> sai do player
     BackHandler(enabled = settingsPanel != SettingsPanel.NONE) {
         settingsPanel = when (settingsPanel) {
-            SettingsPanel.MAIN, SettingsPanel.SOURCES -> SettingsPanel.NONE
-            else -> SettingsPanel.MAIN
+            SettingsPanel.QUALITY, SettingsPanel.SUB_STYLE -> SettingsPanel.MAIN
+            else -> SettingsPanel.NONE
         }
     }
-    BackHandler(enabled = settingsPanel == SettingsPanel.NONE && controlsVisible && usingRemote) {
-        playerViewRef?.hideController()
+    BackHandler(enabled = settingsPanel == SettingsPanel.NONE && locked) { lockHintVisible = true }
+    BackHandler(enabled = settingsPanel == SettingsPanel.NONE && !locked && controlsVisible && usingRemote) {
         controlsVisible = false
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color.Black)
             .onPreviewKeyEvent { ev ->
                 val code = ev.nativeKeyEvent.keyCode
                 val isRemoteKey = ev.key in REMOTE_KEYS
                 if (!isRemoteKey) return@onPreviewKeyEvent false
                 if (ev.type == KeyEventType.KeyDown) {
                     usingRemote = true
-                    if (controlsVisible) playerViewRef?.showController() // segura o auto-esconder
+                    poke()
                 }
-                // teclas de midia funcionam sempre
+                if (locked) {
+                    if (ev.type == KeyEventType.KeyDown) lockHintVisible = true
+                    // travado: OK destrava (no controle não há como tocar no cadeado)
+                    if (ev.type == KeyEventType.KeyDown && (ev.key == Key.DirectionCenter || ev.key == Key.Enter)) { locked = false; showControls() }
+                    return@onPreviewKeyEvent ev.key != Key.Back
+                }
                 when (code) {
                     android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> {
-                        if (ev.type == KeyEventType.KeyDown) { if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play() }
+                        if (ev.type == KeyEventType.KeyDown) togglePlay()
                         return@onPreviewKeyEvent true
                     }
                     android.view.KeyEvent.KEYCODE_MEDIA_PLAY -> {
@@ -1141,23 +1294,19 @@ private fun NativePlayer(
                         return@onPreviewKeyEvent true
                     }
                 }
-                // menus, erro e "proximo episodio": as setas andam entre os botoes
                 if (settingsPanel != SettingsPanel.NONE || errorMessage != null || showNextPrompt) {
                     return@onPreviewKeyEvent false
                 }
-                // um botao da barra esta com foco: setas/OK sao dele
                 if (controlsVisible && !rootFocused) return@onPreviewKeyEvent false
                 if (ev.type != KeyEventType.KeyDown) return@onPreviewKeyEvent true
                 when (ev.key) {
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
-                        if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                        playerViewRef?.showController()
-                        controlsVisible = true
+                        togglePlay(); showControls(); focusChipsPending = true
                         true
                     }
                     Key.DirectionLeft -> { seekBy(-SEEK_STEP_MS); true }
                     Key.DirectionRight -> { seekBy(SEEK_STEP_MS); true }
-                    Key.DirectionUp, Key.DirectionDown -> { showControlsFromRemote(); true }
+                    Key.DirectionUp, Key.DirectionDown -> { showControls(); focusChipsPending = true; true }
                     else -> false
                 }
             }
@@ -1172,38 +1321,17 @@ private fun NativePlayer(
                 PlayerView(context).apply {
                     player = exoPlayer
                     playerViewRef = this
-                    // o controle remoto e tratado em Compose; a view nativa nao rouba o foco
                     isFocusable = false
                     isFocusableInTouchMode = false
                     descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                    useController = true
-                    controllerAutoShow = true
+                    // controles agora são nossos (Compose): linha do tempo e menus novos
+                    useController = false
                     layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                    controllerShowTimeoutMs = 5000
-                    controllerHideOnTouch = true
-                    post { hideController() }
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     subtitleView?.let { sub ->
                         sub.setBottomPaddingFraction(0.08f)
                         applySubtitleStyle(sub, subStyle)
                     }
-                    fun hideNativeSettingsButton() {
-                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_settings)?.visibility = android.view.View.GONE
-                    }
-                    post {
-                        hideNativeSettingsButton()
-                        hideController()
-                    }
-                    setControllerVisibilityListener(
-                        PlayerView.ControllerVisibilityListener { visibility ->
-                            // Sincroniza quando o Exo esconde por timeout; nao forca false no show
-                            if (visibility == android.view.View.VISIBLE) {
-                                controlsVisible = true
-                            } else if (visibility == android.view.View.GONE) {
-                                controlsVisible = false
-                            }
-                            hideNativeSettingsButton()
-                        },
-                    )
                 }
             },
             update = { v ->
@@ -1218,7 +1346,7 @@ private fun NativePlayer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = if (overlaySubTop) 36.dp else 0.dp, bottom = if (overlaySubTop) 0.dp else 72.dp)
+                    .padding(top = if (overlaySubTop) 36.dp else 0.dp, bottom = if (overlaySubTop) 0.dp else if (controlsVisible) 130.dp else 72.dp)
                     .navigationBarsPadding(),
                 contentAlignment = if (overlaySubTop) Alignment.TopCenter else Alignment.BottomCenter,
             ) {
@@ -1226,379 +1354,367 @@ private fun NativePlayer(
             }
         }
 
-
-
-        // SHOW_ONLY_WHEN_HIDDEN: toque so ABRE o menu.
-        // Com menu aberto, PlayerView nativo cuida de pause/seek/timeline.
-        // Fechar: timeout do Exo ou toque no video (controllerHideOnTouch).
-        if (!controlsVisible && settingsPanel == SettingsPanel.NONE) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = {
-                                playerViewRef?.showController()
-                                controlsVisible = true
+        // ---- Gestos: 3 faixas. Toque mostra/esconde; toque duplo nas laterais = ±10 s;
+        // arrastar na esquerda = brilho, na direita = volume. Travado: só mostra o cadeado.
+        if (!inPip) Row(Modifier.fillMaxSize()) {
+            listOf(0, 1, 2).forEach { zone ->
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .weight(if (zone == 1) 0.4f else 0.3f)
+                        .pointerInput(locked, zone) {
+                            detectTapGestures(
+                                onTap = {
+                                    if (locked) { lockHintVisible = true; return@detectTapGestures }
+                                    if (settingsPanel != SettingsPanel.NONE) { settingsPanel = SettingsPanel.NONE; return@detectTapGestures }
+                                    usingRemote = false
+                                    controlsVisible = !controlsVisible
+                                    if (controlsVisible) poke()
+                                },
+                                onDoubleTap = {
+                                    if (locked) return@detectTapGestures
+                                    when (zone) {
+                                        0 -> { seekBy(-SEEK_STEP_MS); seekRippleLeft = true; seekRippleTick += 1 }
+                                        2 -> { seekBy(SEEK_STEP_MS); seekRippleLeft = false; seekRippleTick += 1 }
+                                        else -> togglePlay()
+                                    }
+                                },
+                            )
+                        }
+                        .then(
+                            if (zone == 1) Modifier else Modifier.pointerInput(locked, zone) {
+                                if (locked) return@pointerInput
+                                detectVerticalDragGestures(
+                                    onDragStart = {
+                                        gestureHideJob?.cancel()
+                                        gestureKind = if (zone == 0) "brightness" else "volume"
+                                        gestureValue = if (zone == 0) brightnessLevel else volumeLevel
+                                    },
+                                    onVerticalDrag = { _, dragAmount ->
+                                        val delta = -dragAmount / size.height.toFloat()
+                                        if (zone == 0) {
+                                            brightnessLevel = (brightnessLevel + delta).coerceIn(0.01f, 1f)
+                                            gestureValue = brightnessLevel
+                                            (context as? android.app.Activity)?.window?.let { w ->
+                                                val lp = w.attributes
+                                                lp.screenBrightness = brightnessLevel
+                                                w.attributes = lp
+                                            }
+                                        } else {
+                                            volumeLevel = (volumeLevel + delta).coerceIn(0f, 1f)
+                                            gestureValue = volumeLevel
+                                            runCatching {
+                                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (volumeLevel * maxVolume).toInt().coerceIn(0, maxVolume), 0)
+                                            }
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        gestureHideJob?.cancel()
+                                        gestureHideJob = MainScope().launch { delay(900); gestureKind = null }
+                                    },
+                                    onDragCancel = { gestureKind = null },
+                                )
                             },
-                            // toque duplo: esquerda volta 10s, direita avanca 10s, meio pausa/continua
-                            onDoubleTap = { offset ->
-                                val w = size.width.toFloat()
-                                when {
-                                    offset.x < w * 0.4f -> seekBy(-SEEK_STEP_MS)
-                                    offset.x > w * 0.6f -> seekBy(SEEK_STEP_MS)
-                                    else -> if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
-                                }
-                            },
-                        )
-                    },
-            )
+                        ),
+                )
+            }
         }
 
-        // Zonas de gesto: 28% esquerda = brilho, 28% direita = volume
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(0.28f)
-                .align(Alignment.CenterStart)
-                .pointerInput(controlsVisible, settingsPanel) {
-                    // Com o menu escondido: toque abre o menu, toque duplo volta 10s
-                    if (!controlsVisible && settingsPanel == SettingsPanel.NONE) {
-                        detectTapGestures(
-                            onTap = {
-                                playerViewRef?.showController()
-                                controlsVisible = true
-                            },
-                            onDoubleTap = { seekBy(-SEEK_STEP_MS) },
-                        )
+        // toque duplo: onda "−10 s / +10 s" no lado tocado
+        if (seekRippleTick > 0) {
+            var rippleVisible by remember(seekRippleTick) { mutableStateOf(true) }
+            LaunchedEffect(seekRippleTick) { delay(650); rippleVisible = false }
+            if (rippleVisible) {
+                Box(
+                    Modifier.fillMaxHeight().fillMaxWidth(0.3f)
+                        .align(if (seekRippleLeft) Alignment.CenterStart else Alignment.CenterEnd)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                if (seekRippleLeft) listOf(Color.White.copy(alpha = 0.18f), Color.Transparent)
+                                else listOf(Color.Transparent, Color.White.copy(alpha = 0.18f)),
+                            ),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(if (seekRippleLeft) Icons.Filled.FastRewind else Icons.Filled.FastForward, null, tint = Color.White, modifier = Modifier.size(34.dp))
+                        Text(if (seekRippleLeft) "−10 s" else "+10 s", color = Color.White, fontSize = 14.sp)
                     }
                 }
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = {
-                            gestureHideJob?.cancel()
-                            gestureKind = "brightness"
-                            gestureValue = brightnessLevel
-                        },
-                        onVerticalDrag = { _, dragAmount ->
-                            val delta = -dragAmount / size.height.toFloat()
-                            brightnessLevel = (brightnessLevel + delta).coerceIn(0.01f, 1f)
-                            gestureValue = brightnessLevel
-                            val act = context as? android.app.Activity
-                            act?.window?.let { w ->
-                                val lp = w.attributes
-                                lp.screenBrightness = brightnessLevel
-                                w.attributes = lp
-                            }
-                        },
-                        onDragEnd = {
-                            gestureHideJob?.cancel()
-                            gestureHideJob = MainScope().launch {
-                                delay(900)
-                                gestureKind = null
-                            }
-                        },
-                        onDragCancel = { gestureKind = null },
-                    )
-                },
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(0.28f)
-                .align(Alignment.CenterEnd)
-                .pointerInput(controlsVisible, settingsPanel) {
-                    // Com o menu escondido: toque abre o menu, toque duplo avanca 10s
-                    if (!controlsVisible && settingsPanel == SettingsPanel.NONE) {
-                        detectTapGestures(
-                            onTap = {
-                                playerViewRef?.showController()
-                                controlsVisible = true
-                            },
-                            onDoubleTap = { seekBy(SEEK_STEP_MS) },
-                        )
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = {
-                            gestureHideJob?.cancel()
-                            gestureKind = "volume"
-                            gestureValue = volumeLevel
-                        },
-                        onVerticalDrag = { _, dragAmount ->
-                            val delta = -dragAmount / size.height.toFloat()
-                            volumeLevel = (volumeLevel + delta).coerceIn(0f, 1f)
-                            gestureValue = volumeLevel
-                            val vol = (volumeLevel * maxVolume).toInt().coerceIn(0, maxVolume)
-                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, vol, 0)
-                        },
-                        onDragEnd = {
-                            gestureHideJob?.cancel()
-                            gestureHideJob = MainScope().launch {
-                                delay(900)
-                                gestureKind = null
-                            }
-                        },
-                        onDragCancel = { gestureKind = null },
-                    )
-                },
-        )
+            }
+        }
 
-        if (gestureKind != null) {
+        if (gestureKind == "brightness" || gestureKind == "volume") {
             Surface(
                 color = Color.Black.copy(alpha = 0.75f),
                 shape = RoundedCornerShape(20.dp),
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 40.dp),
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Icon(
-                        imageVector = when {
-                            gestureKind == "brightness" -> Icons.Filled.BrightnessHigh
-                            gestureKind == "seek" && (seekFeedback ?: "").startsWith("-") -> Icons.Filled.FastRewind
-                            gestureKind == "seek" -> Icons.Filled.FastForward
-                            else -> Icons.Filled.VolumeUp
-                        },
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Text(
-                        if (gestureKind == "seek") {
-                            seekFeedback ?: ""
-                        } else if (gestureKind == "brightness") {
-                            "Brilho ${(gestureValue * 100).toInt()}%"
-                        } else {
-                            "Volume ${(gestureValue * 100).toInt()}%"
-                        },
-                        color = Color.White,
-                        fontSize = 15.sp,
-                    )
+                    Icon(if (gestureKind == "brightness") Icons.Filled.BrightnessHigh else Icons.Filled.VolumeUp, null, tint = Color.White, modifier = Modifier.size(22.dp))
+                    Box(Modifier.width(110.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.25f))) {
+                        Box(Modifier.fillMaxWidth(gestureValue.coerceIn(0f, 1f)).height(4.dp).background(accent))
+                    }
+                    Text("${(gestureValue * 100).toInt()}%", color = Color.White, fontSize = 13.sp)
                 }
+            }
+        } else if (gestureKind == "seek" && !controlsVisible && seekRippleTick == 0) {
+            Surface(color = Color.Black.copy(alpha = 0.7f), shape = RoundedCornerShape(20.dp)) {
+                Text(seekFeedback ?: "", color = Color.White, fontSize = 15.sp, modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp))
             }
         }
 
+        // carregando (sem a rodinha nativa): spinner discreto no meio
+        if (isBufferingUi && errorMessage == null && !isRecovering && !controlsVisible) {
+            CircularProgressIndicator(color = accent, strokeWidth = 3.dp, modifier = Modifier.size(46.dp))
+        }
+
         if (errorMessage != null || isRecovering) {
-            Surface(color = Color.Black.copy(alpha = 0.88f), shape = RoundedCornerShape(12.dp), modifier = Modifier.padding(16.dp)) {
-                Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Surface(color = Color.Black.copy(alpha = 0.9f), shape = RoundedCornerShape(16.dp), modifier = Modifier.padding(16.dp)) {
+                Column(modifier = Modifier.padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     if (isRecovering) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.padding(bottom = 12.dp))
+                        CircularProgressIndicator(color = accent, modifier = Modifier.padding(bottom = 12.dp))
                         Text(
                             if (retryAttempt > 0) "Tentando novamente ($retryAttempt/2)..." else "Carregando...",
                             color = Color.White,
                             textAlign = TextAlign.Center,
                         )
                     } else {
-                        Text("Nao foi possivel reproduzir", color = Color.White, fontSize = 16.sp, textAlign = TextAlign.Center)
+                        Text("Não foi possível reproduzir", color = Color.White, fontSize = 16.sp, textAlign = TextAlign.Center)
                         Text(errorMessage ?: "", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp, bottom = 16.dp), textAlign = TextAlign.Center)
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Surface(color = Color.White.copy(alpha = 0.22f), shape = RoundedCornerShape(8.dp), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)), modifier = Modifier.focusRequester(errorFocus).tvFocus(RoundedCornerShape(8.dp)).clickable {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            ChromeChip("Tentar de novo", Icons.Filled.Refresh, {
                                 retryAttempt = 0; triedUrls.clear(); errorMessage = null; isRecovering = true; reloadWithUrl(activeUrl)
-                            }) {
-                                Text("Tentar de novo", color = Color.White, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
-                            }
-                            Surface(color = Color.White.copy(alpha = 0.15f), shape = RoundedCornerShape(8.dp), modifier = Modifier.tvFocus(RoundedCornerShape(8.dp)).clickable {
+                            }, highlighted = true, accent = accent, focusRequester = errorFocus)
+                            ChromeChip("Trocar servidor", Icons.Filled.Dns, {
                                 MainScope().launch {
                                     if (alternateSources.isEmpty()) loadAlternateSources()
-                                    if (alternateSources.isEmpty()) { errorMessage = "Sem outra fonte disponivel"; return@launch }
+                                    if (alternateSources.isEmpty()) { errorMessage = "Sem outra fonte disponível"; return@launch }
                                     triedUrls += activeUrl
                                     val next = alternateSources.firstOrNull { it !in triedUrls }
                                         ?: alternateSources[alternateIndex % alternateSources.size]
                                     alternateIndex += 1; retryAttempt = 0; errorMessage = null; reloadWithUrl(next)
                                 }
-                            }) {
-                                Text("Trocar servidor", color = Color.White, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
-                            }
+                            })
+                            ChromeChip("Sair", null, onBack)
                         }
                     }
                 }
             }
         }
 
+        // ---- Tela travada: só o cadeado aparece (toque nele destrava) ----
+        if (locked && lockHintVisible && !inPip) {
+            Column(
+                Modifier.align(Alignment.CenterStart).padding(start = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                ChromeIconButton(Icons.Filled.Lock, "Destravar", { locked = false; showControls() }, size = 56.dp, filled = true, accent = accent)
+                Text("Toque para destravar", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        }
+
+        // ---- Controles ----
         AnimatedVisibility(
-            visible = controlsVisible,
+            visible = controlsVisible && !locked && !inPip,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            modifier = Modifier.fillMaxSize(),
         ) {
-            val epLabel = if (mediaType == "tv" && currentSeason > 0 && currentEpisode > 0) {
-                "S${currentSeason} E${currentEpisode}"
-            } else null
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Voltar",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp),
-                    )
-                }
-                Column {
-                    Text(currentTitle, color = Color.White, fontSize = 15.sp, maxLines = 1)
-                    if (epLabel != null) {
-                        Text(epLabel, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
-                    }
-                }
-            }
-        }
+            Box(Modifier.fillMaxSize()) {
+                // sombras em cima e embaixo para os textos aparecerem em qualquer cena
+                Box(
+                    Modifier.fillMaxWidth().height(120.dp).align(Alignment.TopCenter)
+                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent))),
+                )
+                Box(
+                    Modifier.fillMaxWidth().height(190.dp).align(Alignment.BottomCenter)
+                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))),
+                )
 
-        AnimatedVisibility(
-            visible = controlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(start = 12.dp, end = 12.dp, bottom = 10.dp),
-        ) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.55f),
-                shape = RoundedCornerShape(22.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-            ) {
+                // topo: voltar, título, travar, janela flutuante
                 Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    Modifier.align(Alignment.TopStart).fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.focusRequester(chipsFocus).tvFocus(RoundedCornerShape(16.dp)).clickable {
-                        aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
-                    }) {
-                        Text(aspectMode.label, color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    ChromeIconButton(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", onBack, size = 40.dp, iconSize = 22.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(currentTitle, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        val sub = buildList {
+                            if (isSeries) add("Temporada $currentSeason · Episódio $currentEpisode")
+                            alternateLabels[activeUrl]?.let { add(it) }
+                            if (sleepTimer != SleepTimer.OFF) add("Timer: ${sleepTimer.label}")
+                        }.joinToString(" · ")
+                        if (sub.isNotBlank()) Text(sub, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp, maxLines = 1)
                     }
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
-                        settingsPanel = SettingsPanel.SPEED
-                    }) {
-                        Text("${playbackSpeed}x", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    ChromeIconButton(Icons.Filled.LockOpen, "Travar tela", { locked = true; controlsVisible = false; settingsPanel = SettingsPanel.NONE; lockHintVisible = true }, size = 40.dp, iconSize = 20.dp)
+                    ChromeIconButton(Icons.Filled.PictureInPictureAlt, "Janela flutuante", { enterPip() }, size = 40.dp, iconSize = 20.dp)
+                    ChromeIconButton(Icons.Filled.Settings, "Ajustes", { openPanel(SettingsPanel.MAIN) }, size = 40.dp, iconSize = 20.dp)
+                }
+
+                // meio: voltar 10 s, play/pausa grande, avançar 10 s
+                Row(
+                    Modifier.align(Alignment.Center),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(36.dp),
+                ) {
+                    ChromeIconButton(Icons.Filled.Replay10, "Voltar 10 segundos", { seekBy(-SEEK_STEP_MS); poke() }, size = 56.dp, iconSize = 32.dp)
+                    Box(contentAlignment = Alignment.Center) {
+                        ChromeIconButton(
+                            if (isPlayingUi) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            if (isPlayingUi) "Pausar" else "Tocar",
+                            { togglePlay() },
+                            size = 76.dp, iconSize = 44.dp, filled = true, accent = Color.White,
+                            focusRequester = playFocus,
+                        )
+                        if (isBufferingUi) CircularProgressIndicator(color = accent, strokeWidth = 3.dp, modifier = Modifier.size(82.dp))
                     }
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
-                        settingsPanel = SettingsPanel.SUBTITLE
-                    }) {
-                        Text("Legendas", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                    ChromeIconButton(Icons.Filled.Forward10, "Avançar 10 segundos", { seekBy(SEEK_STEP_MS); poke() }, size = 56.dp, iconSize = 32.dp)
+                }
+
+                // baixo: linha do tempo + atalhos
+                Column(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp),
+                ) {
+                    val shownPos = if (isScrubbing) scrubTarget else scrubPosition
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(chromeTime(shownPos), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        PlayerTimeline(
+                            position = scrubPosition,
+                            buffered = bufferedUi,
+                            duration = scrubDuration,
+                            accent = accent,
+                            onScrub = { s, t -> isScrubbing = s; scrubTarget = t; poke() },
+                            onSeek = { t -> runCatching { exoPlayer.seekTo(t) }; scrubPosition = t; poke() },
+                            onInteract = { poke() },
+                            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                        )
+                        Text(
+                            if (scrubDuration > 0) "-" + chromeTime((scrubDuration - shownPos).coerceAtLeast(0)) else "--:--",
+                            color = Color.White.copy(alpha = 0.8f), fontSize = 13.sp,
+                        )
                     }
-                    if (audioOptions.isNotEmpty()) {
-                        Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
-                            settingsPanel = SettingsPanel.AUDIO
-                        }) {
-                            Text("Audio", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
-                        }
-                    }
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
-                        MainScope().launch {
-                            if (alternateSources.isEmpty()) loadAlternateSources()
-                            if (alternateSources.isEmpty()) {
-                                Toast.makeText(context, "Sem outra fonte", Toast.LENGTH_SHORT).show()
-                            } else {
-                                settingsPanel = SettingsPanel.SOURCES
+                    Row(
+                        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (isSeries) ChromeChip("Episódios", Icons.Filled.VideoLibrary, { openPanel(SettingsPanel.EPISODES) })
+                        ChromeChip(
+                            if (selectedSubtitleLabel == "Desligada" && !onlineSubtitleApplied) "Legendas" else "Legendas ✓",
+                            Icons.Filled.Subtitles, { openPanel(SettingsPanel.SUBTITLE) },
+                        )
+                        if (audioOptions.isNotEmpty()) ChromeChip("Áudio", Icons.Filled.Audiotrack, { openPanel(SettingsPanel.AUDIO) })
+                        ChromeChip("Servidor", Icons.Filled.Dns, {
+                            MainScope().launch {
+                                if (alternateSources.isEmpty()) loadAlternateSources()
+                                openPanel(SettingsPanel.SOURCES)
                             }
-                        }
-                    }) {
-                        Text("Fontes", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
-                    }
-                    if (mediaType == "tv" && currentEpisode > 0) {
-                        Surface(
-                            color = Color.White.copy(alpha = 0.16f),
-                            shape = RoundedCornerShape(16.dp),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)),
-                            modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable { if (!isLoadingNext) MainScope().launch { playNextEpisode() } },
-                        ) {
-                            Text(
-                                if (isLoadingNext) "…" else "Proximo",
-                                color = Color.White,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            )
-                        }
-                    }
-                    Surface(color = Color.White.copy(alpha = 0.10f), shape = RoundedCornerShape(16.dp), modifier = Modifier.tvFocus(RoundedCornerShape(16.dp)).clickable {
-                        settingsPanel = SettingsPanel.MAIN
-                    }) {
-                        Text("Mais", color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                        })
+                        ChromeChip(if (playbackSpeed == 1f) "Velocidade" else "${playbackSpeed}x", Icons.Filled.Speed, { openPanel(SettingsPanel.SPEED) }, highlighted = playbackSpeed != 1f, accent = accent)
+                        ChromeChip(aspectMode.label, Icons.Filled.AspectRatio, {
+                            aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]; poke()
+                        })
+                        if (isSeries) ChromeChip(if (isLoadingNext) "Carregando…" else "Próximo", Icons.Filled.SkipNext, {
+                            if (!isLoadingNext) MainScope().launch { playNextEpisode() }
+                        }, highlighted = true, accent = accent)
                     }
                 }
             }
         }
 
-        if (showNextPrompt && mediaType == "tv") {
-            Surface(
-                color = Color.Black.copy(alpha = 0.85f),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 56.dp, start = 16.dp, end = 16.dp),
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text("S${currentSeason} E${currentEpisode + 1} · Assistir agora?", color = Color.White, fontSize = 13.sp)
-                    Surface(
-                        color = Color.White.copy(alpha = 0.18f),
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                        modifier = Modifier.focusRequester(nextFocus).tvFocus(RoundedCornerShape(8.dp)).clickable { MainScope().launch { playNextEpisode() } },
-                    ) {
-                        Text("Sim", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-                    }
-                    Surface(
-                        color = Color.White.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.tvFocus(RoundedCornerShape(8.dp)).clickable { showNextPrompt = false },
-                    ) {
-                        Text("Nao", color = Color.White, modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp))
-                    }
-                }
-            }
+        if (showNextPrompt && isSeries && !inPip) {
+            NextEpisodeCard(
+                label = "T$currentSeason · Episódio ${currentEpisode + 1}",
+                secondsLeft = nextCountdown,
+                totalSeconds = NEXT_COUNTDOWN,
+                accent = accent,
+                onPlay = { MainScope().launch { playNextEpisode() } },
+                onCancel = { showNextPrompt = false; nextDismissedFor = currentSeason * 10_000 + currentEpisode },
+                playFocus = nextFocus,
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(end = 18.dp, bottom = if (controlsVisible) 120.dp else 24.dp),
+            )
         }
 
-        if (settingsPanel != SettingsPanel.NONE) {
-            Box(modifier = Modifier.fillMaxSize().focusProperties { canFocus = false }.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { settingsPanel = SettingsPanel.NONE })
-            Box(
+        // ---- Painel lateral com abas ----
+        if (settingsPanel != SettingsPanel.NONE && !inPip) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)).focusProperties { canFocus = false }.noRippleClick { settingsPanel = SettingsPanel.NONE })
+            Column(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .navigationBarsPadding()
-                    .padding(end = 8.dp, bottom = 48.dp)
-                    .width(280.dp)
-                    .heightIn(max = 320.dp)
-                    .background(Color.Black.copy(alpha = 0.92f), RoundedCornerShape(12.dp))
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .widthIn(max = 380.dp)
+                    .fillMaxWidth(0.46f)
+                    .background(Color(0xF20E0F13))
+                    .border(1.dp, Color.White.copy(alpha = 0.08f))
                     .focusProperties { canFocus = false }
-                    .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
+                    .noRippleClick {}
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp)) {
+                val tabs = buildList {
+                    if (isSeries) add(SettingsPanel.EPISODES to "Episódios")
+                    add(SettingsPanel.SUBTITLE to "Legendas")
+                    if (audioOptions.isNotEmpty()) add(SettingsPanel.AUDIO to "Áudio")
+                    add(SettingsPanel.SOURCES to "Servidor")
+                    add(SettingsPanel.SPEED to "Velocidade")
+                    add(SettingsPanel.MAIN to "Mais")
+                }
+                val selTab = when (settingsPanel) {
+                    SettingsPanel.QUALITY, SettingsPanel.SUB_STYLE, SettingsPanel.SLEEP -> SettingsPanel.MAIN
+                    else -> settingsPanel
+                }
+                PanelTabs(tabs, selTab, accent, { settingsPanel = it; poke() }, firstFocus = panelFocus)
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 6.dp))
+                Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     when (settingsPanel) {
+                        SettingsPanel.EPISODES -> {
+                            if (episodesLoading) {
+                                Text("Carregando episódios…", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(vertical = 12.dp))
+                            } else if (episodeList.isEmpty()) {
+                                Text("Lista de episódios indisponível", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.padding(vertical = 12.dp))
+                            }
+                            episodeList.forEach { ep ->
+                                val cur = ep.episode_number == currentEpisode
+                                SubmenuItem(
+                                    "${ep.episode_number}. ${ep.displayName}" + (ep.displayRuntime?.let { " · $it" } ?: ""),
+                                    cur,
+                                ) {
+                                    if (!cur) {
+                                        settingsPanel = SettingsPanel.NONE
+                                        MainScope().launch { playEpisode(currentSeason, ep.episode_number) }
+                                    }
+                                }
+                            }
+                        }
                         SettingsPanel.MAIN -> {
-                            SettingsRow("Tela", aspectMode.label, Modifier.focusRequester(panelFocus)) {
+                            SettingsRow("Tela", aspectMode.label) {
                                 aspectMode = AspectMode.entries[(aspectMode.ordinal + 1) % AspectMode.entries.size]
                             }
                             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                            SettingsRow("Legenda", selectedSubtitleLabel) { settingsPanel = SettingsPanel.SUBTITLE }
+                            SettingsRow("Qualidade", selectedQualityLabel) { settingsPanel = SettingsPanel.QUALITY }
+                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                            SettingsRow("Timer para dormir", sleepTimer.label) { settingsPanel = SettingsPanel.SLEEP }
                             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text("Sync legenda", color = Color.White, fontSize = 14.sp)
+                                Text("Sincronia da legenda", color = Color.White, fontSize = 14.sp)
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Surface(color = Color.White.copy(alpha = 0.12f), shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier.tvFocus(RoundedCornerShape(8.dp)).clickable { reapplySubtitleOffset(subtitleOffsetMs - 500L) }) {
                                         Text("−0.5s", color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
                                     }
                                     Text(
-                                        when {
-                                            subtitleOffsetMs > 0 -> "+${subtitleOffsetMs / 1000.0}s"
-                                            else -> "${subtitleOffsetMs / 1000.0}s"
-                                        }.replace(".0s", "s"),
-                                        color = Color(0xFFFFB547),
+                                        (if (subtitleOffsetMs > 0) "+${subtitleOffsetMs / 1000.0}s" else "${subtitleOffsetMs / 1000.0}s").replace(".0s", "s"),
+                                        color = accent,
                                         fontSize = 13.sp,
                                     )
                                     Surface(color = Color.White.copy(alpha = 0.12f), shape = RoundedCornerShape(8.dp),
@@ -1612,70 +1728,42 @@ private fun NativePlayer(
                                 settingsPanel = SettingsPanel.SUB_STYLE
                             }
                             HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                            if (audioOptions.isNotEmpty()) {
-                                SettingsRow("Áudio", selectedAudioLabel) { settingsPanel = SettingsPanel.AUDIO }
-                                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                            }
-                            SettingsRow("Qualidade", selectedQualityLabel) { settingsPanel = SettingsPanel.QUALITY }
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                            SettingsRow("Velocidade", "${playbackSpeed}x") { settingsPanel = SettingsPanel.SPEED }
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                            SettingsRow("Fontes", "${alternateSources.size} opções") {
-                                MainScope().launch {
-                                    if (alternateSources.isEmpty()) loadAlternateSources()
-                                    settingsPanel = SettingsPanel.SOURCES
-                                }
-                            }
-                            HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                             SettingsRow("Abrir no VLC / player externo", "") {
                                 settingsPanel = SettingsPanel.NONE
                                 openInExternalPlayer(context, activeUrl)
                             }
                         }
+                        SettingsPanel.SLEEP -> {
+                            SubmenuHeader("Timer para dormir") { settingsPanel = SettingsPanel.MAIN }
+                            SleepTimer.entries.forEach { t ->
+                                SubmenuItem(t.label, sleepTimer == t) {
+                                    sleepTimer = t
+                                    sleepEndsAt = if (t.minutes > 0) android.os.SystemClock.elapsedRealtime() + t.minutes * 60_000L else 0L
+                                    settingsPanel = SettingsPanel.MAIN
+                                    if (t != SleepTimer.OFF) Toast.makeText(context, "Timer: ${t.label}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
                         SettingsPanel.SUBTITLE -> {
-                            SubmenuHeader("Legenda", panelFocus) { settingsPanel = SettingsPanel.MAIN }
                             SubmenuItem("Desligada", selectedSubtitleLabel == "Desligada" && !onlineSubtitleApplied) {
-                                selectSubtitle(null); settingsPanel = SettingsPanel.MAIN
+                                selectSubtitle(null); settingsPanel = SettingsPanel.NONE
                             }
                             if (subtitleOptions.isNotEmpty()) {
-                                Text(
-                                    "DO VÍDEO / ADDON",
-                                    color = Color.White.copy(alpha = 0.55f),
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                                )
+                                Text("DO VÍDEO", color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
                                 subtitleOptions.forEach { o ->
-                                    SubmenuItem(
-                                        "Stream: ${o.label}",
-                                        selectedSubtitleLabel == "Stream: ${o.label}" && !onlineSubtitleApplied,
-                                    ) { selectSubtitle(o); settingsPanel = SettingsPanel.MAIN }
+                                    SubmenuItem(o.label, selectedSubtitleLabel == "Stream: ${o.label}" && !onlineSubtitleApplied) {
+                                        selectSubtitle(o); settingsPanel = SettingsPanel.NONE
+                                    }
                                 }
                             }
-                            Text(
-                                "Online PT-BR",
-                                color = Color.White.copy(alpha = 0.55f),
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                            )
+                            Text("ONLINE PT-BR", color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
                             if (onlineSubtitlesLoading) {
-                                Text(
-                                    "Buscando…",
-                                    color = Color.White.copy(alpha = 0.7f),
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                )
+                                Text("Buscando…", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
                             } else {
-                                SubmenuItem("Buscar legendas online", false) {
-                                    MainScope().launch { searchOnlineSubtitles() }
-                                }
+                                SubmenuItem("Buscar legendas online", false) { MainScope().launch { searchOnlineSubtitles() } }
                             }
                             onlineSubtitlesError?.let { err ->
-                                Text(
-                                    err,
-                                    color = Color(0xFFFF8A80),
-                                    fontSize = 12.sp,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                )
+                                Text(err, color = Color(0xFFFF8A80), fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
                             }
                             onlineSubtitleResults.forEach { item ->
                                 val label = buildString {
@@ -1689,36 +1777,33 @@ private fun NativePlayer(
                             }
                         }
                         SettingsPanel.AUDIO -> {
-                            SubmenuHeader("Audio", panelFocus) { settingsPanel = SettingsPanel.MAIN }
-                            SubmenuItem("Padrao", selectedAudioLabel == "Padrao") { selectAudio(null); settingsPanel = SettingsPanel.MAIN }
+                            SubmenuItem("Padrão", selectedAudioLabel == "Padrao") { selectAudio(null); settingsPanel = SettingsPanel.NONE }
                             audioOptions.forEach { o ->
-                                SubmenuItem(o.label, selectedAudioLabel == o.label) { selectAudio(o); settingsPanel = SettingsPanel.MAIN }
+                                SubmenuItem(o.label, selectedAudioLabel == o.label) { selectAudio(o); settingsPanel = SettingsPanel.NONE }
                             }
                         }
                         SettingsPanel.QUALITY -> {
-                            SubmenuHeader("Qualidade", panelFocus) { settingsPanel = SettingsPanel.MAIN }
-                            SubmenuItem("Automatico", selectedQualityLabel == "Automatico") { selectQuality(null); settingsPanel = SettingsPanel.MAIN }
+                            SubmenuHeader("Qualidade") { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuItem("Automático", selectedQualityLabel == "Automatico") { selectQuality(null); settingsPanel = SettingsPanel.MAIN }
                             qualityOptions.forEach { o ->
                                 SubmenuItem(o.label, selectedQualityLabel == o.label) { selectQuality(o); settingsPanel = SettingsPanel.MAIN }
                             }
                         }
                         SettingsPanel.SPEED -> {
-                            SubmenuHeader("Velocidade", panelFocus) { settingsPanel = SettingsPanel.MAIN }
                             PLAYBACK_SPEEDS.forEach { speed ->
-                                SubmenuItem("${speed}x", playbackSpeed == speed) {
-                                    playbackSpeed = speed; exoPlayer.setPlaybackSpeed(speed); settingsPanel = SettingsPanel.MAIN
+                                SubmenuItem(if (speed == 1f) "Normal (1x)" else "${speed}x", playbackSpeed == speed) {
+                                    playbackSpeed = speed; runCatching { exoPlayer.setPlaybackSpeed(speed) }; settingsPanel = SettingsPanel.NONE
                                 }
                             }
                         }
                         SettingsPanel.SOURCES -> {
-                            SubmenuHeader("Fontes", panelFocus) { settingsPanel = SettingsPanel.NONE }
+                            Text(
+                                "Se travar, o app já troca de servidor sozinho.",
+                                color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp),
+                            )
+                            SubmenuItem("Atual: " + (alternateLabels[activeUrl] ?: prettyFonteLabel(activeUrl, 0)), true) { settingsPanel = SettingsPanel.NONE }
                             if (alternateSources.isEmpty()) {
-                                Text(
-                                    "Nenhuma outra fonte",
-                                    color = Color.White.copy(alpha = 0.55f),
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.padding(vertical = 12.dp),
-                                )
+                                Text("Nenhuma outra fonte", color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, modifier = Modifier.padding(vertical = 12.dp))
                             } else {
                                 alternateSources.forEachIndexed { i, src ->
                                     val label = alternateLabels[src] ?: prettyFonteLabel(src, i)
@@ -1732,7 +1817,7 @@ private fun NativePlayer(
                             }
                         }
                         SettingsPanel.SUB_STYLE -> {
-                            SubmenuHeader("Aparência da legenda", panelFocus) { settingsPanel = SettingsPanel.MAIN }
+                            SubmenuHeader("Aparência da legenda") { settingsPanel = SettingsPanel.MAIN }
                             SettingsRow("Tamanho", subStyle.size.label) {
                                 subStyle = subStyle.copy(size = nextOf(subStyle.size, SubSize.entries))
                                 SubtitleStylePrefs.save(context, subStyle)
@@ -1759,6 +1844,14 @@ private fun NativePlayer(
     }
 }
 
+private fun activityOf(context: android.content.Context): Activity? {
+    var c: android.content.Context? = context
+    while (c is android.content.ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
+}
 
 private fun prettyFonteLabel(url: String, index: Int): String {
     val host = try { java.net.URI(url).host.orEmpty().lowercase() } catch (_: Exception) { "" }
@@ -1793,7 +1886,7 @@ private fun Modifier.tvFocus(shape: androidx.compose.ui.graphics.Shape): Modifie
         )
 }
 
-private enum class SettingsPanel { NONE, MAIN, SUBTITLE, AUDIO, QUALITY, SPEED, SOURCES, SUB_STYLE }
+private enum class SettingsPanel { NONE, MAIN, SUBTITLE, AUDIO, QUALITY, SPEED, SOURCES, SUB_STYLE, EPISODES, SLEEP }
 
 private fun formatPlayerTime(ms: Long): String {
     if (ms <= 0L) return "0:00"

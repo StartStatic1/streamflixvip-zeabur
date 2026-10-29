@@ -33,7 +33,9 @@
             android:exported="true"
             android:screenOrientation="unspecified"
             android:theme="@style/Theme.StreamFlixVIP.Splash"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
