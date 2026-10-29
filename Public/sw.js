@@ -1,5 +1,5 @@
 // ⚡ Incrementa esta versão a cada deploy para forçar atualização
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `streamflixvip-${CACHE_VERSION}`;
 
 // Apenas assets estáticos que raramente mudam
