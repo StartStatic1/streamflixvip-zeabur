@@ -292,7 +292,7 @@ data class FavoriteEntry(
 ) {
     val displayTitle: String get() = title ?: "Sem título"
     val isAnime: Boolean get() = media_type == "tv" && original_language == "ja"
-    val isDorama: Boolean get() = media_type == "tv" && original_language == "ko"
+    val isDorama: Boolean get() = media_type == "tv" && original_language in setOf("ko", "zh", "cn", "th", "tw")
 }
 
 interface CommentsApi {

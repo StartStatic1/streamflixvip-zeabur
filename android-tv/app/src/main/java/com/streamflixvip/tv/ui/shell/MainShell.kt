@@ -309,11 +309,15 @@ private fun BrandMark(expanded: Boolean, kids: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp)) {
         Box(
             Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                .background(Brush.linearGradient(listOf(p.accent, p.accent2))),
+                .background(if (kids) Brush.linearGradient(listOf(p.accent, p.accent2)) else Brush.linearGradient(listOf(Color.Black, Color.Black))),
             contentAlignment = Alignment.Center,
         ) {
             if (kids) Icon(Icons.Filled.ChildCare, null, tint = p.onAccent, modifier = Modifier.size(22.dp))
-            else Text("S", color = p.onAccent, fontWeight = FontWeight.Black, fontSize = 20.sp)
+            else androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(com.streamflixvip.tv.R.drawable.ic_launcher_fg),
+                contentDescription = "StreamFlix",
+                modifier = Modifier.size(40.dp),
+            )
         }
         if (expanded) {
             Spacer(Modifier.width(12.dp))

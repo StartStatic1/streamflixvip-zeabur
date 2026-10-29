@@ -110,6 +110,7 @@ fun LivePlayerScreen(
             if (i < 0) 50 else i
         }
     }
+    val sourceGroups = remember(orderedStreams) { groupLiveSources(orderedStreams) }
     var streamIndex by remember(orderedStreams) { mutableIntStateOf(0) }
     var selectedQuality by remember(orderedStreams) {
         mutableStateOf(orderedStreams.firstOrNull()?.quality)
@@ -534,39 +535,48 @@ fun LivePlayerScreen(
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
                 Text("Servidores", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Text("${orderedStreams.size} fontes para $channelName", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${sourceGroups.size} fontes para $channelName", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(10.dp))
                 androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    items(orderedStreams.size) { i ->
-                        val st = orderedStreams[i]
-                        val sel = i == streamIndex
-                        Row(
-                            Modifier.fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (sel) accentColor.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.06f))
-                                .border(1.dp, if (sel) accentColor else Color.Transparent, RoundedCornerShape(12.dp))
-                                .clickable {
-                                    showSources = false
-                                    if (!sel) { streamIndex = i; retryOnSame = 0; isLoading = true; errorMessage = null }
+                    var lastQ: String? = null
+                    sourceGroups.forEach { g ->
+                        if (g.quality != lastQ) {
+                            lastQ = g.quality
+                            val hq = g.quality
+                            item(key = "qh:$hq") {
+                                Text(hq, color = accentColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
+                                    modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp))
+                            }
+                        }
+                        item(key = "g:${g.firstIndex}") {
+                            val sel = streamIndex in g.indices
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (sel) accentColor.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.06f))
+                                    .border(1.dp, if (sel) accentColor else Color.Transparent, RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        showSources = false
+                                        if (!sel) { streamIndex = g.firstIndex; retryOnSame = 0; isLoading = true; errorMessage = null }
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(g.label, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        g.host + (if (g.indices.size > 1) " · ${g.indices.size} opções" else ""),
+                                        color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("${i + 1}", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, modifier = Modifier.width(24.dp))
-                            Text(
-                                st.label?.takeIf { it.isNotBlank() } ?: "Fonte ${i + 1}",
-                                color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                            st.quality?.takeIf { it.isNotBlank() }?.let { q ->
-                                Text(q, color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                Text(g.quality, color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 8.dp, vertical = 2.dp))
+                                if (g.leg) {
+                                    Text("LEG", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(Color(0xFF34D399)).padding(horizontal = 8.dp, vertical = 2.dp))
+                                }
+                                if (sel) Text("  ✓", color = accentColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             }
-                            if (st.leg == true) {
-                                Text("LEG", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(Color(0xFF34D399)).padding(horizontal = 8.dp, vertical = 2.dp))
-                            }
-                            if (sel) Text("  ✓", color = accentColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

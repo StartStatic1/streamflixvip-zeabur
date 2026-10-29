@@ -626,18 +626,29 @@ fun LivePlayerTvScreen(
                     )
                 }
                 if (streams.size > 1) {
-                    item { OptionHeader("Fonte") }
-                    itemsIndexed(streams) { i, s ->
-                        PanelItem(
-                            streamLabel(s, i),
-                            selected = i == streamIndex,
-                            leading = Icons.Filled.Dns,
-                            onClick = {
-                                streamIndex = i
-                                reloadNonce++
-                                optionsVisible = false
-                            },
-                        )
+                    val groups = groupLiveSources(streams)
+                    var lastQ: String? = null
+                    groups.forEach { g ->
+                        if (g.quality != lastQ) {
+                            lastQ = g.quality
+                            val hq = g.quality
+                            item(key = "qh:$hq") { OptionHeader("Fonte · $hq") }
+                        }
+                        item(key = "g:${g.firstIndex}") {
+                            PanelItem(
+                                g.label + (if (g.leg) " · LEG" else ""),
+                                subtitle = g.host + (if (g.indices.size > 1) " · ${g.indices.size} opções" else ""),
+                                selected = streamIndex in g.indices,
+                                leading = Icons.Filled.Dns,
+                                onClick = {
+                                    if (streamIndex !in g.indices) {
+                                        streamIndex = g.firstIndex
+                                        reloadNonce++
+                                    }
+                                    optionsVisible = false
+                                },
+                            )
+                        }
                     }
                 }
                 item { OptionHeader("Tela") }

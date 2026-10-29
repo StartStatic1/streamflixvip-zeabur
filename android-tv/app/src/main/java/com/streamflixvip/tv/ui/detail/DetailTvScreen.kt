@@ -45,6 +45,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
@@ -97,6 +102,8 @@ data class PlayRequest(
 )
 
 private const val KEY_PLAY = "btn:play"
+
+private val DetailH = 72.dp
 
 @Composable
 fun DetailTvScreen(
@@ -211,7 +218,7 @@ fun DetailTvScreen(
                 Box(
                     Modifier.fillMaxSize().background(
                         Brush.horizontalGradient(
-                            0f to p.bg, 0.30f to p.bg.copy(alpha = 0.96f), 0.62f to p.bg.copy(alpha = 0.35f), 1f to Color.Transparent,
+                            0f to p.bg, 0.38f to p.bg.copy(alpha = 0.97f), 0.66f to p.bg.copy(alpha = 0.45f), 1f to Color.Transparent,
                         ),
                     ),
                 )
@@ -229,8 +236,8 @@ fun DetailTvScreen(
                 TvLazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(22.dp),
+                    contentPadding = PaddingValues(top = 24.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(40.dp),
                     pivotOffsets = PivotOffsets(parentFraction = 0.0f),
                 ) {
                     item(key = "header") {
@@ -242,7 +249,7 @@ fun DetailTvScreen(
                         Column(
                             Modifier.fillParentMaxHeight(if (isSeries || recs.isNotEmpty()) 0.84f else 1f)
                                 .fillMaxWidth()
-                                .padding(start = 56.dp, end = 56.dp, top = 36.dp),
+                                .padding(start = DetailH, end = DetailH, top = 36.dp),
                             verticalArrangement = Arrangement.Bottom,
                         ) {
                             Header(details = details, isSeries = isSeries)
@@ -331,6 +338,14 @@ fun DetailTvScreen(
                                 onRetrySeason = { viewModel.selectSeason(state.selectedSeason) },
                                 onEpisodeFocused = { key -> restoreKey = key },
                                 onEpisode = { ep -> viewModel.openSources(state.selectedSeason, ep.episode_number) },
+                                onUpToActions = {
+                                    scope.launch {
+                                        runCatching { listState.animateScrollToItem(0) }
+                                        focus(KEY_PLAY)
+                                        delay(300)
+                                        if (focusTarget == KEY_PLAY) focus(KEY_PLAY)
+                                    }
+                                },
                             )
                           }
                         }
@@ -341,16 +356,27 @@ fun DetailTvScreen(
                             Column(Modifier.onFocusChanged {
                                 if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(if (isSeries) 2 else 1) } }
                             }) {
-                                SectionTitle("Você também pode gostar", Modifier.padding(start = 56.dp, bottom = 10.dp))
+                                SectionTitle("Você também pode gostar", Modifier.padding(start = DetailH, bottom = 14.dp))
                                 TvLazyRow(
-                                    contentPadding = PaddingValues(horizontal = 56.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    modifier = if (isSeries) Modifier else Modifier.onPreviewKeyEvent { ev ->
+                                        if (ev.key == Key.DirectionUp) {
+                                            if (ev.type == KeyEventType.KeyDown) scope.launch {
+                                                runCatching { listState.animateScrollToItem(0) }
+                                                focus(KEY_PLAY)
+                                                delay(300)
+                                                if (focusTarget == KEY_PLAY) focus(KEY_PLAY)
+                                            }
+                                            true
+                                        } else false
+                                    },
+                                    contentPadding = PaddingValues(horizontal = DetailH, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(18.dp),
                                 ) {
                                     items(recs.distinctBy { it.id }, key = { it.id }) { item ->
                                         PosterCard(
                                             title = item.displayTitle,
                                             posterPath = item.poster_path,
-                                            width = 124.dp,
+                                            width = 140.dp,
                                             onClick = { onOpenTitle(item.id, item.media_type ?: mediaType) },
                                         )
                                     }
@@ -403,6 +429,7 @@ fun DetailTvScreen(
                                 subtitle = listOfNotNull(
                                     if (s.displayName == sp.preferredLabel) "Último usado" else null,
                                     tags.takeIf { it.isNotBlank() },
+                                    sourceHost(s.source_url).takeIf { it.isNotBlank() },
                                 ).joinToString(" · ").ifBlank { null },
                                 leading = Icons.Filled.Tv,
                                 trailingText = "${index + 1}",
@@ -475,9 +502,9 @@ private fun Header(details: com.streamflixvip.tv.network.TmdbResponse, isSeries:
             color = p.text.copy(alpha = 0.88f),
             fontSize = 14.sp,
             lineHeight = 20.sp,
-            maxLines = 4,
+            maxLines = 3,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth(0.55f),
+            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth(0.5f),
         )
     }
     details.credits?.cast?.take(5)?.takeIf { it.isNotEmpty() }?.let { cast ->
@@ -488,7 +515,7 @@ private fun Header(details: com.streamflixvip.tv.network.TmdbResponse, isSeries:
             fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth(0.55f),
+            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth(0.5f),
         )
     }
 }
@@ -511,6 +538,7 @@ private fun EpisodesBlock(
     onRetrySeason: () -> Unit,
     onEpisodeFocused: (String) -> Unit,
     onEpisode: (TmdbEpisode) -> Unit,
+    onUpToActions: () -> Unit,
 ) {
     val p = LocalPalette.current
     var focusedEp by remember(selectedSeason) { mutableStateOf<TmdbEpisode?>(null) }
@@ -523,12 +551,19 @@ private fun EpisodesBlock(
         }
     }
 
+    val upToActions = Modifier.onPreviewKeyEvent { ev ->
+        if (ev.key == Key.DirectionUp) {
+            if (ev.type == KeyEventType.KeyDown) onUpToActions()
+            true
+        } else false
+    }
     Column(Modifier.fillMaxWidth()) {
-        SectionTitle("Episódios", Modifier.padding(start = 56.dp, bottom = 10.dp), trailing = "${episodes.size.takeIf { it > 0 } ?: ""}".ifBlank { null }?.let { "$it episódios" })
+        SectionTitle("Episódios", Modifier.padding(start = DetailH, bottom = 10.dp), trailing = "${episodes.size.takeIf { it > 0 } ?: ""}".ifBlank { null }?.let { "$it episódios" })
         if (seasons.size > 1) {
             TvLazyRow(
-                contentPadding = PaddingValues(horizontal = 56.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = upToActions,
+                contentPadding = PaddingValues(horizontal = DetailH, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(seasons) { s ->
                     TvChip(
@@ -538,18 +573,19 @@ private fun EpisodesBlock(
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(14.dp))
         }
         when {
             loading && episodes.isEmpty() -> LoadingBox(Modifier.fillMaxWidth().height(150.dp))
-            failed && episodes.isEmpty() -> Box(Modifier.padding(start = 56.dp)) {
+            failed && episodes.isEmpty() -> Box(Modifier.padding(start = DetailH)) {
                 TvButton("Erro ao carregar episódios — tentar de novo", onClick = onRetrySeason, icon = Icons.Filled.Refresh)
             }
-            episodes.isEmpty() -> Text("Nenhum episódio nesta temporada.", color = p.textMuted, modifier = Modifier.padding(start = 56.dp))
+            episodes.isEmpty() -> Text("Nenhum episódio nesta temporada.", color = p.textMuted, modifier = Modifier.padding(start = DetailH))
             else -> {
                 TvLazyRow(
                     state = rowState,
-                    contentPadding = PaddingValues(horizontal = 56.dp, vertical = 10.dp),
+                    modifier = if (seasons.size > 1) Modifier else upToActions,
+                    contentPadding = PaddingValues(horizontal = DetailH, vertical = 10.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     items(episodes.distinctBy { it.episode_number }, key = { "$selectedSeason:${it.episode_number}" }) { ep ->
@@ -580,7 +616,7 @@ private fun EpisodesBlock(
                     }
                 }
                 val fe = focusedEp
-                Box(Modifier.padding(start = 56.dp, end = 56.dp, top = 6.dp).height(44.dp).fillMaxWidth(0.7f)) {
+                Box(Modifier.padding(start = DetailH, end = DetailH, top = 6.dp).height(44.dp).fillMaxWidth(0.7f)) {
                     if (fe != null && !fe.overview.isNullOrBlank()) {
                         Text(fe.overview, color = p.textMuted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 18.sp)
                     }
@@ -593,8 +629,10 @@ private fun EpisodesBlock(
 private fun sourceTags(label: String): String {
     val l = label.lowercase()
     return buildList {
-        if (Regex("\\bdub|dublad").containsMatchIn(l)) add("Dublado")
-        if (Regex("\\bleg|legend").containsMatchIn(l)) add("Legendado")
+        val dub = Regex("\\bdub|dublad|dual").containsMatchIn(l)
+        val leg = Regex("\\bleg|legend|\\bsub").containsMatchIn(l)
+        if (dub) add("DUB")
+        if (leg && !dub) add("LEG")
         when {
             l.contains("4k") || l.contains("2160") -> add("4K")
             l.contains("1080") || l.contains("fhd") -> add("Full HD")

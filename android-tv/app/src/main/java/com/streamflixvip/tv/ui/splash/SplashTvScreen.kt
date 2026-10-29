@@ -224,23 +224,11 @@ private fun SplashLogo() {
             .alpha(alphaAnim),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .size(88.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(
-                    Brush.linearGradient(listOf(Accent, Cyan.copy(alpha = 0.85f))),
-                )
-                .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(22.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Filled.PlayArrow,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(46.dp),
-            )
-        }
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(com.streamflixvip.tv.R.drawable.ic_launcher_fg),
+            contentDescription = null,
+            modifier = Modifier.size(104.dp).clip(RoundedCornerShape(24.dp)),
+        )
         Spacer(Modifier.height(18.dp))
         Text(
             "StreamFlix",

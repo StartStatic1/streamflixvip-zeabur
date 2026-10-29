@@ -236,7 +236,7 @@ fun DetailScreen(
                 }
                 ServersBrowser(
                     title = s.details.title ?: s.details.name ?: "Servidores",
-                    sources = s.movieSources,
+                    sources = dedupeSources(s.movieSources),
                     loading = s.isLoadingMovieSources,
                     isVip = isVip,
                     onDismiss = { showMovieServerPicker = false },
@@ -653,7 +653,7 @@ private fun DetailContent(
         var showPremiumSheet by remember { mutableStateOf(false) }
         ServersBrowser(
             title = state.details.name ?: state.details.title ?: "Episódio",
-            sources = state.episodeSources,
+            sources = dedupeSources(state.episodeSources),
             loading = state.isLoadingEpisodeSources,
             isVip = isVip,
             onDismiss = onDismissServerPicker,
