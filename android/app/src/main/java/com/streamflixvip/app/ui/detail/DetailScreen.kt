@@ -1272,6 +1272,7 @@ private fun CommentsModal(
                         }
                     }
                 }
+                }
 
                 // Campo de digitar: só aparece pra quem está logado — sem
                 // login, mostra convite simples em vez de campo desabilitado
@@ -1380,7 +1381,6 @@ private fun CommentsModal(
                     }
                 }
             }
-        }
         }
     }
 }

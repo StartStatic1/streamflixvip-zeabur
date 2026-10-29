@@ -81,6 +81,8 @@ fun LivePlayerScreen(
     epgNext: String? = PendingLiveChannel.epgNext,
 ) {
     val accentColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
+    var showSources by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = showSources) { showSources = false }
     val view = LocalView.current
     val activity = view.context as? Activity
 
@@ -493,13 +495,7 @@ fun LivePlayerScreen(
                                 } else {
                                     "Fonte"
                                 },
-                                onClick = {
-                                    streamIndex = (streamIndex + 1) % orderedStreams.size
-                                    retryOnSame = 0
-                                    isLoading = true
-                                    errorMessage = null
-                                    controlsVisible = true
-                                },
+                                onClick = { showSources = true; controlsVisible = true },
                             )
                         }
                         LiveChip(
@@ -513,6 +509,65 @@ fun LivePlayerScreen(
                                 reloadToken++
                             },
                         )
+                    }
+                }
+            }
+        }
+
+        // Painel de servidores/fontes (como no Hugo): lista clara, toque para trocar
+        if (showSources && orderedStreams.isNotEmpty()) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))
+                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { showSources = false },
+            )
+            Column(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(
+                        androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.let { sw ->
+                            (sw * 0.4f).coerceAtLeast(300f).coerceAtMost(sw * 0.92f).coerceAtMost(440f).dp
+                        },
+                    )
+                    .background(Color(0xF20E0F13))
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+                Text("Servidores", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("${orderedStreams.size} fontes para $channelName", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(orderedStreams.size) { i ->
+                        val st = orderedStreams[i]
+                        val sel = i == streamIndex
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (sel) accentColor.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.06f))
+                                .border(1.dp, if (sel) accentColor else Color.Transparent, RoundedCornerShape(12.dp))
+                                .clickable {
+                                    showSources = false
+                                    if (!sel) { streamIndex = i; retryOnSame = 0; isLoading = true; errorMessage = null }
+                                }
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("${i + 1}", color = Color.White.copy(alpha = 0.5f), fontSize = 13.sp, modifier = Modifier.width(24.dp))
+                            Text(
+                                st.label?.takeIf { it.isNotBlank() } ?: "Fonte ${i + 1}",
+                                color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            st.quality?.takeIf { it.isNotBlank() }?.let { q ->
+                                Text(q, color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 8.dp, vertical = 2.dp))
+                            }
+                            if (st.leg == true) {
+                                Text("LEG", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(Color(0xFF34D399)).padding(horizontal = 8.dp, vertical = 2.dp))
+                            }
+                            if (sel) Text("  ✓", color = accentColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

@@ -428,7 +428,7 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
             val has = if (key == "all") channels.isNotEmpty() else tags.values.any { it.contains(key) }
             if (has) categories.add(LiveCategory(key, LiveTvUiState.labels[key] ?: key))
         }
-        return Cleaned(categories, channels, tags)
+        return Cleaned(categories, LiveQualityGroup.group(channels), tags)
     }
 
     private fun epgKey(name: String): String =
@@ -609,7 +609,7 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
             val categories = order.filter { key ->
                 key == "all" && channels.isNotEmpty() || tags.values.any { it.contains(key) }
             }.map { LiveCategory(it, LiveTvUiState.labels[it] ?: it) }
-            Cleaned(categories, channels, tags)
+            Cleaned(categories, LiveQualityGroup.group(channels), tags)
         }.getOrNull()
     }
 }

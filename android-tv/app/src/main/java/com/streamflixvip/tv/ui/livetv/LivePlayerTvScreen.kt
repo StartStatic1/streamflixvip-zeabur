@@ -131,6 +131,8 @@ fun LivePlayerTvScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var reloadNonce by remember { mutableIntStateOf(0) }
     var infoVisible by remember { mutableStateOf(true) }
+    // navegar pela faixa sem trocar de canal (OK confirma)
+    var browseIndex by remember { mutableStateOf<Int?>(null) }
     var infoTick by remember { mutableIntStateOf(0) }
     var listVisible by remember { mutableStateOf(false) }
     var optionsVisible by remember { mutableStateOf(false) }
@@ -318,8 +320,9 @@ fun LivePlayerTvScreen(
 
     LaunchedEffect(infoVisible, infoTick) {
         if (infoVisible) {
-            delay(5000)
+            delay(if (browseIndex != null) 8000 else 5000)
             infoVisible = false
+            browseIndex = null
         }
     }
 
@@ -367,6 +370,7 @@ fun LivePlayerTvScreen(
     BackHandler {
         when {
             listVisible -> listVisible = false
+            browseIndex != null -> { browseIndex = null; infoVisible = false }
             digits.isNotEmpty() -> digits = ""
             else -> onBack()
         }
@@ -389,10 +393,27 @@ fun LivePlayerTvScreen(
                 }
                 if (listVisible || optionsVisible || error != null) return@onPreviewKeyEvent false
                 when (code) {
-                    AKeyEvent.KEYCODE_DPAD_UP -> { zap(-1); true }
-                    AKeyEvent.KEYCODE_DPAD_DOWN -> { zap(1); true }
-                    AKeyEvent.KEYCODE_DPAD_CENTER, AKeyEvent.KEYCODE_ENTER, AKeyEvent.KEYCODE_NUMPAD_ENTER, AKeyEvent.KEYCODE_DPAD_LEFT -> {
-                        if (ev.nativeKeyEvent.repeatCount == 0) listVisible = true
+                    AKeyEvent.KEYCODE_DPAD_UP, AKeyEvent.KEYCODE_DPAD_DOWN -> {
+                        if (channels.isNotEmpty()) {
+                            val d = if (code == AKeyEvent.KEYCODE_DPAD_DOWN) 1 else -1
+                            val b = browseIndex
+                            browseIndex = if (b == null || !infoVisible) index else (b + d).mod(channels.size)
+                            showInfo()
+                        }
+                        true
+                    }
+                    AKeyEvent.KEYCODE_DPAD_CENTER, AKeyEvent.KEYCODE_ENTER, AKeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                        if (ev.nativeKeyEvent.repeatCount == 0) {
+                            val b = browseIndex
+                            if (b != null && infoVisible) {
+                                browseIndex = null
+                                if (b != index) goTo(b) else showInfo()
+                            } else listVisible = true
+                        }
+                        true
+                    }
+                    AKeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (ev.nativeKeyEvent.repeatCount == 0) { browseIndex = null; listVisible = true }
                         true
                     }
                     AKeyEvent.KEYCODE_DPAD_RIGHT, AKeyEvent.KEYCODE_MENU, AKeyEvent.KEYCODE_INFO -> {
@@ -448,46 +469,78 @@ fun LivePlayerTvScreen(
             exit = slideOutVertically { it } + fadeOut(),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            val ch = channel ?: return@AnimatedVisibility
+            val shownIndex = browseIndex ?: index
+            val ch = channels.getOrNull(shownIndex) ?: channel ?: return@AnimatedVisibility
+            val browsing = browseIndex != null && shownIndex != index
             Box(
                 Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.92f))))
                     .padding(start = 48.dp, end = 48.dp, top = 60.dp, bottom = 32.dp),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "%03d".format(index + 1),
-                        color = p.accent,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Black,
-                    )
-                    Spacer(Modifier.width(18.dp))
-                    Box(Modifier.size(width = 96.dp, height = 60.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
-                        if (!ch.logo.isNullOrBlank()) FadeImage(ch.logo, Modifier.fillMaxSize().padding(6.dp), contentScale = ContentScale.Fit)
-                        else androidx.tv.material3.Icon(Icons.Filled.LiveTv, null, tint = Color.White)
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                        .background(p.bgElevated.copy(alpha = 0.88f))
+                        .border(1.dp, if (browsing) p.accent else Color.White.copy(alpha = 0.10f), RoundedCornerShape(18.dp))
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("▲", color = Color.White.copy(alpha = 0.35f), fontSize = 10.sp)
+                        Text("%03d".format(shownIndex + 1), color = p.accent, fontSize = 26.sp, fontWeight = FontWeight.Black)
+                        Text("▼", color = Color.White.copy(alpha = 0.35f), fontSize = 10.sp)
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Box(
+                        Modifier.size(width = 110.dp, height = 66.dp).clip(RoundedCornerShape(12.dp)).background(Color.White.copy(alpha = 0.92f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (!ch.logo.isNullOrBlank()) FadeImage(ch.logo, Modifier.fillMaxSize().padding(8.dp), contentScale = ContentScale.Fit)
+                        else Text(ch.name.take(2).uppercase(), color = Color.Black, fontSize = 22.sp, fontWeight = FontWeight.Black)
                     }
                     Spacer(Modifier.width(18.dp))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(ch.name, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (isFavorite) {
+                            Text(ch.name, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            if (shownIndex == index && isFavorite) {
                                 Spacer(Modifier.width(8.dp))
                                 androidx.tv.material3.Icon(Icons.Filled.Star, null, tint = p.star, modifier = Modifier.size(18.dp))
                             }
+                            val qs = ch.streams.mapNotNull { it.quality?.takeIf { q -> q.isNotBlank() } }.distinct()
+                            qs.take(4).forEach { q ->
+                                Spacer(Modifier.width(6.dp))
+                                Text(q, color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 8.dp, vertical = 2.dp))
+                            }
+                            if (ch.streams.any { it.leg == true }) {
+                                Spacer(Modifier.width(6.dp))
+                                Text("LEG", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFF34D399)).padding(horizontal = 8.dp, vertical = 2.dp))
+                            }
                         }
-                        epgNow[ch.id]?.let {
-                            Text("Agora: $it", color = Color.White.copy(alpha = 0.85f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(4.dp))
+                        val now = epgNow[ch.id]
+                        Text(
+                            if (now != null) "Agora · $now" else "Sem programação disponível",
+                            color = Color.White.copy(alpha = 0.88f), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        // barra decorativa de "ao vivo" (a grade não informa horários)
+                        Box(Modifier.padding(vertical = 6.dp).width(260.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.15f))) {
+                            Box(Modifier.fillMaxHeight().width(130.dp).background(p.accent))
                         }
                         epgNext[ch.id]?.let {
-                            Text("A seguir: $it", color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("A seguir · $it", color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        streams.getOrNull(streamIndex)?.let {
+                        if (!browsing) streams.getOrNull(streamIndex)?.let {
                             Text(streamLabel(it, streamIndex), color = Color.White.copy(alpha = 0.45f), fontSize = 12.sp)
                         }
                     }
+                    Spacer(Modifier.width(16.dp))
                     Column(horizontalAlignment = Alignment.End) {
                         LiveClock()
                         Spacer(Modifier.height(6.dp))
-                        Text("▲▼ trocar  ·  OK lista  ·  ▶ opções", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+                        Text(
+                            if (browsing) "OK assistir  ·  ▲▼ navegar  ·  Voltar fecha" else "▲▼ ver canais  ·  OK lista  ·  ▶ opções",
+                            color = if (browsing) p.accent else Color.White.copy(alpha = 0.5f), fontSize = 11.sp,
+                        )
                     }
                 }
             }

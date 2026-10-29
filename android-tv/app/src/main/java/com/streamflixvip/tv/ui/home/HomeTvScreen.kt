@@ -254,21 +254,22 @@ fun HomeTvScreen(
                 SpotlightInfo(
                     spotlight,
                     Modifier.fillMaxWidth().height(236.dp).clipToBounds()
-                        .padding(start = 44.dp, top = 24.dp, end = 120.dp, bottom = 14.dp),
+                        .padding(start = 44.dp, top = 18.dp, end = 120.dp, bottom = 12.dp),
                 )
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                // o foco cai no CARTÃO; deixamos ~64dp acima dele para o título da fileira nunca sumir
+                val pivot = (64f / maxHeight.value.coerceAtLeast(120f)).coerceIn(0f, 0.45f)
                 TvLazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(top = 6.dp, bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
-                    pivotOffsets = PivotOffsets(parentFraction = 0.0f),
+                    pivotOffsets = PivotOffsets(parentFraction = pivot),
                 ) {
                     rows.forEachIndexed { rowIndex, row ->
                         item(key = row.key, contentType = row.contentType) {
                           // fileira em foco sempre inteira no topo (titulo + cartoes), nos dois sentidos
-                          Box(Modifier.padding(top = 10.dp).onFocusChanged {
-                              if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(rowIndex) } }
-                          }) {
+                          Box(Modifier.padding(top = 10.dp)) {
                             HomeRowView(
                                 row = row,
                                 focusTarget = focusTarget,
@@ -294,6 +295,7 @@ fun HomeTvScreen(
                           }
                         }
                     }
+                }
                 }
             }
         }
@@ -321,7 +323,7 @@ private fun SpotlightInfo(s: Spotlight?, modifier: Modifier) {
     }
     Column(modifier, verticalArrangement = Arrangement.Bottom) {
         s.label?.let {
-            Text(it, color = p.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
+            Text(it, color = p.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
         }
         Text(
@@ -346,7 +348,9 @@ private fun SpotlightInfo(s: Spotlight?, modifier: Modifier) {
             Spacer(Modifier.height(6.dp))
             com.streamflixvip.tv.ui.components.ProgressLine(s.progress, Modifier.width(220.dp), height = 4.dp)
         }
-        s.overview?.takeIf { it.isNotBlank() }?.let {
+        s.overview?.takeIf { it.isNotBlank() }?.let { full ->
+            // corta no fim de uma palavra (nunca "pressã…")
+            val it = if (full.length <= 190) full else full.take(190).substringBeforeLast(' ').trimEnd(',', '.', ';', ':', '-') + "…"
             Spacer(Modifier.height(6.dp))
             Text(
                 it,
@@ -367,7 +371,7 @@ private fun HomeRowView(
     focusTarget: String?,
     focusNonce: Int,
     onFocusConsumed: () -> Unit,
-    onCardFocused: (key: String, spotlight: Spotlight) -> Unit,
+    onCardFocusedRaw: (key: String, spotlight: Spotlight) -> Unit,
     onItemClick: (Int, String) -> Unit,
     onItemLongClick: (TmdbItem) -> Unit,
     onContinueClick: (LocalWatchProgress) -> Unit,
@@ -384,6 +388,9 @@ private fun HomeRowView(
         is HomeRow.Continue -> "segure OK para remover"
         is HomeRow.MyList -> "${row.favorites.size} títulos"
         else -> null
+    }
+    val onCardFocused: (String, Spotlight) -> Unit = { k, sp ->
+        onCardFocusedRaw(k, sp.copy(label = listOfNotNull(title, sp.label).joinToString(" · ")))
     }
     Column(Modifier.fillMaxWidth()) {
         SectionTitle(title, Modifier.padding(start = 44.dp, bottom = 8.dp), trailing = hint)

@@ -79,6 +79,7 @@ object ProfileStore {
     /** Carrega os perfis da conta [accountId] (ou do aparelho). Cria um perfil padrão se vazio. */
     fun init(context: Context, accountId: String?, defaultName: String?) {
         runCatching {
+            ProfileLocalData.init(context)
             val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             prefs = p
             scope = accountId?.takeIf { it.isNotBlank() } ?: "local"
@@ -115,6 +116,9 @@ object ProfileStore {
     }
 
     fun delete(id: String) {
+        // o perfil principal (primeiro) guarda os dados da nuvem: não pode ser apagado
+        if (_profiles.value.firstOrNull()?.id == id) return
+        ProfileLocalData.clear(id)
         val next = _profiles.value.filterNot { it.id == id }
         if (next.isEmpty()) return // sempre fica ao menos um
         _profiles.value = next

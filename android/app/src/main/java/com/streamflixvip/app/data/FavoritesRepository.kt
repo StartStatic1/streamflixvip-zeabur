@@ -33,6 +33,9 @@ class FavoritesRepository {
         posterPath: String?,
         originalLanguage: String? = null,
     ): Boolean {
+        com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let {
+            return com.streamflixvip.app.profiles.ProfileLocalData.addFavorite(it, tmdbId, mediaType, title, posterPath, originalLanguage)
+        }
         val uid = uidOrNull(userId) ?: return false
         suspend fun once(token: String): Boolean =
             try {
@@ -65,6 +68,9 @@ class FavoritesRepository {
         tmdbId: Int,
         mediaType: String,
     ): Boolean {
+        com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let {
+            return com.streamflixvip.app.profiles.ProfileLocalData.removeFavorite(it, tmdbId, mediaType)
+        }
         val uid = uidOrNull(userId) ?: return false
         suspend fun once(token: String): Boolean =
             try {
@@ -90,6 +96,9 @@ class FavoritesRepository {
         accessToken: String? = null,
         userId: String? = null,
     ): List<FavoriteEntry> {
+        com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let {
+            return com.streamflixvip.app.profiles.ProfileLocalData.favorites(it)
+        }
         val uid = uidOrNull(userId) ?: return emptyList()
         suspend fun once(token: String): List<FavoriteEntry>? =
             try {
@@ -114,6 +123,9 @@ class FavoritesRepository {
         tmdbId: Int,
         mediaType: String,
     ): Boolean {
+        com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let {
+            return com.streamflixvip.app.profiles.ProfileLocalData.isFavorite(it, tmdbId, mediaType)
+        }
         val uid = uidOrNull(userId) ?: return false
         suspend fun once(token: String): Boolean? =
             try {
