@@ -80,15 +80,21 @@ fun SplashTvScreen(
 
         val postersJob = async(Dispatchers.IO) {
             runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(2_500) {
                 val trending = NetworkModule.tmdbApi.request(path = "/trending/all/week").results.orEmpty()
                 val paths = trending.mapNotNull { it.poster_path }.filter { it.isNotBlank() }
                 if (paths.isEmpty()) emptyList()
                 else paths.chunked((paths.size / 3).coerceAtLeast(1)).take(3)
+                } ?: emptyList()
             }.getOrDefault(emptyList())
         }
 
         statusText = "Verificando ativação…"
-        val revalidateJob = async { activationManager.revalidate() }
+        // internet lenta não segura a abertura: no máximo 4 s, depois vale a ativação salva
+        val revalidateJob = async {
+            kotlinx.coroutines.withTimeoutOrNull(4_000) { activationManager.revalidate() }
+                ?: activationManager.isActivatedLocally
+        }
 
         posterRows = postersJob.await()
         statusText = if (posterRows.isNotEmpty()) "Bem-vindo" else "Preparando…"
@@ -218,23 +224,11 @@ private fun SplashLogo() {
             .alpha(alphaAnim),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = Modifier
-                .size(88.dp)
-                .clip(RoundedCornerShape(22.dp))
-                .background(
-                    Brush.linearGradient(listOf(Accent, Cyan.copy(alpha = 0.85f))),
-                )
-                .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(22.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Filled.PlayArrow,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(46.dp),
-            )
-        }
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(com.streamflixvip.tv.R.drawable.ic_launcher_fg),
+            contentDescription = null,
+            modifier = Modifier.size(104.dp).clip(RoundedCornerShape(24.dp)),
+        )
         Spacer(Modifier.height(18.dp))
         Text(
             "StreamFlix",

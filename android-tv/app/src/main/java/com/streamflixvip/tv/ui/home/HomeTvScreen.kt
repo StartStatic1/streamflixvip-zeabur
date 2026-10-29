@@ -254,27 +254,28 @@ fun HomeTvScreen(
                 SpotlightInfo(
                     spotlight,
                     Modifier.fillMaxWidth().height(236.dp).clipToBounds()
-                        .padding(start = 44.dp, top = 24.dp, end = 120.dp, bottom = 14.dp),
+                        .padding(start = 44.dp, top = 18.dp, end = 120.dp, bottom = 12.dp),
                 )
+                androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+                // o foco cai no CARTÃO; deixamos ~64dp acima dele para o título da fileira nunca sumir
+                val pivot = (64f / maxHeight.value.coerceAtLeast(120f)).coerceIn(0f, 0.45f)
                 TvLazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    contentPadding = PaddingValues(top = 4.dp, bottom = 120.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(top = 6.dp, bottom = 120.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
-                    pivotOffsets = PivotOffsets(parentFraction = 0.0f),
+                    pivotOffsets = PivotOffsets(parentFraction = pivot),
                 ) {
                     rows.forEachIndexed { rowIndex, row ->
                         item(key = row.key, contentType = row.contentType) {
                           // fileira em foco sempre inteira no topo (titulo + cartoes), nos dois sentidos
-                          Box(Modifier.onFocusChanged {
-                              if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(rowIndex) } }
-                          }) {
+                          Box(Modifier.padding(top = 10.dp)) {
                             HomeRowView(
                                 row = row,
                                 focusTarget = focusTarget,
                                 focusNonce = focusNonce,
                                 onFocusConsumed = { focusTarget = null },
-                                onCardFocused = { key, s ->
+                                onCardFocusedRaw = { key, s ->
                                     restoreKey = key
                                     candidate = s
                                 },
@@ -294,6 +295,7 @@ fun HomeTvScreen(
                           }
                         }
                     }
+                }
                 }
             }
         }
@@ -321,7 +323,7 @@ private fun SpotlightInfo(s: Spotlight?, modifier: Modifier) {
     }
     Column(modifier, verticalArrangement = Arrangement.Bottom) {
         s.label?.let {
-            Text(it, color = p.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.6.sp)
+            Text(it, color = p.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(4.dp))
         }
         Text(
@@ -346,7 +348,9 @@ private fun SpotlightInfo(s: Spotlight?, modifier: Modifier) {
             Spacer(Modifier.height(6.dp))
             com.streamflixvip.tv.ui.components.ProgressLine(s.progress, Modifier.width(220.dp), height = 4.dp)
         }
-        s.overview?.takeIf { it.isNotBlank() }?.let {
+        s.overview?.takeIf { it.isNotBlank() }?.let { full ->
+            // corta no fim de uma palavra (nunca "pressã…")
+            val it = if (full.length <= 190) full else full.take(190).substringBeforeLast(' ').trimEnd(',', '.', ';', ':', '-') + "…"
             Spacer(Modifier.height(6.dp))
             Text(
                 it,
@@ -367,7 +371,7 @@ private fun HomeRowView(
     focusTarget: String?,
     focusNonce: Int,
     onFocusConsumed: () -> Unit,
-    onCardFocused: (key: String, spotlight: Spotlight) -> Unit,
+    onCardFocusedRaw: (key: String, spotlight: Spotlight) -> Unit,
     onItemClick: (Int, String) -> Unit,
     onItemLongClick: (TmdbItem) -> Unit,
     onContinueClick: (LocalWatchProgress) -> Unit,
@@ -385,6 +389,9 @@ private fun HomeRowView(
         is HomeRow.MyList -> "${row.favorites.size} títulos"
         else -> null
     }
+    val onCardFocused: (String, Spotlight) -> Unit = { k, sp ->
+        onCardFocusedRaw(k, sp.copy(label = listOfNotNull(title, sp.label).joinToString(" · ")))
+    }
     Column(Modifier.fillMaxWidth()) {
         SectionTitle(title, Modifier.padding(start = 44.dp, bottom = 8.dp), trailing = hint)
         TvLazyRow(
@@ -397,7 +404,8 @@ private fun HomeRowView(
                 is HomeRow.Catalog -> {
                     // filme e serie podem ter o mesmo id no TMDB (linha "Destaques" = trending/all):
                     // chave so com id repetia e derrubava o app ao rolar a fileira
-                    val list = row.items.distinctBy { "${it.resolvedMediaType}_${it.id}" }.take(20)
+                    val list = row.items.distinctBy { "${it.resolvedMediaType}_${it.id}" }
+                        .take(if (row.spec.style == RowStyle.TOP10) 10 else 20)
                     itemsIndexed(list, key = { _, it -> "${it.resolvedMediaType}_${it.id}" }) { index, item ->
                         val key = "${row.key}:${item.resolvedMediaType}_${item.id}"
                         FocusTargetBox(key, focusTarget, focusNonce, onFocusConsumed) { mod ->
@@ -447,7 +455,7 @@ private fun HomeRowView(
                             }
                         }
                     }
-                    if (row.items.size >= 8) {
+                    if (row.items.size >= 8 && row.spec.style != RowStyle.TOP10) {
                         item(key = "see_all") {
                             SeeAllCard(featured = row.spec.style == RowStyle.FEATURED) { onSeeAll(row.spec.key) }
                         }
@@ -517,18 +525,24 @@ fun FocusTargetBox(
 @Composable
 private fun Top10Card(rank: Int, poster: @Composable () -> Unit) {
     val p = LocalPalette.current
-    Box(Modifier.width(if (rank >= 10) 196.dp else 172.dp)) {
-        Text(
-            "$rank",
-            style = TextStyle(
-                brush = Brush.verticalGradient(listOf(p.accent, p.accent.copy(alpha = 0.05f))),
-                fontSize = 120.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = (-8).sp,
-            ),
-            modifier = Modifier.align(Alignment.BottomStart).offset(y = 22.dp),
-        )
-        Box(Modifier.align(Alignment.CenterEnd)) { poster() }
+    // número e pôster lado a lado (sem sobrepor), largura fixa por posição
+    Row(verticalAlignment = Alignment.Bottom) {
+        Box(Modifier.width(if (rank >= 10) 104.dp else 62.dp).height(180.dp), contentAlignment = Alignment.BottomEnd) {
+            Text(
+                "$rank",
+                style = TextStyle(
+                    brush = Brush.verticalGradient(listOf(p.accent, p.accent.copy(alpha = 0.15f))),
+                    fontSize = 104.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = (-6).sp,
+                ),
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.offset(y = 14.dp),
+            )
+        }
+        Spacer(Modifier.width(4.dp))
+        poster()
     }
 }
 

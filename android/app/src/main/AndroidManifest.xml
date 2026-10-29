@@ -18,6 +18,7 @@
         android:name=".StreamFlixApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="StreamFlixVIP"
         android:theme="@style/Theme.StreamFlixVIP"
         android:usesCleartextTraffic="true"
@@ -31,13 +32,23 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:screenOrientation="unspecified"
             android:theme="@style/Theme.StreamFlixVIP.Splash"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:supportsPictureInPicture="true"
+            android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- QR da TV: streamflixvip://tvpair?p=... abre o app para confirmar a TV -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="streamflixvip" android:host="tvpair" />
             </intent-filter>
         </activity>
 

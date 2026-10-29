@@ -85,6 +85,11 @@ class AuthViewModel(
         }
     }
 
+    /** Volta para trocar o e-mail (na tela do código). */
+    fun backToEmail() {
+        _uiState.value = _uiState.value.copy(step = AuthStep.EnterEmail, code = "", errorMessage = null, infoMessage = null)
+    }
+
     fun signOut() {
         repository.signOut()
         _uiState.value = AuthUiState(step = AuthStep.EnterEmail)

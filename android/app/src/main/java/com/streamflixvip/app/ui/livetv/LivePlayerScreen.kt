@@ -77,7 +77,12 @@ fun LivePlayerScreen(
     channelName: String,
     streams: List<LiveStreamOption>,
     onBack: () -> Unit,
+    epgNow: String? = PendingLiveChannel.epgNow,
+    epgNext: String? = PendingLiveChannel.epgNext,
 ) {
+    val accentColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
+    var showSources by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = showSources) { showSources = false }
     val view = LocalView.current
     val activity = view.context as? Activity
 
@@ -105,6 +110,7 @@ fun LivePlayerScreen(
             if (i < 0) 50 else i
         }
     }
+    val sourceGroups = remember(orderedStreams) { groupLiveSources(orderedStreams) }
     var streamIndex by remember(orderedStreams) { mutableIntStateOf(0) }
     var selectedQuality by remember(orderedStreams) {
         mutableStateOf(orderedStreams.firstOrNull()?.quality)
@@ -318,7 +324,7 @@ fun LivePlayerScreen(
                     .fillMaxWidth()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.Black.copy(alpha = 0.55f), Color.Transparent),
+                            listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent),
                         ),
                     )
                     .padding(horizontal = 8.dp, vertical = 8.dp),
@@ -333,7 +339,17 @@ fun LivePlayerScreen(
                 ) {
                     Icon(Icons.Filled.ArrowBack, "Voltar", tint = Color.White)
                 }
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(channelName, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (!epgNow.isNullOrBlank()) {
+                        Text("Agora · $epgNow", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (!epgNext.isNullOrBlank()) {
+                        Text("A seguir · $epgNext", color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
                 Row(
                     Modifier
                         .clip(RoundedCornerShape(20.dp))
@@ -383,31 +399,22 @@ fun LivePlayerScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            channelName,
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
                         val qualities = remember(orderedStreams) {
                             qualityOrder.filter { q -> orderedStreams.any { it.quality == q } }
                         }
                         val hasLeg = remember(orderedStreams) { orderedStreams.any { it.leg == true } }
                         if (qualities.size > 1 || hasLeg) {
-                            Spacer(Modifier.height(6.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 qualities.forEach { q ->
                                     val selected = selectedQuality == q
                                     Text(
                                         text = q,
                                         color = if (selected) Color.Black else Color.White,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(if (selected) Color(0xFFFBBF24) else Color.White.copy(alpha = 0.15f))
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (selected) accentColor else Color.White.copy(alpha = 0.12f))
                                             .clickable {
                                                 selectedQuality = q
                                                 val idx = orderedStreams.indexOfFirst {
@@ -415,7 +422,7 @@ fun LivePlayerScreen(
                                                 }.let { i -> if (i >= 0) i else orderedStreams.indexOfFirst { it.quality == q } }
                                                 if (idx >= 0) { streamIndex = idx; retryOnSame = 0; isLoading = true; errorMessage = null; controlsVisible = true }
                                             }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            .padding(horizontal = 14.dp, vertical = 7.dp),
                                     )
                                 }
                                 if (hasLeg) {
@@ -423,11 +430,11 @@ fun LivePlayerScreen(
                                     Text(
                                         text = "LEG",
                                         color = if (legOn) Color.Black else Color.White,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(if (legOn) Color(0xFF34D399) else Color.White.copy(alpha = 0.15f))
+                                            .clip(RoundedCornerShape(50))
+                                            .background(if (legOn) accentColor else Color.White.copy(alpha = 0.12f))
                                             .clickable {
                                                 selectedLeg = !selectedLeg
                                                 val wantLeg = !legOn
@@ -437,12 +444,12 @@ fun LivePlayerScreen(
                                                 }.let { i -> if (i >= 0) i else orderedStreams.indexOfFirst { if (wantLeg) it.leg == true else it.leg != true } }
                                                 if (idx >= 0) { streamIndex = idx; retryOnSame = 0; isLoading = true; errorMessage = null; controlsVisible = true }
                                             }
-                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            .padding(horizontal = 14.dp, vertical = 7.dp),
                                     )
                                 }
                             }
                         }
-                        Spacer(Modifier.height(3.dp))
+                        Spacer(Modifier.height(8.dp))
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -450,8 +457,8 @@ fun LivePlayerScreen(
                             val isManual = sourceLabel.equals("Manual", ignoreCase = true)
                             Text(
                                 sourceLabel.ifBlank { "Fonte ${streamIndex + 1}" },
-                                color = if (isManual) Color(0xFF34D399) else Color(0xFFFBBF24),
-                                fontSize = 13.sp,
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -489,18 +496,12 @@ fun LivePlayerScreen(
                                 } else {
                                     "Fonte"
                                 },
-                                onClick = {
-                                    streamIndex = (streamIndex + 1) % orderedStreams.size
-                                    retryOnSame = 0
-                                    isLoading = true
-                                    errorMessage = null
-                                    controlsVisible = true
-                                },
+                                onClick = { showSources = true; controlsVisible = true },
                             )
                         }
                         LiveChip(
                             icon = Icons.Filled.Refresh,
-                            label = "Reload",
+                            label = "Recarregar",
                             onClick = {
                                 retryOnSame = 0
                                 isLoading = true
@@ -509,6 +510,74 @@ fun LivePlayerScreen(
                                 reloadToken++
                             },
                         )
+                    }
+                }
+            }
+        }
+
+        // Painel de servidores/fontes (como no Hugo): lista clara, toque para trocar
+        if (showSources && orderedStreams.isNotEmpty()) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))
+                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { showSources = false },
+            )
+            Column(
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight()
+                    .width(
+                        androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.let { sw ->
+                            (sw * 0.4f).coerceAtLeast(300f).coerceAtMost(sw * 0.92f).coerceAtMost(440f).dp
+                        },
+                    )
+                    .background(Color(0xF20E0F13))
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            ) {
+                Text("Servidores", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("${sourceGroups.size} fontes para $channelName", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(10.dp))
+                androidx.compose.foundation.lazy.LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    var lastQ: String? = null
+                    sourceGroups.forEach { g ->
+                        if (g.quality != lastQ) {
+                            lastQ = g.quality
+                            val hq = g.quality
+                            item(key = "qh:$hq") {
+                                Text(hq, color = accentColor, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
+                                    modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp))
+                            }
+                        }
+                        item(key = "g:${g.firstIndex}") {
+                            val sel = streamIndex in g.indices
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (sel) accentColor.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.06f))
+                                    .border(1.dp, if (sel) accentColor else Color.Transparent, RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        showSources = false
+                                        if (!sel) { streamIndex = g.firstIndex; retryOnSame = 0; isLoading = true; errorMessage = null }
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(g.label, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        g.host + (if (g.indices.size > 1) " · ${g.indices.size} opções" else ""),
+                                        color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Text(g.quality, color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 8.dp, vertical = 2.dp))
+                                if (g.leg) {
+                                    Text("LEG", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(Color(0xFF34D399)).padding(horizontal = 8.dp, vertical = 2.dp))
+                                }
+                                if (sel) Text("  ✓", color = accentColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -556,9 +625,9 @@ private fun LiveChip(
 ) {
     Row(
         Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = 0.12f))
-            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.45f))
+            .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

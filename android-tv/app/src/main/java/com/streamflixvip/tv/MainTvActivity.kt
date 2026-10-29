@@ -60,6 +60,25 @@ private data class LiveSession(
 
 class MainTvActivity : ComponentActivity() {
 
+    /**
+     * Rede de segurança do D-pad: no Fire TV (AFTSSS) a busca de foco do Compose às vezes
+     * mede um cartão que acabou de sair da tela e lança
+     * "LayoutCoordinate operations are only valid when isAttached is true", fechando o app.
+     * Aqui engolimos só esse erro de foco: a tecla é ignorada e o app continua aberto.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        try {
+            super.dispatchKeyEvent(event)
+        } catch (e: IllegalStateException) {
+            val msg = e.message.orEmpty()
+            if (msg.contains("isAttached") || msg.contains("focus", ignoreCase = true) ||
+                e.stackTrace.any { it.className.contains("androidx.compose.ui.focus") }
+            ) {
+                runCatching { com.streamflixvip.tv.util.CrashLog.action("foco ignorado: ${msg.take(80)}") }
+                true
+            } else throw e
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -82,6 +101,7 @@ class MainTvActivity : ComponentActivity() {
     private fun AppRoot(toaster: Toaster) {
         val navController = rememberNavController()
         val activationManager = remember { TvActivationManager(applicationContext) }
+        remember { com.streamflixvip.tv.profiles.ProfileStore.init(applicationContext, null, "Sala"); true }
         val recent = remember { RecentStore(applicationContext) }
         val scope = rememberCoroutineScope()
         val context = LocalContext.current
@@ -279,7 +299,12 @@ class MainTvActivity : ComponentActivity() {
                 SplashTvScreen(
                     activationManager = activationManager,
                     onFinished = { isActivated ->
-                        navController.navigate(if (isActivated) "main" else "activation") {
+                        val next = when {
+                            !isActivated -> "activation"
+                            com.streamflixvip.tv.profiles.ProfileStore.shouldAsk() -> "profiles"
+                            else -> "main"
+                        }
+                        navController.navigate(next) {
                             popUpTo("splash") { inclusive = true }
                         }
                     },
@@ -293,9 +318,17 @@ class MainTvActivity : ComponentActivity() {
                     },
                 )
             }
+            composable("profiles") {
+                com.streamflixvip.tv.profiles.ProfilePickerTvScreen(
+                    onPicked = {
+                        navController.navigate("main") { popUpTo(0) { inclusive = true } }
+                    },
+                )
+            }
             composable("main") {
                 MainShell(
                     activationManager = activationManager,
+                    onSwitchProfile = { navController.navigate("profiles") { popUpTo(0) { inclusive = true } } },
                     onItemClick = { id, type -> navController.navigate("detail/$type/$id") },
                     onContinueClick = { resumeContinueWatching(it) },
                     onSeeAll = { key -> navController.navigate("category/$key") },

@@ -12,6 +12,7 @@ import com.streamflixvip.app.network.WatchProgressEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -70,30 +71,29 @@ class HomeViewModel(
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
             try {
-                val trending = repository.getTrendingWeek()
-                val popularMovies = repository.getPopularMovies()
-                val nowPlaying = repository.getNowPlayingMovies()
-                val popularSeries = repository.getPopularSeries()
-                val continueWatching = if (userId != null && accessToken != null) {
-                    progressRepository.getContinueWatching(accessToken, userId)
-                } else {
-                    emptyList()
-                }
-
+                // Tudo em paralelo (antes era em fila: a Home esperava a soma de 7 chamadas).
+                // Uma lista que falha vira vazia em vez de derrubar a Home inteira.
+                val kids = com.streamflixvip.app.profiles.ProfileStore.isKids
                 val classicsYear = (1970..1999).random()
                 val trashYear = (1970..1995).random()
-
-                val classics = runCatching {
-                    repository.exploreCatalog(category = GenreCategory.MOVIES, genreId = null, year = classicsYear)
-                }.getOrElse { emptyList() }
-
-                val trash = runCatching {
-                    repository.exploreCatalog(category = GenreCategory.MOVIES, genreId = 27, year = trashYear)
-                }.getOrElse { emptyList() }
-
-                val freeArea: List<TmdbItem> = runCatching {
-                    repository.getFreeCatalog(50)
-                }.getOrElse { emptyList() }
+                suspend fun <T> safe(block: suspend () -> List<T>): List<T> = runCatching { block() }.getOrElse { emptyList() }
+                val (trending, popularMovies, nowPlaying, popularSeries, continueWatching, classics, trash, freeArea) =
+                    kotlinx.coroutines.coroutineScope {
+                        val dTrending = async { if (kids) safe { repository.exploreCatalog(GenreCategory.MOVIES, 10751, null) } else safe { repository.getTrendingWeek() } }
+                        val dPopMovies = async { if (kids) safe { repository.exploreCatalog(GenreCategory.MOVIES, 16, null) } else safe { repository.getPopularMovies() } }
+                        val dNow = async { if (kids) emptyList() else safe { repository.getNowPlayingMovies() } }
+                        val dPopSeries = async { if (kids) safe { repository.exploreCatalog(GenreCategory.SERIES, 10762, null) } else safe { repository.getPopularSeries() } }
+                        val dCont = async {
+                            if (userId != null && accessToken != null) safe { progressRepository.getContinueWatching(accessToken, userId) } else emptyList()
+                        }
+                        val dClassics = async { if (kids) emptyList() else safe { repository.exploreCatalog(category = GenreCategory.MOVIES, genreId = null, year = classicsYear) } }
+                        val dTrash = async { if (kids) emptyList() else safe { repository.exploreCatalog(category = GenreCategory.MOVIES, genreId = 27, year = trashYear) } }
+                        val dFree = async { if (kids) emptyList() else safe { repository.getFreeCatalog(50) } }
+                        HomeLoad(dTrending.await(), dPopMovies.await(), dNow.await(), dPopSeries.await(), dCont.await(), dClassics.await(), dTrash.await(), dFree.await())
+                    }
+                if (trending.isEmpty() && popularMovies.isEmpty() && popularSeries.isEmpty()) {
+                    throw IllegalStateException("Sem conexão com o catálogo")
+                }
 
                 prefetchContinueSources(continueWatching)
                 _uiState.value = HomeUiState.Success(
@@ -107,10 +107,11 @@ class HomeViewModel(
                             HomeRow("Area Free", it, "movie")
                         },
                         trending.takeIf { it.isNotEmpty() }?.let {
-                            HomeRow("Top 10 da Semana", it.take(10), "movie", isRanked = true)
+                            if (kids) HomeRow("Para toda a família", it, "movie")
+                            else HomeRow("Top 10 da Semana", it.take(10), "movie", isRanked = true)
                         },
-                        HomeRow("Filmes populares", popularMovies, "movie"),
-                        HomeRow("Series populares", popularSeries, "tv"),
+                        popularMovies.takeIf { it.isNotEmpty() }?.let { HomeRow(if (kids) "Animações" else "Filmes populares", it, "movie") },
+                        popularSeries.takeIf { it.isNotEmpty() }?.let { HomeRow(if (kids) "Desenhos e séries infantis" else "Series populares", it, "tv") },
                         classics.takeIf { it.isNotEmpty() }?.let {
                             HomeRow(
                                 "Classicos",
@@ -178,3 +179,14 @@ class HomeViewModel(
         }
     }
 }
+
+private data class HomeLoad(
+    val trending: List<TmdbItem>,
+    val popularMovies: List<TmdbItem>,
+    val nowPlaying: List<TmdbItem>,
+    val popularSeries: List<TmdbItem>,
+    val continueWatching: List<WatchProgressEntry>,
+    val classics: List<TmdbItem>,
+    val trash: List<TmdbItem>,
+    val freeArea: List<TmdbItem>,
+)

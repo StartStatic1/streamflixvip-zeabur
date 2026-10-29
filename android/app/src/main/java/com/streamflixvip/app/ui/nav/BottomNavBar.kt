@@ -43,10 +43,13 @@ sealed class BottomNavItem(
     data object Profile : BottomNavItem("profile", "Perfil", Icons.Filled.Person)
 }
 
-val bottomNavItems = listOf(
+/** Reels fica desligado por enquanto (código mantido). Mude para true para voltar a aba. */
+const val REELS_ENABLED = false
+
+val bottomNavItems = listOfNotNull(
     BottomNavItem.Home,
     BottomNavItem.Explore,
-    BottomNavItem.Reels,
+    if (REELS_ENABLED) BottomNavItem.Reels else null,
     BottomNavItem.LiveTv,
     BottomNavItem.Profile,
 )

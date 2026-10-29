@@ -34,6 +34,20 @@ class ProgressRepository {
         durationSeconds: Int,
     ) {
         if (positionSeconds < 10) return
+        com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let { scope ->
+            if (durationSeconds > 0 && positionSeconds.toFloat() / durationSeconds >= 0.95f) {
+                com.streamflixvip.app.profiles.ProfileLocalData.removeProgress(scope, tmdbId, mediaType)
+            } else {
+                com.streamflixvip.app.profiles.ProfileLocalData.saveProgress(
+                    scope,
+                    com.streamflixvip.app.network.WatchProgressEntry(
+                        tmdbId, mediaType, season, episode, title, posterPath, positionSeconds,
+                        if (durationSeconds > 0) durationSeconds else maxOf(positionSeconds + 120, positionSeconds * 2),
+                    ),
+                )
+            }
+            return
+        }
         val uid = uidOrNull(userId) ?: return
         val token = tokenOrNull(accessToken) ?: return
         val effectiveDuration = if (durationSeconds > 0) durationSeconds else maxOf(positionSeconds + 120, positionSeconds * 2)
@@ -74,6 +88,9 @@ class ProgressRepository {
         accessToken: String? = null,
         userId: String? = null,
     ): List<WatchProgressEntry> {
+        com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let {
+            return com.streamflixvip.app.profiles.ProfileLocalData.progress(it)
+        }
         val uid = uidOrNull(userId) ?: return emptyList()
         suspend fun once(t: String): List<WatchProgressEntry>? = try {
             api.getContinueWatching(
@@ -97,6 +114,9 @@ class ProgressRepository {
         season: Int,
         episode: Int,
     ) {
+        com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let {
+            com.streamflixvip.app.profiles.ProfileLocalData.removeProgress(it, tmdbId, mediaType, season, episode); return
+        }
         val uid = uidOrNull(userId) ?: return
         val token = tokenOrNull(accessToken) ?: return
         try {
@@ -131,6 +151,9 @@ class ProgressRepository {
         tmdbId: Int,
         mediaType: String,
     ) {
+        com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let {
+            com.streamflixvip.app.profiles.ProfileLocalData.removeProgress(it, tmdbId, mediaType); return
+        }
         val uid = uidOrNull(userId) ?: return
         val token = tokenOrNull(accessToken) ?: return
         try {

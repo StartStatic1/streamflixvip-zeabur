@@ -1,0 +1,91 @@
+name: Pré-release de teste (overhaul 2026-10)
+
+# Só roda na branch feature/overhaul-2026-10 (ou manualmente).
+# NÃO publica para clientes: não mexe em app-version.json / tv-version.json /
+# Public/downloads e não faz commit. Gera os 2 APKs de release (assinados com a
+# mesma chave dos apps oficiais, então instalam por cima) e cria uma
+# GitHub *pre-release* (não vira "latest").
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [feature/overhaul-2026-10]
+    paths:
+      - 'android/**'
+      - 'android-tv/**'
+      - '.github/workflows/prerelease-overhaul.yml'
+
+concurrency:
+  group: prerelease-overhaul
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # mesmos ajustes que o workflow oficial de release aplica antes de buildar
+      - name: Patches do release oficial
+        run: |
+          python3 scripts/patch_detail_cast.py
+          python3 scripts/patch_server_picker_detail.py
+          python3 scripts/patch_torbox_direct_play.py
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Instalar Gradle 8.7
+        run: |
+          curl -sL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          echo "/tmp/gradle-8.7/bin" >> $GITHUB_PATH
+
+      - name: Marcar versão como beta (mesmo versionCode)
+        run: |
+          sed -i -E 's/versionName\s*=\s*"([^"]*)"/versionName = "\1-beta"/' android/app/build.gradle.kts android-tv/app/build.gradle.kts
+
+      - name: Restaurar keystore
+        run: |
+          echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > android/app/debug.keystore
+          cp android/app/debug.keystore android-tv/app/debug.keystore
+
+      - name: Testes + APK celular
+        working-directory: android
+        env:
+          DEBUG_KEYSTORE_PATH: debug.keystore
+          DEBUG_KEYSTORE_PASSWORD: streamflixvip123
+          DEBUG_KEY_ALIAS: streamflixvip-debug
+          DEBUG_KEY_PASSWORD: streamflixvip123
+        run: gradle testReleaseUnitTest assembleRelease --no-daemon
+
+      - name: Testes + APK TV
+        working-directory: android-tv
+        env:
+          DEBUG_KEYSTORE_PATH: debug.keystore
+          DEBUG_KEYSTORE_PASSWORD: streamflixvip123
+          DEBUG_KEY_ALIAS: streamflixvip-debug
+          DEBUG_KEY_PASSWORD: streamflixvip123
+        run: gradle testReleaseUnitTest assembleRelease --no-daemon
+
+      - name: Renomear
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk out/StreamFlixVIP-celular-beta.apk
+          cp android-tv/app/build/outputs/apk/release/app-release.apk out/StreamFlixVIP-TV-beta.apk
+          sha256sum out/*.apk > out/SHA256SUMS.txt
+
+      - name: Publicar pré-release (não é "latest")
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="overhaul-beta-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" out/*.apk out/SHA256SUMS.txt \
+            --prerelease --latest=false --target "$GITHUB_SHA" \
+            --title "Beta de teste — overhaul 2026-10 (#${GITHUB_RUN_NUMBER})" \
+            --notes "APKs de TESTE da branch feature/overhaul-2026-10 (commit ${GITHUB_SHA::7}). Não foram enviados aos clientes. Instalam por cima do app oficial."

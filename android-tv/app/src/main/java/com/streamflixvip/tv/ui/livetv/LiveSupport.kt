@@ -145,3 +145,55 @@ internal fun liveLoadControl(): DefaultLoadControl = DefaultLoadControl.Builder(
     .setPrioritizeTimeOverSizeThresholds(!com.streamflixvip.tv.util.DeviceProfile.isLowRam)
     .setBackBuffer(0, false)
     .build()
+
+/**
+ * Uma linha no painel "Fonte": junta fontes iguais (mesmo nome, qualidade, LEG e host).
+ * O provedor costuma ter o mesmo canal varias vezes (FHD, FHD², H265, versao .ts) com
+ * URLs diferentes no mesmo servidor — antes cada uma virava "New21 · FHD" repetido.
+ * As alternativas continuam na lista interna para a troca automatica quando uma falha.
+ */
+internal data class LiveSourceGroup(
+    val indices: List<Int>,
+    val label: String,
+    val quality: String,
+    val leg: Boolean,
+    val host: String,
+) {
+    val firstIndex: Int get() = indices.first()
+}
+
+private val GROUP_QUALITY_ORDER = listOf("4K", "FHD", "HD", "PADRAO", "SD")
+
+internal fun liveQualityName(q: String?): String {
+    val k = (q ?: "").uppercase().replace(" ", "")
+    return when (k) {
+        "4K", "UHD" -> "4K"
+        "FHD", "FULLHD" -> "FHD"
+        "HD" -> "HD"
+        "SD" -> "SD"
+        else -> "Padrão"
+    }
+}
+
+internal fun shortHost(url: String): String {
+    val h = LiveHostHealth.hostOf(url).removePrefix("www.")
+    if (h.length > 40 || h.contains('/')) return "servidor"
+    return h
+}
+
+internal fun groupLiveSources(streams: List<LiveStreamOption>): List<LiveSourceGroup> {
+    val map = LinkedHashMap<String, MutableList<Int>>()
+    val meta = HashMap<String, LiveSourceGroup>()
+    streams.forEachIndexed { i, s ->
+        val label = s.label?.trim()?.takeIf { it.isNotEmpty() } ?: "Fonte"
+        val q = liveQualityName(s.quality)
+        val leg = s.leg == true
+        val host = shortHost(s.url)
+        val key = "${label.lowercase()}|$q|$leg|$host"
+        map.getOrPut(key) { mutableListOf() }.add(i)
+        if (key !in meta) meta[key] = LiveSourceGroup(listOf(i), label, q, leg, host)
+    }
+    return map.map { (k, idx) -> meta.getValue(k).copy(indices = idx) }
+        .sortedWith(compareBy<LiveSourceGroup> { GROUP_QUALITY_ORDER.indexOf(it.quality.uppercase().replace("Ã", "A")).let { r -> if (r < 0) 3 else r } }
+            .thenBy { it.firstIndex })
+}

@@ -87,6 +87,12 @@ import com.startapp.sdk.adsbase.StartAppAd
 import com.startapp.sdk.adsbase.StartAppSDK
 
 class MainActivity : ComponentActivity() {
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        com.streamflixvip.app.tvpair.TvPair.handleUri(intent.data)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -95,11 +101,13 @@ class MainActivity : ComponentActivity() {
         StartAppAd.disableSplash()
 
         enableEdgeToEdge()
+        com.streamflixvip.app.tvpair.TvPair.handleUri(intent?.data)
         setContent {
             CompositionLocalProvider(LocalLifecycleOwner provides this) {
                 StreamFlixTheme {
                     Surface(modifier = Modifier.fillMaxSize()) {
                         AppRoot()
+                        com.streamflixvip.app.tvpair.TvPairDialogHost()
                     }
                 }
             }
@@ -191,17 +199,49 @@ private fun AppRoot() {
     var showSplash by remember { mutableStateOf(true) }
 
     if (showSplash) {
-        com.streamflixvip.app.ui.splash.SplashScreen(onSplashFinished = { showSplash = false })
+        com.streamflixvip.app.ui.splash.SplashScreen(
+            onSplashFinished = { showSplash = false },
+            preload = { com.streamflixvip.app.network.Prewarm.run() },
+        )
     } else if (!isLoggedIn) {
         AuthScreen(viewModel = authViewModel, onLoggedIn = { isLoggedIn = true })
     } else {
-        MainAppScaffold(
-            authViewModel = authViewModel,
-            userId = sessionStore.userId,
-            userEmail = sessionStore.userEmail,
-            accessToken = sessionStore.accessToken,
-            onSignedOut = { isLoggedIn = false },
-        )
+        // Perfis: carrega os desta conta e pergunta "Quem está assistindo?" quando há mais de um.
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val accountId = sessionStore.userId
+        var profilesReady by remember(accountId) { mutableStateOf(false) }
+        var askProfile by remember(accountId) { mutableStateOf(false) }
+        var manageProfiles by remember { mutableStateOf(false) }
+        LaunchedEffect(accountId) {
+            com.streamflixvip.app.profiles.ProfileStore.init(ctx, accountId, sessionStore.userEmail)
+            if (accountId != null) {
+                kotlinx.coroutines.withTimeoutOrNull(3_000) { com.streamflixvip.app.profiles.ProfileSync.pull(accountId) }
+            }
+            askProfile = com.streamflixvip.app.profiles.ProfileStore.shouldAsk()
+            profilesReady = true
+        }
+        val profileScope = rememberCoroutineScope()
+        val activeProfile by com.streamflixvip.app.profiles.ProfileStore.active.collectAsState()
+        when {
+            !profilesReady -> Box(Modifier.fillMaxSize().background(Color(0xFF070B12)))
+            askProfile || manageProfiles -> com.streamflixvip.app.profiles.ProfilePickerScreen(
+                startInManage = manageProfiles,
+                onPicked = { askProfile = false; manageProfiles = false },
+                onChanged = {
+                    accountId?.let { id -> profileScope.launch { com.streamflixvip.app.profiles.ProfileSync.push(id) } }
+                },
+            )
+            else -> androidx.compose.runtime.key(activeProfile?.id) {
+                MainAppScaffold(
+                    authViewModel = authViewModel,
+                    userId = sessionStore.userId,
+                    userEmail = sessionStore.userEmail,
+                    accessToken = sessionStore.accessToken,
+                    onSignedOut = { isLoggedIn = false },
+                    onSwitchProfile = { askProfile = true },
+                )
+            }
+        }
     }
 }
 
@@ -212,6 +252,7 @@ private fun MainAppScaffold(
     userEmail: String?,
     accessToken: String?,
     onSignedOut: () -> Unit,
+    onSwitchProfile: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -260,6 +301,7 @@ private fun MainAppScaffold(
                     onFavoritesClick = {
                         navController.navigate("mylist") { launchSingleTop = true }
                     },
+                    onProfileClick = onSwitchProfile,
                 )
             }
         },
@@ -349,6 +391,10 @@ private fun MainAppScaffold(
                 SearchScreen(
                     viewModel = viewModel,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
+                    onGenreClick = { genreId, genreName ->
+                        val encodedName = java.net.URLEncoder.encode(genreName, "UTF-8")
+                        navController.navigate("genre_detail/$genreId/${com.streamflixvip.app.data.GenreCategory.ALL.name}?name=$encodedName")
+                    },
                 )
             }
 
@@ -485,6 +531,7 @@ private fun MainAppScaffold(
                     onMyListClick = {
                         navController.navigate("mylist") { launchSingleTop = true }
                     },
+                    onSwitchProfile = onSwitchProfile,
                     onAnnouncementClick = { tmdbId, mediaType ->
                         navController.navigate("detail/$tmdbId/$mediaType")
                     },

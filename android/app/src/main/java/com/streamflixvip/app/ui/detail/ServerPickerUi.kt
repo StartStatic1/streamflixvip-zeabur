@@ -454,3 +454,16 @@ fun ServerSourceCard(
         }
     }
 }
+
+/** Host real da fonte (abre o ?url= do stream-proxy). Nunca lança. */
+internal fun sourceHostOf(url: String): String = runCatching {
+    var u = url
+    if (u.contains("/stream-proxy")) {
+        val q = u.substringAfter("url=", "").substringBefore('&')
+        if (q.isNotEmpty()) u = java.net.URLDecoder.decode(q, "UTF-8")
+    }
+    java.net.URI(u).host?.lowercase()?.removePrefix("www.") ?: ""
+}.getOrDefault("")
+
+/** Tira fontes repetidas só quando a URL é idêntica (agregadores mandam nomes iguais válidos). */
+internal fun dedupeSources(list: List<VipSource>): List<VipSource> = list.distinctBy { it.source_url.trim() }

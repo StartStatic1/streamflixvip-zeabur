@@ -108,6 +108,7 @@ private val RAIL_EXPANDED = 224.dp
 @Composable
 fun MainShell(
     activationManager: TvActivationManager,
+    onSwitchProfile: () -> Unit = {},
     onItemClick: (tmdbId: Int, mediaType: String) -> Unit,
     onContinueClick: (LocalWatchProgress) -> Unit,
     onSeeAll: (rowKey: String) -> Unit,
@@ -166,21 +167,21 @@ fun MainShell(
         }
     }
 
+    var showExit by remember { mutableStateOf(false) }
     BackHandler {
         when {
             railFocused && section != ShellSection.HOME -> select(ShellSection.HOME)
             railFocused -> goToContent()
             section != ShellSection.HOME -> runCatching { railRequesters.getValue(section).requestFocus() }
-            else -> {
-                val now = System.currentTimeMillis()
-                if (now - lastBack < 2200) {
-                    (context as? Activity)?.finish()
-                } else {
-                    lastBack = now
-                    toaster.show("Aperte Voltar de novo para sair")
-                }
-            }
+            else -> showExit = true
         }
+    }
+
+    if (showExit) {
+        ExitConfirmDialog(
+            onExit = { showExit = false; (context as? Activity)?.finish() },
+            onCancel = { showExit = false },
+        )
     }
 
     Box(Modifier.fillMaxSize().background(p.bg)) {
@@ -238,6 +239,7 @@ fun MainShell(
                     ShellSection.SETTINGS -> SettingsTvScreen(
                         focusSignal = focusSignal,
                         activationManager = activationManager,
+                        onSwitchProfile = onSwitchProfile,
                         onDeactivated = onDeactivated,
                     )
                 }
@@ -307,11 +309,15 @@ private fun BrandMark(expanded: Boolean, kids: Boolean) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 6.dp)) {
         Box(
             Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                .background(Brush.linearGradient(listOf(p.accent, p.accent2))),
+                .background(if (kids) Brush.linearGradient(listOf(p.accent, p.accent2)) else Brush.linearGradient(listOf(Color.Black, Color.Black))),
             contentAlignment = Alignment.Center,
         ) {
             if (kids) Icon(Icons.Filled.ChildCare, null, tint = p.onAccent, modifier = Modifier.size(22.dp))
-            else Text("S", color = p.onAccent, fontWeight = FontWeight.Black, fontSize = 20.sp)
+            else androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(com.streamflixvip.tv.R.drawable.ic_launcher_fg),
+                contentDescription = "StreamFlix",
+                modifier = Modifier.size(40.dp),
+            )
         }
         if (expanded) {
             Spacer(Modifier.width(12.dp))
@@ -375,4 +381,50 @@ private fun Clock(modifier: Modifier) {
     }
     val fmt = remember { SimpleDateFormat("HH:mm", Locale("pt", "BR")) }
     Text(fmt.format(now), color = p.text.copy(alpha = 0.85f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = modifier)
+}
+
+
+/** "Sair do StreamFlix?" — o foco começa em Cancelar para evitar saída sem querer. */
+@Composable
+private fun ExitConfirmDialog(onExit: () -> Unit, onCancel: () -> Unit) {
+    val p = com.streamflixvip.tv.ui.theme.LocalPalette.current
+    val cancelFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onCancel) {
+        androidx.compose.foundation.layout.Column(
+            Modifier
+                .width(420.dp)
+                .background(p.bgElevated, androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+                .padding(28.dp),
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+        ) {
+            androidx.tv.material3.Text("Sair do StreamFlix?", color = p.text, fontSize = 22.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 20.dp))
+            androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp)) {
+                ExitButton("Cancelar", Modifier.focusRequester(cancelFocus), onCancel)
+                ExitButton("Sair", Modifier, onExit)
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        delay(80)
+        runCatching { cancelFocus.requestFocus() }
+    }
+}
+
+@Composable
+private fun ExitButton(label: String, modifier: Modifier, onClick: () -> Unit) {
+    val p = com.streamflixvip.tv.ui.theme.LocalPalette.current
+    androidx.tv.material3.Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+        colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
+            containerColor = p.glass,
+            contentColor = p.text,
+            focusedContainerColor = p.accent,
+            focusedContentColor = p.onAccent,
+        ),
+    ) {
+        androidx.tv.material3.Text(label, modifier = Modifier.padding(horizontal = 30.dp, vertical = 12.dp), fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+    }
 }

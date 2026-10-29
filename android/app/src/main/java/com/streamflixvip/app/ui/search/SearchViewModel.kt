@@ -32,11 +32,70 @@ data class SearchUiState(
     val isLoading: Boolean = false,
     val hasSearched: Boolean = false,
     val errorMessage: String? = null,
+    val recent: List<String> = emptyList(),
 )
+
+/** Buscas recentes guardadas no aparelho (máx. 8). Nunca lança exceção. */
+object RecentSearches {
+    private const val PREFS = "sfv_recent_searches"
+    private const val KEY = "items"
+    private const val MAX = 8
+
+    fun load(context: android.content.Context?): List<String> = runCatching {
+        val raw = context?.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+            ?.getString(KEY, null).orEmpty()
+        raw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }.take(MAX)
+    }.getOrDefault(emptyList())
+
+    fun add(context: android.content.Context?, query: String): List<String> {
+        val q = query.trim()
+        if (q.length < 2) return load(context)
+        val list = (listOf(q) + load(context).filterNot { it.equals(q, ignoreCase = true) }).take(MAX)
+        save(context, list)
+        return list
+    }
+
+    fun remove(context: android.content.Context?, query: String): List<String> {
+        val list = load(context).filterNot { it == query }
+        save(context, list)
+        return list
+    }
+
+    fun clear(context: android.content.Context?) = save(context, emptyList())
+
+    private fun save(context: android.content.Context?, list: List<String>) {
+        runCatching {
+            context?.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                ?.edit()?.putString(KEY, list.joinToString("\n") { it.replace('\n', ' ') })?.apply()
+        }
+    }
+}
 
 class SearchViewModel(
     private val repository: CatalogRepository = CatalogRepository(),
 ) : ViewModel() {
+
+    private var appContext: android.content.Context? = null
+
+    fun attach(context: android.content.Context) {
+        if (appContext != null) return
+        appContext = context.applicationContext
+        _uiState.value = _uiState.value.copy(recent = RecentSearches.load(appContext))
+    }
+
+    fun useRecent(query: String) {
+        _uiState.value = _uiState.value.copy(query = query, errorMessage = null)
+        submitSearch(withDebounce = false)
+    }
+
+    fun removeRecent(query: String) {
+        _uiState.value = _uiState.value.copy(recent = RecentSearches.remove(appContext, query))
+    }
+
+    fun clearRecent() {
+        RecentSearches.clear(appContext)
+        _uiState.value = _uiState.value.copy(recent = emptyList())
+    }
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState
@@ -94,8 +153,11 @@ class SearchViewModel(
 
             if (version != requestVersion) return@launch
 
-            result.onSuccess { items ->
+            result.onSuccess { raw ->
+                val items = raw.distinctBy { "${it.id}_${it.resolvedMediaType}" }
+                val recent = if (items.isNotEmpty()) RecentSearches.add(appContext, query) else _uiState.value.recent
                 _uiState.value = _uiState.value.copy(
+                    recent = recent,
                     results = items,
                     isLoading = false,
                     hasSearched = true,

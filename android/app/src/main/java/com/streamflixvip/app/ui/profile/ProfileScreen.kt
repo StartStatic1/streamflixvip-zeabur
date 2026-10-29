@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Notifications
@@ -59,6 +60,7 @@ fun ProfileScreen(
     onSignedOut: () -> Unit,
     onMyListClick: (() -> Unit)? = null,
     onAnnouncementClick: ((tmdbId: Int, mediaType: String) -> Unit)? = null,
+    onSwitchProfile: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -104,12 +106,18 @@ fun ProfileScreen(
                         .background(StreamFlixColors.SurfaceRaised),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        Icons.Filled.Person,
-                        contentDescription = null,
-                        tint = Accent,
-                        modifier = Modifier.size(48.dp),
-                    )
+                    val activeProfile by com.streamflixvip.app.profiles.ProfileStore.active.collectAsState()
+                    val ap = activeProfile
+                    if (ap != null) {
+                        com.streamflixvip.app.profiles.ProfileAvatar(ap.avatar, ap.name, 96.dp)
+                    } else {
+                        Icon(
+                            Icons.Filled.Person,
+                            contentDescription = null,
+                            tint = Accent,
+                            modifier = Modifier.size(48.dp),
+                        )
+                    }
                 }
                 Box(
                     modifier = Modifier
@@ -146,8 +154,17 @@ fun ProfileScreen(
                 iconTint = Accent,
                 onClick = onMyListClick,
             )
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
         }
+
+        ProfileInfoCard(
+            icon = Icons.Filled.Tv,
+            title = "Conectar TV",
+            subtitle = "Digite o código que aparece na TV (ou leia o QR com a câmera)",
+            iconTint = Accent,
+            onClick = { com.streamflixvip.app.tvpair.TvPair.pending.value = "" },
+        )
+        Spacer(modifier = Modifier.height(24.dp))
 
         if (notificationsEnabled && announcements.isNotEmpty()) {
             SectionTitle("Avisos")
@@ -234,11 +251,41 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
+        onSwitchProfile?.let { switch ->
+            val activeProfile by com.streamflixvip.app.profiles.ProfileStore.active.collectAsState()
+            SectionTitle("Perfil")
+            androidx.compose.foundation.layout.Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                    .background(com.streamflixvip.app.ui.theme.StreamFlixColors.Glass)
+                    .clickable { switch() }
+                    .padding(14.dp),
+            ) {
+                activeProfile?.let { com.streamflixvip.app.profiles.ProfileAvatar(it.avatar, it.name, 48.dp) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(activeProfile?.name ?: "Perfil", color = Color.White, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (activeProfile?.kids == true) "Perfil infantil" else "Trocar ou gerenciar perfis",
+                        color = Color(0xFF8A94A6), fontSize = 12.sp,
+                    )
+                }
+                Text("Trocar", color = com.streamflixvip.app.ui.theme.StreamFlixColors.Accent, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(16.dp))
+        }
+
+        SectionTitle("Aparência")
+        com.streamflixvip.app.ui.common.AccentPicker()
+
+        Spacer(modifier = Modifier.height(28.dp))
+
         SectionTitle("Sobre")
         ProfileInfoCard(
             icon = Icons.Filled.Info,
             title = "Versão",
-            subtitle = "7.4.0",
+            subtitle = com.streamflixvip.app.BuildConfig.VERSION_NAME,
             iconTint = Color(0xFF78909C),
             onClick = {},
             showChevron = false,

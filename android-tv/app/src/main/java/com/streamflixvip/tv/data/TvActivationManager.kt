@@ -86,9 +86,21 @@ class TvActivationManager(context: Context) {
         prefs.edit().remove(KEY_EXPIRES_AT).remove(KEY_PLAN_LABEL).apply()
     }
 
-    private fun parseIso(iso: String): Long? = runCatching {
-        java.time.Instant.parse(iso).toEpochMilli()
-    }.getOrNull()
+    /** Aceita "...Z" e "...+00:00" (Supabase). Instant.parse do Android 9-11 não lê offset. */
+    private fun parseIso(iso: String): Long? =
+        runCatching { java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli() }.getOrNull()
+            ?: runCatching { java.time.Instant.parse(iso).toEpochMilli() }.getOrNull()
+            ?: runCatching { java.time.OffsetDateTime.parse(iso.trim().replace(' ', 'T')).toInstant().toEpochMilli() }.getOrNull()
+
+    /** Pareamento por QR/código confirmado: grava a validade que veio do servidor. */
+    fun applyPaired(expiresAt: String?, plan: String?): Boolean {
+        val ms = expiresAt?.let { parseIso(it) } ?: return isActivatedLocally
+        if (ms > System.currentTimeMillis()) {
+            expiresAtMs = ms
+            if (plan != null) planLabel = plan
+        }
+        return isActivatedLocally
+    }
 
     companion object {
         private const val KEY_EXPIRES_AT = "expires_at_ms"

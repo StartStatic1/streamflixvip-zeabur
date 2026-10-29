@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FormatColorText
@@ -80,6 +81,7 @@ fun SettingsTvScreen(
     focusSignal: FocusSignal,
     activationManager: TvActivationManager,
     onDeactivated: () -> Unit,
+    onSwitchProfile: () -> Unit = {},
 ) {
     val p = LocalPalette.current
     val s by TvSettingsStore.state.collectAsState()
@@ -127,6 +129,17 @@ fun SettingsTvScreen(
                     )
                 }
             }
+        }
+
+        item { GroupTitle("Perfil") }
+        item {
+            val ap by com.streamflixvip.tv.profiles.ProfileStore.active.collectAsState()
+            PanelItem(
+                title = "Trocar ou gerenciar perfis",
+                subtitle = "Perfil atual: ${ap?.name ?: "—"}" + if (ap?.kids == true) " (infantil)" else "",
+                leading = Icons.Filled.Person,
+                onClick = onSwitchProfile,
+            )
         }
 
         item { GroupTitle("Modos") }

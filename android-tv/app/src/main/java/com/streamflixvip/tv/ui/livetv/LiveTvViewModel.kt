@@ -136,6 +136,7 @@ class LiveTvViewModel(app: Application) : AndroidViewModel(app) {
         } else cats
         // ordem vem pronta do servidor (Canais, Regionais, Capitais, HBO, Telecine...)
         val sortedCats = catsUsed
+        chans = LiveQualityGroup.group(chans)
         _uiState.update {
             it.copy(
                 isLoading = false,
