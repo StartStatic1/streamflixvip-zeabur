@@ -221,6 +221,24 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
                 )
+
+                Spacer(Modifier.height(20.dp))
+                // Sem código: QR abre o WhatsApp do suporte no celular, já com o ID da TV
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val waText = "Olá! Quero ativar o StreamFlix na minha TV. ID: ${activationManager.deviceId}"
+                    com.streamflixvip.tv.ui.components.QrCode(
+                        "https://wa.me/558498334731?text=" + java.net.URLEncoder.encode(waText, "UTF-8"),
+                        Modifier.size(104.dp),
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text("Não tem código?", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Aponte a câmera do celular para o QR e fale com o suporte no WhatsApp.",
+                            color = TextMuted, fontSize = 12.sp, lineHeight = 17.sp,
+                        )
+                    }
+                }
             }
 
             // Direita — teclado D-pad

@@ -80,15 +80,21 @@ fun SplashTvScreen(
 
         val postersJob = async(Dispatchers.IO) {
             runCatching {
+                kotlinx.coroutines.withTimeoutOrNull(2_500) {
                 val trending = NetworkModule.tmdbApi.request(path = "/trending/all/week").results.orEmpty()
                 val paths = trending.mapNotNull { it.poster_path }.filter { it.isNotBlank() }
                 if (paths.isEmpty()) emptyList()
                 else paths.chunked((paths.size / 3).coerceAtLeast(1)).take(3)
+                } ?: emptyList()
             }.getOrDefault(emptyList())
         }
 
         statusText = "Verificando ativação…"
-        val revalidateJob = async { activationManager.revalidate() }
+        // internet lenta não segura a abertura: no máximo 4 s, depois vale a ativação salva
+        val revalidateJob = async {
+            kotlinx.coroutines.withTimeoutOrNull(4_000) { activationManager.revalidate() }
+                ?: activationManager.isActivatedLocally
+        }
 
         posterRows = postersJob.await()
         statusText = if (posterRows.isNotEmpty()) "Bem-vindo" else "Preparando…"

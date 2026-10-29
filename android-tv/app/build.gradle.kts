@@ -99,6 +99,8 @@ dependencies {
 
     // Imagens
     implementation("io.coil-kt:coil-compose:2.6.0")
+    // QR code desenhado no app (ativação/suporte) — só a parte de gerar, sem câmera
+    implementation("com.google.zxing:core:3.5.3")
 
     // Core
     implementation("androidx.core:core-ktx:1.13.1")
