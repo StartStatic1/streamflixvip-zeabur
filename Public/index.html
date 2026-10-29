@@ -137,6 +137,50 @@
       .wall{grid-template-columns:repeat(4,1fr)}
       .tabs{display:flex;width:100%}.tabs button{flex:1;padding:10px 8px}
     }
+
+    .show{display:grid;grid-template-columns:1.6fr 1fr;gap:34px;align-items:end;margin-top:38px}
+    .tvf{background:#000;border:10px solid #1b1818;border-bottom-width:14px;border-radius:14px;box-shadow:0 30px 80px rgba(229,9,20,.18);aspect-ratio:16/9;overflow:hidden;position:relative}
+    .tvf .scr,.phf .scr{position:absolute;inset:0;background:radial-gradient(120% 80% at 20% 0,rgba(229,9,20,.28),transparent 60%),#070606}
+    .tvf .bn{position:absolute;left:5%;top:7%;width:28%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:8px;box-shadow:0 0 0 2px rgba(255,215,122,.5)}
+    .tvf .ttl{position:absolute;left:5%;top:49%;font-weight:800;font-size:clamp(11px,1.2vw,16px)}
+    .row{position:absolute;left:5%;right:0;display:flex;gap:1.4%}
+    .row div{flex:0 0 13%;aspect-ratio:2/3;border-radius:6px;background:#1c1717 center/cover}
+    .row div:first-child{outline:3px solid #fff;transform:scale(1.06)}
+    .tvstand{width:28%;height:12px;margin:0 auto;background:#1b1818;border-radius:0 0 8px 8px}
+    .phf{width:min(100%,250px);margin:0 auto;aspect-ratio:9/19.5;background:#000;border:9px solid #1b1818;border-radius:36px;position:relative;overflow:hidden;box-shadow:0 30px 80px rgba(229,9,20,.18)}
+    .phf .top{position:absolute;top:5%;left:8%;right:8%;display:flex;align-items:center;gap:8px;font-weight:800;font-size:13px}
+    .phf .top img{width:28px;height:28px;border-radius:7px}
+    .phf .feat{position:absolute;top:13%;left:8%;right:8%;aspect-ratio:2/3;border-radius:12px;background:#1c1717 center/cover}
+    .phf .row{top:auto;bottom:6%;left:8%}
+    .phf .row div{flex-basis:30%}
+    .phf .row div:first-child{outline:0;transform:none}
+    .cap{color:var(--muted);font-size:13px;text-align:center;margin-top:12px}
+    .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:34px}
+    .plan{position:relative;text-align:center;padding:30px 20px}
+    .plan .pr{font-size:34px;font-weight:900;margin:8px 0 2px;letter-spacing:-1px}
+    .plan .pr small{font-size:16px;font-weight:700;color:var(--muted)}
+    .plan.hi{border-color:var(--red);box-shadow:0 0 0 1px var(--red),0 20px 50px rgba(229,9,20,.25)}
+    .plan .bd{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;font-size:12px;font-weight:800;padding:4px 12px;border-radius:99px;white-space:nowrap}
+    .plan.au .bd{background:var(--gold);color:#1a1205}
+    .perks{display:flex;flex-wrap:wrap;gap:10px 22px;justify-content:center;margin-top:24px;color:#d6cfc9;font-size:15px}
+    .perks span:before{content:"✓ ";color:var(--gold);font-weight:900}
+    .fs{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:34px;counter-reset:f}
+    .fs .card{padding:0;overflow:hidden}
+    .fs .il{aspect-ratio:16/10;background:radial-gradient(90% 90% at 50% 0,rgba(229,9,20,.25),#0b0909);display:grid;place-items:center;border-bottom:1px solid var(--line);position:relative}
+    .fs .il:before{counter-increment:f;content:counter(f);position:absolute;top:10px;left:10px;width:28px;height:28px;border-radius:50%;background:var(--red);font-weight:900;display:grid;place-items:center;font-size:14px}
+    .fs .il svg{width:44%;height:auto;fill:none;stroke:#f6f2ee;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
+    .fs .tx{padding:18px 20px 22px}
+    .fs .tx h3{font-size:17px;margin-bottom:6px}
+    .fs .tx p{color:var(--muted);font-size:14.5px}
+    .keys{display:flex;gap:5px;justify-content:center}
+    .keys b{background:#1d1919;border:1px solid rgba(255,215,122,.45);color:var(--gold2);border-radius:6px;padding:6px 7px;font-size:clamp(14px,1.6vw,20px);font-family:ui-monospace,monospace}
+    .qrs{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-top:28px}
+    .qr{background:#fff;color:#111;border-radius:16px;padding:14px 14px 10px;text-align:center;width:180px}
+    .qr img{width:152px;height:152px;display:block;image-rendering:pixelated}
+    .qr b{display:block;font-size:14px;margin-top:6px}
+    .qr span{font-size:12px;color:#555}
+    @media(max-width:980px){.show{grid-template-columns:1fr}.plans,.fs{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:560px){.plans,.fs{grid-template-columns:1fr}.qr{width:150px}.qr img{width:122px;height:122px}}
   </style>
 </head>
 <body>
@@ -144,7 +188,7 @@
     <div class="wrap nav">
       <a class="brand" href="/"><img src="/img/logo-256.webp" alt="" width="38" height="38" />Stream<b>Flix</b></a>
       <nav class="nav-links">
-        <a href="#recursos">Recursos</a><a href="#aparelhos">Aparelhos</a><a href="#instalar">Como instalar</a><a href="#comunidade">Suporte</a>
+        <a href="#recursos">Recursos</a><a href="#aparelhos">Aparelhos</a><a href="#instalar">Como instalar</a><a href="#vip">Planos VIP</a><a href="#comunidade">Suporte</a>
       </nav>
       <a class="nav-cta" href="#baixar">Baixar</a>
     </div>
@@ -205,6 +249,20 @@
       </div>
     </section>
 
+
+    <section id="telas">
+      <div class="wrap">
+        <div class="kicker">Telas do app</div>
+        <h2>Feito para o toque e para o controle.</h2>
+        <p class="sub">No celular, navegação por gestos. Na TV, tudo no D-pad com foco bem visível, até no Firestick.</p>
+        <div class="show">
+          <div><div class="tvf"><div class="scr"><img class="bn" src="/img/tv-banner.png" alt="Banner StreamFlix TV" width="320" height="180" loading="lazy"/><div class="ttl">Em alta esta semana</div><div class="row" id="rowTv" style="top:58%"></div></div></div><div class="tvstand"></div><p class="cap">StreamFlix TV · Android TV, Fire TV e TV Box</p></div>
+          <div><div class="phf"><div class="scr"><div class="top"><img src="/icons/icon-96x96.png" alt="" width="28" height="28"/>StreamFlix</div><div class="feat" id="featPh"></div><div class="row" id="rowPh"></div></div></div><p class="cap">StreamFlix Celular · Android</p></div>
+        </div>
+        <p class="cap" style="margin-top:18px">Ilustração com o ícone, o banner e os pôsteres reais do catálogo.</p>
+      </div>
+    </section>
+
     <section id="instalar" class="install">
       <div class="wrap">
         <div class="kicker">Como instalar</div>
@@ -230,6 +288,37 @@
           </div>
         </div>
         <p class="note">Prefere o navegador? No celular, o código do Downloader é <b style="color:var(--gold2)">6085325</b>. Em TV Box antigo, se o download pelo site falhar, peça o link no grupo de suporte.</p>
+      </div>
+    </section>
+
+
+    <section id="firestick">
+      <div class="wrap">
+        <div class="kicker">Guia Fire TV / Firestick</div>
+        <h2>Instale no Firestick em 4 passos.</h2>
+        <p class="sub">Só com o controle remoto. Leva uns 3 minutos.</p>
+        <div class="fs">
+          <div class="card"><div class="il"><svg viewBox="0 0 64 40"><rect x="6" y="4" width="52" height="30" rx="3"/><circle cx="26" cy="19" r="6"/><path d="m30.5 23.5 5 5"/><path d="M24 37h16"/></svg></div><div class="tx"><h3>Baixe o Downloader</h3><p>Na tela inicial, abra a <b>Lupa (Buscar)</b>, digite <b>Downloader</b> e instale o app gratuito.</p></div></div>
+          <div class="card"><div class="il"><svg viewBox="0 0 64 40"><circle cx="32" cy="18" r="9"/><circle cx="32" cy="18" r="3.5"/><path d="M32 5v4m0 18v4M19 18h4m18 0h4M23 9l3 3m12 12 3 3m0-18-3 3M26 24l-3 3"/></svg></div><div class="tx"><h3>Permita apps desconhecidos</h3><p><b>Configurações › Minha Fire TV › Opções do desenvolvedor › Instalar apps desconhecidos</b> e ative o <b>Downloader</b>. Se o menu não aparecer, toque 7× em <b>Sobre › nome do aparelho</b>.</p></div></div>
+          <div class="card"><div class="il"><div class="keys"><b>3</b><b>4</b><b>2</b><b>2</b><b>9</b><b>7</b><b>2</b></div></div><div class="tx"><h3>Digite o código 3422972</h3><p>Abra o Downloader, selecione o campo de endereço, digite <b>3422972</b> e aperte <b>Go</b>. O download começa sozinho.</p></div></div>
+          <div class="card"><div class="il"><svg viewBox="0 0 64 40"><rect x="6" y="4" width="52" height="30" rx="3"/><path d="m27 13 10 6-10 6z"/><path d="M24 37h16"/></svg></div><div class="tx"><h3>Instale e abra</h3><p>Escolha <b>Instalar</b> e depois <b>Abrir</b>. Para entrar, leia o <b>QR code</b> da TV com o celular logado.</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="vip">
+      <div class="wrap" style="text-align:center">
+        <div class="kicker">Planos VIP</div>
+        <h2>Assista sem anúncios e com lançamentos antes.</h2>
+        <p class="sub" style="margin:0 auto">Pagamento único por Pix, sem renovação automática. Assine pelo app em <b>Perfil › Seja VIP</b>.</p>
+        <div class="plans">
+          <div class="card plan"><h3>1 mês</h3><div class="pr"><small>R$</small> 9,90</div><p>30 dias de VIP</p></div>
+          <div class="card plan hi"><span class="bd">Popular</span><h3>3 meses</h3><div class="pr"><small>R$</small> 24,90</div><p>90 dias de VIP</p></div>
+          <div class="card plan"><span class="bd">Mais tempo</span><h3>6 meses</h3><div class="pr"><small>R$</small> 49,90</div><p>180 dias de VIP</p></div>
+          <div class="card plan au"><span class="bd">Melhor valor</span><h3>Anual</h3><div class="pr"><small>R$</small> 89,90</div><p>12 meses de VIP</p></div>
+        </div>
+        <div class="perks"><span>Sem anúncios</span><span>Lançamentos antecipados</span><span>Celular e TV</span><span>Pix na hora</span></div>
+        <p style="margin-top:26px"><a class="btn btn-red" href="/downloads/app-latest.apk" download><span>Assine pelo app<small>Baixe e toque em Seja VIP</small></span></a></p>
       </div>
     </section>
 
@@ -259,6 +348,10 @@
         <div class="ctas">
           <a class="btn btn-red" href="/downloads/app-latest.apk" download><span>Baixar para Celular<small>Código Downloader 6085325</small></span></a>
           <a class="btn btn-gold" href="/downloads/tv-latest.apk" download><span>Baixar para TV<small>Código Downloader 3422972</small></span></a>
+        <div class="qrs">
+            <div class="qr"><img src="/img/qr/qr-celular.png" alt="QR code para baixar o app de celular" width="152" height="152" loading="lazy"/><b>Celular</b><span>Aponte a câmera</span></div>
+            <div class="qr"><img src="/img/qr/qr-tv.png" alt="QR code para baixar o app de TV" width="152" height="152" loading="lazy"/><b>TV / Firestick</b><span>Abra no celular ou TV</span></div>
+          </div>
         </div>
       </div>
     </section>
@@ -293,6 +386,7 @@
         var posters=[];(a[0].results||[]).concat(a[1].results||[]).forEach(function(x){if(x.poster_path)posters.push(x.poster_path)});
         if(!posters.length)return;
         [].forEach.call(wall.children,function(d,i){d.style.backgroundImage="url(https://image.tmdb.org/t/p/w185"+posters[i%posters.length]+")"});
+        var mk=function(id,n,o){var r=document.getElementById(id);if(!r)return;for(var i=0;i<n;i++){var d=document.createElement("div");d.style.backgroundImage="url(https://image.tmdb.org/t/p/w185"+posters[(i+o)%posters.length]+")";r.appendChild(d)}};mk("rowTv",7,3);mk("rowPh",3,9);var f=document.getElementById("featPh");if(f)f.style.backgroundImage="url(https://image.tmdb.org/t/p/w342"+posters[1]+")";
       });
     })();
   </script>
