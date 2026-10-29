@@ -275,7 +275,7 @@ fun HomeTvScreen(
                                 focusTarget = focusTarget,
                                 focusNonce = focusNonce,
                                 onFocusConsumed = { focusTarget = null },
-                                onCardFocused = { key, s ->
+                                onCardFocusedRaw = { key, s ->
                                     restoreKey = key
                                     candidate = s
                                 },
