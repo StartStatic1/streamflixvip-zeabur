@@ -465,7 +465,5 @@ internal fun sourceHostOf(url: String): String = runCatching {
     java.net.URI(u).host?.lowercase()?.removePrefix("www.") ?: ""
 }.getOrDefault("")
 
-/** Tira fontes repetidas: mesma URL, ou mesmo nome no mesmo servidor de origem. */
-internal fun dedupeSources(list: List<VipSource>): List<VipSource> =
-    list.distinctBy { it.source_url }
-        .distinctBy { (it.source_label ?: "").trim().lowercase() + "|" + sourceHostOf(it.source_url) }
+/** Tira fontes repetidas só quando a URL é idêntica (agregadores mandam nomes iguais válidos). */
+internal fun dedupeSources(list: List<VipSource>): List<VipSource> = list.distinctBy { it.source_url.trim() }

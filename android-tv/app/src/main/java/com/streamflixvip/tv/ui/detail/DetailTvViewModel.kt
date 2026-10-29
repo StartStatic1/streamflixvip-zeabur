@@ -250,9 +250,9 @@ class DetailTvViewModel(
     }
 
     private fun order(list: List<VipSource>, preferred: String?): List<VipSource> {
-        // mesma URL, ou mesmo nome no mesmo servidor de origem = fonte repetida
-        val unique = list.distinctBy { it.source_url }
-            .distinctBy { it.displayName.trim().lowercase() + "|" + sourceHost(it.source_url) }
+        // so tira repetida quando a URL e identica (agregadores como AIOStreams mandam
+        // varios resultados com o mesmo nome e o mesmo host, e todos sao validos)
+        val unique = list.distinctBy { it.source_url.trim() }
         if (preferred.isNullOrBlank()) return unique
         return unique.sortedByDescending { it.displayName == preferred }
     }
