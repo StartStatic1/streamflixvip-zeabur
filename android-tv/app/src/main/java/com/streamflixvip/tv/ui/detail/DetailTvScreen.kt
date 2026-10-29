@@ -232,12 +232,16 @@ fun DetailTvScreen(
                 val recs = (details.recommendations?.results.orEmpty().ifEmpty { details.similar?.results.orEmpty() })
                     .filter { it.poster_path != null }.take(20)
                 val episodes = state.seasonEpisodes[state.selectedSeason].orEmpty()
+                // Filme: ao descer para "Você também pode gostar" o cabeçalho vira compacto
+                // (título + infos) e tudo cabe na tela — sem rolar, sem pular, sem cortar a sinopse.
+                var recsFocused by remember { mutableStateOf(false) }
+                val compactHeader = !isSeries && recsFocused
 
                 TvLazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(top = 24.dp, bottom = 96.dp),
-                    verticalArrangement = Arrangement.spacedBy(40.dp),
+                    contentPadding = PaddingValues(top = 24.dp, bottom = if (isSeries) 96.dp else 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (isSeries) 40.dp else 24.dp),
                     pivotOffsets = PivotOffsets(parentFraction = 0.0f),
                 ) {
                     item(key = "header") {
@@ -246,6 +250,25 @@ fun DetailTvScreen(
                                 if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(0) } }
                             },
                         ) {
+                        if (compactHeader) {
+                            Column(Modifier.fillMaxWidth().padding(start = DetailH, end = DetailH, top = 8.dp)) {
+                                Text(
+                                    details.title ?: details.name ?: "",
+                                    color = p.text, fontSize = 30.sp, fontWeight = FontWeight.Black,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    listOfNotNull(
+                                        details.vote_average?.takeIf { it > 0 }?.let { "★ %.1f".format(it) },
+                                        (details.release_date ?: details.first_air_date)?.take(4),
+                                        details.displayRuntime,
+                                        details.genres?.take(3)?.joinToString(", ") { it.name }?.ifBlank { null },
+                                    ).joinToString("  ·  "),
+                                    color = p.textMuted, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        } else
                         Column(
                             Modifier.fillParentMaxHeight(if (isSeries || recs.isNotEmpty()) 0.84f else 1f)
                                 .fillMaxWidth()
@@ -354,14 +377,20 @@ fun DetailTvScreen(
                     if (recs.isNotEmpty()) {
                         item(key = "recs") {
                             Column(Modifier.onFocusChanged {
-                                if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(if (isSeries) 2 else 1) } }
+                                if (isSeries) {
+                                    if (it.hasFocus) scope.launch { runCatching { listState.animateScrollToItem(2) } }
+                                } else {
+                                    recsFocused = it.hasFocus
+                                    if (it.hasFocus) scope.launch { runCatching { listState.scrollToItem(0) } }
+                                }
                             }) {
                                 SectionTitle("Você também pode gostar", Modifier.padding(start = DetailH, bottom = 14.dp))
                                 TvLazyRow(
                                     modifier = if (isSeries) Modifier else Modifier.onPreviewKeyEvent { ev ->
                                         if (ev.key == Key.DirectionUp) {
                                             if (ev.type == KeyEventType.KeyDown) scope.launch {
-                                                runCatching { listState.animateScrollToItem(0) }
+                                                recsFocused = false
+                                                runCatching { listState.scrollToItem(0) }
                                                 focus(KEY_PLAY)
                                                 delay(300)
                                                 if (focusTarget == KEY_PLAY) focus(KEY_PLAY)
