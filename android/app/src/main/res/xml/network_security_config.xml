@@ -11,6 +11,10 @@
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
+            <!-- TV Box / Android 7 antigos sem as raízes atuais do Let's Encrypt -->
+            <certificates src="@raw/isrg_root_x1" />
+            <certificates src="@raw/isrg_root_x2" />
+            <certificates src="@raw/isrg_root_ye" />
         </trust-anchors>
     </base-config>
 </network-security-config>

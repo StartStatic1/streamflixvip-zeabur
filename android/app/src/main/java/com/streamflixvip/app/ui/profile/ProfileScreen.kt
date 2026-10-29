@@ -234,11 +234,16 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
+        SectionTitle("Aparência")
+        com.streamflixvip.app.ui.common.AccentPicker()
+
+        Spacer(modifier = Modifier.height(28.dp))
+
         SectionTitle("Sobre")
         ProfileInfoCard(
             icon = Icons.Filled.Info,
             title = "Versão",
-            subtitle = "7.4.0",
+            subtitle = com.streamflixvip.app.BuildConfig.VERSION_NAME,
             iconTint = Color(0xFF78909C),
             onClick = {},
             showChevron = false,

@@ -68,7 +68,7 @@ object NetworkModule {
             .build()
     }
 
-    private val okHttpClient = OkHttpClient.Builder()
+    internal val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(sessionAuthInterceptor)
         .addInterceptor(loggingInterceptor)
         .authenticator(tokenAuthenticator)

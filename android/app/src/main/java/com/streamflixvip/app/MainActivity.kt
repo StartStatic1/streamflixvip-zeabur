@@ -191,7 +191,10 @@ private fun AppRoot() {
     var showSplash by remember { mutableStateOf(true) }
 
     if (showSplash) {
-        com.streamflixvip.app.ui.splash.SplashScreen(onSplashFinished = { showSplash = false })
+        com.streamflixvip.app.ui.splash.SplashScreen(
+            onSplashFinished = { showSplash = false },
+            preload = { com.streamflixvip.app.network.Prewarm.run() },
+        )
     } else if (!isLoggedIn) {
         AuthScreen(viewModel = authViewModel, onLoggedIn = { isLoggedIn = true })
     } else {

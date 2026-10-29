@@ -337,6 +337,8 @@ private fun DetailContent(
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
     val showBar = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 220
     Box(Modifier.fillMaxSize()) {
+    // fundo com a cor do pôster (some no preto conforme desce)
+    com.streamflixvip.app.ui.theme.PosterBackdrop(posterUrl = posterPath?.let { TmdbImages.poster(it, "w185") })
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         item {
             DetailHeader(
