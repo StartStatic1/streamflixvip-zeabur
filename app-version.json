@@ -1,7 +1,7 @@
 {
-  "versionCode": 170000,
-  "versionName": "17.0.0",
+  "versionCode": 170001,
+  "versionName": "17.0.1",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Visual novo, perfis, player novo, TV ao vivo organizada, comentarios e mais fontes (dublado e legendado)"
+  "releaseNotes": "Correções de estabilidade e mais fontes na TV ao vivo"
 }
