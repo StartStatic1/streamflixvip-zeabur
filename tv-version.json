@@ -1,7 +1,7 @@
 {
-  "versionCode": 24,
-  "versionName": "4.1.0",
+  "versionCode": 25,
+  "versionName": "4.1.1",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "VIP vale para 1 celular e 1 TV. Trocou de TV? Use o botão Usar nesta TV."
+  "releaseNotes": "Perfis separados: cada perfil tem seu Continuar assistindo e Minha lista. Tela de editar perfil ajustada."
 }
