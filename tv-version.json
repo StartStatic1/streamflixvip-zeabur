@@ -1,7 +1,7 @@
 {
-  "versionCode": 23,
-  "versionName": "4.0.3",
+  "versionCode": 24,
+  "versionName": "4.1.0",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Fontes sem endereço do servidor e melhorias"
+  "releaseNotes": "VIP vale para 1 celular e 1 TV. Trocou de TV? Use o botão Usar nesta TV."
 }
