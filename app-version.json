@@ -1,7 +1,7 @@
 {
-  "versionCode": 170002,
-  "versionName": "17.0.2",
+  "versionCode": 170100,
+  "versionName": "17.1.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Fontes sem endereço do servidor e melhorias"
+  "releaseNotes": "VIP vale para 1 celular e 1 TV. Trocou de celular? Toque em Usar neste aparelho."
 }
