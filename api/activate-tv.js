@@ -25,6 +25,8 @@
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const MAX_TV_DEVICES_PER_CODE = 1; // 1 TV por assinante (vaga controlada em lib/device-lock.js)
 const deviceLock = require('../lib/device-lock');
+const codeMeta = require('../lib/code-meta');
+const codeWindow = require('../lib/code-window');
 const { tvKeyForCode } = require('../lib/vip-gate');
 
 module.exports = async function handler(req, res) {
@@ -120,9 +122,33 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    const currentExpiry = existing?.expires_at ? new Date(existing.expires_at) : null;
-    const baseTime = (currentExpiry && currentExpiry > now) ? currentExpiry : now;
-    const newExpiry = new Date(baseTime.getTime() + durationHours * 60 * 60 * 1000);
+    // Um código soma o tempo dele UMA vez só, contado do 1º uso (celular ou qualquer TV).
+    // Redigitar o mesmo código só entra de novo, sem somar nada.
+    const codeTvRes = await fetch(`${SUPABASE_URL}/rest/v1/tv_activations?code=eq.${encodeURIComponent(code)}&select=expires_at,activated_at`, { headers });
+    const codeTvRows = codeTvRes.ok ? await codeTvRes.json() : [];
+    const meta = codeMeta.get(code) || {};
+    let start = codeWindow.firstUse(vipCode, codeTvRows, meta);
+    const fresh = !start;
+    if (fresh) start = now.getTime();
+    const end = codeWindow.codeEnd(vipCode, start);
+    const existingExp = existing?.expires_at ? new Date(existing.expires_at).getTime() : 0;
+    const sameCode = existing && existing.code === code;
+    let newExpiryMs;
+    if (sameCode && existing.is_active !== false) {
+      newExpiryMs = existingExp; // redigitou: mantém
+    } else if (fresh) {
+      // código novo: renovação soma em cima do tempo que a TV ainda tem (de outro código)
+      newExpiryMs = (existingExp > now.getTime() ? existingExp : now.getTime()) + durationHours * 3600 * 1000;
+    } else {
+      // código já usado antes (outra TV/celular): no máximo até o fim do próprio código
+      newExpiryMs = Math.max(end, existingExp > now.getTime() && !sameCode ? existingExp : 0);
+    }
+    if (newExpiryMs <= now.getTime()) {
+      res.status(410).json({ error: `Este código já venceu em ${new Date(end).toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' })}.` });
+      return;
+    }
+    const newExpiry = new Date(newExpiryMs);
+    const activatedAt = sameCode && existing.activated_at ? existing.activated_at : now.toISOString();
 
     // 4) Upsert por device_id (uma linha por aparelho — reativar/renovar
     //    com um código novo simplesmente atualiza a mesma linha).
@@ -134,7 +160,7 @@ module.exports = async function handler(req, res) {
         code,
         plan_label: vipCode.plan_label || null,
         expires_at: newExpiry.toISOString(),
-        activated_at: now.toISOString(),
+        activated_at: activatedAt,
         is_active: true,
         device_label: deviceLabel || existing?.device_label || null,
       }),
@@ -147,25 +173,13 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    // 5) Log no histórico (mesma tabela que o mobile usa), marcado como TV
-    //    — não bloqueia a resposta se falhar, é só telemetria pro painel.
+    // 5) Histórico: vip_redemptions exige user_id (TV não tem conta), então registra no
+    //    histórico do painel (code-meta) — antes o insert falhava calado.
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/vip_redemptions`, {
-        method: 'POST',
-        headers: { ...headers, 'Prefer': 'return=minimal' },
-        body: JSON.stringify({
-          user_id: null,
-          email: null,
-          code,
-          plan_label: vipCode.plan_label || null,
-          duration_hours: durationHours,
-          redeemed_at: now.toISOString(),
-          platform: 'tv',
-          device_id: deviceId,
-        }),
-      });
+      if (fresh) codeMeta.update(code, { firstUseAt: start }, `1º uso na 📺 TV …${deviceId.slice(-6)}`);
+      else codeMeta.update(code, { firstUseAt: start }, `${sameCode ? 'redigitado (sem somar)' : 'ativado'} na 📺 TV …${deviceId.slice(-6)}`);
     } catch (logErr) {
-      console.warn('vip_redemptions (tv) log error (non-fatal):', logErr);
+      console.warn('code-meta (tv) log error (non-fatal):', logErr && logErr.message);
     }
 
     res.status(200).json({

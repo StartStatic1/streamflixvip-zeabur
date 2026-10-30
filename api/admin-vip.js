@@ -3,6 +3,7 @@
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const deviceLock = require('../lib/device-lock');
 const codeMeta = require('../lib/code-meta');
+const codeWindow = require('../lib/code-window');
 const { PLANS, priceForLabel } = require('../lib/plans');
 
 module.exports = async function handler(req, res) {
@@ -210,8 +211,7 @@ module.exports = async function handler(req, res) {
       let exp = u && u.expires_at ? new Date(u.expires_at).getTime() : 0;
       for (const t of tvs) exp = Math.max(exp, new Date(t.expires_at).getTime() || 0);
       // Janela do PRÓPRIO código: início = resgate no celular (ou 1ª ativação de TV) + duração.
-      let start = c.used_at ? new Date(c.used_at).getTime() : 0;
-      if (!start) for (const t of allTvs) { const a = new Date(t.activated_at).getTime() || 0; if (a && (!start || a < start)) start = a; }
+      const start = codeWindow.firstUse(c, allTvs, meta);
       const hours = Number(c.duration_hours) || 0;
       const codeEnd = start && hours ? start + hours * 3600 * 1000 : 0;
       const isTest = hours <= 24 || /teste/i.test(String(c.plan_label || ''));

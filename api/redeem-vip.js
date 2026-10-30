@@ -15,6 +15,8 @@
 //   Settings > Environment Variables > SUPABASE_SERVICE_ROLE_KEY = <service role key>
 //   (a SUPABASE_URL já é pública e está hardcoded no front-end também)
 
+const codeMeta = require('../lib/code-meta');
+const codeWindow = require('../lib/code-window');
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const vipMem = require('../lib/vip-status-cache');
 
@@ -94,7 +96,26 @@ module.exports = async function handler(req, res) {
 
     const currentExpiry = currentStatus?.expires_at ? new Date(currentStatus.expires_at) : null;
     const baseTime = (currentExpiry && currentExpiry > now) ? currentExpiry : now;
-    const newExpiry = new Date(baseTime.getTime() + durationHours * 60 * 60 * 1000);
+    let newExpiry = new Date(baseTime.getTime() + durationHours * 60 * 60 * 1000);
+
+    // Código já usado numa TV antes? Vale só até o fim da janela dele (1º uso + plano), sem somar de novo.
+    try {
+      const tvr = await fetch(`${SUPABASE_URL}/rest/v1/tv_activations?code=eq.${encodeURIComponent(code)}&select=expires_at,activated_at`, { headers });
+      const tvRows = tvr.ok ? await tvr.json() : [];
+      const start = codeWindow.firstUse(vipCode, tvRows, codeMeta.get(code));
+      if (start) {
+        const end = codeWindow.codeEnd(vipCode, start);
+        if (end <= now.getTime()) {
+          res.status(410).json({ error: `Este código já venceu em ${new Date(end).toLocaleDateString('pt-BR', { timeZone: 'America/Fortaleza' })}.` });
+          return;
+        }
+        newExpiry = new Date(Math.max(end, currentExpiry && currentExpiry > now ? currentExpiry.getTime() : 0));
+      } else {
+        codeMeta.update(code, { firstUseAt: now.getTime() }, '1º uso no 📱 celular');
+      }
+    } catch (e) {
+      console.warn('redeem code-window (non-fatal):', e && e.message);
+    }
 
     // 3) Marca o código como usado (condicionalmente: só se ainda não tinha used_by,
     //    evitando corrida entre duas requisições simultâneas com o mesmo código)
