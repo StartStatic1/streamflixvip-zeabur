@@ -205,15 +205,23 @@ module.exports = async function handler(req, res) {
       const meta = metaAll[c.code] || {};
       const u = c.used_by ? users.get(c.used_by) : null;
       const tvs = (tvByCode.get(c.code) || []).filter((t) => t.is_active);
+      const allTvs = tvByCode.get(c.code) || [];
+      // Validade da CONTA/TV (pode vir de outros códigos somados) — usada pra renovação.
       let exp = u && u.expires_at ? new Date(u.expires_at).getTime() : 0;
       for (const t of tvs) exp = Math.max(exp, new Date(t.expires_at).getTime() || 0);
-      const used = !!c.used_by || tvs.length > 0;
+      // Janela do PRÓPRIO código: início = resgate no celular (ou 1ª ativação de TV) + duração.
+      let start = c.used_at ? new Date(c.used_at).getTime() : 0;
+      if (!start) for (const t of allTvs) { const a = new Date(t.activated_at).getTime() || 0; if (a && (!start || a < start)) start = a; }
+      const hours = Number(c.duration_hours) || 0;
+      const codeEnd = start && hours ? start + hours * 3600 * 1000 : 0;
+      const isTest = hours <= 24 || /teste/i.test(String(c.plan_label || ''));
+      const used = !!c.used_by || allTvs.length > 0;
       let status;
       if (!c.is_active) status = 'desativado';
       else if (!used) status = (meta.soldAt || meta.buyerName || meta.buyerPhone) ? 'vendido_sem_uso' : 'nao_vendido';
-      else if (exp && exp < now) status = 'vencido';
-      else if (exp && exp - now < WEEK) status = 'vencendo';
-      else status = 'ativo';
+      else if (codeEnd && codeEnd > now) status = (!isTest && exp && exp - now < WEEK) ? 'vencendo' : 'ativo';
+      else if (isTest || (exp && exp > now)) status = 'concluido';
+      else status = 'vencido';
       return {
         code: c.code,
         planLabel: c.plan_label,
@@ -223,6 +231,10 @@ module.exports = async function handler(req, res) {
         createdAt: c.created_at || null,
         usedAt: c.used_at || null,
         status,
+        isTest,
+        codeStart: start ? new Date(start).toISOString() : null,
+        codeEnd: codeEnd ? new Date(codeEnd).toISOString() : null,
+        accountExpiresAt: exp ? new Date(exp).toISOString() : null,
         expiresAt: exp ? new Date(exp).toISOString() : null,
         account: u ? { email: u.email || null, name: u.name || null, userId: u.user_id, lastSeen: u.last_seen_at || null } : (c.used_by ? { userId: c.used_by } : null),
         tvCount: tvs.length,

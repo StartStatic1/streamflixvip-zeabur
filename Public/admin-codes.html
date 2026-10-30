@@ -33,6 +33,7 @@ button,.btn{background:#22223a;border:1px solid var(--line);color:var(--text);bo
 .modal.open{display:flex}.sheet{background:#12121c;border:1px solid var(--line);border-radius:16px 16px 0 0;width:100%;max-width:640px;max-height:92vh;overflow:auto;padding:16px}
 @media(min-width:700px){.modal{align-items:center}.sheet{border-radius:16px}}
 .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;border:1px solid var(--line);padding:10px 14px;border-radius:10px;display:none;z-index:10}
+.sum{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}@media(min-width:700px){.sum{grid-template-columns:repeat(4,1fr)}}.sum div{background:linear-gradient(180deg,#171724,var(--card));border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer}.sum b{display:block;font-size:22px;margin-top:2px}.sum small{color:var(--muted);font-size:12px}.help{color:var(--muted);font-size:12px;margin:4px 0 8px;line-height:1.4}details>summary{cursor:pointer;list-style:none}details>summary h2{display:inline}.s-concluido{color:#7fb3ff}
 .kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:14px}.kv div:nth-child(odd){color:var(--muted)}
 </style>
 </head>
@@ -49,8 +50,27 @@ button,.btn{background:#22223a;border:1px solid var(--line);color:var(--text);bo
   </div>
 
   <div id="app" style="display:none">
+    <div class="sum" id="sum"></div>
+    <div class="card" id="remCard">
+      <h2>🔔 Renovar (contas que vencem em até 7 dias)</h2>
+      <div class="help">Conta por conta (o VIP da conta pode somar vários códigos). Códigos de teste não entram. O botão abre o WhatsApp com a mensagem pronta — <b>você</b> envia.</div>
+      <div id="rem" class="muted">Carregando…</div>
+    </div>
+
     <div class="card">
-      <h2>✨ Gerar códigos</h2>
+      <h2>🎟️ Todos os códigos</h2>
+      <div class="help"><b>Em uso</b>: o tempo do próprio código ainda está correndo. <b>Concluído</b>: o código já foi usado e o tempo dele acabou (a conta pode continuar VIP por outro código). <b>Vencido</b>: a conta ficou sem VIP. Toque num código para ver tudo e editar.</div>
+      <input id="q" placeholder="Buscar código, e-mail, comprador, WhatsApp, lote…" oninput="render()">
+      <div class="chips" id="chips"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0">
+        <span id="count" class="muted"></span>
+        <span><select id="batchSel" onchange="render()" style="width:auto;padding:7px"></select> <button onclick="exportCsv()">⬇️ CSV</button> <button onclick="load()">↻</button></span>
+      </div>
+      <div id="list"></div>
+    </div>
+    <details class="card" id="genCard">
+      <summary><h2>✨ Gerar códigos novos</h2> <span class="muted">(toque para abrir)</span></summary>
+      <div class="help">Escolha o plano e a quantidade. Se já sabe quem comprou, preencha nome e WhatsApp: o código já entra como <b>vendido</b>. O <b>lote</b> ajuda a achar depois (ex.: “Revenda João · Nov”).</div>
       <div class="row">
         <div><label>Plano</label><select id="gPlan"></select></div>
         <div><label>Quantidade</label><input id="gQty" type="number" min="1" max="200" value="1"></div>
@@ -65,23 +85,7 @@ button,.btn{background:#22223a;border:1px solid var(--line);color:var(--text);bo
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="gold" id="gBtn" onclick="gerar()">Gerar</button></div>
       <div id="gOut" style="display:none;margin-top:10px"><textarea id="gCodes" rows="4" readonly></textarea>
         <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap"><button onclick="copyText(document.getElementById('gCodes').value)">Copiar</button><a class="btn" id="gWa" target="_blank" rel="noopener">Enviar no WhatsApp</a></div></div>
-    </div>
-
-    <div class="card" id="remCard">
-      <h2>🔔 Renovações (vencem em 7 dias ou venceram há pouco)</h2>
-      <div id="rem" class="muted">Carregando…</div>
-    </div>
-
-    <div class="card">
-      <h2>🎟️ Códigos</h2>
-      <input id="q" placeholder="Buscar código, e-mail, comprador, WhatsApp, lote…" oninput="render()">
-      <div class="chips" id="chips"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0">
-        <span id="count" class="muted"></span>
-        <span><select id="batchSel" onchange="render()" style="width:auto;padding:7px"></select> <button onclick="exportCsv()">⬇️ CSV</button> <button onclick="load()">↻</button></span>
-      </div>
-      <div id="list"></div>
-    </div>
+    </details>
   </div>
 </div>
 
@@ -93,7 +97,9 @@ const SUPABASE_URL='https://gkujbjpvphuvrejpvvtz.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdWpianB2cGh1dnJlanB2dnR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTQ2OTMsImV4cCI6MjA5NDI3MDY5M30.Zoqdn0V6SZOAfhz9kK9NgG6lniJdyVqihLsNT-O8Huw';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON,{auth:{persistSession:true,autoRefreshToken:true,storageKey:'sfv-admin-auth-token',storage:window.localStorage}});
 let S=null, CODES=[], PLANS=[], F='todos';
-const ST={todos:'Todos',nao_vendido:'Não vendido',vendido_sem_uso:'Vendido sem uso',ativo:'Ativo',vencendo:'Vencendo em 7 dias',vencido:'Vencido',desativado:'Desativado'};
+const ST={todos:'Todos',ativo:'Em uso',vencendo:'Vence em 7 dias',vendido_sem_uso:'Vendido, não usado',nao_vendido:'Não vendido',concluido:'Concluído',vencido:'Vencido',desativado:'Desativado'};
+const dur=h=>!h?'':h<24?h+'h':h%720===0?(h/720)+(h===720?' mês':' meses'):h%24===0?(h/24)+' dias':h+'h';
+function codeWin(c){if(!c.codeStart)return '';const ended=new Date(c.codeEnd)<new Date();return `usado ${fmtDT(c.codeStart)} · ${ended?'acabou':'vale até'} ${fmtDT(c.codeEnd)}`}
 const esc=t=>String(t==null?'':t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtD=d=>d?new Date(d).toLocaleDateString('pt-BR'):'—';
 const fmtDT=d=>d?new Date(d).toLocaleString('pt-BR'):'—';
@@ -126,24 +132,44 @@ function filtered(){
   const q=document.getElementById('q').value.trim().toLowerCase(), b=document.getElementById('batchSel').value;
   return CODES.filter(c=>(F==='todos'||c.status===F)&&(!b||c.batch===b)&&(!q||[c.code,c.account?.email,c.account?.name,c.buyerName,c.buyerPhone,c.batch,c.note].some(v=>v&&String(v).toLowerCase().includes(q))));
 }
-function render(){
+function renderSum(){
+  const now=new Date(), m=now.getMonth(), y=now.getFullYear();
+  const inMonth=d=>{if(!d)return false;const x=new Date(d);return x.getMonth()===m&&x.getFullYear()===y};
+  const cnt=k=>CODES.filter(c=>c.status===k).length;
+  const fat=CODES.filter(c=>!c.isTest&&c.price&&(inMonth(c.soldAt)||(!c.soldAt&&inMonth(c.codeStart)))).reduce((a,c)=>a+c.price,0);
+  const ren=renewals().filter(c=>new Date(c.accountExpiresAt)>=now).length;
+  document.getElementById('sum').innerHTML=`<div onclick="F='ativo';render()"><small>👑 Em uso agora</small><b>${cnt('ativo')+cnt('vencendo')}</b></div>
+   <div onclick="F='vendido_sem_uso';render()"><small>🧾 Vendidos, não usados</small><b>${cnt('vendido_sem_uso')}</b></div>
+   <div onclick="document.getElementById('remCard').scrollIntoView({behavior:'smooth'})"><small>🔔 Vencem em 7 dias</small><b>${ren}</b></div>
+   <div title="Estimativa: códigos pagos vendidos (ou usados) neste mês, pelo preço do plano. Testes não contam."><small>💰 Faturamento do mês*</small><b>${money(fat)}</b></div>`;
+}
+function render(){renderSum();
   const cnt={};CODES.forEach(c=>cnt[c.status]=(cnt[c.status]||0)+1);
   document.getElementById('chips').innerHTML=Object.keys(ST).map(k=>`<span class="chip ${F===k?'on':''}" onclick="F='${k}';render()">${ST[k]} ${k==='todos'?CODES.length:(cnt[k]||0)}</span>`).join('');
   const list=filtered(); document.getElementById('count').textContent=list.length+' código(s)';
+  if(!list.length){document.getElementById('list').innerHTML='<div class="muted" style="padding:14px;text-align:center">Nenhum código aqui. Troque o filtro ou a busca.</div>';return}
   document.getElementById('list').innerHTML=list.slice(0,400).map(c=>`<div class="item" onclick="openCode('${esc(c.code)}')">
     <div class="l1"><span class="code">${esc(c.code)}</span><span class="badge s-${c.status}">${ST[c.status]}</span></div>
-    <div class="muted">${esc(c.planLabel||'')} · ${money(c.price)}${c.batch?' · 📦 '+esc(c.batch):''}${c.expiresAt?' · vence '+fmtD(c.expiresAt):''}</div>
+    <div class="muted">${esc(c.planLabel||'')}${c.isTest?'':' · '+money(c.price)}${c.batch?' · 📦 '+esc(c.batch):''}</div>${c.codeStart?`<div class="muted">⏱️ ${codeWin(c)}</div>`:''}${c.accountExpiresAt&&c.status!=='desativado'?`<div class="muted">👑 Conta VIP até ${fmtD(c.accountExpiresAt)}${new Date(c.accountExpiresAt)<new Date()?' (vencida)':''}</div>`:''}
     <div class="muted">${c.buyerName||c.buyerPhone?'🧾 '+esc(c.buyerName||'')+' '+esc(c.buyerPhone||''):''}${c.account?.email?' · 👤 '+esc(c.account.email):''}${c.tvCount?' · 📺 '+c.tvCount:''}</div>
   </div>`).join('')+(list.length>400?'<div class="muted">Mostrando 400. Use a busca ou o CSV.</div>':'');
 }
 function waLink(phone,text){const p=String(phone||'').replace(/\D/g,'');return 'https://wa.me/'+(p?p:'')+'?text='+encodeURIComponent(text)}
 function renewMsg(c){const pl=PLANS.filter(p=>p.price>0).map(p=>`${p.label} ${money(p.price)}`).join(' · ');
-  const venc=c.expiresAt&&new Date(c.expiresAt)<new Date()?'venceu em '+fmtD(c.expiresAt):'vence em '+fmtD(c.expiresAt);
+  const e=c.accountExpiresAt||c.expiresAt; const venc=e&&new Date(e)<new Date()?'venceu em '+fmtD(e):'vence em '+fmtD(e);
   return `Olá${c.buyerName?' '+c.buyerName:''}! Seu VIP do StreamFlix (${c.planLabel||'plano'}) ${venc}. Quer renovar? ${pl}`}
+function renewals(){
+  const now=Date.now(), by=new Map();
+  for(const c of CODES){ if(c.isTest||!c.isActive||!c.accountExpiresAt||!c.codeStart) continue;
+    const left=new Date(c.accountExpiresAt)-now; if(left>7*864e5||left<-7*864e5) continue;
+    const key=c.account?.userId||('c:'+c.code); const prev=by.get(key);
+    if(!prev||new Date(c.codeStart)>new Date(prev.codeStart)) by.set(key,c); }
+  return [...by.values()].sort((a,b)=>new Date(a.accountExpiresAt)-new Date(b.accountExpiresAt));
+}
 function renderRem(){
-  const now=Date.now(), list=CODES.filter(c=>c.isActive&&c.expiresAt&&(c.status==='vencendo'||(c.status==='vencido'&&now-new Date(c.expiresAt)<7*864e5))).sort((a,b)=>new Date(a.expiresAt)-new Date(b.expiresAt));
-  document.getElementById('rem').innerHTML=list.length?list.map(c=>`<div class="item" style="cursor:default"><div class="l1"><span><span class="code">${esc(c.code)}</span> <span class="muted">${esc(c.buyerName||c.account?.email||'')}</span></span><span class="badge s-${c.status}">${fmtD(c.expiresAt)}</span></div>
-    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><a class="btn gold" target="_blank" rel="noopener" href="${waLink(c.buyerPhone,renewMsg(c))}">💬 ${c.buyerPhone?'WhatsApp':'WhatsApp (escolher contato)'}</a><button onclick="openCode('${esc(c.code)}')">Detalhes</button></div></div>`).join(''):'Nenhuma renovação pendente 🎉';
+  const list=renewals();
+  document.getElementById('rem').innerHTML=list.length?list.map(c=>`<div class="item" style="cursor:default"><div class="l1"><span><span class="code">${esc(c.code)}</span> <span class="muted">${esc(c.buyerName||c.account?.email||'')}</span></span><span class="badge ${new Date(c.accountExpiresAt)<new Date()?'s-vencido':'s-vencendo'}">${new Date(c.accountExpiresAt)<new Date()?'venceu':'vence'} ${fmtD(c.accountExpiresAt)}</span></div>
+    <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><a class="btn gold" target="_blank" rel="noopener" href="${waLink(c.buyerPhone,renewMsg(c))}">💬 ${c.buyerPhone?'WhatsApp':'WhatsApp (escolher contato)'}</a><button onclick="openCode('${esc(c.code)}')">Detalhes</button></div></div>`).join(''):'Nenhuma conta vencendo nos próximos 7 dias 🎉';
 }
 async function gerar(){
   const b=document.getElementById('gBtn');b.disabled=true;b.textContent='Gerando…';
@@ -162,9 +188,9 @@ async function openCode(code){
   const dev=(i,x)=>x?`${i} ${esc(x.label||'aparelho')} …${esc(x.deviceIdTail)} <span class="muted">(visto ${fmtDT(x.lastSeen)})</span>`:`${i} —`;
   ms.innerHTML=`<div class="l1" style="display:flex;justify-content:space-between;align-items:center"><span class="code" style="font-size:18px">${esc(c.code)}</span><button onclick="closeM()">✕</button></div>
   <div style="margin:8px 0"><span class="badge s-${c.status}">${ST[c.status]}</span></div>
-  <div class="kv"><div>Plano</div><div>${esc(c.planLabel||'')} · ${money(c.price)}</div><div>Criado</div><div>${fmtDT(c.createdAt)}</div>
+  <div class="kv"><div>Plano</div><div>${esc(c.planLabel||'')}${c.isTest?'':' · '+money(c.price)}</div><div>Criado</div><div>${fmtDT(c.createdAt)}</div>
   <div>Lote</div><div>${esc(c.batch||'—')}</div><div>Conta</div><div>${esc(c.account?.email||'—')}${c.account?.name?' ('+esc(c.account.name)+')':''}</div>
-  <div>Resgatado</div><div>${fmtDT(c.usedAt)}</div><div>Vence</div><div>${fmtDT(c.expiresAt)}</div>
+  <div>Duração</div><div>${dur(c.durationHours)}${c.isTest?' (teste)':''}</div><div>Este código</div><div>${c.codeStart?codeWin(c):'ainda não usado'}</div><div>Conta VIP até</div><div>${c.accountExpiresAt?fmtDT(c.accountExpiresAt)+' <span class="muted">(soma de todos os códigos da conta/TV)</span>':'—'}</div>
   <div>Celular</div><div>${dev('📱',dv.phone)}</div><div>TV em uso</div><div>${dev('📺',dv.tv)}</div>
   <div>TVs ativadas</div><div>${(d.tvs||[]).filter(t=>t.active).map(t=>esc(t.label||'TV')+' …'+esc(t.deviceIdTail)).join(', ')||'—'}</div>
   ${dv.swaps_phone||dv.swaps_tv||dv.blocked_phone||dv.blocked_tv?`<div>Trocas/bloqueios</div><div>📱 ${dv.swaps_phone||0}/${dv.blocked_phone||0} · 📺 ${dv.swaps_tv||0}/${dv.blocked_tv||0}</div>`:''}</div>
@@ -175,7 +201,7 @@ async function openCode(code){
   <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
     <button class="gold" onclick="saveMeta('${esc(c.code)}')">Salvar</button>
     <button onclick="copyText('${esc(c.code)}')">Copiar código</button>
-    ${c.expiresAt?`<a class="btn" target="_blank" rel="noopener" href="${waLink(c.buyerPhone,renewMsg(c))}">💬 Lembrar renovação</a>`:''}
+    ${c.accountExpiresAt&&!c.isTest?`<a class="btn" target="_blank" rel="noopener" href="${waLink(c.buyerPhone,renewMsg(c))}">💬 Lembrar renovação</a>`:''}
     ${(dv.phone||dv.tv)?`<button onclick="releaseDev('${esc(d.deviceKey)}','${esc(c.code)}')">Liberar aparelhos</button>`:''}
     ${c.isActive?`<button class="danger" onclick="deact('${esc(c.code)}',${!!c.account})">Desativar e liberar aparelhos</button>`:`<button onclick="react('${esc(c.code)}')">Reativar código</button>`}
   </div>
@@ -190,7 +216,7 @@ async function deact(code,hasAcc){
   const r=await api('deactivate-release',{code,endAccountVip:end});if(r.ok){toast('✅ Desativado'+(r.endedVip?' e VIP encerrado':''));await load();openCode(code)}else if(r.error!=='auth')toast('❌ '+r.error)}
 async function react(code){const r=await api('reactivate',{code});if(!r.error){toast('✅ Código reativado (TVs precisam ativar de novo)');await load();openCode(code)}}
 function exportCsv(){
-  const cols=['code','status','planLabel','price','batch','buyerName','buyerPhone','note','soldAt','createdAt','usedAt','expiresAt','email','tvCount'];
+  const cols=['code','status','planLabel','price','batch','buyerName','buyerPhone','note','soldAt','createdAt','codeStart','codeEnd','accountExpiresAt','email','tvCount'];
   const rows=filtered().map(c=>cols.map(k=>{let v=k==='email'?(c.account?.email||''):c[k];if(k==='status')v=ST[v];if(k==='soldAt'&&v)v=new Date(v).toISOString();return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'}).join(';'));
   const blob=new Blob(['\ufeff'+cols.join(';')+'\n'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='codigos-vip-'+new Date().toISOString().slice(0,10)+'.csv';a.click();
