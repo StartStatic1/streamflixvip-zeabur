@@ -23,7 +23,9 @@
 //   cria a tabela tv_activations e a coluna vip_redemptions.platform
 
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
-const MAX_TV_DEVICES_PER_CODE = 2; // quantos aparelhos de TV o mesmo código pode ativar
+const MAX_TV_DEVICES_PER_CODE = 1; // 1 TV por assinante (vaga controlada em lib/device-lock.js)
+const deviceLock = require('../lib/device-lock');
+const { tvKeyForCode } = require('../lib/vip-gate');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -51,6 +53,7 @@ module.exports = async function handler(req, res) {
   const code = (body?.code || '').trim();
   const deviceId = (body?.deviceId || '').trim();
   const deviceLabel = (body?.deviceLabel || '').trim() || null;
+  const replace = body?.replace === true;
 
   if (!code || !deviceId) {
     res.status(400).json({ error: 'Informe "code" e "deviceId".' });
@@ -98,15 +101,22 @@ module.exports = async function handler(req, res) {
     const existingRows = await existingRes.json();
     const existing = Array.isArray(existingRows) && existingRows.length ? existingRows[0] : null;
 
-    // 3) Limite de aparelhos por código — conta outros devices ativos com
-    //    esse mesmo código, sem contar o próprio (renovação não deve travar).
-    const othersUrl = `${SUPABASE_URL}/rest/v1/tv_activations?code=eq.${encodeURIComponent(code)}&is_active=eq.true&device_id=neq.${encodeURIComponent(deviceId)}&select=device_id`;
-    const othersRes = await fetch(othersUrl, { headers });
-    const othersRows = await othersRes.json();
-    const othersCount = Array.isArray(othersRows) ? othersRows.length : 0;
-
-    if (othersCount >= MAX_TV_DEVICES_PER_CODE) {
-      res.status(409).json({ error: `Este código já ativou o número máximo de TVs permitido (${MAX_TV_DEVICES_PER_CODE}).` });
+    // 3) 1 TV por assinante. A vaga é do assinante (conta dona do código, ou o
+    //    próprio código). Outra TV usando? Só troca com "Usar nesta TV" (replace),
+    //    que gasta 1 das trocas do mês. Renovação na mesma TV não conta.
+    const key = await tvKeyForCode(serviceKey, code);
+    const lk = replace
+      ? deviceLock.claim(key, 'tv', deviceId, deviceLabel)
+      : deviceLock.check(key, 'tv', deviceId, deviceLabel);
+    if (!lk.ok) {
+      res.status(409).json({
+        code: lk.code === 'SWAP_LIMIT' ? 'SWAP_LIMIT' : 'TV_IN_USE',
+        error: lk.code === 'SWAP_LIMIT'
+          ? `Limite de ${lk.maxSwaps} trocas de TV em 30 dias atingido. Fale com o suporte.`
+          : `Este VIP já está em uso em outra TV${lk.otherLabel ? ' (' + lk.otherLabel + ')' : ''}. Você pode usar nesta TV (a outra será desconectada).`,
+        swapsLeft: lk.swapsLeft,
+        maxSwaps: lk.maxSwaps,
+      });
       return;
     }
 

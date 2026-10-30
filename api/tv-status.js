@@ -8,6 +8,8 @@
 //   POST /api/tv-status   body: { deviceId: "<android_id>" }
 
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+const deviceLock = require('../lib/device-lock');
+const { tvKeyForCode } = require('../lib/vip-gate');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -45,7 +47,7 @@ module.exports = async function handler(req, res) {
   };
 
   try {
-    const url = `${SUPABASE_URL}/rest/v1/tv_activations?device_id=eq.${encodeURIComponent(deviceId)}&select=is_active,expires_at,plan_label`;
+    const url = `${SUPABASE_URL}/rest/v1/tv_activations?device_id=eq.${encodeURIComponent(deviceId)}&select=is_active,expires_at,plan_label,code`;
     const r = await fetch(url, { headers });
     const rows = await r.json();
     const row = Array.isArray(rows) && rows.length ? rows[0] : null;
@@ -57,6 +59,29 @@ module.exports = async function handler(req, res) {
 
     const expiresAt = new Date(row.expires_at);
     const active = expiresAt > new Date();
+
+    // 1 TV por assinante: outra TV está com a vaga? (claim:true = "Usar nesta TV")
+    if (active && row.code) {
+      const key = await tvKeyForCode(serviceKey, row.code);
+      const label = String(body?.deviceLabel || '').slice(0, 60);
+      const r = body?.claim === true
+        ? deviceLock.claim(key, 'tv', deviceId, label)
+        : deviceLock.check(key, 'tv', deviceId, label);
+      if (!r.ok) {
+        res.status(200).json({
+          active: false,
+          inUse: true,
+          code: r.code,
+          otherLabel: r.otherLabel || null,
+          swapsLeft: r.swapsLeft,
+          maxSwaps: r.maxSwaps,
+          message: r.code === 'SWAP_LIMIT'
+            ? `Limite de ${r.maxSwaps} trocas de TV em 30 dias atingido. Fale com o suporte.`
+            : deviceLock.MSG.tv,
+        });
+        return;
+      }
+    }
 
     // Sempre ISO com "Z": o Supabase devolve "+00:00" e o Instant.parse das TVs
     // Android 9-11 (Fire TV) não entende offset — a TV achava que não estava ativa.

@@ -25,13 +25,21 @@ object VipStatusHolder {
      * devolver (vip-status / redeem). Se expiresAt for no passado, isVip
      * fica false mesmo que o flag venha true.
      */
+    @Volatile private var rawVip = false
+
     fun update(isVip: Boolean, expiresAtIso: String? = null) {
         expiresAtMs = parseIso(expiresAtIso) ?: 0L
+        rawVip = isVip
+        reapply()
+    }
+
+    /** Recalcula (ex.: conta VIP passou a outro celular ou voltou pra este). */
+    fun reapply() {
         val effective = when {
             expiresAtMs > 0L -> expiresAtMs > System.currentTimeMillis()
-            else -> isVip
+            else -> rawVip
         }
-        _isVip.value = effective
+        _isVip.value = effective && !DeviceLock.blocked
     }
 
     /**
@@ -41,7 +49,7 @@ object VipStatusHolder {
      */
     fun refreshFromClock() {
         if (expiresAtMs > 0L) {
-            val still = expiresAtMs > System.currentTimeMillis()
+            val still = expiresAtMs > System.currentTimeMillis() && !DeviceLock.blocked
             if (_isVip.value != still) _isVip.value = still
         }
     }

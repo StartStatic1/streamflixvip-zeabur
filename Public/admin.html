@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+<script>if(location.hostname==="streamflixvip.online")location.replace("https://www.streamflixvip.online"+location.pathname+location.search+location.hash);</script>
+
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin — StreamFlixVIP</title>
@@ -1020,6 +1022,7 @@
                 <th style="padding:8px 6px">Expira em</th>
                 <th style="padding:8px 6px">Origem</th>
                 <th style="padding:8px 6px">📺 TVs</th>
+                <th style="padding:8px 6px">📱 Celular / 📺 TV em uso</th>
               </tr>
             </thead>
             <tbody id="activationsTableBody"></tbody>
@@ -1567,7 +1570,10 @@
   // Link de recuperação de senha (#access_token=...&type=recovery) chega
   // via evento PASSWORD_RECOVERY do próprio SDK — tratado à parte do
   // fluxo normal de login, sempre que o Supabase disparar esse evento.
-  db.auth.onAuthStateChange((event) => {
+  db.auth.onAuthStateChange((event, session) => {
+    // O SDK renova o token sozinho (~1h). Sem isto o painel seguia usando o
+    // token velho e a API respondia "Token invalido" (parecia deslogado).
+    if (session && (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN' || event === 'USER_UPDATED')) _session = session;
     if (event === 'PASSWORD_RECOVERY') {
       if (window.location.hash) history.replaceState(null, '', window.location.pathname);
       document.getElementById('resetPassModal').classList.add('open');
@@ -1697,9 +1703,18 @@
   }
 
   // ── API CALL ──
+  // Token sempre atual: pega a sessão do SDK (que renova sozinha) e, se a API
+  // ainda disser 401, força uma renovação e tenta 1 vez de novo.
+  async function freshToken(force) {
+    try {
+      const r = force ? await db.auth.refreshSession() : await db.auth.getSession();
+      const s = r?.data?.session;
+      if (s) _session = s;
+    } catch (_) {}
+    return _session?.access_token;
+  }
   async function api(action, extra = {}) {
-    const token = _session?.access_token;
-    const res = await fetch('/api/admin-vip', {
+    const call = async (token) => fetch('/api/admin-vip', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1707,8 +1722,12 @@
       },
       body: JSON.stringify({ action, ...extra })
     });
+    let res = await call(await freshToken(false));
+    if (res.status === 401) res = await call(await freshToken(true));
     return res.json();
   }
+  // Ao voltar pra aba depois de muito tempo, renova antes do próximo clique.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && _session) freshToken(false); });
 
   // ── LOAD ──
   async function loadCodes() {
@@ -2053,11 +2072,33 @@
         <td style="padding:8px 6px">${expira}</td>
         <td style="padding:8px 6px;font-size:0.85rem;color:var(--muted)">${a.origem}</td>
         <td style="padding:8px 6px">${tvInfo}</td>
+        <td style="padding:8px 6px;font-size:0.85rem">${deviceCell(a)}</td>
       </tr>`;
     }).join('');
     if (filtered.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--muted)">Nada encontrado</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--muted)">Nada encontrado</td></tr>';
     }
+  }
+
+  function _esc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function _devLine(icon, d, blocked, swaps) {
+    if (!d) return `${icon} —`;
+    const seen = d.lastSeen ? new Date(d.lastSeen).toLocaleString('pt-BR') : '—';
+    let t = `${icon} ${_esc(d.label || 'aparelho')} …${_esc(d.deviceIdTail)} <span style="color:var(--muted)">(visto ${seen})</span>`;
+    if (swaps) t += ` · ${swaps} troca(s)/30d`;
+    if (blocked) t += ` · <span style="color:#e0a052">${blocked} bloqueio(s)</span>`;
+    return t;
+  }
+  function deviceCell(a) {
+    const d = a.devices;
+    if (!d) return '<span style="color:var(--muted)">nenhum ainda</span>';
+    return _devLine('📱', d.phone, d.blocked_phone, d.swaps_phone) + '<br>' + _devLine('📺', d.tv, d.blocked_tv, d.swaps_tv) +
+      `<br><button class="btn btn-sm" onclick="releaseDevices('${_esc(a.deviceKey)}')">Liberar aparelhos</button>`;
+  }
+  async function releaseDevices(key) {
+    if (!confirm('Liberar celular e TV desta conta? O próximo aparelho que abrir o app vira o ativo e as trocas do mês são zeradas.')) return;
+    const r = await api('device-release', { key });
+    if (r && r.ok) { showToast('✅ Aparelhos liberados'); loadActivations(); } else showToast('❌ ' + ((r && r.error) || 'Falha'));
   }
 
   // ════════════════════════════════════════════════════════════

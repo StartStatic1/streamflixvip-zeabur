@@ -11,7 +11,8 @@
 const crypto = require('crypto');
 
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
-const MAX_TV_DEVICES_PER_CODE = 2;
+const MAX_TV_DEVICES_PER_CODE = 1; // 1 TV por assinante (lib/device-lock.js)
+const deviceLock = require('../lib/device-lock');
 const TTL_MS = 10 * 60 * 1000;
 const PUBLIC_URL = process.env.PUBLIC_SITE_URL || 'https://www.streamflixvip.online';
 
@@ -114,10 +115,11 @@ module.exports = async function handler(req, res) {
       const code = Array.isArray(crows) && crows[0] && crows[0].code;
       if (!code) { res.status(409).json({ error: 'Não achamos o código VIP da sua conta. Use o código na TV.' }); return; }
 
-      const or = await fetch(`${SUPABASE_URL}/rest/v1/tv_activations?code=eq.${encodeURIComponent(code)}&is_active=eq.true&device_id=neq.${encodeURIComponent(p.deviceId)}&select=device_id,expires_at`, { headers });
-      const others = (await or.json() || []).filter((r) => new Date(r.expires_at).getTime() > Date.now());
-      if (others.length >= MAX_TV_DEVICES_PER_CODE) {
-        res.status(409).json({ error: `Sua conta já está em ${MAX_TV_DEVICES_PER_CODE} TVs.` }); return;
+      // 1 TV por conta: parear pelo celular da própria conta move a vaga pra esta TV
+      // (a anterior é desconectada), gastando 1 das trocas do mês.
+      const lk = deviceLock.claim('u:' + user.id, 'tv', p.deviceId, 'TV (QR)');
+      if (!lk.ok) {
+        res.status(409).json({ error: `Você já trocou de TV ${lk.maxSwaps} vezes nos últimos 30 dias. Fale com o suporte para liberar.` }); return;
       }
       const up = await fetch(`${SUPABASE_URL}/rest/v1/tv_activations?on_conflict=device_id`, {
         method: 'POST',

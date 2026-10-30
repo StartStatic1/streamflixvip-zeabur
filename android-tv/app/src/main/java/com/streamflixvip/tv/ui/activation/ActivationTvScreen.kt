@@ -58,6 +58,10 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
     var code by remember { mutableStateOf("") }
     var isLoading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val inUseMsg by activationManager.inUseMessage.collectAsState()
+    // código digitado que bateu em "já em uso em outra TV" -> botão reenvia com replace
+    var replaceCode by remember { mutableStateOf<String?>(null) }
+    var replaceLimit by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val firstKeyFocusRequester = remember { FocusRequester() }
 
@@ -104,10 +108,31 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
         isLoading = true
         errorMessage = null
         scope.launch {
-            val result = activationManager.activate(code)
+            val typed = code
+            val result = activationManager.activate(typed)
             isLoading = false
-            result.onSuccess { onActivated() }
-                .onFailure { e -> errorMessage = e.message ?: "Não foi possível ativar." }
+            result.onSuccess { replaceCode = null; onActivated() }
+                .onFailure { e ->
+                    errorMessage = e.message ?: "Não foi possível ativar."
+                    if (e is TvActivationManager.TvInUseException) { replaceCode = typed; replaceLimit = e.limit } else replaceCode = null
+                }
+        }
+    }
+
+    /** "Usar nesta TV": move a assinatura pra cá e desconecta a outra TV. */
+    fun useHere() {
+        if (isLoading) return
+        isLoading = true
+        errorMessage = null
+        scope.launch {
+            val rc = replaceCode
+            val result = if (rc != null) activationManager.activate(rc, replace = true) else activationManager.claimHere()
+            isLoading = false
+            result.onSuccess { replaceCode = null; onActivated() }
+                .onFailure { e ->
+                    errorMessage = e.message ?: "Não foi possível ativar."
+                    if (e is TvActivationManager.TvInUseException) replaceLimit = e.limit
+                }
         }
     }
 
@@ -204,6 +229,23 @@ fun ActivationTvScreen(activationManager: TvActivationManager, onActivated: () -
                 if (errorMessage != null) {
                     Spacer(Modifier.height(8.dp))
                     Text(errorMessage!!, color = Color(0xFFF87171), fontSize = 13.sp)
+                }
+                val showUseHere = (replaceCode != null && !replaceLimit) ||
+                    (replaceCode == null && inUseMsg != null && !activationManager.swapLimitReached)
+                if (inUseMsg != null && errorMessage == null) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(inUseMsg!! + " Cada assinatura vale para 1 celular e 1 TV.", color = Color(0xFFFBBF24), fontSize = 13.sp)
+                }
+                if (showUseHere) {
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { useHere() },
+                        enabled = !isLoading,
+                        colors = ButtonDefaults.colors(
+                            containerColor = Color(0xFFFBBF24), focusedContainerColor = Color(0xFFFFD45C),
+                            contentColor = Color.Black, focusedContentColor = Color.Black,
+                        ),
+                    ) { Text("Usar nesta TV (desconecta a outra)", fontWeight = FontWeight.Bold) }
                 }
                 Spacer(Modifier.height(14.dp))
                 LazyVerticalGrid(

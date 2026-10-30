@@ -44,6 +44,7 @@ object NetworkModule {
         val dev = deviceId
         if (!dev.isNullOrBlank()) {
             builder.header("X-Device-Id", dev)
+            builder.header("X-Client", "tv")
         }
         chain.proceed(builder.build())
     }

@@ -1,6 +1,7 @@
 // api/admin-vip.js
 // API admin VIP — restaurada (nucleo + IPTV + live TV + fontes + ads basico + avisos)
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
+const deviceLock = require('../lib/device-lock');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -166,9 +167,26 @@ module.exports = async function handler(req, res) {
         codigoRelacionado,
         tvsAtivas: tvs.length,
         tvs,
+        deviceKey: 'u:' + u.user_id,
+        devices: deviceLock.get('u:' + u.user_id),
       };
     });
     res.status(200).json({ activations });
+    return;
+  }
+
+  // 1 celular + 1 TV: ver e liberar aparelhos (suporte)
+  if (action === 'device-locks') {
+    res.status(200).json({ locks: deviceLock.all(), maxSwaps: deviceLock.MAX_SWAPS });
+    return;
+  }
+  if (action === 'device-release') {
+    const key = String(body.key || '');
+    const slot = body.slot === 'phone' || body.slot === 'tv' ? body.slot : null;
+    if (!/^[uc]:/.test(key)) { res.status(400).json({ error: 'key inválida' }); return; }
+    const ok = deviceLock.release(key, slot);
+    console.log('[admin] device-release', key.slice(0, 10) + '…', slot || 'todos', ok);
+    res.status(200).json({ ok: true, released: ok });
     return;
   }
 

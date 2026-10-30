@@ -363,6 +363,7 @@ async function handler(req, res) {
   }
 
   if (needsVip && !access.isVip) {
+    if (access.lock) res.setHeader('X-Device-Lock', access.lock.slot);
     res.status(200).json({
       error: 'VIP necessário para este título/episódio.',
       code: 'VIP_REQUIRED',

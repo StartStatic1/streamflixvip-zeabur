@@ -11,6 +11,7 @@ class StreamFlixApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        runCatching { com.streamflixvip.app.data.DeviceLock.init(this) }
         runCatching { com.streamflixvip.app.ui.theme.AccentStore.init(this) }
         runCatching { AdsHelper.init(this) }
         if (CrashLog.consumeNotice(this)) {

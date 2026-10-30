@@ -83,7 +83,7 @@ data class PixRequest(val userId: String, val value: Double)
 data class PixResponse(val success: Boolean = false, val qrCode: String? = null, val pixCode: String? = null)
 
 @JsonClass(generateAdapter = true)
-data class ActivateTvRequest(val code: String, val deviceId: String, val deviceLabel: String? = null)
+data class ActivateTvRequest(val code: String, val deviceId: String, val deviceLabel: String? = null, val replace: Boolean = false)
 
 @JsonClass(generateAdapter = true)
 data class ActivateTvResponse(
@@ -94,11 +94,16 @@ data class ActivateTvResponse(
 )
 
 @JsonClass(generateAdapter = true)
-data class TvStatusRequest(val deviceId: String)
+data class TvStatusRequest(val deviceId: String, val claim: Boolean = false, val deviceLabel: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class TvStatusResponse(
     val active: Boolean = false,
     val expiresAt: String? = null,
     val planLabel: String? = null,
+    /** true = esta assinatura está ativa em OUTRA TV (1 TV por assinante). */
+    val inUse: Boolean = false,
+    val code: String? = null,
+    val message: String? = null,
+    val swapsLeft: Int? = null,
 )

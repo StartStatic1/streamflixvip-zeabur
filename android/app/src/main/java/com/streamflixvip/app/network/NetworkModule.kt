@@ -39,7 +39,17 @@ object NetworkModule {
         if (!userId.isNullOrBlank()) {
             builder.header("X-User-Id", userId)
         }
-        chain.proceed(builder.build())
+        val dev = com.streamflixvip.app.data.DeviceLock.deviceId
+        if (!dev.isNullOrBlank() && original.url.host.contains("streamflixvip")) {
+            builder.header("X-Device-Id", dev)
+            builder.header("X-Client", "phone")
+            builder.header("X-Device-Label", com.streamflixvip.app.data.DeviceLock.deviceLabel.take(40).filter { it.code in 32..126 })
+        }
+        val response = chain.proceed(builder.build())
+        if (response.header("X-Device-Lock") == "phone") {
+            com.streamflixvip.app.data.DeviceLock.onServerSaysInUse()
+        }
+        response
     }
 
     private val tokenAuthenticator = okhttp3.Authenticator { _, response ->

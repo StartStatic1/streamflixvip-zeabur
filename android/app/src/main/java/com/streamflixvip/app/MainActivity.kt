@@ -281,8 +281,12 @@ private fun MainAppScaffold(
         if (userId != null) {
             val status = VipRepository().getStatus(userId)
             VipStatusHolder.update(status.isVip, status.expiresAt)
+            if (status.isVip) com.streamflixvip.app.data.DeviceLock.check(claim = false)
+        } else {
+            com.streamflixvip.app.data.DeviceLock.clearOnSignOut()
         }
     }
+    DeviceInUseDialog()
 
     if (resumeBusy) {
         androidx.compose.ui.window.Dialog(onDismissRequest = {}) {
@@ -673,3 +677,50 @@ private fun <T : androidx.lifecycle.ViewModel> viewModelFactory(create: () -> T)
             return create() as VM
         }
     }
+
+
+/** "Sua conta VIP está em uso em outro celular" + "Usar neste aparelho". */
+@Composable
+private fun DeviceInUseDialog() {
+    val info by com.streamflixvip.app.data.DeviceLock.state.collectAsState()
+    var dismissedFor by remember { mutableStateOf<com.streamflixvip.app.data.DeviceLock.Info?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val i = info ?: return
+    if (dismissedFor == i) return
+    val other = i.otherLabel?.let { " ($it)" } ?: ""
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { dismissedFor = i },
+        title = { Text(if (i.limitReached) "Limite de trocas" else "VIP em uso em outro celular") },
+        text = {
+            Column {
+                Text(
+                    if (i.limitReached) i.message
+                    else "Sua conta VIP está em uso em outro celular$other. Cada assinatura vale para 1 celular e 1 TV.\n\n" +
+                        "Tocar em \"Usar neste aparelho\" passa o VIP para este celular e desconecta o outro." +
+                        (i.swapsLeft?.let { "\n\nTrocas restantes este mês: $it" } ?: ""),
+                )
+                error?.let { Spacer(Modifier.height(8.dp)); Text(it, color = Color(0xFFFF6B6B)) }
+            }
+        },
+        confirmButton = {
+            if (!i.limitReached) {
+                androidx.compose.material3.TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        busy = true; error = null
+                        scope.launch {
+                            val r = com.streamflixvip.app.data.DeviceLock.check(claim = true)
+                            busy = false
+                            if (r == null) error = "Sem conexão. Tente de novo."
+                        }
+                    },
+                ) { Text(if (busy) "Aguarde..." else "Usar neste aparelho") }
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = { dismissedFor = i }) { Text(if (i.limitReached) "OK" else "Agora não") }
+        },
+    )
+}

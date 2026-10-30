@@ -37,23 +37,60 @@ class TvActivationManager(context: Context) {
     /** true se o cache local diz que essa TV está ativada e dentro da validade. */
     val isActivatedLocally: Boolean get() = expiresAtMs > System.currentTimeMillis()
 
-    suspend fun activate(code: String): Result<Unit> {
+    /** Mensagem "VIP em uso em outra TV" (null = tudo certo). Só vem de resposta EXPLÍCITA do servidor. */
+    val inUseMessage = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    /** true = limite de trocas atingido (não mostra "Usar nesta TV"). */
+    @Volatile var swapLimitReached: Boolean = false
+        private set
+
+    private val label: String = runCatching { android.os.Build.MODEL.orEmpty().take(40) }.getOrDefault("")
+
+    class TvInUseException(message: String, val limit: Boolean) : Exception(message)
+
+    /** "Usar nesta TV": move a assinatura pra esta TV (a outra é desconectada). */
+    suspend fun claimHere(): Result<Unit> {
+        return try {
+            val r = NetworkModule.vipApi.getTvStatus(TvStatusRequest(deviceId = deviceId, claim = true, deviceLabel = label))
+            if (r.active && r.expiresAt != null) {
+                expiresAtMs = parseIso(r.expiresAt) ?: 0L
+                planLabel = r.planLabel
+                inUseMessage.value = null
+                swapLimitReached = false
+                if (isActivatedLocally) Result.success(Unit) else Result.failure(Exception("Não foi possível ativar. Tente novamente."))
+            } else if (r.inUse) {
+                swapLimitReached = r.code == "SWAP_LIMIT"
+                inUseMessage.value = r.message ?: "Sua conta VIP está em uso em outra TV."
+                Result.failure(TvInUseException(inUseMessage.value!!, swapLimitReached))
+            } else {
+                Result.failure(Exception("Ativação não encontrada. Digite o código de novo."))
+            }
+        } catch (_: Exception) {
+            Result.failure(Exception("Sem conexão. Verifique a internet da TV e tente de novo."))
+        }
+    }
+
+    suspend fun activate(code: String, replace: Boolean = false): Result<Unit> {
         return try {
             val response = NetworkModule.vipApi.activateTv(
-                com.streamflixvip.tv.network.ActivateTvRequest(code = code.trim(), deviceId = deviceId),
+                com.streamflixvip.tv.network.ActivateTvRequest(code = code.trim(), deviceId = deviceId, deviceLabel = label.ifBlank { null }, replace = replace),
             )
             if (response.success && response.expiresAt != null) {
                 expiresAtMs = parseIso(response.expiresAt) ?: 0L
                 planLabel = response.planLabel
+                inUseMessage.value = null
                 Result.success(Unit)
             } else {
                 Result.failure(Exception(response.error ?: "Código inválido."))
             }
         } catch (e: retrofit2.HttpException) {
-            val message = runCatching {
-                e.response()?.errorBody()?.string()
-                    ?.let { org.json.JSONObject(it).optString("error") }
+            val json = runCatching {
+                e.response()?.errorBody()?.string()?.let { org.json.JSONObject(it) }
             }.getOrNull()
+            val message = json?.optString("error")
+            val errCode = json?.optString("code").orEmpty()
+            if (e.code() == 409 && (errCode == "TV_IN_USE" || errCode == "SWAP_LIMIT")) {
+                return Result.failure(TvInUseException(message?.takeIf { it.isNotBlank() } ?: "Este VIP já está em uso em outra TV.", errCode == "SWAP_LIMIT"))
+            }
             Result.failure(Exception(message?.takeIf { it.isNotBlank() } ?: "Não foi possível ativar. Tente novamente."))
         } catch (e: Exception) {
             Result.failure(Exception("Sem conexão. Verifique a internet da TV e tente de novo."))
@@ -67,12 +104,19 @@ class TvActivationManager(context: Context) {
      */
     suspend fun revalidate(): Boolean {
         try {
-            val response = NetworkModule.vipApi.getTvStatus(TvStatusRequest(deviceId = deviceId))
+            val response = NetworkModule.vipApi.getTvStatus(TvStatusRequest(deviceId = deviceId, deviceLabel = label.ifBlank { null }))
             if (response.active && response.expiresAt != null) {
                 expiresAtMs = parseIso(response.expiresAt) ?: expiresAtMs
                 planLabel = response.planLabel
+                inUseMessage.value = null
             } else if (!response.active) {
                 expiresAtMs = 0L
+                if (response.inUse) {
+                    swapLimitReached = response.code == "SWAP_LIMIT"
+                    inUseMessage.value = response.message ?: "Sua conta VIP está em uso em outra TV."
+                } else {
+                    inUseMessage.value = null
+                }
             }
         } catch (_: Exception) {
             // mantém cache
