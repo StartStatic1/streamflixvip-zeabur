@@ -564,8 +564,8 @@ fun LivePlayerScreen(
                             ) {
                                 Column(Modifier.weight(1f)) {
                                     Text(g.label, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(
-                                        g.host + (if (g.indices.size > 1) " · ${g.indices.size} opções" else ""),
+                                    if (g.indices.size > 1) Text(
+                                        "${g.indices.size} opções",
                                         color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
                                 }

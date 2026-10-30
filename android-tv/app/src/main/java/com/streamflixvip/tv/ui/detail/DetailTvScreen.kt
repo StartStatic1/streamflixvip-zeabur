@@ -423,7 +423,6 @@ fun DetailTvScreen(
                                 subtitle = listOfNotNull(
                                     if (s.displayName == sp.preferredLabel) "Último usado" else null,
                                     tags.takeIf { it.isNotBlank() },
-                                    sourceHost(s.source_url).takeIf { it.isNotBlank() },
                                 ).joinToString(" · ").ifBlank { null },
                                 leading = Icons.Filled.Tv,
                                 trailingText = "${index + 1}",

@@ -1863,8 +1863,7 @@ private fun prettyFonteLabel(url: String, index: Int): String {
         host.contains("goldvip") || host.contains("sventank") || host.contains("cineduo") || host.contains("kraps") -> "Goldvip"
         host.contains("guindex") -> "Guindex"
         host.contains("flixhub") -> "FlixHub"
-        host.isNotBlank() -> host.removePrefix("www.").substringBefore(".").replaceFirstChar { it.uppercase() }
-        else -> "Fonte ${index + 1}"
+                else -> "Fonte ${index + 1}"
     }
 }
 

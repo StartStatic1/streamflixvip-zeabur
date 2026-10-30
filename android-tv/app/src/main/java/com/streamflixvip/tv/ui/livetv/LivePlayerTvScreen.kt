@@ -637,7 +637,7 @@ fun LivePlayerTvScreen(
                         item(key = "g:${g.firstIndex}") {
                             PanelItem(
                                 g.label + (if (g.leg) " · LEG" else ""),
-                                subtitle = g.host + (if (g.indices.size > 1) " · ${g.indices.size} opções" else ""),
+                                subtitle = if (g.indices.size > 1) "${g.indices.size} opções" else null,
                                 selected = streamIndex in g.indices,
                                 leading = Icons.Filled.Dns,
                                 onClick = {
