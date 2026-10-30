@@ -2,6 +2,8 @@
 // API admin VIP — restaurada (nucleo + IPTV + live TV + fontes + ads basico + avisos)
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const deviceLock = require('../lib/device-lock');
+const codeMeta = require('../lib/code-meta');
+const { PLANS, priceForLabel } = require('../lib/plans');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -145,13 +147,7 @@ module.exports = async function handler(req, res) {
         codigoRelacionado = codesByUser.get(u.user_id);
         origem = 'Codigo: ' + codigoRelacionado;
       }
-      const plan = String(u.plan_label || '');
-      let amountEstimate = null;
-      if (/30\s*Dias|1\s*Mes/i.test(plan)) amountEstimate = 9.9;
-      else if (/90\s*Dias|3\s*Mes/i.test(plan)) amountEstimate = 24.9;
-      else if (/180\s*Dias|6\s*Mes/i.test(plan)) amountEstimate = 49.9;
-      else if (/Anual|365\s*Dias|12\s*Mes/i.test(plan)) amountEstimate = 89.9;
-      else if (/Vital/i.test(plan)) amountEstimate = 149.9;
+      const amountEstimate = priceForLabel(u.plan_label);
       const tvs = codigoRelacionado && !String(codigoRelacionado).startsWith('PIX-')
         ? (tvByCode.get(codigoRelacionado) || [])
         : [];
@@ -172,6 +168,154 @@ module.exports = async function handler(req, res) {
       };
     });
     res.status(200).json({ activations });
+    return;
+  }
+
+  // ════ Painel de códigos (admin-codes.html) ════
+  if (action === 'codes-panel' || action === 'code-detail') {
+    const one = action === 'code-detail' ? String(body.code || '') : '';
+    const codeFilter = one ? `&code=eq.${encodeURIComponent(one)}` : '';
+    const [codesRes, tvRes, redRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/vip_codes?select=*${codeFilter}&order=created_at.desc&limit=3000`, { headers: svcHeaders }),
+      fetch(`${SUPABASE_URL}/rest/v1/tv_activations?select=code,device_id,device_label,expires_at,is_active,activated_at${codeFilter}`, { headers: svcHeaders }),
+      one
+        ? fetch(`${SUPABASE_URL}/rest/v1/vip_redemptions?select=email,plan_label,duration_hours,redeemed_at,platform,device_id&code=eq.${encodeURIComponent(one)}&order=redeemed_at.desc&limit=50`, { headers: svcHeaders })
+        : Promise.resolve(null),
+    ]);
+    const codes = await codesRes.json();
+    if (!codesRes.ok || !Array.isArray(codes)) { res.status(502).json({ error: 'Erro ao listar códigos', detail: codes }); return; }
+    const tvRows = tvRes.ok ? await tvRes.json() : [];
+    const userIds = [...new Set(codes.map((c) => c.used_by).filter(Boolean))];
+    const users = new Map();
+    for (let i = 0; i < userIds.length; i += 150) {
+      const ids = userIds.slice(i, i + 150).map(encodeURIComponent).join(',');
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_status?select=user_id,email,name,expires_at,plan_label,last_seen_at&user_id=in.(${ids})`, { headers: svcHeaders });
+      const rows = r.ok ? await r.json() : [];
+      for (const u of rows) users.set(u.user_id, u);
+    }
+    const tvByCode = new Map();
+    for (const t of Array.isArray(tvRows) ? tvRows : []) {
+      if (!tvByCode.has(t.code)) tvByCode.set(t.code, []);
+      tvByCode.get(t.code).push(t);
+    }
+    const metaAll = codeMeta.all();
+    const now = Date.now();
+    const WEEK = 7 * 24 * 3600 * 1000;
+    const out = codes.map((c) => {
+      const meta = metaAll[c.code] || {};
+      const u = c.used_by ? users.get(c.used_by) : null;
+      const tvs = (tvByCode.get(c.code) || []).filter((t) => t.is_active);
+      let exp = u && u.expires_at ? new Date(u.expires_at).getTime() : 0;
+      for (const t of tvs) exp = Math.max(exp, new Date(t.expires_at).getTime() || 0);
+      const used = !!c.used_by || tvs.length > 0;
+      let status;
+      if (!c.is_active) status = 'desativado';
+      else if (!used) status = (meta.soldAt || meta.buyerName || meta.buyerPhone) ? 'vendido_sem_uso' : 'nao_vendido';
+      else if (exp && exp < now) status = 'vencido';
+      else if (exp && exp - now < WEEK) status = 'vencendo';
+      else status = 'ativo';
+      return {
+        code: c.code,
+        planLabel: c.plan_label,
+        durationHours: c.duration_hours,
+        price: priceForLabel(c.plan_label),
+        isActive: !!c.is_active,
+        createdAt: c.created_at || null,
+        usedAt: c.used_at || null,
+        status,
+        expiresAt: exp ? new Date(exp).toISOString() : null,
+        account: u ? { email: u.email || null, name: u.name || null, userId: u.user_id, lastSeen: u.last_seen_at || null } : (c.used_by ? { userId: c.used_by } : null),
+        tvCount: tvs.length,
+        buyerName: meta.buyerName || '',
+        buyerPhone: meta.buyerPhone || '',
+        note: meta.note || '',
+        batch: meta.batch || '',
+        soldAt: meta.soldAt || null,
+      };
+    });
+    if (one) {
+      const c = out[0];
+      if (!c) { res.status(404).json({ error: 'Código não encontrado' }); return; }
+      const reds = redRes && redRes.ok ? await redRes.json() : [];
+      const key = c.account?.userId ? 'u:' + c.account.userId : 'c:' + c.code;
+      res.status(200).json({
+        code: c,
+        tvs: (tvByCode.get(c.code) || []).map((t) => ({ label: t.device_label || null, deviceIdTail: String(t.device_id).slice(-6), expiresAt: t.expires_at, activatedAt: t.activated_at, active: !!t.is_active })),
+        devices: deviceLock.get(key),
+        deviceKey: key,
+        redemptions: Array.isArray(reds) ? reds.map((r) => ({ ...r, device_id: r.device_id ? String(r.device_id).slice(-6) : null })) : [],
+        history: (codeMeta.get(c.code) || {}).history || [],
+      });
+      return;
+    }
+    res.status(200).json({ codes: out, plans: PLANS });
+    return;
+  }
+
+  if (action === 'code-meta-save') {
+    const code = String(body.code || '').trim();
+    if (!code) { res.status(400).json({ error: 'Informe o código' }); return; }
+    const f = {};
+    for (const k of ['buyerName', 'buyerPhone', 'note', 'batch', 'sold']) if (k in body) f[k] = body[k];
+    const m = codeMeta.update(code, f, body.sold === true && !(codeMeta.get(code) || {}).soldAt ? 'marcado como vendido' : 'dados do comprador editados');
+    res.status(200).json({ ok: true, meta: m });
+    return;
+  }
+
+  if (action === 'create-batch') {
+    const plan = PLANS.find((p) => p.id === body.planId);
+    const hours = plan ? plan.hours : Math.max(1, Math.min(87600, parseInt(body.hours, 10) || 0));
+    if (!hours) { res.status(400).json({ error: 'Plano inválido' }); return; }
+    const label = plan ? plan.label : `${hours}h`;
+    const qty = Math.max(1, Math.min(200, parseInt(body.qty, 10) || 1));
+    const prefix = String(body.prefix || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'VIP';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const rnd = () => Array.from({ length: 6 }, () => chars[require('crypto').randomInt(chars.length)]).join('');
+    const set = new Set();
+    while (set.size < qty) set.add(`${prefix}-${rnd()}`);
+    const rows = [...set].map((code) => ({ code, duration_hours: hours, plan_label: label }));
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/vip_codes`, {
+      method: 'POST', headers: { ...svcHeaders, Prefer: 'return=representation' }, body: JSON.stringify(rows),
+    });
+    const created = await r.json();
+    if (!r.ok) { res.status(502).json({ error: 'Erro ao criar (tente de novo)', detail: created }); return; }
+    const batch = String(body.batch || '').trim();
+    for (const c of created) {
+      codeMeta.update(c.code, {
+        batch, buyerName: body.buyerName || '', buyerPhone: body.buyerPhone || '', note: body.note || '',
+        sold: !!(body.buyerName || body.buyerPhone),
+      }, `criado${batch ? ' no lote ' + batch : ''} (${label})`);
+    }
+    res.status(200).json({ created: created.map((c) => c.code), planLabel: label });
+    return;
+  }
+
+  // Um clique: desativa o código, desliga as TVs dele e libera celular/TV da conta.
+  if (action === 'deactivate-release') {
+    const code = String(body.code || '').trim();
+    if (!code) { res.status(400).json({ error: 'Informe o código' }); return; }
+    const cr = await fetch(`${SUPABASE_URL}/rest/v1/vip_codes?code=eq.${encodeURIComponent(code)}&select=code,used_by`, { headers: svcHeaders });
+    const crow = (cr.ok ? await cr.json() : [])[0];
+    if (!crow) { res.status(404).json({ error: 'Código não encontrado' }); return; }
+    await fetch(`${SUPABASE_URL}/rest/v1/vip_codes?code=eq.${encodeURIComponent(code)}`, {
+      method: 'PATCH', headers: svcHeaders, body: JSON.stringify({ is_active: false }),
+    });
+    await fetch(`${SUPABASE_URL}/rest/v1/tv_activations?code=eq.${encodeURIComponent(code)}`, {
+      method: 'PATCH', headers: svcHeaders, body: JSON.stringify({ is_active: false }),
+    });
+    deviceLock.release('c:' + code);
+    if (crow.used_by) deviceLock.release('u:' + crow.used_by);
+    let endedVip = false;
+    if (body.endAccountVip === true && crow.used_by) {
+      const vr = await fetch(`${SUPABASE_URL}/rest/v1/vip_status?user_id=eq.${encodeURIComponent(crow.used_by)}`, {
+        method: 'PATCH', headers: svcHeaders, body: JSON.stringify({ expires_at: new Date().toISOString() }),
+      });
+      endedVip = vr.ok;
+      try { require('../lib/vip-status-cache').set(crow.used_by, { isVip: false, expiresAt: new Date().toISOString(), planLabel: null }); } catch (_) {}
+    }
+    codeMeta.update(code, {}, `desativado + aparelhos liberados${endedVip ? ' + VIP da conta encerrado' : ''}`);
+    console.log('[admin] deactivate-release', code.slice(0, 4) + '…', endedVip);
+    res.status(200).json({ ok: true, endedVip });
     return;
   }
 

@@ -157,6 +157,7 @@ app.all('/api/infinitepay/*', wrap(infinitepay));
 app.all('/api/activate-tv', wrap(activateTv));
 app.all('/api/tv-status', wrap(tvStatus));
 app.all('/api/device-lock', wrap(deviceLockApi));
+app.get('/api/plans', (req, res) => { res.setHeader('Cache-Control', 'public, max-age=300'); res.json({ plans: require('./lib/plans').PLANS.filter((p) => p.price > 0) }); });
 app.all('/api/tv-pair', wrap(tvPair));
 app.all('/api/r2-presign', wrap(r2Presign));
 app.all('/api/live-tv', wrap(liveTv));
