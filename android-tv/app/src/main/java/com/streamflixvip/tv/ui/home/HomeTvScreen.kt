@@ -132,6 +132,9 @@ fun HomeTvScreen(
     val p = LocalPalette.current
 
     LaunchedEffect(section) { viewModel.load(section) }
+    // Trocou de perfil: recarrega "Continuar assistindo" e Minha lista do perfil novo.
+    val activeProfileId = com.streamflixvip.tv.profiles.ProfileStore.active.collectAsState().value?.id
+    LaunchedEffect(activeProfileId) { viewModel.refreshLibrary() }
 
     // Linhas visiveis (na ordem): destaques, continuar, minha lista, catalogo...
     val showLibraryRows = section == BrowseSection.HOME || section == BrowseSection.KIDS

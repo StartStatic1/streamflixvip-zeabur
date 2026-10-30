@@ -157,9 +157,10 @@ private fun ProfileEditorTv(initial: Profile?, canDelete: Boolean, onClose: () -
     val saveFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { delay(80); runCatching { saveFocus.requestFocus() } }
 
-    Dialog(onDismissRequest = onClose) {
+    // usePlatformDefaultWidth=false: a largura padrão de Dialog cortava "Cancelar" e a última coluna de avatares.
+    Dialog(onDismissRequest = onClose, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            Modifier.width(760.dp).heightIn(max = 520.dp).clip(RoundedCornerShape(20.dp)).background(p.bgElevated)
+            Modifier.fillMaxWidth(0.88f).widthIn(max = 820.dp).heightIn(max = 520.dp).clip(RoundedCornerShape(20.dp)).background(p.bgElevated)
                 .verticalScroll(rememberScrollState()).padding(24.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -180,20 +181,23 @@ private fun ProfileEditorTv(initial: Profile?, canDelete: Boolean, onClose: () -
                 TvButton("Salvar", primary = true, modifier = Modifier.focusRequester(saveFocus), onClick = {
                     ProfileStore.upsert(Profile(id, name.ifBlank { "Perfil" }, avatar, kids, pinHash)); onClose()
                 })
+                TvButton("Cancelar", onClick = onClose)
                 TvButton(if (kids) "Infantil: Sim" else "Infantil: Não", onClick = { kids = !kids })
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TvButton(if (pinHash != null) "Remover PIN" else "Definir PIN", onClick = { if (pinHash != null) pinHash = null else settingPin = true })
                 if (canDelete && initial != null) TvButton("Excluir", onClick = { ProfileStore.delete(initial.id); onClose() })
-                TvButton("Cancelar", onClick = onClose)
             }
             Spacer(Modifier.height(18.dp))
             Text("Avatar", color = p.textMuted, fontSize = 14.sp)
             Spacer(Modifier.height(8.dp))
-            (if (kids) Avatars.KIDS + Avatars.ADULT else Avatars.ALL).chunked(9).forEach { row ->
+            (if (kids) Avatars.KIDS + Avatars.ADULT else Avatars.ALL).chunked(8).forEach { row ->
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 5.dp)) {
                     row.forEach { key ->
                         val src = remember { MutableInteractionSource() }
                         val f by src.collectIsFocusedAsState()
-                        TvProfileAvatar(key, key, 66.dp, focused = f || key == avatar,
+                        TvProfileAvatar(key, key, 62.dp, focused = f || key == avatar,
                             modifier = Modifier.clickable(interactionSource = src, indication = null) { avatar = key })
                     }
                 }

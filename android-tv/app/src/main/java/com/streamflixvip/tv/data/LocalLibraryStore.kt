@@ -21,6 +21,26 @@ class LocalLibraryStore(context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    // Cada perfil tem o seu "Continuar assistindo", assistidos e Minha lista (igual ao celular).
+    // Dados antigos (sem perfil) ficam com o perfil que estava em uso na 1ª abertura após a atualização.
+    private fun pid(): String = com.streamflixvip.tv.profiles.ProfileStore.active.value?.id ?: "default"
+    private fun k(base: String): String = base + "__" + pid()
+
+    init {
+        runCatching {
+            val owner = com.streamflixvip.tv.profiles.ProfileStore.active.value?.id
+            if (owner != null && !prefs.getBoolean(KEY_MIGRATED, false)) {
+                val e = prefs.edit()
+                for (base in listOf(KEY_PROGRESS, KEY_FAVORITES, KEY_WATCHED)) {
+                    val old = prefs.getString(base, null)
+                    if (old != null && prefs.getString(base + "__" + owner, null) == null) e.putString(base + "__" + owner, old)
+                    e.remove(base)
+                }
+                e.putBoolean(KEY_MIGRATED, true).apply()
+            }
+        }
+    }
+
     // ── Continuar assistindo ────────────────────────────────────────────────
 
     fun saveProgress(entry: LocalWatchProgress) {
@@ -59,7 +79,7 @@ class LocalLibraryStore(context: Context) {
     }
 
     fun clearAllProgress() {
-        prefs.edit().remove(KEY_PROGRESS).remove(KEY_WATCHED).apply()
+        prefs.edit().remove(k(KEY_PROGRESS)).remove(k(KEY_WATCHED)).apply()
     }
 
     /** Tira o titulo inteiro do "Continuar assistindo" (todas as entradas dele). */
@@ -83,7 +103,7 @@ class LocalLibraryStore(context: Context) {
         val key = progressKey(tmdbId, mediaType, season, episode)
         set.remove(key)
         set.add(0, key)
-        prefs.edit().putString(KEY_WATCHED, JSONArray(set.take(600)).toString()).apply()
+        prefs.edit().putString(k(KEY_WATCHED), JSONArray(set.take(600)).toString()).apply()
     }
 
     /** Pares (temporada, episodio) ja assistidos desse titulo. */
@@ -98,7 +118,7 @@ class LocalLibraryStore(context: Context) {
     }
 
     private fun watchedRaw(): List<String> = runCatching {
-        val arr = JSONArray(prefs.getString(KEY_WATCHED, "[]") ?: "[]")
+        val arr = JSONArray(prefs.getString(k(KEY_WATCHED), "[]") ?: "[]")
         (0 until arr.length()).map { arr.getString(it) }
     }.getOrDefault(emptyList())
 
@@ -138,7 +158,7 @@ class LocalLibraryStore(context: Context) {
         loadFavoritesRaw().sortedByDescending { it.createdAt }
 
     fun clearAllFavorites() {
-        prefs.edit().remove(KEY_FAVORITES).apply()
+        prefs.edit().remove(k(KEY_FAVORITES)).apply()
     }
 
     fun toggleFavorite(entry: LocalFavorite): Boolean {
@@ -159,7 +179,7 @@ class LocalLibraryStore(context: Context) {
     private fun favKey(tmdbId: Int, mediaType: String) = "$tmdbId|$mediaType"
 
     private fun loadProgressRaw(): List<LocalWatchProgress> {
-        val raw = prefs.getString(KEY_PROGRESS, null) ?: return emptyList()
+        val raw = prefs.getString(k(KEY_PROGRESS), null) ?: return emptyList()
         return runCatching {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { i ->
@@ -196,11 +216,11 @@ class LocalLibraryStore(context: Context) {
                 put("backdropPath", e.backdropPath ?: JSONObject.NULL)
             })
         }
-        prefs.edit().putString(KEY_PROGRESS, arr.toString()).apply()
+        prefs.edit().putString(k(KEY_PROGRESS), arr.toString()).apply()
     }
 
     private fun loadFavoritesRaw(): List<LocalFavorite> {
-        val raw = prefs.getString(KEY_FAVORITES, null) ?: return emptyList()
+        val raw = prefs.getString(k(KEY_FAVORITES), null) ?: return emptyList()
         return runCatching {
             val arr = JSONArray(raw)
             (0 until arr.length()).mapNotNull { i ->
@@ -227,7 +247,7 @@ class LocalLibraryStore(context: Context) {
                 put("createdAt", e.createdAt)
             })
         }
-        prefs.edit().putString(KEY_FAVORITES, arr.toString()).apply()
+        prefs.edit().putString(k(KEY_FAVORITES), arr.toString()).apply()
     }
 
     companion object {
@@ -235,6 +255,7 @@ class LocalLibraryStore(context: Context) {
         private const val KEY_PROGRESS = "watch_progress"
         private const val KEY_FAVORITES = "favorites"
         private const val KEY_WATCHED = "watched"
+        private const val KEY_MIGRATED = "migrated_profiles_v1"
     }
 }
 
