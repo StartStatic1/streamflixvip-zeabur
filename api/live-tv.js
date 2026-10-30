@@ -450,7 +450,8 @@ function cleanCategoryName(name) {
   return s || String(name || '').trim() || 'Outros';
 }
 
-const MAX_STREAMS_PER_CHANNEL = 8;
+// Todas as fontes do canal (cada fonte Xtream vira 2 links: .m3u8 + .ts reserva). Antes 8 = só ~4 fontes.
+const MAX_STREAMS_PER_CHANNEL = 24;
 
 /** Fonte cujos links testados nao tocaram nenhum (404/HTML/timeout). */
 function isDeadSource(entryKey) {

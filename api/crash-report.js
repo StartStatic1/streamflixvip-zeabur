@@ -76,7 +76,11 @@ module.exports = async function handler(req, res) {
 
   const list = Array.isArray(body.reports) ? body.reports : [body];
   const ip = clientIp(req);
-  const reports = list.slice(0, 5).map((r) => store.sanitizeReport(r, ip)).filter(Boolean);
+  // LOWMEM com pss 0MB = o Android matou o app em segundo plano (normal, não é fechamento visto pelo usuário).
+  // Apps 17.0.0/4.0.x ainda mandam; o servidor descarta para o painel mostrar só erros de verdade.
+  const isNoise = (r) => r && String(r.kind || '').toLowerCase() === 'lowmem' && /pss 0MB/.test(String(r.stack || ''));
+  const reports = list.slice(0, 5).filter((r) => !isNoise(r)).map((r) => store.sanitizeReport(r, ip)).filter(Boolean);
+  if (!reports.length && list.length) { res.status(200).json({ ok: true, stored: 0 }); return; }
   if (!reports.length) { res.status(400).json({ error: 'Relatorio vazio' }); return; }
   if (!allow(ip, reports.length)) { res.status(429).json({ error: 'Muitos relatorios' }); return; }
   await store.append(reports);

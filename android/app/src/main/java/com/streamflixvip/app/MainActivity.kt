@@ -87,6 +87,18 @@ import com.startapp.sdk.adsbase.StartAppAd
 import com.startapp.sdk.adsbase.StartAppSDK
 
 class MainActivity : ComponentActivity() {
+    /**
+     * Rede de segurança do D-pad (app de celular usado em TV Box, ex.: BTV B11): a busca de foco do
+     * Compose às vezes mede um item que acabou de sair da tela e lança "LayoutCoordinate operations
+     * are only valid when isAttached is true". Engole só esse erro: a tecla é ignorada, o app segue.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        try {
+            super.dispatchKeyEvent(event)
+        } catch (e: IllegalStateException) {
+            if (e.message.orEmpty().contains("isAttached")) true else throw e
+        }
+
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         setIntent(intent)

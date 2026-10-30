@@ -154,6 +154,9 @@ object CrashLog {
                 else -> null
             } ?: continue
             if (since == 0L) continue // primeira vez: so marca, nao reenvia historico antigo
+            // Falta de memória com o app em segundo plano é o sistema liberando RAM (normal), não um
+            // fechamento que o usuário viu: não vira relatório (eram os "LOWMEM (pss 0MB)").
+            if (kind == "lowmem" && info.importance > ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE) continue
             val trace = runCatching {
                 if (kind == "anr") info.traceInputStream?.bufferedReader()?.use { r ->
                     val sb = StringBuilder()
@@ -162,7 +165,7 @@ object CrashLog {
                     sb.toString()
                 } else null
             }.getOrNull()
-            val stack = "${kind.uppercase()}: ${info.description ?: ""} (pss ${info.pss / 1024}MB)\n" + (trace ?: "")
+            val stack = (if (kind == "lowmem") "LOWMEM: o sistema fechou o app aberto por falta de memória (RAM livre baixa; app usava ${info.pss / 1024}MB)" else "${kind.uppercase()}: ${info.description ?: ""} (pss ${info.pss / 1024}MB)") + "\n" + (trace ?: "")
             savePending(context, report(kind, stack.take(12_000), null, info.timestamp).apply { put("screen", "?"); put("action", "") })
         }
         prefs.edit().putLong(KEY_EXIT_TS, maxOf(newest, 1L)).apply()

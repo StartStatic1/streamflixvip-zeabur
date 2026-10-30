@@ -813,7 +813,7 @@
             <option value="720">30 dias — R$9,90</option>
             <option value="2160">3 meses — R$24,90</option>
             <option value="4320">6 meses — R$49,90</option>
-            <option value="876000">Vitalício — R$149,90</option>
+            <option value="8760">Anual — R$89,90</option>
             <option value="1">Teste 1 hora</option>
             <option value="custom">Personalizado...</option>
           </select>
@@ -1795,6 +1795,7 @@
   function hoursToLabel(h) {
     if (!h) return '—';
     if (h >= 876000) return 'Vitalício';
+    if (h >= 8760)   return 'Anual';
     if (h >= 720)    return `${Math.round(h/720)} mês(es)`;
     if (h >= 24)     return `${Math.round(h/24)} dia(s)`;
     return `${h}h`;
@@ -1837,7 +1838,7 @@
     const hours    = planVal === 'custom'
       ? parseInt(document.getElementById('genCustomHours').value) || 48
       : parseInt(planVal);
-    const planLabel = planVal === '720' ? '30 dias' : planVal === '2160' ? '3 meses' : planVal === '876000' ? 'Vitalício' : planVal === '1' ? 'Teste 1h' : `${hours}h`;
+    const planLabel = planVal === '720' ? '30 dias' : planVal === '2160' ? '3 meses' : planVal === '4320' ? '6 meses' : planVal === '8760' ? 'Anual' : planVal === '876000' ? 'Vitalício' : planVal === '1' ? 'Teste 1h' : `${hours}h`;
 
     const btn = document.getElementById('btnGerar');
     btn.disabled = true;

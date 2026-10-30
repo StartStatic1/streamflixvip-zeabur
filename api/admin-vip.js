@@ -149,6 +149,7 @@ module.exports = async function handler(req, res) {
       if (/30\s*Dias|1\s*Mes/i.test(plan)) amountEstimate = 9.9;
       else if (/90\s*Dias|3\s*Mes/i.test(plan)) amountEstimate = 24.9;
       else if (/180\s*Dias|6\s*Mes/i.test(plan)) amountEstimate = 49.9;
+      else if (/Anual|365\s*Dias|12\s*Mes/i.test(plan)) amountEstimate = 89.9;
       else if (/Vital/i.test(plan)) amountEstimate = 149.9;
       const tvs = codigoRelacionado && !String(codigoRelacionado).startsWith('PIX-')
         ? (tvByCode.get(codigoRelacionado) || [])
@@ -399,6 +400,7 @@ module.exports = async function handler(req, res) {
         if (/30\s*Dias|1\s*Mes/i.test(p)) return 9.9;
         if (/90\s*Dias|3\s*Mes/i.test(p)) return 24.9;
         if (/180\s*Dias|6\s*Mes/i.test(p)) return 49.9;
+        if (/Anual|365\s*Dias|12\s*Mes/i.test(p)) return 89.9;
         if (/Vital/i.test(p)) return 149.9;
         return 0;
       };
