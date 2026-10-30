@@ -1,7 +1,7 @@
 {
-  "versionCode": 21,
-  "versionName": "4.0.1",
+  "versionCode": 22,
+  "versionName": "4.0.2",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Correção na tela de filmes e séries: título, sinopse e botões aparecem juntos, sem pular."
+  "releaseNotes": "Correções de estabilidade e TV ao vivo com todas as fontes dos canais"
 }
