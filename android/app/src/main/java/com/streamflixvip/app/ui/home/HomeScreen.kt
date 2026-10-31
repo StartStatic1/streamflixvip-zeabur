@@ -83,6 +83,7 @@ fun HomeScreen(
         }
         is HomeUiState.Success -> {
             val scrollState = rememberLazyListState()
+            val homeVip by VipStatusHolder.isVip.collectAsState()
             LazyColumn(
                 state = scrollState,
                 modifier = Modifier.fillMaxSize().background(StreamFlixColors.Background),
@@ -103,7 +104,9 @@ fun HomeScreen(
                         )
                     }
                 }
-                itemsIndexed(s.rows) { index, row ->
+                // Area Free so para quem nao e VIP — decidido aqui (reage quando o status VIP chega)
+                val visibleRows = if (homeVip) s.rows.filterNot { it.title == "Area Free" } else s.rows
+                itemsIndexed(visibleRows) { index, row ->
                     Spacer(Modifier.height(18.dp))
                     ContentRow(row = row, onItemClick = onItemClick, onSeeAllClick = onSeeAllClick)
                     val isVip by VipStatusHolder.isVip.collectAsState()
