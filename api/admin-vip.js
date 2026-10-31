@@ -173,7 +173,7 @@ module.exports = async function handler(req, res) {
   }
 
   // ════ Painel de códigos (admin-codes.html) ════
-  if (action === 'codes-panel' || action === 'code-detail') {
+  if (action === 'codes-panel' || action === 'code-detail' || action === 'delete-codes' || action === 'cleanup-codes') {
     const one = action === 'code-detail' ? String(body.code || '') : '';
     const codeFilter = one ? `&code=eq.${encodeURIComponent(one)}` : '';
     const [codesRes, tvRes, redRes] = await Promise.all([
@@ -243,8 +243,52 @@ module.exports = async function handler(req, res) {
         note: meta.note || '',
         batch: meta.batch || '',
         soldAt: meta.soldAt || null,
+        devices: deviceLock.get(c.used_by ? 'u:' + c.used_by : 'c:' + c.code),
+        ...(() => {
+          // Pode apagar? Nunca: vendido, dando VIP agora, ou pago/usado (histórico/receita).
+          const sold = !!(meta.soldAt || meta.buyerName || meta.buyerPhone);
+          const tvLive = tvs.some((t) => new Date(t.expires_at).getTime() > now);
+          if (sold) return { deletable: false, deleteReason: 'Código vendido — não pode apagar (desative se precisar).' };
+          if (!used) return { deletable: true, deleteKind: 'nao_usado' };
+          if (isTest) {
+            if (tvLive || (codeEnd && codeEnd > now)) return { deletable: false, deleteReason: 'Teste ainda em uso.' };
+            return { deletable: true, deleteKind: 'teste' };
+          }
+          return { deletable: false, deleteReason: 'Código usado/pago — fica guardado no histórico e no faturamento.' };
+        })(),
       };
     });
+    if (action === 'delete-codes' || action === 'cleanup-codes') {
+      const want = action === 'cleanup-codes'
+        ? out.filter((c) => c.deletable)
+        : out.filter((c) => Array.isArray(body.codes) && body.codes.includes(c.code));
+      const ok = want.filter((c) => c.deletable);
+      const blocked = want.filter((c) => !c.deletable).map((c) => ({ code: c.code, reason: c.deleteReason }));
+      if (body.preview === true) {
+        res.status(200).json({ preview: true, total: ok.length, naoUsados: ok.filter((c) => c.deleteKind === 'nao_usado').length, testes: ok.filter((c) => c.deleteKind === 'teste').length, codes: ok.map((c) => c.code), blocked });
+        return;
+      }
+      const deleted = [];
+      for (let i = 0; i < ok.length; i += 50) {
+        const part = ok.slice(i, i + 50);
+        const list = part.map((c) => `"${c.code.replace(/"/g, '')}"`).join(',');
+        const tests = part.filter((c) => c.deleteKind === 'teste').map((c) => `"${c.code.replace(/"/g, '')}"`).join(',');
+        if (tests) await fetch(`${SUPABASE_URL}/rest/v1/tv_activations?code=in.(${encodeURIComponent(tests)})`, { method: 'DELETE', headers: svcHeaders });
+        const dr = await fetch(`${SUPABASE_URL}/rest/v1/vip_codes?code=in.(${encodeURIComponent(list)})&used_by=is.null`, { method: 'DELETE', headers: { ...svcHeaders, Prefer: 'return=representation' } });
+        let gone = dr.ok ? await dr.json() : [];
+        // teste usado por conta: apaga só se ainda é teste (garantia extra no filtro)
+        const usedTests = part.filter((c) => c.deleteKind === 'teste' && c.account);
+        for (const c of usedTests) {
+          const r2 = await fetch(`${SUPABASE_URL}/rest/v1/vip_codes?code=eq.${encodeURIComponent(c.code)}&duration_hours=lte.24`, { method: 'DELETE', headers: { ...svcHeaders, Prefer: 'return=representation' } });
+          if (r2.ok) gone = gone.concat(await r2.json());
+        }
+        for (const g of gone) { deleted.push(g.code); codeMeta.remove(g.code); }
+      }
+      console.log('[admin] apagou códigos', deleted.length, 'por', String(userId).slice(0, 8));
+      codeMeta.logAdmin({ at: Date.now(), by: String(userId).slice(0, 8), action: action === 'cleanup-codes' ? 'limpeza' : 'apagar', codes: deleted });
+      res.status(200).json({ ok: true, deleted, blocked });
+      return;
+    }
     if (one) {
       const c = out[0];
       if (!c) { res.status(404).json({ error: 'Código não encontrado' }); return; }

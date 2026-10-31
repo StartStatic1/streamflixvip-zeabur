@@ -64,7 +64,17 @@ button,.btn{background:#22223a;border:1px solid var(--line);color:var(--text);bo
       <div class="chips" id="chips"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0">
         <span id="count" class="muted"></span>
-        <span><select id="batchSel" onchange="render()" style="width:auto;padding:7px"></select> <button onclick="exportCsv()">⬇️ CSV</button> <button onclick="load()">↻</button></span>
+        <span><select id="sortSel" onchange="render()" style="width:auto;padding:7px"><option value="novo">Mais novos</option><option value="vence">Vencem primeiro</option><option value="nome">Comprador A–Z</option></select> <select id="batchSel" onchange="render()" style="width:auto;padding:7px"></select></span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button onclick="toggleSel()" id="selBtn">☑️ Selecionar</button>
+        <button onclick="cleanup()">🧹 Limpar não usados e testes</button>
+        <button onclick="exportCsv()">⬇️ Baixar planilha</button>
+        <button onclick="load()">↻ Atualizar</button>
+      </div>
+      <div id="selBar" style="display:none;position:sticky;top:0;z-index:5;background:#1b1b2b;border:1px solid var(--gold);border-radius:12px;padding:8px 10px;margin-bottom:8px;align-items:center;justify-content:space-between;gap:8px">
+        <span id="selCount">0 selecionado(s)</span>
+        <span><button onclick="selAllDeletable()">Marcar apagáveis</button> <button class="danger" onclick="deleteSelected()">🗑️ Apagar</button></span>
       </div>
       <div id="list"></div>
     </div>
@@ -128,6 +138,14 @@ async function load(){
   bs.innerHTML='<option value="">Todos os lotes</option>'+batches.map(b=>`<option ${b===cur?'selected':''}>${esc(b)}</option>`).join('');
   render(); renderRem();
 }
+let SEL=null;
+function toggleSel(){SEL=SEL?null:new Set();document.getElementById('selBtn').textContent=SEL?'✖ Cancelar seleção':'☑️ Selecionar';render()}
+function selAllDeletable(){filtered().filter(c=>c.deletable).forEach(c=>SEL.add(c.code));render()}
+function pick(ev,code){ev.stopPropagation();SEL.has(code)?SEL.delete(code):SEL.add(code);render()}
+function sorted(list){const v=document.getElementById('sortSel').value;const t=d=>d?new Date(d).getTime():0;
+  if(v==='vence')return list.slice().sort((a,b)=>(t(a.accountExpiresAt)||9e15)-(t(b.accountExpiresAt)||9e15));
+  if(v==='nome')return list.slice().sort((a,b)=>(a.buyerName||'~').localeCompare(b.buyerName||'~','pt'));
+  return list;}
 function filtered(){
   const q=document.getElementById('q').value.trim().toLowerCase(), b=document.getElementById('batchSel').value;
   return CODES.filter(c=>(F==='todos'||c.status===F)&&(!b||c.batch===b)&&(!q||[c.code,c.account?.email,c.account?.name,c.buyerName,c.buyerPhone,c.batch,c.note].some(v=>v&&String(v).toLowerCase().includes(q))));
@@ -146,13 +164,16 @@ function renderSum(){
 function render(){renderSum();
   const cnt={};CODES.forEach(c=>cnt[c.status]=(cnt[c.status]||0)+1);
   document.getElementById('chips').innerHTML=Object.keys(ST).map(k=>`<span class="chip ${F===k?'on':''}" onclick="F='${k}';render()">${ST[k]} ${k==='todos'?CODES.length:(cnt[k]||0)}</span>`).join('');
-  const list=filtered(); document.getElementById('count').textContent=list.length+' código(s)';
+  const sb=document.getElementById('selBar');sb.style.display=SEL?'flex':'none';if(SEL)document.getElementById('selCount').textContent=SEL.size+' selecionado(s)';
+  const list=sorted(filtered()); document.getElementById('count').textContent=list.length+' código(s)';
   if(!list.length){document.getElementById('list').innerHTML='<div class="muted" style="padding:14px;text-align:center">Nenhum código aqui. Troque o filtro ou a busca.</div>';return}
-  document.getElementById('list').innerHTML=list.slice(0,400).map(c=>`<div class="item" onclick="openCode('${esc(c.code)}')">
-    <div class="l1"><span class="code">${esc(c.code)}</span><span class="badge s-${c.status}">${ST[c.status]}</span></div>
+  const dvTxt=c=>{const d=c.devices||{};const a=[];if(d.phone)a.push('📱 '+esc(d.phone.label||'celular'));if(d.tv)a.push('📺 '+esc(d.tv.label||'TV'));else if(c.tvCount)a.push('📺 '+c.tvCount+' TV');return a.join(' · ')};
+  document.getElementById('list').innerHTML=list.slice(0,400).map(c=>`<div class="item" onclick="openCode('${esc(c.code)}')" style="${SEL&&SEL.has(c.code)?'border-color:var(--gold)':''}">
+    <div class="l1"><span>${SEL?`<input type="checkbox" style="width:auto;margin-right:8px" ${SEL.has(c.code)?'checked':''} ${c.deletable?'':'disabled title="'+esc(c.deleteReason||'')+'"'} onclick="pick(event,'${esc(c.code)}')">`:''}<span class="code">${esc(c.code)}</span></span><span class="badge s-${c.status}">${ST[c.status]}</span></div>
+    ${c.buyerName||c.buyerPhone?`<div style="margin-top:4px">🧾 <b>${esc(c.buyerName||'Comprador')}</b>${c.buyerPhone?` <a href="https://wa.me/${esc(c.buyerPhone)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">💬 WhatsApp</a>`:''}</div>`:''}
     <div class="muted">${esc(c.planLabel||'')}${c.isTest?'':' · '+money(c.price)}${c.batch?' · 📦 '+esc(c.batch):''}</div>${c.codeStart?`<div class="muted">⏱️ ${codeWin(c)}</div>`:''}${c.accountExpiresAt&&c.status!=='desativado'?`<div class="muted">👑 Conta VIP até ${fmtD(c.accountExpiresAt)}${new Date(c.accountExpiresAt)<new Date()?' (vencida)':''}</div>`:''}
-    <div class="muted">${c.buyerName||c.buyerPhone?'🧾 '+esc(c.buyerName||'')+' '+esc(c.buyerPhone||''):''}${c.account?.email?' · 👤 '+esc(c.account.email):''}${c.tvCount?' · 📺 '+c.tvCount:''}</div>
-  </div>`).join('')+(list.length>400?'<div class="muted">Mostrando 400. Use a busca ou o CSV.</div>':'');
+    ${c.account?.email||dvTxt(c)?`<div class="muted">${c.account?.email?'👤 '+esc(c.account.email):''}${c.account?.email&&dvTxt(c)?' · ':''}${dvTxt(c)}</div>`:''}
+  </div>`).join('')+(list.length>400?'<div class="muted">Mostrando 400. Use a busca ou a planilha.</div>':'');
 }
 function waLink(phone,text){const p=String(phone||'').replace(/\D/g,'');return 'https://wa.me/'+(p?p:'')+'?text='+encodeURIComponent(text)}
 function renewMsg(c){const pl=PLANS.filter(p=>p.price>0).map(p=>`${p.label} ${money(p.price)}`).join(' · ');
@@ -202,8 +223,13 @@ async function openCode(code){
     <button class="gold" onclick="saveMeta('${esc(c.code)}')">Salvar</button>
     <button onclick="copyText('${esc(c.code)}')">Copiar código</button>
     ${c.accountExpiresAt&&!c.isTest?`<a class="btn" target="_blank" rel="noopener" href="${waLink(c.buyerPhone,renewMsg(c))}">💬 Lembrar renovação</a>`:''}
+  </div>
+  <h2 style="margin-top:14px">Ações de suporte</h2>
+  <div class="help">Liberar aparelhos: a pessoa trocou de celular/TV e ficou travada. Desativar: reembolso ou abuso (corta as TVs deste código). Apagar: só códigos de teste ou nunca usados e não vendidos.</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
     ${(dv.phone||dv.tv)?`<button onclick="releaseDev('${esc(d.deviceKey)}','${esc(c.code)}')">Liberar aparelhos</button>`:''}
     ${c.isActive?`<button class="danger" onclick="deact('${esc(c.code)}',${!!c.account})">Desativar e liberar aparelhos</button>`:`<button onclick="react('${esc(c.code)}')">Reativar código</button>`}
+    ${c.deletable?`<button class="danger" onclick="delOne('${esc(c.code)}')">🗑️ Apagar código</button>`:`<span class="muted" style="align-self:center">🔒 Não dá pra apagar: ${esc(c.deleteReason||'')}</span>`}
   </div>
   <h2 style="margin-top:14px">Histórico</h2>
   <div class="muted">${[...(d.redemptions||[]).map(r=>({at:r.redeemed_at,what:`resgatado no ${r.platform==='tv'?'📺 TV':'📱 celular'}${r.email?' por '+r.email:''}${r.device_id?' (…'+r.device_id+')':''}`})),...(d.history||[])].sort((a,b)=>new Date(b.at)-new Date(a.at)).map(h=>`${fmtDT(h.at)} — ${esc(h.what)}`).join('<br>')||'—'}</div>`;
@@ -215,6 +241,15 @@ async function deact(code,hasAcc){
   const end=hasAcc&&confirm('Também ENCERRAR AGORA o VIP da conta que usou este código? (reembolso/abuso)\n\nOK = encerrar VIP · Cancelar = só desativar o código');
   const r=await api('deactivate-release',{code,endAccountVip:end});if(r.ok){toast('✅ Desativado'+(r.endedVip?' e VIP encerrado':''));await load();openCode(code)}else if(r.error!=='auth')toast('❌ '+r.error)}
 async function react(code){const r=await api('reactivate',{code});if(!r.error){toast('✅ Código reativado (TVs precisam ativar de novo)');await load();openCode(code)}}
+async function doDelete(codes){const r=await api('delete-codes',{codes});if(r.error){if(r.error!=='auth')toast('❌ '+r.error);return}
+  toast(`🗑️ ${r.deleted.length} apagado(s)${r.blocked.length?' · '+r.blocked.length+' protegido(s)':''}`);if(SEL)SEL.clear();closeM();load()}
+async function delOne(code){if(confirm('Apagar o código '+code+' para sempre? Isso não dá pra desfazer.'))doDelete([code])}
+async function deleteSelected(){const codes=[...SEL];if(!codes.length){toast('Nenhum código marcado');return}
+  if(confirm('Apagar '+codes.length+' código(s) para sempre? Códigos vendidos ou em uso são protegidos e não serão apagados.'))doDelete(codes)}
+async function cleanup(){const p=await api('cleanup-codes',{preview:true});if(p.error){if(p.error!=='auth')toast('❌ '+p.error);return}
+  if(!p.total){toast('Nada para limpar 🎉');return}
+  if(!confirm(`Limpar ${p.total} código(s)?\n\n• ${p.naoUsados} nunca usados e não vendidos\n• ${p.testes} testes já usados/vencidos\n\nCódigos vendidos, pagos ou em uso NÃO são apagados. Não dá pra desfazer.`))return;
+  const r=await api('cleanup-codes',{});if(r.ok){toast('🧹 '+r.deleted.length+' código(s) apagado(s)');load()}else if(r.error!=='auth')toast('❌ '+r.error)}
 function exportCsv(){
   const cols=['code','status','planLabel','price','batch','buyerName','buyerPhone','note','soldAt','createdAt','codeStart','codeEnd','accountExpiresAt','email','tvCount'];
   const rows=filtered().map(c=>cols.map(k=>{let v=k==='email'?(c.account?.email||''):c[k];if(k==='status')v=ST[v];if(k==='soldAt'&&v)v=new Date(v).toISOString();return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'}).join(';'));
