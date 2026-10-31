@@ -113,6 +113,34 @@ async function createLink(req, res) {
 }
 
 /**
+ * Verifica com a InfinitePay se o pagamento realmente existe e está pago.
+ * Retorna o objeto de status ou null se não confirmado.
+ */
+async function verifyPaymentWithInfinitePay(handle, orderNsu, transactionNsu, slug) {
+  try {
+    const r = await fetch('https://api.checkout.infinitepay.io/payment_check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        handle,
+        order_nsu: orderNsu,
+        transaction_nsu: transactionNsu || undefined,
+        slug: slug || undefined,
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (r.ok && data.success && data.paid === true) {
+      return data;
+    }
+    console.warn('[infinitepay] payment_check não confirmou', r.status, data);
+    return null;
+  } catch (e) {
+    console.error('[infinitepay] payment_check erro', e.message || e);
+    return null;
+  }
+}
+
+/**
  * POST /api/infinitepay/webhook
  * Body típico: order_nsu, amount, paid_amount, capture_method, transaction_nsu, ...
  */
@@ -165,6 +193,21 @@ async function handleWebhook(req, res) {
       return res.status(400).json({ success: false, message: 'sem userId' });
     }
 
+    // === SEGURANÇA: confirma com a InfinitePay antes de liberar VIP ===
+    const handle = (process.env.INFINITEPAY_HANDLE || 'streamflixvip').replace(/^\$/, '');
+    const tx = body.transaction_nsu || body.invoice_slug || '';
+    const slug = body.invoice_slug || body.slug || '';
+    const verified = await verifyPaymentWithInfinitePay(handle, orderNsu, tx, slug);
+    if (!verified) {
+      console.warn('[infinitepay] webhook rejeitado — pagamento não confirmado', orderNsu);
+      return res.status(400).json({ success: false, message: 'pagamento não confirmado' });
+    }
+
+    // Usa o capture_method real (credit_card ou pix)
+    const captureMethod = String(verified.capture_method || body.capture_method || 'pix').toLowerCase();
+    const isCard = captureMethod.includes('card') || captureMethod === 'credit_card';
+    const methodLabel = isCard ? 'CARTAO' : 'PIX';
+
     const headers = {
       apikey: serviceKey,
       Authorization: `Bearer ${serviceKey}`,
@@ -179,16 +222,15 @@ async function handleWebhook(req, res) {
     const currentExpiry = current?.expires_at ? new Date(current.expires_at) : null;
     const base = currentExpiry && currentExpiry > now ? currentExpiry : now;
     const newExpiry = new Date(base.getTime() + durationHours * 60 * 60 * 1000);
-    const tx = body.transaction_nsu || body.invoice_slug || 'ip';
 
-    // Puxa e-mail/nome do Auth (app mobile nao chama track-login)
+    // Puxa e-mail/nome do Auth (URL corrigida)
     let email = current?.email || null;
     let name = current?.name || null;
     if (!email) {
       try {
         const authRes = await fetch(
-          `\( {SUPABASE_URL}/auth/v1/admin/users/ \){encodeURIComponent(userId)}`,
-          { headers: { ...headers, apikey: serviceKey } },
+          `${SUPABASE_URL}/auth/v1/admin/users/${encodeURIComponent(userId)}`,
+          { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } },
         );
         if (authRes.ok) {
           const authUser = await authRes.json();
@@ -205,7 +247,7 @@ async function handleWebhook(req, res) {
       user_id: userId,
       expires_at: newExpiry.toISOString(),
       plan_label: planLabel,
-      last_code_used: `PIX-IP-${tx}`.slice(0, 80),
+      last_code_used: `${methodLabel}-IP-${tx}`.slice(0, 80),
       updated_at: now.toISOString(),
     };
     if (email) upsertBody.email = email;
@@ -219,7 +261,7 @@ async function handleWebhook(req, res) {
     });
 
     try { vipMem.invalidate(userId); } catch (_) {}
-    console.log(`[infinitepay] VIP ok user=${userId} until=${newExpiry.toISOString()}`);
+    console.log(`[infinitepay] VIP ok user=${userId} method=${methodLabel} until=${newExpiry.toISOString()}`);
     return res.status(200).json({ success: true, message: null });
   } catch (e) {
     console.error('[infinitepay] webhook', e);
