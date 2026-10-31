@@ -224,9 +224,10 @@ module.exports = async function handler(req, res) {
       else status = 'vencido';
       return {
         code: c.code,
-        planLabel: c.plan_label,
+        planLabel: /^\d+h$/.test(String(c.plan_label || '')) ? ((PLANS.find((p) => p.hours === Number(c.duration_hours)) || {}).label || c.plan_label) : c.plan_label,
         durationHours: c.duration_hours,
-        price: priceForLabel(c.plan_label),
+        price: priceForLabel(c.plan_label) ?? ((PLANS.find((p) => p.hours === Number(c.duration_hours)) || {}).price || null),
+        planLabel2: undefined,
         isActive: !!c.is_active,
         createdAt: c.created_at || null,
         usedAt: c.used_at || null,
