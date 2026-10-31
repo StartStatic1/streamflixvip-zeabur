@@ -34,6 +34,7 @@ button,.btn{background:#22223a;border:1px solid var(--line);color:var(--text);bo
 @media(min-width:700px){.modal{align-items:center}.sheet{border-radius:16px}}
 .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;border:1px solid var(--line);padding:10px 14px;border-radius:10px;display:none;z-index:10}
 .sum{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px}@media(min-width:700px){.sum{grid-template-columns:repeat(4,1fr)}}.sum div{background:linear-gradient(180deg,#171724,var(--card));border:1px solid var(--line);border-radius:14px;padding:12px;cursor:pointer}.sum b{display:block;font-size:22px;margin-top:2px}.sum small{color:var(--muted);font-size:12px}.help{color:var(--muted);font-size:12px;margin:4px 0 8px;line-height:1.4}details>summary{cursor:pointer;list-style:none}details>summary h2{display:inline}.s-concluido{color:#7fb3ff}
+.selmode .item{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}.ck{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:2px solid var(--gold);border-radius:8px;margin-right:10px;font-size:18px;font-weight:800;color:#111;vertical-align:middle}.ck.on{background:var(--gold)}.lockr{font-size:12px;color:var(--muted);margin-top:4px}.item.picked{border:2px solid var(--gold);background:#1d1a0c}.item.prot{opacity:.75}
 .kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:14px}.kv div:nth-child(odd){color:var(--muted)}
 </style>
 </head>
@@ -73,8 +74,8 @@ button,.btn{background:#22223a;border:1px solid var(--line);color:var(--text);bo
         <button onclick="load()">↻ Atualizar</button>
       </div>
       <div id="selBar" style="display:none;position:sticky;top:0;z-index:5;background:#1b1b2b;border:1px solid var(--gold);border-radius:12px;padding:8px 10px;margin-bottom:8px;align-items:center;justify-content:space-between;gap:8px">
-        <span id="selCount">0 selecionado(s)</span>
-        <span><button onclick="selAllDeletable()">Marcar apagáveis</button> <button class="danger" onclick="deleteSelected()">🗑️ Apagar</button></span>
+        <span><b id="selCount">0 selecionado(s)</b><br><span class="muted" style="font-size:12px">Toque nos códigos para marcar — 🔒 = protegido</span></span>
+        <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><button id="selAllBtn" onclick="selAllDeletable()">Marcar apagáveis</button> <button class="danger" onclick="deleteSelected()">🗑️ Apagar</button></span>
       </div>
       <div id="list"></div>
     </div>
@@ -140,7 +141,9 @@ async function load(){
 }
 let SEL=null;
 function toggleSel(){SEL=SEL?null:new Set();document.getElementById('selBtn').textContent=SEL?'✖ Cancelar seleção':'☑️ Selecionar';render()}
-function selAllDeletable(){filtered().filter(c=>c.deletable).forEach(c=>SEL.add(c.code));render()}
+function selAllDeletable(){const a=filtered().filter(c=>c.deletable);if(!a.length){toast('Nenhum código apagável neste filtro');return}a.forEach(c=>SEL.add(c.code));render()}
+function cardTap(code){if(!SEL){openCode(code);return}const c=CODES.find(x=>x.code===code);if(!c||!c.deletable){toast('🔒 '+lockTxt(c));return}SEL.has(code)?SEL.delete(code):SEL.add(code);render()}
+function lockTxt(c){if(!c)return '';const r=c.deleteReason||'';return /vendido/i.test(r)?'vendido — não pode apagar':/teste/i.test(r)?'teste em uso — não pode apagar':(c.status==='ativo'||c.status==='vencendo')?'em uso — não pode apagar':'usado/pago — fica no histórico'}
 function pick(ev,code){ev.stopPropagation();SEL.has(code)?SEL.delete(code):SEL.add(code);render()}
 function sorted(list){const v=document.getElementById('sortSel').value;const t=d=>d?new Date(d).getTime():0;
   if(v==='vence')return list.slice().sort((a,b)=>(t(a.accountExpiresAt)||9e15)-(t(b.accountExpiresAt)||9e15));
@@ -165,11 +168,14 @@ function render(){renderSum();
   const cnt={};CODES.forEach(c=>cnt[c.status]=(cnt[c.status]||0)+1);
   document.getElementById('chips').innerHTML=Object.keys(ST).map(k=>`<span class="chip ${F===k?'on':''}" onclick="F='${k}';render()">${ST[k]} ${k==='todos'?CODES.length:(cnt[k]||0)}</span>`).join('');
   const sb=document.getElementById('selBar');sb.style.display=SEL?'flex':'none';if(SEL)document.getElementById('selCount').textContent=SEL.size+' selecionado(s)';
+  document.getElementById('list').classList.toggle('selmode',!!SEL);
+  if(SEL){const n=filtered().filter(c=>c.deletable).length;const b=document.getElementById('selAllBtn');b.textContent='Marcar apagáveis ('+n+')';b.disabled=!n;b.style.opacity=n?1:.5}
   const list=sorted(filtered()); document.getElementById('count').textContent=list.length+' código(s)';
   if(!list.length){document.getElementById('list').innerHTML='<div class="muted" style="padding:14px;text-align:center">Nenhum código aqui. Troque o filtro ou a busca.</div>';return}
   const dvTxt=c=>{const d=c.devices||{};const a=[];if(d.phone)a.push('📱 '+esc(d.phone.label||'celular'));if(d.tv)a.push('📺 '+esc(d.tv.label||'TV'));else if(c.tvCount)a.push('📺 '+c.tvCount+' TV');return a.join(' · ')};
-  document.getElementById('list').innerHTML=list.slice(0,400).map(c=>`<div class="item" onclick="openCode('${esc(c.code)}')" style="${SEL&&SEL.has(c.code)?'border-color:var(--gold)':''}">
-    <div class="l1"><span>${SEL?`<input type="checkbox" style="width:auto;margin-right:8px" ${SEL.has(c.code)?'checked':''} ${c.deletable?'':'disabled title="'+esc(c.deleteReason||'')+'"'} onclick="pick(event,'${esc(c.code)}')">`:''}<span class="code">${esc(c.code)}</span></span><span class="badge s-${c.status}">${ST[c.status]}</span></div>
+  document.getElementById('list').innerHTML=list.slice(0,400).map(c=>`<div class="item ${SEL&&SEL.has(c.code)?'picked':''} ${SEL&&!c.deletable?'prot':''}" onclick="cardTap('${esc(c.code)}')">
+    <div class="l1"><span>${SEL?(c.deletable?`<span class="ck ${SEL.has(c.code)?'on':''}">${SEL.has(c.code)?'✓':''}</span>`:'<span class="ck" style="border-color:var(--line);font-size:15px">🔒</span>'):''}<span class="code">${esc(c.code)}</span></span><span class="badge s-${c.status}">${ST[c.status]}</span></div>
+    ${SEL&&!c.deletable?`<div class="lockr">🔒 ${lockTxt(c)}</div>`:''}
     ${c.buyerName||c.buyerPhone?`<div style="margin-top:4px">🧾 <b>${esc(c.buyerName||'Comprador')}</b>${c.buyerPhone?` <a href="https://wa.me/${esc(c.buyerPhone)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">💬 WhatsApp</a>`:''}</div>`:''}
     <div class="muted">${esc(c.planLabel||'')}${c.isTest?'':' · '+money(c.price)}${c.batch?' · 📦 '+esc(c.batch):''}</div>${c.codeStart?`<div class="muted">⏱️ ${codeWin(c)}</div>`:''}${c.accountExpiresAt&&c.status!=='desativado'?`<div class="muted">👑 Conta VIP até ${fmtD(c.accountExpiresAt)}${new Date(c.accountExpiresAt)<new Date()?' (vencida)':''}</div>`:''}
     ${c.account?.email||dvTxt(c)?`<div class="muted">${c.account?.email?'👤 '+esc(c.account.email):''}${c.account?.email&&dvTxt(c)?' · ':''}${dvTxt(c)}</div>`:''}
