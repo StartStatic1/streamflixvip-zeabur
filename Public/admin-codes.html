@@ -176,6 +176,7 @@ function render(){renderSum();
   document.getElementById('list').innerHTML=list.slice(0,400).map(c=>`<div class="item ${SEL&&SEL.has(c.code)?'picked':''} ${SEL&&!c.deletable?'prot':''}" onclick="cardTap('${esc(c.code)}')">
     <div class="l1"><span>${SEL?(c.deletable?`<span class="ck ${SEL.has(c.code)?'on':''}">${SEL.has(c.code)?'✓':''}</span>`:'<span class="ck" style="border-color:var(--line);font-size:15px">🔒</span>'):''}<span class="code">${esc(c.code)}</span></span><span class="badge s-${c.status}">${ST[c.status]}</span></div>
     ${SEL&&!c.deletable?`<div class="lockr">🔒 ${lockTxt(c)}</div>`:''}
+    ${SEL?`<div style="margin-top:6px"><button style="padding:5px 10px;font-size:12px" onclick="event.stopPropagation();openCode('${esc(c.code)}')">Detalhes</button></div>`:''}
     ${c.buyerName||c.buyerPhone?`<div style="margin-top:4px">🧾 <b>${esc(c.buyerName||'Comprador')}</b>${c.buyerPhone?` <a href="https://wa.me/${esc(c.buyerPhone)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">💬 WhatsApp</a>`:''}</div>`:''}
     <div class="muted">${esc(c.planLabel||'')}${c.isTest?'':' · '+money(c.price)}${c.batch?' · 📦 '+esc(c.batch):''}</div>${c.codeStart?`<div class="muted">⏱️ ${codeWin(c)}</div>`:''}${c.accountExpiresAt&&c.status!=='desativado'?`<div class="muted">👑 Conta VIP até ${fmtD(c.accountExpiresAt)}${new Date(c.accountExpiresAt)<new Date()?' (vencida)':''}</div>`:''}
     ${c.account?.email||dvTxt(c)?`<div class="muted">${c.account?.email?'👤 '+esc(c.account.email):''}${c.account?.email&&dvTxt(c)?' · ':''}${dvTxt(c)}</div>`:''}
