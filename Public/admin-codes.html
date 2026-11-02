@@ -174,7 +174,7 @@ function renderSum(){
   document.getElementById('sum').innerHTML=`<div onclick="F='ativo';render()"><small>👑 Em uso agora</small><b>${cnt('ativo')+cnt('vencendo')}</b></div>
    <div onclick="F='vendido_sem_uso';render()"><small>🧾 Vendidos, não usados</small><b>${cnt('vendido_sem_uso')}</b></div>
    <div onclick="document.getElementById('remCard').scrollIntoView({behavior:'smooth'})"><small>🔔 Vencem em 7 dias</small><b>${ren}</b></div>
-   <div onclick="document.getElementById('vendasCard').scrollIntoView({behavior:'smooth'})" title="Cartão + PIX + códigos vendidos neste mês. Testes não contam."><small>💰 Faturamento do mês</small><b>${money(fat)}</b></div>`;
+   <div onclick="document.getElementById('vendasCard').scrollIntoView({behavior:'smooth'})" title="Cartão + PIX + códigos vendidos neste mês. Testes não contam."><small>💰 Faturamento do mês</small><b>${money(fat)}</b><small>mês passado ${money(VT.prevMonth||0)}</small></div>`;
 }
 function render(){renderSum();
   const cnt={};CODES.forEach(c=>cnt[c.status]=(cnt[c.status]||0)+1);
@@ -224,7 +224,7 @@ const METH={cartao:'💳 Cartão',pix:'⚡ PIX',codigo:'🎟️ Código'};
 async function loadVendas(){const d=await api('vendas'); if(d.error){if(d.error!=='auth')document.getElementById('vList').textContent='❌ '+d.error;return}
   VENDAS=d.vendas||[]; VT=d.totals||{}; renderVendas(); renderSum(); renderRem()}
 function renderVendas(){
-  const t=VT; document.getElementById('vSum').innerHTML=`<div><small>Mês (total)</small><b>${money(t.month||0)}</b></div><div onclick="VF='cartao';renderVendas()"><small>💳 Cartão</small><b>${money(t.monthCard||0)}</b></div><div onclick="VF='pix';renderVendas()"><small>⚡ PIX</small><b>${money(t.monthPix||0)}</b></div><div onclick="VF='codigo';renderVendas()"><small>🎟️ Códigos</small><b>${money(t.monthCodes||0)}</b></div>`;
+  const t=VT; document.getElementById('vSum').innerHTML=`<div><small>Este mês</small><b>${money(t.month||0)}</b><small>mês passado ${money(t.prevMonth||0)}</small></div><div onclick="VF='cartao';renderVendas()"><small>💳 Cartão</small><b>${money(t.monthCard||0)}</b></div><div onclick="VF='pix';renderVendas()"><small>⚡ PIX</small><b>${money(t.monthPix||0)}</b></div><div onclick="VF='codigo';renderVendas()"><small>🎟️ Códigos</small><b>${money(t.monthCodes||0)}</b></div>`;
   const n=k=>VENDAS.filter(v=>k==='todos'||v.method===k).length;
   document.getElementById('vChips').innerHTML=['todos','cartao','pix','codigo'].map(k=>`<span class="chip ${VF===k?'on':''}" onclick="VF='${k}';renderVendas()">${k==='todos'?'Todas':METH[k]} ${n(k)}</span>`).join('');
   const q=document.getElementById('vq').value.trim().toLowerCase();

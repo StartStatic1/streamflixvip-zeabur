@@ -213,9 +213,10 @@ module.exports = async function handler(req, res) {
     const sum = (f) => Math.round(list.filter(f).reduce((a, x) => a + (x.amount || 0), 0) * 100) / 100;
     const d = new Date(Date.now() - 3 * 3600e3); const monthStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) + 3 * 3600e3;
     const inMonth = (x) => x.at >= monthStart;
+    const prevStart = Date.UTC(d.getUTCMonth() === 0 ? d.getUTCFullYear() - 1 : d.getUTCFullYear(), (d.getUTCMonth() + 11) % 12, 1) + 3 * 3600e3;
     const totals = {
       all: sum(() => true), month: sum(inMonth), monthPix: sum((x) => inMonth(x) && x.method === 'pix'), monthCard: sum((x) => inMonth(x) && x.method === 'cartao'),
-      monthCodes: sum((x) => inMonth(x) && x.provider === 'codigo'), monthCount: list.filter(inMonth).length,
+      monthCodes: sum((x) => inMonth(x) && x.provider === 'codigo'), monthCount: list.filter(inMonth).length, prevMonth: sum((x) => x.at >= prevStart && x.at < monthStart),
     };
     res.status(200).json({ vendas: list, totals, total: totals.all, totalPix: sum((x) => x.method === 'pix'), totalCard: sum((x) => x.method === 'cartao') });
     return;
