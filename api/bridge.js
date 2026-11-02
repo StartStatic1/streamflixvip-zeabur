@@ -1,3 +1,4 @@
+const { exactIsSafe } = require('../lib/title-confirm');
 // api/bridge.js — add-on Stremio/Nuvio gerado pela aba Bridge.
 // Live TV: type "channel", catálogos por categoria + busca.
 // Filmes/séries: meta básica para abrir no catálogo Nuvio.
@@ -31,7 +32,7 @@ function norm(s) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\b(19|20)\d{2}\b/g, ' ')
-    .replace(/\b(4k|uhd|1080p|720p|2160p|fhd|hd|sd|bluray|webrip|dublado|legendado|leg|dub)\b/g, ' ')
+    .replace(/\b(4k|uhd|1080p|720p|2160p|fhd|hd|sd|bluray|webrip|web|dl|dublado|legendado|leg|dub|dual|audio|nacional|hdr|hdr10|remux|extended|estendida|versao|remasterizado|remastered|imax)\b/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
@@ -141,7 +142,7 @@ async function liveList(b, categoryId) {
   return rows;
 }
 
-function scoreOne(itemName, queryTitle, queryYear) {
+function scoreOne(itemName, queryTitle, queryYear, alias) {
   const t = norm(itemName);
   const n = norm(queryTitle);
   if (!t || !n) return 0;
@@ -168,19 +169,23 @@ function scoreOne(itemName, queryTitle, queryYear) {
   const shared = nTok.filter((w) => tSet.has(w));
   if (shared.length === 1 && nTok.length >= 2 && GENERIC.has(shared[0])) return 0;
   if (queryYear && itemYear && Number(queryYear) === Number(itemYear)) score += 20;
-  if (queryYear && !itemYear && score < 88) return 0;
+  // palavras a mais que não são de outro nome do mesmo título (ex. "Ilha da Morte") = outro filme: exige o mesmo ano
+  const extra = tTok.filter((w) => !nSet.has(w) && !(alias && alias.has(w)));
+  if (score < 100 && coverN >= 0.99 && extra.length === 0 && (!queryYear || !itemYear || Number(queryYear) === Number(itemYear))) score = Math.max(score, 100 + (queryYear && itemYear ? 20 : 0));
+  if (queryYear && !itemYear && score < 100) return 0;
   return score;
 }
 
 function pick(list, titles, queryYear) {
   const bag = (Array.isArray(titles) ? titles : [titles]).filter(Boolean);
   if (!bag.length) return null;
+  const alias = new Set(); for (const q of bag) tokens(q).forEach((w) => alias.add(w));
   let best = null;
   let bestScore = 0;
   for (const item of list) {
     const name = item.name || item.title || '';
     for (const q of bag) {
-      const score = scoreOne(name, q, queryYear);
+      const score = scoreOne(name, q, queryYear, alias);
       if (score > bestScore) {
         bestScore = score;
         best = item;
@@ -673,7 +678,7 @@ module.exports = async function handler(req, res) {
       if (streamReq.xtreamId) {
         hit = list.find((x) => String(x.stream_id) === String(streamReq.xtreamId));
       }
-      if (!hit && titles.length) hit = pick(list, titles, year);
+      if (!hit && titles.length) { hit = pick(list, titles, year); if (hit && !(await exactIsSafe(hit.name || hit.title || '', kind, year))) hit = null; }
       if (hit && hit.stream_id) {
         const ext = (hit.container_extension || 'mp4').replace(/^\./, '');
         streams.push({
@@ -690,7 +695,7 @@ module.exports = async function handler(req, res) {
       if (streamReq.xtreamId) {
         hit = list.find((x) => String(x.series_id || x.stream_id) === String(streamReq.xtreamId));
       }
-      if (!hit && titles.length) hit = pick(list, titles, year);
+      if (!hit && titles.length) { hit = pick(list, titles, year); if (hit && !(await exactIsSafe(hit.name || hit.title || '', kind, year))) hit = null; }
       if (hit && (hit.series_id || hit.stream_id)) {
         const sid = hit.series_id || hit.stream_id;
         const info = await xtream(b, 'get_series_info', { series_id: sid }).catch(() => null);

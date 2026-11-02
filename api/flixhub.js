@@ -1,3 +1,4 @@
+const { exactIsSafe } = require('../lib/title-confirm');
 // api/flixhub.js — fontes HD, indice rapido, evita CAM
 const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
@@ -21,7 +22,7 @@ function norm(s) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\b(19|20)\d{2}\b/g, ' ')
-    .replace(/\b(4k|uhd|1080p|720p|2160p|fhd|hd|sd|bluray|webrip|dublado|legendado|leg|dub)\b/g, ' ')
+    .replace(/\b(4k|uhd|1080p|720p|2160p|fhd|hd|sd|bluray|webrip|web|dl|dublado|legendado|leg|dub|dual|audio|nacional|hdr|hdr10|remux|extended|estendida|versao|remasterizado|remastered|imax)\b/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 }
@@ -265,7 +266,7 @@ function isLowQuality(name) {
   return LOW_Q.test(String(name || ''));
 }
 
-function scoreOne(itemName, queryTitle, queryYear) {
+function scoreOne(itemName, queryTitle, queryYear, alias) {
   const t = norm(itemName);
   const n = norm(queryTitle);
   if (!t || !n) return 0;
@@ -293,7 +294,10 @@ function scoreOne(itemName, queryTitle, queryYear) {
   const shared = nTok.filter((w) => tSet.has(w));
   if (shared.length === 1 && nTok.length >= 2 && GENERIC.has(shared[0])) return 0;
   if (queryYear && itemYear && Number(queryYear) === Number(itemYear)) score += 20;
-  if (queryYear && !itemYear && score < 88) return 0;
+  // palavras a mais que não são de outro nome do mesmo título (ex. "Ilha da Morte") = outro filme: exige o mesmo ano
+  const extra = tTok.filter((w) => !nSet.has(w) && !(alias && alias.has(w)));
+  if (score < 100 && coverN >= 0.99 && extra.length === 0 && (!queryYear || !itemYear || Number(queryYear) === Number(itemYear))) score = Math.max(score, 100 + (queryYear && itemYear ? 20 : 0));
+  if (queryYear && !itemYear && score < 100) return 0;
   if (nTok.length >= 3 && tTok.length <= 2 && coverN < 0.99) return 0;
   if (nTok.length >= 4 && interN < 3) return 0;
   return score;
@@ -341,7 +345,7 @@ function pickFromPack(pack, titles, queryYear) {
     const name = item.name || item.title || '';
     const low = isLowQuality(name);
     for (const q of bag) {
-      let score = scoreOne(name, q, queryYear);
+      let score = scoreOne(name, q, queryYear, qToks);
       if (score < 80) continue;
       if (low) score -= 40;
       if (!low && score > bestScore) {
@@ -638,7 +642,7 @@ module.exports = async function handler(req, res) {
             (async () => {
           if (streamReq.type === 'movie' && server.use_movies !== false) {
             const packV = await vodList(server);
-            const hit = pick(packV, titles, year);
+            let hit = pick(packV, titles, year); if (hit && !(await exactIsSafe(hit.name || hit.title || '', 'movie', year))) hit = null;
             if (hit && hit.stream_id) {
               const ext = (hit.container_extension || 'mp4').replace(/^\./, '');
               const label = server.name || brand;
@@ -673,7 +677,7 @@ module.exports = async function handler(req, res) {
           }
           if (streamReq.type === 'series' && server.use_series !== false) {
             const packS = await seriesList(server);
-            const hit = pick(packS, titles, year);
+            let hit = pick(packS, titles, year); if (hit && !(await exactIsSafe(hit.name || hit.title || '', 'tv', year))) hit = null;
             if (hit && (hit.series_id || hit.stream_id)) {
               const sid = hit.series_id || hit.stream_id;
               const info = await seriesInfo(server, sid).catch(() => null);
