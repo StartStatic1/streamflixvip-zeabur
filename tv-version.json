@@ -1,7 +1,7 @@
 {
-  "versionCode": 28,
-  "versionName": "4.1.4",
+  "versionCode": 29,
+  "versionName": "4.1.5",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Servidores lentos não são mais pulados cedo demais. AIOStreams corrigido. Filmes errados nas listas corrigidos."
+  "releaseNotes": "AIOStreams corrigido: o vídeo abre direto da sua internet (sem 'Opened on a different connection')."
 }
