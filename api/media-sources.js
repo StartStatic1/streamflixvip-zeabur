@@ -4,6 +4,7 @@
 //
 // GET /api/media-sources?tmdb_id=123&type=movie
 
+const sourceHealth = require('../lib/source-health');
 const { resolveVipAccess } = require('../lib/vip-gate');
 const { enforceMinAppVersion } = require('../lib/client-gate');
 const { collectAddonSources, collectAddonSourcesProgress, loadActiveAddons } = require('../lib/stremio-addons');
@@ -390,8 +391,9 @@ async function handler(req, res) {
   // o app pede de novo e recebe o resto (a coleta continua em segundo plano).
   // Sem fast: igual antes (espera ate o prazo normal) — apps antigos nao mudam.
   const fastMode = String(req.query.fast || '') === '1';
+  const resumeMode = String(req.query.resume || '') === '1';
   const earlyAddons = allowAddons && !freeFast
-    ? collectAddonSourcesProgress(serviceKey, tmdbId, mediaType, season, episode, fastMode ? FAST_DEADLINE_MS : undefined)
+    ? collectAddonSourcesProgress(serviceKey, tmdbId, mediaType, season, episode, fastMode ? FAST_DEADLINE_MS : undefined, { early: fastMode, longTtl: resumeMode })
     : null;
   let addonsComplete = true;
   if (earlyAddons) earlyAddons.catch(() => {});
@@ -447,6 +449,12 @@ async function handler(req, res) {
       if (ra.p !== rb.p) return ra.p - rb.p;
       return ra.q - rb.q;
     });
+
+    // servidores que falharam há pouco vão para o fim; no "Continuar" testa os primeiros e sobe o que manda vídeo
+    sources = sourceHealth.demoteFailed(sources);
+    if (resumeMode && sources.length > 1) {
+      try { sources = await sourceHealth.promoteFirstWorking(sources, 4, 1500); } catch (_) {}
+    }
 
     const partial = fastMode && !addonsComplete;
     res.status(200).json({
