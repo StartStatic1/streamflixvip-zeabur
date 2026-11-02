@@ -231,7 +231,12 @@ class DetailTvViewModel(
             // cancelado (painel fechado/reaberto): nao mexe no painel novo
             ensureActive()
             val final = result.getOrNull() ?: last
-            val sources = order(final?.sources.orEmpty(), preferred)
+            // AIOStreams: a TV pede direto e junta no fim (o servidor não pode pedir — link preso ao IP)
+            val relaySources = final?.relay?.takeIf { it.isNotEmpty() }?.let { plan ->
+                com.streamflixvip.tv.network.AddonRelay.fetchWithin(12_000L, tmdbId, if (isSeries) "tv" else "movie", if (isSeries) season else null, if (isSeries) episode else null, plan)
+            }.orEmpty()
+            ensureActive()
+            val sources = order(com.streamflixvip.tv.network.AddonRelay.merge(final?.sources.orEmpty(), relaySources), preferred)
             updatePanel(season, episode) { p ->
                 p.copy(
                     sources = if (sources.isEmpty()) p.sources else sources,

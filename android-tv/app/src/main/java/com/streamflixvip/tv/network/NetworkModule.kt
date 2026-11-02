@@ -101,6 +101,9 @@ object NetworkModule {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    /** Cliente com a sessão (para o relay do AIOStreams mandar as streams ao servidor). */
+    val authedClient: OkHttpClient get() = mediaOkHttp
+
     val fastProbeClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.SECONDS)

@@ -190,7 +190,13 @@ class MainTvActivity : ComponentActivity() {
                 delay((merged.pollAfterMs ?: 800L).coerceIn(400L, 1500L))
                 polls++
             }
-            val list = last?.sources.orEmpty().distinctBy { it.source_url }
+            // AIOStreams: a TV pede direto (o link fica preso a quem pediu); espera pouco se já tem servidores
+            val plan = last?.relay
+            val relaySources = if (plan.isNullOrEmpty()) emptyList() else com.streamflixvip.tv.network.AddonRelay.fetchWithin(
+                if (last?.sources.isNullOrEmpty()) 9_000L else if (preferred != null && preferred.startsWith("Aiostreams", true)) 6_000L else 3_500L,
+                tmdbId, type, season, episode, plan,
+            )
+            val list = com.streamflixvip.tv.network.AddonRelay.merge(last?.sources.orEmpty(), relaySources).distinctBy { it.source_url }
                 .sortedByDescending { preferred != null && it.displayName == preferred }
             return list to last
         }

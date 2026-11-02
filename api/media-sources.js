@@ -7,7 +7,7 @@
 const sourceHealth = require('../lib/source-health');
 const { resolveVipAccess } = require('../lib/vip-gate');
 const { enforceMinAppVersion } = require('../lib/client-gate');
-const { collectAddonSources, collectAddonSourcesProgress, loadActiveAddons } = require('../lib/stremio-addons');
+const { collectAddonSources, collectAddonSourcesProgress, loadActiveAddons, relayPlan, formatRelayStreams } = require('../lib/stremio-addons');
 
 // Resposta rapida (fast=1): prazo dos add-ons e intervalo sugerido para pedir o resto.
 const FAST_DEADLINE_MS = 3000;
@@ -300,7 +300,7 @@ function pushUnique(list, seen, dest) {
 
 async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader(
     'Access-Control-Allow-Headers',
     'Content-Type, Authorization, X-App-Version, X-App-Version-Code, X-User-Id, X-Device-Id',
@@ -309,7 +309,8 @@ async function handler(req, res) {
     res.status(200).end();
     return;
   }
-  if (req.method !== 'GET') {
+  const relayFormat = req.method === 'POST' && String(req.query.relay_format || '') === '1';
+  if (req.method !== 'GET' && !relayFormat) {
     res.status(405).json({ error: 'Método não permitido', sources: [] });
     return;
   }
@@ -358,6 +359,17 @@ async function handler(req, res) {
 
   const needsVip = titleRequiresVip(vipConfig, mediaType === 'tv' ? episode : null, mediaType);
 
+  // TV mandou o que pediu direto ao AIOStreams: só formata (o servidor não abre nada)
+  if (relayFormat) {
+    if (!access.isVip && !(vipConfig && vipConfig.is_free === true)) { res.status(403).json({ sources: [] }); return; }
+    try {
+      const b = req.body || {};
+      const out = await formatRelayStreams(serviceKey, b.addonId, b.streams, tmdbId, mediaType, season, episode);
+      res.status(200).json({ sources: out });
+    } catch (e) { res.status(200).json({ sources: [] }); }
+    return;
+  }
+
   if (needsVip && !access.isVip) {
     const ticketOk = await hasValidTicket(serviceKey, access.userId, tmdbId);
     if (ticketOk) { access.isVip = true; access.source = access.source || 'ticket'; }
@@ -392,8 +404,10 @@ async function handler(req, res) {
   // Sem fast: igual antes (espera ate o prazo normal) — apps antigos nao mudam.
   const fastMode = String(req.query.fast || '') === '1';
   const resumeMode = String(req.query.resume || '') === '1';
+  // TV 4.1.5+: AIOStreams/ElfHosted a TV pede direto (o link fica preso ao IP de quem pede a lista)
+  const relayMode = String(req.query.relay || '') === '1';
   const earlyAddons = allowAddons && !freeFast
-    ? collectAddonSourcesProgress(serviceKey, tmdbId, mediaType, season, episode, fastMode ? FAST_DEADLINE_MS : undefined, { early: fastMode, longTtl: resumeMode })
+    ? collectAddonSourcesProgress(serviceKey, tmdbId, mediaType, season, episode, fastMode ? FAST_DEADLINE_MS : undefined, { early: fastMode, longTtl: resumeMode, relay: relayMode })
     : null;
   let addonsComplete = true;
   if (earlyAddons) earlyAddons.catch(() => {});
@@ -456,10 +470,16 @@ async function handler(req, res) {
       try { sources = await sourceHealth.promoteFirstWorking(sources, 4, 1500); } catch (_) {}
     }
 
+    let relay;
+    if (relayMode && allowAddons) {
+      try { relay = await relayPlan(serviceKey, tmdbId, mediaType, season, episode); } catch (_) { relay = []; }
+    }
+
     const partial = fastMode && !addonsComplete;
     res.status(200).json({
       sources,
       ...(fastMode ? { partial, pollAfterMs: partial ? FAST_POLL_MS : undefined } : {}),
+      ...(relay ? { relay } : {}),
       vipConfig: vipConfig
         ? { vip_lock: !!vipConfig.vip_lock, vip_free_episode_limit: vipConfig.vip_free_episode_limit ?? null, is_free: !!vipConfig.is_free }
         : null,

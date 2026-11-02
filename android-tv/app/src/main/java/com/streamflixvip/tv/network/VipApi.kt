@@ -47,6 +47,7 @@ interface VipApi {
         @Query("episode") episode: Int? = null,
         @Query("fast") fast: Int? = null,
         @Query("resume") resume: Int? = null,
+        @Query("relay") relay: Int? = 1,
     ): MediaSourcesResponse
 }
 
@@ -60,6 +61,15 @@ data class MediaSourcesResponse(
     /** true = ainda chegando servidores; pedir de novo depois de pollAfterMs (so com fast=1) */
     val partial: Boolean = false,
     val pollAfterMs: Long? = null,
+    /** add-ons presos ao IP (AIOStreams): a TV pede direto — ver AddonRelay */
+    val relay: List<RelayAddon>? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class RelayAddon(
+    val addonId: String = "",
+    val name: String? = null,
+    val urls: List<String> = emptyList(),
 )
 
 @JsonClass(generateAdapter = true)
