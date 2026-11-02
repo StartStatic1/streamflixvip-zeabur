@@ -1,7 +1,7 @@
 {
-  "versionCode": 25,
-  "versionName": "4.1.1",
+  "versionCode": 26,
+  "versionName": "4.1.2",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Perfis separados: cada perfil tem seu Continuar assistindo e Minha lista. Tela de editar perfil ajustada."
+  "releaseNotes": "Continuar assistindo abre o player bem mais rápido."
 }
