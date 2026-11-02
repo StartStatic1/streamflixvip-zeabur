@@ -153,7 +153,7 @@ private data class TrackOpt(val label: String, val groupIndex: Int, val trackInd
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
 private const val SKIP_INTRO_MS = 85_000L
-private const val START_TIMEOUT_MS = 30_000L
+private const val START_TIMEOUT_MS = 7_000L
 private const val NEXT_CARD_MS = 25_000L
 
 @Composable
@@ -350,6 +350,8 @@ private fun PlayerSession(
                     if (!firstReady) {
                         firstReady = true
                         retryCount = 0
+                        // lembra o servidor que funcionou: no "Continuar" ele é tentado primeiro
+                        runCatching { sources.getOrNull(sourceIndex)?.displayName?.takeIf { it.isNotBlank() }?.let { com.streamflixvip.tv.data.RecentStore(context).setLastServer(args.tmdbId, it) } }
                     }
                     everReady = true
                 }
@@ -427,7 +429,7 @@ private fun PlayerSession(
         }
     }
 
-    // servidor que nao comeca a tocar em 30s conta como falha
+    // servidor que nao comeca a tocar em 7s conta como falha (ja tocou alguma vez: nao entra aqui)
     LaunchedEffect(loadNonce) {
         if (loadNonce == 0) return@LaunchedEffect
         delay(START_TIMEOUT_MS)

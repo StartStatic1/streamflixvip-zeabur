@@ -50,6 +50,7 @@ import com.streamflixvip.tv.ui.update.UpdateRequiredTvScreen
 import com.streamflixvip.tv.update.ApkInstaller
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
 
 private data class LiveSession(
     val channels: List<LiveChannel>,
@@ -170,13 +171,13 @@ class MainTvActivity : ComponentActivity() {
         }
 
         /** Busca servidores (fast=1) e para cedo quando o servidor preferido aparece. */
-        suspend fun resolveSources(tmdbId: Int, type: String, season: Int?, episode: Int?, preferred: String?): Pair<List<VipSource>, MediaSourcesResponse?> {
+        suspend fun resolveSources(tmdbId: Int, type: String, season: Int?, episode: Int?, preferred: String?, resume: Boolean = false): Pair<List<VipSource>, MediaSourcesResponse?> {
             var last: MediaSourcesResponse? = null
             var polls = 0
             val started = System.currentTimeMillis()
             while (true) {
                 val res = runCatching {
-                    NetworkModule.vipApi.getMediaSources(tmdbId, type, season, episode, fast = 1)
+                    NetworkModule.vipApi.getMediaSources(tmdbId, type, season, episode, fast = 1, resume = if (resume) 1 else null)
                 }.getOrNull() ?: break
                 val merged = if (last != null && res.sources.size < last.sources.size) res.copy(sources = last.sources) else res
                 last = merged
@@ -194,6 +195,31 @@ class MainTvActivity : ComponentActivity() {
             return list to last
         }
 
+        // pré-busca ao focar o cartão do "Continuar": guarda por 2 min; ao clicar usa na hora
+        val prefetched = remember { HashMap<String, Pair<Long, kotlinx.coroutines.Deferred<Pair<List<VipSource>, MediaSourcesResponse?>>>>() }
+        fun resumeKey(e: LocalWatchProgress) = "${e.mediaType}:${e.tmdbId}:${e.season}:${e.episode}"
+        fun fetchResume(entry: LocalWatchProgress): kotlinx.coroutines.Deferred<Pair<List<VipSource>, MediaSourcesResponse?>> {
+            val k = resumeKey(entry)
+            val now = System.currentTimeMillis()
+            prefetched[k]?.let { (at, d) -> if (now - at < 120_000L && !d.isCancelled) return d }
+            val isTv = entry.mediaType == "tv"
+            val d = scope.async {
+                runCatching { resolveSources(entry.tmdbId, if (isTv) "tv" else "movie", if (isTv) entry.season else null, if (isTv) entry.episode else null, recent.lastServer(entry.tmdbId), resume = true) }.getOrElse { emptyList<VipSource>() to null }
+            }
+            prefetched[k] = now to d
+            if (prefetched.size > 20) prefetched.keys.firstOrNull()?.let { prefetched.remove(it) }
+            return d
+        }
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            var job: kotlinx.coroutines.Job? = null
+            com.streamflixvip.tv.ui.home.ResumePrefetch.onFocus = { e ->
+                // espera o foco parar um pouco (rolar a fileira não dispara buscas à toa)
+                job?.cancel()
+                job = scope.launch { delay(350); runCatching { fetchResume(e) } }
+            }
+            onDispose { com.streamflixvip.tv.ui.home.ResumePrefetch.onFocus = null }
+        }
+
         fun resumeContinueWatching(entry: LocalWatchProgress) {
             if (busy) return
             busy = true
@@ -201,13 +227,12 @@ class MainTvActivity : ComponentActivity() {
             scope.launch {
                 try {
                     val isTv = entry.mediaType == "tv"
-                    val (sources, res) = resolveSources(
-                        entry.tmdbId,
-                        if (isTv) "tv" else "movie",
-                        if (isTv) entry.season else null,
-                        if (isTv) entry.episode else null,
-                        recent.lastServer(entry.tmdbId),
-                    )
+                    var (sources, res) = runCatching { fetchResume(entry).await() }.getOrElse { emptyList<VipSource>() to null }
+                    if (sources.isEmpty()) { // a pré-busca veio vazia: tenta de novo agora
+                        prefetched.remove(resumeKey(entry))
+                        val again = runCatching { fetchResume(entry).await() }.getOrElse { emptyList<VipSource>() to null }
+                        sources = again.first; res = again.second
+                    }
                     if (sources.isEmpty()) {
                         toaster.show(sourcesMessage(res))
                         navController.navigate("detail/${entry.mediaType}/${entry.tmdbId}")

@@ -46,6 +46,7 @@ interface VipApi {
         @Query("season") season: Int? = null,
         @Query("episode") episode: Int? = null,
         @Query("fast") fast: Int? = null,
+        @Query("resume") resume: Int? = null,
     ): MediaSourcesResponse
 }
 

@@ -479,7 +479,7 @@ private fun HomeRowView(
                                 showPlayIcon = true,
                                 width = 248.dp,
                                 modifier = mod,
-                                onFocus = { onCardFocused(key, entry.toSpotlight()) },
+                                onFocus = { onCardFocused(key, entry.toSpotlight()); ResumePrefetch.onFocus?.invoke(entry) },
                                 onLongClick = { onContinueLongClick(entry) },
                                 onClick = { onContinueClick(entry) },
                             )
@@ -573,4 +573,9 @@ private fun SeeAllCard(featured: Boolean, onClick: () -> Unit) {
             }
         }
     }
+}
+
+/** "Continuar assistindo": ao focar um cartão, a lista de servidores já começa a ser buscada (MainTvActivity liga). */
+object ResumePrefetch {
+    var onFocus: ((LocalWatchProgress) -> Unit)? = null
 }
