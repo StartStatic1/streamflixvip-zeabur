@@ -103,7 +103,8 @@ class HomeViewModel(
                             .ifEmpty { nowPlaying }
                     ).take(6),
                     rows = listOfNotNull(
-                        freeArea.takeIf { it.isNotEmpty() && !VipStatusHolder.isVipNow() }?.let {
+                        // sempre monta; a tela esconde para VIP (o status VIP chega depois da home carregar)
+                        freeArea.takeIf { it.isNotEmpty() }?.let {
                             HomeRow("Area Free", it, "movie")
                         },
                         trending.takeIf { it.isNotEmpty() }?.let {
