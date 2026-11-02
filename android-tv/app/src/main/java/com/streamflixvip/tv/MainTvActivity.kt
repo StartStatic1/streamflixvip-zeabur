@@ -173,6 +173,7 @@ class MainTvActivity : ComponentActivity() {
         suspend fun resolveSources(tmdbId: Int, type: String, season: Int?, episode: Int?, preferred: String?): Pair<List<VipSource>, MediaSourcesResponse?> {
             var last: MediaSourcesResponse? = null
             var polls = 0
+            val started = System.currentTimeMillis()
             while (true) {
                 val res = runCatching {
                     NetworkModule.vipApi.getMediaSources(tmdbId, type, season, episode, fast = 1)
@@ -180,8 +181,12 @@ class MainTvActivity : ComponentActivity() {
                 val merged = if (last != null && res.sources.size < last.sources.size) res.copy(sources = last.sources) else res
                 last = merged
                 val hasPreferred = preferred != null && merged.sources.any { it.displayName == preferred }
-                if (!merged.partial || merged.code != null || hasPreferred || polls >= 8) break
-                delay((merged.pollAfterMs ?: 1500L).coerceIn(500L, 5000L))
+                // abre assim que der: com servidores na mão não espera a lista completa (antes até 8 voltas ≈ 10–20 s);
+                // o servidor de antes ganha só ~2,5 s de vantagem para aparecer
+                val waited = System.currentTimeMillis() - started
+                val enough = merged.sources.isNotEmpty() && (preferred == null || waited >= 2_500L)
+                if (!merged.partial || merged.code != null || hasPreferred || enough || polls >= 8) break
+                delay((merged.pollAfterMs ?: 800L).coerceIn(400L, 1500L))
                 polls++
             }
             val list = last?.sources.orEmpty().distinctBy { it.source_url }
