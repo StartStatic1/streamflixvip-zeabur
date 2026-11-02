@@ -14,6 +14,9 @@ const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 /**
  * Handler principal que roteia entre a criação do PIX e o Webhook.
  */
+const sales = require('../lib/sales');
+const { PLANS } = require('../lib/plans');
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -114,6 +117,12 @@ async function handleWebhook(req, res) {
     return res.status(200).send('OK');
   }
 
+  // O Mercado Pago avisa várias vezes o mesmo pagamento: só credita uma vez.
+  const saleId = 'mp:' + String(paymentId);
+  if (sales.processed(saleId)) {
+    return res.status(200).send('OK (repetido)');
+  }
+
   try {
     // 1. Busca os detalhes do pagamento no Mercado Pago para confirmar se foi pago
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
@@ -133,6 +142,21 @@ async function handleWebhook(req, res) {
     if (!userId) {
       console.error('Pagamento aprovado sem external_reference (userId)');
       return res.status(200).send('Erro: Sem userId');
+    }
+
+    const baseSale = {
+      id: saleId, provider: 'mercadopago', method: sales.methodOf(payment.payment_type_id || payment.payment_method_id),
+      tx: String(paymentId), amountCents: Math.round(Number(payment.transaction_amount || 0) * 100) || null,
+      paidCents: Math.round(Number(payment.transaction_details?.total_paid_amount || payment.transaction_amount || 0) * 100) || null,
+      feeCents: Math.round((payment.fee_details || []).reduce((a, f) => a + Number(f.amount || 0), 0) * 100) || null,
+      at: payment.date_approved ? new Date(payment.date_approved).getTime() : Date.now(),
+      kind: 'vip', userId, planLabel, hours: Number(durationHours) || 720, receiptUrl: null,
+    };
+    const plan = PLANS.find((p) => p.hours === Number(durationHours) && p.price > 0);
+    if (plan && Number(payment.transaction_amount || 0) < plan.price - 0.01) {
+      console.warn('[mercadopago] valor abaixo do plano — não liberado', paymentId);
+      sales.record({ ...baseSale, status: 'valor_abaixo' });
+      return res.status(200).send('Valor abaixo do plano');
     }
 
     // 2. Lógica de ativação no Supabase (igual ao redeem-vip.js)
@@ -167,6 +191,8 @@ async function handleWebhook(req, res) {
       }),
     });
 
+    sales.record({ ...baseSale, email: currentStatus?.email || null, status: 'aprovado', expiresAt: newExpiry.toISOString() });
+    try { require('../lib/vip-status-cache').invalidate(userId); } catch (_) {}
     console.log(`VIP ativado automaticamente para o usuário ${userId} via PIX.`);
     res.status(200).send('OK');
   } catch (err) {

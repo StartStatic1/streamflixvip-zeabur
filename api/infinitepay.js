@@ -163,6 +163,8 @@ async function grantTicket(serviceKey, parts, body, res) {
   return res.status(200).json({ success: true, message: 'ticket' });
 }
 
+const sales = require('../lib/sales');
+
 async function handleWebhook(req, res) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {
@@ -192,6 +194,10 @@ async function handleWebhook(req, res) {
     if (!userId) {
       return res.status(400).json({ success: false, message: 'sem userId' });
     }
+
+    const tx0 = String(body.transaction_nsu || body.invoice_slug || orderNsu);
+    const saleId = 'ip:' + tx0;
+    if (sales.processed(saleId)) return res.status(200).json({ success: true, message: 'repetido' });
 
     // === SEGURANÇA: confirma com a InfinitePay antes de liberar VIP ===
     const handle = (process.env.INFINITEPAY_HANDLE || 'streamflixvip').replace(/^\$/, '');
@@ -260,6 +266,13 @@ async function handleWebhook(req, res) {
       body: JSON.stringify(upsertBody),
     });
 
+    try {
+      const cents = Number(verified.paid_amount || body.paid_amount || verified.amount || body.amount || 0) || null;
+      sales.record({ id: saleId, provider: 'infinitepay', method: isCard ? 'cartao' : 'pix', tx: String(tx || '') || null,
+        amountCents: Number(body.amount || verified.amount || 0) || cents, paidCents: cents, installments: Number(body.installments || verified.installments || 0) || null,
+        at: now.getTime(), kind: 'vip', userId, email: email || null, name: name || null, planLabel, hours: durationHours,
+        status: 'aprovado', expiresAt: newExpiry.toISOString(), receiptUrl: body.receipt_url || null });
+    } catch (e) { console.warn('[infinitepay] sales log', e.message); }
     try { vipMem.invalidate(userId); } catch (_) {}
     console.log(`[infinitepay] VIP ok user=${userId} method=${methodLabel} until=${newExpiry.toISOString()}`);
     return res.status(200).json({ success: true, message: null });
