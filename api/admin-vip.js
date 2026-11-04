@@ -234,8 +234,10 @@ module.exports = async function handler(req, res) {
         ? fetch(`${SUPABASE_URL}/rest/v1/vip_redemptions?select=email,plan_label,duration_hours,redeemed_at,platform,device_id&code=eq.${encodeURIComponent(one)}&order=redeemed_at.desc&limit=50`, { headers: svcHeaders })
         : Promise.resolve(null),
     ]);
-    const codes = await codesRes.json();
-    if (!codesRes.ok || !Array.isArray(codes)) { res.status(502).json({ error: 'Erro ao listar códigos', detail: codes }); return; }
+    const codesAll = await codesRes.json();
+    if (!codesRes.ok || !Array.isArray(codesAll)) { res.status(502).json({ error: 'Erro ao listar códigos', detail: codesAll }); return; }
+    // U-<userId> = código interno da conta (TV pareada por VIP pago): não aparece na lista nem pode ser apagado
+    const codes = codesAll.filter((c) => !String(c.code || '').startsWith('U-'));
     const tvRows = tvRes.ok ? await tvRes.json() : [];
     const userIds = [...new Set(codes.map((c) => c.used_by).filter(Boolean))];
     const users = new Map();
@@ -432,6 +434,41 @@ module.exports = async function handler(req, res) {
     res.status(200).json({ locks: deviceLock.all(), maxSwaps: deviceLock.MAX_SWAPS });
     return;
   }
+  if (action === 'account-detail') {
+    const userId = String(body.userId || '');
+    if (!/^[0-9a-f-]{36}$/i.test(userId)) { res.status(400).json({ error: 'userId inválido' }); return; }
+    const [vsR, tvR, uR] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/vip_status?user_id=eq.${userId}&select=email,name,expires_at,plan_label,last_code_used,last_seen_at`, { headers: svcHeaders }),
+      fetch(`${SUPABASE_URL}/rest/v1/tv_activations?code=eq.U-${userId}&select=device_id,device_label,expires_at,is_active,activated_at`, { headers: svcHeaders }),
+      fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, { headers: svcHeaders }),
+    ]);
+    const vs = (vsR.ok ? await vsR.json() : [])[0] || {};
+    const tvs = tvR.ok ? await tvR.json() : [];
+    const au = uR.ok ? await uR.json() : {};
+    const lc = String(vs.last_code_used || '');
+    res.status(200).json({
+      userId, email: vs.email || au.email || null, name: vs.name || null, planLabel: vs.plan_label || null,
+      expiresAt: vs.expires_at || null, lastSeen: vs.last_seen_at || null,
+      origem: lc.startsWith('PIX-') ? 'PIX' : lc.startsWith('CARTAO-') ? 'Cartão' : lc ? 'Código' : '—',
+      provider: /-MP-/.test(lc) ? 'Mercado Pago' : /-IP-/.test(lc) ? 'InfinitePay' : null,
+      deviceKey: 'u:' + userId, devices: deviceLock.get('u:' + userId),
+      tvs: (Array.isArray(tvs) ? tvs : []).map((t) => ({ deviceIdTail: String(t.device_id).slice(-6), deviceId: t.device_id, label: t.device_label || 'TV', active: !!t.is_active,
+        activatedAt: t.activated_at, expiresAt: vs.expires_at && new Date(vs.expires_at) > new Date(t.expires_at) ? vs.expires_at : t.expires_at })),
+    });
+    return;
+  }
+
+  if (action === 'account-tv-disconnect') {
+    const userId = String(body.userId || ''); const deviceId = String(body.deviceId || '');
+    if (!/^[0-9a-f-]{36}$/i.test(userId) || !deviceId) { res.status(400).json({ error: 'dados inválidos' }); return; }
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/tv_activations?code=eq.U-${userId}&device_id=eq.${encodeURIComponent(deviceId)}`, {
+      method: 'PATCH', headers: { ...svcHeaders, 'Content-Type': 'application/json', Prefer: 'return=minimal' }, body: JSON.stringify({ is_active: false }) });
+    deviceLock.release('u:' + userId, 'tv');
+    console.log('[admin] account-tv-disconnect', userId.slice(0, 8) + '…', r.status);
+    res.status(200).json({ ok: r.ok });
+    return;
+  }
+
   if (action === 'device-release') {
     const key = String(body.key || '');
     const slot = body.slot === 'phone' || body.slot === 'tv' ? body.slot : null;

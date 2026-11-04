@@ -232,7 +232,7 @@ function renderVendas(){
   document.getElementById('vList').innerHTML=list.length?list.slice(0,300).map((v,i)=>`<div class="item" onclick="this.querySelector('.vx').style.display=this.querySelector('.vx').style.display==='none'?'block':'none'">
     <div class="l1"><span>${METH[v.method]||esc(v.method)} <b>${money(v.amount||0)}</b></span><span class="muted">${fmtD(v.at)}</span></div>
     <div class="muted">${esc(v.name||v.email||(v.code?'':'—'))}${v.code?' · <span class="code">'+esc(v.code)+'</span>':''} · ${esc(v.planLabel||'')}</div>
-    <div class="vx muted" style="display:none;margin-top:6px">Via ${PROV[v.provider]||esc(v.provider)}${v.installments>1?' · '+v.installments+'x':''}${v.email?'<br>👤 '+esc(v.email):''}${v.expiresAt?'<br>👑 VIP até '+fmtD(v.expiresAt)+(new Date(v.expiresAt)<new Date()?' (vencido)':''):''}${v.code?`<br><button style="margin-top:6px" onclick="event.stopPropagation();openCode('${esc(v.code)}')">Ver código</button>`:''}</div></div>`).join(''):'<div class="muted">Nenhuma venda aqui.</div>';
+    <div class="vx muted" style="display:none;margin-top:6px">Via ${PROV[v.provider]||esc(v.provider)}${v.installments>1?' · '+v.installments+'x':''}${v.email?'<br>👤 '+esc(v.email):''}${v.expiresAt?'<br>👑 VIP até '+fmtD(v.expiresAt)+(new Date(v.expiresAt)<new Date()?' (vencido)':''):''}${v.code?`<br><button style="margin-top:6px" onclick="event.stopPropagation();openCode('${esc(v.code)}')">Ver código</button>`:''}${!v.code&&v.userId?`<br><button class="gold" style="margin-top:6px" onclick="event.stopPropagation();openAccount('${esc(v.userId)}')">📺 Ver conta e TVs</button>`:''}</div></div>`).join(''):'<div class="muted">Nenhuma venda aqui.</div>';
 }
 async function gerar(){
   const b=document.getElementById('gBtn');b.disabled=true;b.textContent='Gerando…';
@@ -243,6 +243,28 @@ async function gerar(){
   gWa.href=waLink(gPhone.value,`Seu código VIP StreamFlix (${r.planLabel}):\n${r.created.join('\n')}\n\nNo app: Perfil > VIP > Resgatar código. Na TV: digite o código na tela de ativação.`);
   toast('✅ '+r.created.length+' código(s) criado(s)');load();
 }
+async function openAccount(uid){
+  const ms=document.getElementById('ms');ms.innerHTML='<div class="muted">Carregando…</div>';document.getElementById('m').classList.add('open');
+  const d=await api('account-detail',{userId:uid}); if(d.error){ms.innerHTML='<div class="muted">'+esc(d.error)+'</div>';return}
+  const dv=d.devices||{}; const vip=d.expiresAt&&new Date(d.expiresAt)>new Date();
+  const dev=(i,x)=>x?`${i} ${esc(x.label||'aparelho')} …${esc(x.deviceIdTail)}<br><span class="muted">desde ${fmtDT(x.since)} · visto ${fmtDT(x.lastSeen)}</span>`:`${i} —`;
+  const tvs=(d.tvs||[]);
+  ms.innerHTML=`<div class="l1" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:16px;word-break:break-all"><b>${esc(d.email||'(sem e-mail)')}</b></span><button onclick="closeM()">✕</button></div>
+  <div style="margin:8px 0"><span class="badge ${vip?'s-ativo':'s-vencido'}">${vip?'VIP ativo':'VIP vencido'}</span></div>
+  <div class="kv"><div>Plano</div><div>${esc(d.planLabel||'—')}</div><div>Origem</div><div>${esc(d.origem)}${d.provider?' · '+esc(d.provider):''}</div>
+  <div>VIP até</div><div>${d.expiresAt?fmtDT(d.expiresAt):'—'}</div><div>Visto no app</div><div>${d.lastSeen?fmtDT(d.lastSeen):'—'}</div>
+  <div>Celular</div><div>${dev('📱',dv.phone)}</div><div>TV em uso</div><div>${dev('📺',dv.tv)}</div>
+  ${dv.swaps_phone||dv.swaps_tv||dv.blocked_phone||dv.blocked_tv?`<div>Trocas/bloqueios</div><div>📱 ${dv.swaps_phone||0}/${dv.blocked_phone||0} · 📺 ${dv.swaps_tv||0}/${dv.blocked_tv||0}</div>`:''}</div>
+  <h2 style="margin-top:14px">TVs conectadas pelo celular</h2>
+  ${tvs.length?tvs.map(t=>`<div class="item" style="cursor:default"><div class="l1"><span>📺 ${esc(t.label)} …${esc(t.deviceIdTail)}</span><span class="badge ${t.active?'s-ativo':'s-desativado'}">${t.active?'conectada':'desconectada'}</span></div>
+    <div class="muted">conectada em ${fmtDT(t.activatedAt)} · VIP até ${fmtDT(t.expiresAt)}</div>
+    ${t.active?`<button class="danger" style="margin-top:6px" onclick="accTvOff('${esc(uid)}','${esc(t.deviceId)}')">Desconectar esta TV</button>`:''}</div>`).join(''):'<div class="muted">Nenhuma TV conectada por esta conta ainda.</div>'}
+  <h2 style="margin-top:14px">Ações de suporte</h2>
+  <div class="help">Liberar aparelhos: a pessoa trocou de celular/TV e ficou travada (zera as trocas do mês). Desconectar TV: corta só aquela TV.</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">${(dv.phone||dv.tv)?`<button onclick="releaseAcc('${esc(uid)}')">Liberar aparelhos</button>`:'<span class="muted">Nenhum aparelho preso.</span>'}</div>`;
+}
+async function releaseAcc(uid){if(!confirm('Liberar celular e TV desta conta? O próximo aparelho que abrir o app vira o ativo e as trocas do mês são zeradas.'))return;const r=await api('device-release',{key:'u:'+uid});if(r.ok){toast('✅ Liberado');openAccount(uid)}}
+async function accTvOff(uid,dev){if(!confirm('Desconectar esta TV? Ela volta para a tela de ativação.'))return;const r=await api('account-tv-disconnect',{userId:uid,deviceId:dev});if(r.ok){toast('✅ TV desconectada');openAccount(uid)}else if(r.error!=='auth')toast('❌ '+(r.error||'erro'))}
 function closeM(){document.getElementById('m').classList.remove('open')}
 async function openCode(code){
   const ms=document.getElementById('ms');ms.innerHTML='<div class="muted">Carregando…</div>';document.getElementById('m').classList.add('open');

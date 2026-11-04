@@ -9,7 +9,7 @@
 
 const SUPABASE_URL = 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const deviceLock = require('../lib/device-lock');
-const { tvKeyForCode } = require('../lib/vip-gate');
+const { tvKeyForCode, accountTvExpiry } = require('../lib/vip-gate');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -57,6 +57,7 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+    row.expires_at = await accountTvExpiry(serviceKey, row);
     const expiresAt = new Date(row.expires_at);
     const active = expiresAt > new Date();
 
