@@ -115,6 +115,16 @@ module.exports = async function handler(req, res) {
       const codeRow = Array.isArray(crows) && crows[0] && crows[0].code;
       // VIP pago (PIX InfinitePay/Mercado Pago) não tem código: usa um código da própria conta (U-<userId>)
       const code = codeRow || ('U-' + user.id);
+      if (!codeRow) {
+        // tv_activations.code tem FK para vip_codes: cria (1x) o código da conta, já marcado como usado por ela
+        const nowIso = new Date().toISOString();
+        const vc = await fetch(`${SUPABASE_URL}/rest/v1/vip_codes?on_conflict=code`, {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'resolution=ignore-duplicates,return=minimal' },
+          body: JSON.stringify({ code, duration_hours: 0, plan_label: 'Conta (VIP pago)', is_active: true, used_by: user.id, used_at: nowIso }),
+        });
+        if (!vc.ok) { console.error('tv-pair vip_codes', vc.status, (await vc.text()).slice(0, 200)); res.status(502).json({ error: 'Falha ao ativar. Tente de novo.' }); return; }
+      }
 
       // 1 TV por conta: parear pelo celular da própria conta move a vaga pra esta TV
       // (a anterior é desconectada), gastando 1 das trocas do mês.
@@ -131,7 +141,7 @@ module.exports = async function handler(req, res) {
           device_label: 'QR',
         }),
       });
-      if (!up.ok) { console.error('tv-pair upsert', up.status); res.status(502).json({ error: 'Falha ao ativar. Tente de novo.' }); return; }
+      if (!up.ok) { console.error('tv-pair upsert', up.status, (await up.text()).slice(0, 200)); res.status(502).json({ error: 'Falha ao ativar. Tente de novo.' }); return; }
       const expIso = new Date(vip.expires_at).toISOString();
       p.status = 'done';
       p.expiresAt = expIso;
