@@ -112,8 +112,9 @@ module.exports = async function handler(req, res) {
       }
       const cr = await fetch(`${SUPABASE_URL}/rest/v1/vip_codes?used_by=eq.${encodeURIComponent(user.id)}&select=code&order=used_at.desc.nullslast&limit=1`, { headers });
       const crows = await cr.json();
-      const code = Array.isArray(crows) && crows[0] && crows[0].code;
-      if (!code) { res.status(409).json({ error: 'Não achamos o código VIP da sua conta. Use o código na TV.' }); return; }
+      const codeRow = Array.isArray(crows) && crows[0] && crows[0].code;
+      // VIP pago (PIX InfinitePay/Mercado Pago) não tem código: usa um código da própria conta (U-<userId>)
+      const code = codeRow || ('U-' + user.id);
 
       // 1 TV por conta: parear pelo celular da própria conta move a vaga pra esta TV
       // (a anterior é desconectada), gastando 1 das trocas do mês.

@@ -149,9 +149,11 @@ module.exports = async function handler(req, res) {
         origem = 'Codigo: ' + codigoRelacionado;
       }
       const amountEstimate = priceForLabel(u.plan_label);
-      const tvs = codigoRelacionado && !String(codigoRelacionado).startsWith('PIX-')
-        ? (tvByCode.get(codigoRelacionado) || [])
-        : [];
+      // TVs pelo código usado + TVs pareadas pela conta (VIP pago usa U-<userId>)
+      const tvs = [
+        ...(codigoRelacionado && !String(codigoRelacionado).startsWith('PIX-') ? (tvByCode.get(codigoRelacionado) || []) : []),
+        ...(tvByCode.get('U-' + u.user_id) || []),
+      ];
       return {
         email: u.email || '(sem e-mail)',
         userId: u.user_id,
