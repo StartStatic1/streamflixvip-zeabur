@@ -236,3 +236,24 @@ test('priority sempre inteiro (apps leem como Int)', () => {
   const { channels } = mergeResults([r], [{ name: 'AXN', stream_url: 'http://m/x.m3u8', priority: 2.7 }]);
   for (const ch of channels) for (const st of ch.streams) assert.ok(Number.isInteger(st.priority), JSON.stringify(st));
 });
+
+test('requiresVpn da fonte aparece no stream mesclado e no .ts reserva', () => {
+  const { mergeResults } = require('../api/live-tv.js')._test;
+  const r = {
+    entryKey: 'vpn', priority: 1, categories: [{ id: '1', name: 'Filmes' }],
+    streams: [{ name: 'AXN HD', categoryId: '1', url: 'http://h/live/u/p/1.m3u8', sourceLabel: 'Kasshub', requiresVpn: true }],
+  };
+  const ok = {
+    entryKey: 'ok', priority: 2, categories: [{ id: '1', name: 'Filmes' }],
+    streams: [{ name: 'AXN HD', categoryId: '1', url: 'http://o/live/u/p/1.m3u8', sourceLabel: 'Draxix', requiresVpn: false }],
+  };
+  const { channels } = mergeResults([r, ok], []);
+  const ch = channels.find((c) => c.name === 'AXN');
+  assert.ok(ch);
+  const kass = ch.streams.filter((x) => x.label === 'Kasshub');
+  const drax = ch.streams.filter((x) => x.label === 'Draxix');
+  assert.ok(kass.length >= 1);
+  assert.ok(kass.every((x) => x.requiresVpn === true));
+  assert.ok(drax.length >= 1);
+  assert.ok(drax.every((x) => x.requiresVpn === false));
+});

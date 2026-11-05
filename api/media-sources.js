@@ -8,6 +8,7 @@ const sourceHealth = require('../lib/source-health');
 const { resolveVipAccess } = require('../lib/vip-gate');
 const { enforceMinAppVersion } = require('../lib/client-gate');
 const { collectAddonSources, collectAddonSourcesProgress, loadActiveAddons, relayPlan, formatRelayStreams } = require('../lib/stremio-addons');
+const { loadVpnSourceNames, stampRequiresVpn } = require('../lib/vpn-sources');
 
 // Resposta rapida (fast=1): prazo dos add-ons e intervalo sugerido para pedir o resto.
 const FAST_DEADLINE_MS = 3000;
@@ -365,7 +366,8 @@ async function handler(req, res) {
     try {
       const b = req.body || {};
       const out = await formatRelayStreams(serviceKey, b.addonId, b.streams, tmdbId, mediaType, season, episode);
-      res.status(200).json({ sources: out });
+      const vpnNames = await loadVpnSourceNames(serviceKey);
+      res.status(200).json({ sources: stampRequiresVpn(out, vpnNames) });
     } catch (e) { res.status(200).json({ sources: [] }); }
     return;
   }
@@ -476,6 +478,8 @@ async function handler(req, res) {
     }
 
     const partial = fastMode && !addonsComplete;
+    const vpnNames = await loadVpnSourceNames(serviceKey);
+    sources = stampRequiresVpn(sources, vpnNames);
     res.status(200).json({
       sources,
       ...(fastMode ? { partial, pollAfterMs: partial ? FAST_POLL_MS : undefined } : {}),

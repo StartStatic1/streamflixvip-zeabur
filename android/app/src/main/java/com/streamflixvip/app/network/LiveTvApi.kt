@@ -10,7 +10,10 @@ data class LiveStreamOption(
     val priority: Int? = null,
     val quality: String? = null,
     val leg: Boolean? = null,
-)
+    val requiresVpn: Boolean? = null,
+) {
+    val needsVpn: Boolean get() = requiresVpn == true
+}
 
 @JsonClass(generateAdapter = true)
 data class LiveChannel(

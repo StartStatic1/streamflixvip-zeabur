@@ -1,6 +1,7 @@
 package com.streamflixvip.app.ui.livetv
 
 import android.app.Activity
+import android.widget.Toast
 import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -130,6 +131,12 @@ fun LivePlayerScreen(
     }
 
     val context = view.context
+    LaunchedEffect(streamIndex, orderedStreams) {
+        val opt = orderedStreams.getOrNull(streamIndex) ?: return@LaunchedEffect
+        if (opt.needsVpn) {
+            Toast.makeText(context, "Esta fonte pode exigir VPN para abrir.", Toast.LENGTH_SHORT).show()
+        }
+    }
     var reloadToken by remember { mutableIntStateOf(0) }
     var retryOnSame by remember { mutableIntStateOf(0) }
     var bufferingSince by remember { mutableStateOf<Long?>(null) }
@@ -463,6 +470,18 @@ fun LivePlayerScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            if (orderedStreams.getOrNull(streamIndex)?.needsVpn == true) {
+                                Text(
+                                    "VPN",
+                                    color = Color(0xFF1A1200),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(50))
+                                        .background(Color(0xFFF5C518))
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                                )
+                            }
                             if (orderedStreams.size > 1) {
                                 Text(
                                     "${streamIndex + 1}/${orderedStreams.size}",
@@ -568,6 +587,10 @@ fun LivePlayerScreen(
                                         "${g.indices.size} opções",
                                         color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
+                                }
+                                if (g.requiresVpn) {
+                                    Text("VPN", color = Color(0xFF1A1200), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(Color(0xFFF5C518)).padding(horizontal = 8.dp, vertical = 2.dp))
                                 }
                                 Text(g.quality, color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(50)).background(Color.White).padding(horizontal = 8.dp, vertical = 2.dp))

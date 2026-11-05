@@ -5,6 +5,7 @@ const deviceLock = require('../lib/device-lock');
 const codeMeta = require('../lib/code-meta');
 const codeWindow = require('../lib/code-window');
 const { PLANS, priceForLabel } = require('../lib/plans');
+const { persistVpnFlag, applyVpnToRows, loadVpnIndex } = require('../lib/vpn-sources');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -953,15 +954,23 @@ module.exports = async function handler(req, res) {
 
 
   if (action === 'list-live-tv-sources') {
-    const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/live_tv_sources?select=id,name,xtream_host,xtream_user,priority,is_active,created_at&order=priority.asc.nullslast`,
+    let r = await fetch(
+      `${SUPABASE_URL}/rest/v1/live_tv_sources?select=id,name,xtream_host,xtream_user,priority,is_active,requires_vpn,created_at&order=priority.asc.nullslast`,
       { headers: svcHeaders },
     );
+    if (!r.ok) {
+      r = await fetch(
+        `${SUPABASE_URL}/rest/v1/live_tv_sources?select=id,name,xtream_host,xtream_user,priority,is_active,created_at&order=priority.asc.nullslast`,
+        { headers: svcHeaders },
+      );
+    }
     if (!r.ok) {
       res.status(502).json({ error: 'Tabela live_tv_sources ausente', detail: await r.text() });
       return;
     }
-    res.status(200).json({ sources: await r.json() });
+    const sources = await r.json();
+    try { applyVpnToRows(sources, await loadVpnIndex(serviceKey)); } catch (_) {}
+    res.status(200).json({ sources });
     return;
   }
 
@@ -975,19 +984,30 @@ module.exports = async function handler(req, res) {
       res.status(400).json({ error: 'Informe name, host, user e pass' });
       return;
     }
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_sources`, {
+    const livePayload = {
+      name: String(name).trim(),
+      xtream_host: String(xtreamHost).trim().replace(/\/+$/, ''),
+      xtream_user: String(xtreamUser).trim(),
+      xtream_pass: String(xtreamPass).trim(),
+      priority: Number.isFinite(Number(priority)) ? Number(priority) : 10,
+      is_active: true,
+      requires_vpn: !!(body.requires_vpn || body.requiresVpn),
+    };
+    let r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_sources`, {
       method: 'POST',
       headers: { ...svcHeaders, Prefer: 'return=representation' },
-      body: JSON.stringify({
-        name: String(name).trim(),
-        xtream_host: String(xtreamHost).trim().replace(/\/+$/, ''),
-        xtream_user: String(xtreamUser).trim(),
-        xtream_pass: String(xtreamPass).trim(),
-        priority: Number.isFinite(Number(priority)) ? Number(priority) : 10,
-        is_active: true,
-      }),
+      body: JSON.stringify(livePayload),
     });
-    const liveBody = await r.text();
+    let liveBody = await r.text();
+    if (!r.ok && /requires_vpn/i.test(liveBody)) {
+      delete livePayload.requires_vpn;
+      r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_sources`, {
+        method: 'POST',
+        headers: { ...svcHeaders, Prefer: 'return=representation' },
+        body: JSON.stringify(livePayload),
+      });
+      liveBody = await r.text();
+    }
     if (!r.ok) {
       const msg = liveBody || '';
       if (msg.includes('duplicate') || msg.includes('unique')) {
@@ -999,7 +1019,16 @@ module.exports = async function handler(req, res) {
     }
     let liveJson;
     try { liveJson = JSON.parse(liveBody); } catch (_) { liveJson = []; }
-    res.status(200).json({ success: true, source: Array.isArray(liveJson) ? liveJson[0] : liveJson });
+    const created = Array.isArray(liveJson) ? liveJson[0] : liveJson;
+    try {
+      persistVpnFlag({
+        type: 'live',
+        id: created && created.id,
+        name: String(name).trim(),
+        value: !!(body.requires_vpn || body.requiresVpn),
+      });
+    } catch (_) {}
+    res.status(200).json({ success: true, source: created });
     return;
   }
 
@@ -1046,11 +1075,36 @@ module.exports = async function handler(req, res) {
       if (p) patch.xtream_pass = p;
     }
     if (body.priority != null) patch.priority = Number(body.priority) || 10;
+    if (body.requires_vpn != null || body.requiresVpn != null) {
+      patch.requires_vpn = !!(body.requires_vpn ?? body.requiresVpn);
+    }
     if (!Object.keys(patch).length) { res.status(400).json({ error: 'Nada para atualizar' }); return; }
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_sources?id=eq.${encodeURIComponent(sourceId)}`, {
+    let r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_sources?id=eq.${encodeURIComponent(sourceId)}`, {
       method: 'PATCH', headers: svcHeaders, body: JSON.stringify(patch),
     });
-    if (!r.ok) { res.status(502).json({ error: 'Erro atualizar live TV', detail: await r.text() }); return; }
+    if (!r.ok) {
+      const errText = await r.text();
+      if (patch.requires_vpn != null && /requires_vpn/i.test(errText)) {
+        const retry = Object.assign({}, patch);
+        delete retry.requires_vpn;
+        r = await fetch(`${SUPABASE_URL}/rest/v1/live_tv_sources?id=eq.${encodeURIComponent(sourceId)}`, {
+          method: 'PATCH', headers: svcHeaders, body: JSON.stringify(retry),
+        });
+        if (!r.ok) { res.status(502).json({ error: 'Erro atualizar live TV', detail: await r.text() }); return; }
+      } else {
+        res.status(502).json({ error: 'Erro atualizar live TV', detail: errText }); return;
+      }
+    }
+    if (patch.requires_vpn != null) {
+      try {
+        persistVpnFlag({
+          type: 'live',
+          id: sourceId,
+          name: patch.name || body.name,
+          value: !!patch.requires_vpn,
+        });
+      } catch (_) {}
+    }
     res.status(200).json({ success: true });
     return;
   }

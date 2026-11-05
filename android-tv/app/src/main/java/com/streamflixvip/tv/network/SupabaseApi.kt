@@ -51,8 +51,10 @@ data class VipSource(
     val source_url: String,
     val source_label: String?,
     val priority: Int?,
+    val requires_vpn: Boolean? = null,
 ) {
     val displayName: String get() = source_label ?: "Servidor"
+    val needsVpn: Boolean get() = requires_vpn == true
 
     val isDirectPlayable: Boolean
         get() {

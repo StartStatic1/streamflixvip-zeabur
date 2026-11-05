@@ -257,6 +257,10 @@ private fun PlayerSession(
 
     val current = sources.getOrNull(sourceIndex)
 
+    LaunchedEffect(sourceIndex) {
+        if (current?.needsVpn == true) toaster.show("Esta fonte pode exigir VPN para abrir.")
+    }
+
     fun requestFocusOn(r: FocusRequester) {
         focusReq = r
         focusNonce++
@@ -983,12 +987,15 @@ private fun PlayerSession(
                 items(sources.size) { i ->
                     val s = sources[i]
                     PanelItem(
-                        title = s.displayName,
-                        subtitle = when {
-                            i == sourceIndex && fatalError == null -> "Tocando agora"
-                            i in failed.value -> "Falhou nesta sessão"
-                            else -> null
-                        },
+                        title = s.displayName + if (s.needsVpn) " · VPN" else "",
+                        subtitle = listOfNotNull(
+                            if (s.needsVpn) "Pode exigir VPN" else null,
+                            when {
+                                i == sourceIndex && fatalError == null -> "Tocando agora"
+                                i in failed.value -> "Falhou nesta sessão"
+                                else -> null
+                            },
+                        ).joinToString(" · ").ifBlank { null },
                         selected = i == sourceIndex,
                         leading = Icons.Filled.Dns,
                         trailingText = "${i + 1}",

@@ -19,6 +19,7 @@
 const { enforceVipOrReject } = require('../lib/vip-gate');
 const liveCategories = require('../lib/live-categories');
 const { xtreamFetch: xtreamFetchSmart } = require('../lib/xtream-fetch');
+const { loadVpnIndex, applyVpnToRows } = require('../lib/vpn-sources');
 const fs = require('fs');
 const path = require('path');
 
@@ -56,6 +57,17 @@ async function sbSelect(serviceKey, table, query) {
     throw err;
   }
   return r.json();
+}
+
+async function sbSelectOpt(serviceKey, table, query, fallbackQuery) {
+  try {
+    return await sbSelect(serviceKey, table, query);
+  } catch (e) {
+    if (fallbackQuery && /requires_vpn/i.test(String(e.message || ''))) {
+      return sbSelect(serviceKey, table, fallbackQuery);
+    }
+    throw e;
+  }
 }
 
 function clientCachePath(baseUrl, username) {
@@ -245,6 +257,7 @@ async function loadFromSource(source) {
       categoryId: String(s.category_id ?? ''),
       url: buildLiveUrl(host, user, pass, s.stream_id, s.container_extension),
       sourceLabel: source.name || 'Fonte',
+      requiresVpn: !!(source.requires_vpn || source.requiresVpn),
     })),
   };
 }
@@ -253,12 +266,15 @@ const MAX_BRIDGES = 16;
 
 async function loadBridgeRows(serviceKey) {
   try {
-    const rows = await sbSelect(
+    const rows = await sbSelectOpt(
       serviceKey,
       'iptv_bridges',
+      'is_active=eq.true&use_live=eq.true&select=id,name,xtream_host,xtream_user,xtream_pass,live_cats,requires_vpn&order=created_at.desc&limit=20',
       'is_active=eq.true&use_live=eq.true&select=id,name,xtream_host,xtream_user,xtream_pass,live_cats&order=created_at.desc&limit=20',
     );
-    return Array.isArray(rows) ? rows : [];
+    const list = Array.isArray(rows) ? rows : [];
+    try { applyVpnToRows(list, await loadVpnIndex(serviceKey)); } catch (_) {}
+    return list;
   } catch (e) {
     console.warn('[live-tv] iptv_bridges:', e.message);
     return [];
@@ -280,6 +296,7 @@ async function loadFromBridge(bridge) {
     xtream_user: bridge.xtream_user,
     xtream_pass: bridge.xtream_pass,
     priority: 80,
+    requires_vpn: !!bridge.requires_vpn,
   });
   return filterBridgeLive(loaded, bridge.live_cats);
 }
@@ -300,20 +317,24 @@ async function loadManualChannels(serviceKey) {
 
 async function loadSourceRows(serviceKey) {
   try {
-    let rows = await sbSelect(
+    let rows = await sbSelectOpt(
       serviceKey,
       'live_tv_sources',
+      'is_active=eq.true&select=id,name,priority,xtream_host,xtream_user,xtream_pass,is_active,requires_vpn&order=priority.asc.nullslast&limit=20',
       'is_active=eq.true&select=id,name,priority,xtream_host,xtream_user,xtream_pass,is_active&order=priority.asc.nullslast&limit=20',
     );
     if (Array.isArray(rows) && rows.length) {
+      try { applyVpnToRows(rows, await loadVpnIndex(serviceKey)); } catch (_) {}
       return { rows, origin: 'live_tv_sources' };
     }
-    rows = await sbSelect(
+    rows = await sbSelectOpt(
       serviceKey,
       'live_tv_sources',
+      'select=id,name,priority,xtream_host,xtream_user,xtream_pass,is_active,requires_vpn&order=priority.asc.nullslast&limit=20',
       'select=id,name,priority,xtream_host,xtream_user,xtream_pass,is_active&order=priority.asc.nullslast&limit=20',
     );
     if (Array.isArray(rows) && rows.filter(hasXtreamCreds).length) {
+      try { applyVpnToRows(rows, await loadVpnIndex(serviceKey)); } catch (_) {}
       return { rows, origin: 'live_tv_sources' };
     }
   } catch (e) {
@@ -550,10 +571,10 @@ function mergeResults(results, manuals) {
         const q = qualityScore(s.name);
         // inteiro: os apps (TV 3.x e celular 16.3) leem priority como Int
         const pri = Math.round(basePri + (q >= 30 ? 0 : q <= 5 ? 6 : 2));
-        ch.streams.push({ url: s.url, label: s.sourceLabel, priority: pri, quality: q, leg: sLeg });
+        ch.streams.push({ url: s.url, label: s.sourceLabel, priority: pri, quality: q, leg: sLeg, requiresVpn: !!s.requiresVpn });
         const ts = tsVariant(s.url);
         if (ts && !ch.streams.some((x) => x.url === ts)) {
-          ch.streams.push({ url: ts, label: s.sourceLabel, priority: pri + 1, quality: q, leg: sLeg });
+          ch.streams.push({ url: ts, label: s.sourceLabel, priority: pri + 1, quality: q, leg: sLeg, requiresVpn: !!s.requiresVpn });
         }
       }
     }
@@ -583,6 +604,7 @@ function mergeResults(results, manuals) {
         priority: Number.isFinite(Number(m.priority)) ? Math.round(Number(m.priority)) : 1,
         quality: 40,
         leg: isLegendadoName(name),
+        requiresVpn: false,
       });
     }
   }
@@ -596,12 +618,13 @@ function mergeResults(results, manuals) {
     channels.push({
       ...ch,
       name: displayBaseName(ch.name) || ch.name,
-      streams: streams.slice(0, MAX_STREAMS_PER_CHANNEL).map(({ url, label, priority, quality, leg }) => ({
+      streams: streams.slice(0, MAX_STREAMS_PER_CHANNEL).map(({ url, label, priority, quality, leg, requiresVpn }) => ({
         url,
         label,
         priority,
         quality: qualityLabelFromScore(quality ?? 20),
         leg: !!leg,
+        requiresVpn: !!requiresVpn,
       })),
     });
   }

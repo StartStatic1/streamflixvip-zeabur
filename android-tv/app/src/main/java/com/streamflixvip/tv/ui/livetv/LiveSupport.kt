@@ -79,6 +79,7 @@ internal fun streamLabel(option: LiveStreamOption, index: Int): String = buildSt
     if (option.leg == true) append(if (isEmpty()) "Legendado" else " · Legendado")
     if (lab != null) append(if (isEmpty()) lab else " · $lab")
     if (isEmpty()) append("Fonte ${index + 1}")
+    if (option.needsVpn) append(" · VPN")
     append(if (isLiveTs(option.url)) " · TS" else if (isLiveHls(option.url)) " · HLS" else "")
 }
 
@@ -158,6 +159,7 @@ internal data class LiveSourceGroup(
     val quality: String,
     val leg: Boolean,
     val host: String,
+    val requiresVpn: Boolean = false,
 ) {
     val firstIndex: Int get() = indices.first()
 }
@@ -191,7 +193,7 @@ internal fun groupLiveSources(streams: List<LiveStreamOption>): List<LiveSourceG
         val host = shortHost(s.url)
         val key = "${label.lowercase()}|$q|$leg|$host"
         map.getOrPut(key) { mutableListOf() }.add(i)
-        if (key !in meta) meta[key] = LiveSourceGroup(listOf(i), label, q, leg, host)
+        if (key !in meta) meta[key] = LiveSourceGroup(listOf(i), label, q, leg, host, s.needsVpn)
     }
     return map.map { (k, idx) -> meta.getValue(k).copy(indices = idx) }
         .sortedWith(compareBy<LiveSourceGroup> { GROUP_QUALITY_ORDER.indexOf(it.quality.uppercase().replace("Ã", "A")).let { r -> if (r < 0) 3 else r } }

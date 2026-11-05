@@ -127,6 +127,10 @@ fun LivePlayerTvScreen(
     val streams = remember(channel?.id) { channel?.let { orderStreams(it.streams) }.orEmpty() }
     val streamsNow by rememberUpdatedState(streams)
     var streamIndex by remember { mutableIntStateOf(0) }
+    LaunchedEffect(streamIndex, channel?.id) {
+        val opt = streams.getOrNull(streamIndex) ?: return@LaunchedEffect
+        if (opt.needsVpn) toaster.show("Esta fonte pode exigir VPN para abrir.")
+    }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var reloadNonce by remember { mutableIntStateOf(0) }
@@ -636,8 +640,11 @@ fun LivePlayerTvScreen(
                         }
                         item(key = "g:${g.firstIndex}") {
                             PanelItem(
-                                g.label + (if (g.leg) " · LEG" else ""),
-                                subtitle = if (g.indices.size > 1) "${g.indices.size} opções" else null,
+                                g.label + (if (g.leg) " · LEG" else "") + (if (g.requiresVpn) " · VPN" else ""),
+                                subtitle = listOfNotNull(
+                                    if (g.requiresVpn) "Pode exigir VPN" else null,
+                                    if (g.indices.size > 1) "${g.indices.size} opções" else null,
+                                ).joinToString(" · ").ifBlank { null },
                                 selected = streamIndex in g.indices,
                                 leading = Icons.Filled.Dns,
                                 onClick = {

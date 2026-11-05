@@ -64,7 +64,7 @@ object AddonRelay {
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val url = o.optString("source_url").takeIf { it.isNotBlank() } ?: continue
-            list.add(VipSource(source_url = url, source_label = o.optString("source_label").takeIf { it.isNotBlank() }, priority = if (o.has("priority")) o.optInt("priority") else null))
+            list.add(VipSource(source_url = url, source_label = o.optString("source_label").takeIf { it.isNotBlank() }, priority = if (o.has("priority")) o.optInt("priority") else null, requires_vpn = if (o.has("requires_vpn")) o.optBoolean("requires_vpn") else null))
         }
         return list
     }

@@ -419,8 +419,9 @@ fun DetailTvScreen(
                         itemsIndexed(sp.sources, key = { i, s -> "$i:${s.source_url}" }) { index, s ->
                             val tags = sourceTags(s.displayName)
                             PanelItem(
-                                title = s.displayName,
+                                title = s.displayName + if (s.needsVpn) " · VPN" else "",
                                 subtitle = listOfNotNull(
+                                    if (s.needsVpn) "Pode exigir VPN" else null,
                                     if (s.displayName == sp.preferredLabel) "Último usado" else null,
                                     tags.takeIf { it.isNotBlank() },
                                 ).joinToString(" · ").ifBlank { null },

@@ -86,6 +86,7 @@ fun WatchOptionsSheet(
                     subtitle = "Abrir no VLC, MX Player ou outro app",
                     highlighted = false,
                     onClick = {
+                        warnIfSourceNeedsVpn(context, source)
                         val playbackUrl = source.resolvedPlaybackUrl(BuildConfig.API_BASE_URL)
                         openInExternalPlayer(context, playbackUrl, source.displayName)
                         onDismiss()

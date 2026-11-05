@@ -10,6 +10,7 @@ const {
   relayConfigured,
   proxyConfigured,
 } = require('../lib/xtream-fetch');
+const { persistVpnFlag, applyVpnToRows, loadVpnIndex } = require('../lib/vpn-sources');
 
 /** tokens curtos para ingest pelo celular quando VPS+CF levam 403 */
 const phoneProbeTokens = new Map();
@@ -184,15 +185,24 @@ module.exports = async function handler(req, res) {
   if (gate.error) { res.status(gate.status).json({ error: gate.error }); return; }
 
   if (action === 'list') {
-    const r = await fetch(
-      SUPABASE_URL + '/rest/v1/iptv_bridges?select=id,name,xtream_host,xtream_user,xtream_pass,use_live,use_movies,use_series,live_cats,vod_cats,series_cats,is_active,addon_id,access_token,created_at&order=created_at.desc',
+    const selectBase = 'id,name,xtream_host,xtream_user,xtream_pass,use_live,use_movies,use_series,live_cats,vod_cats,series_cats,is_active,addon_id,access_token,created_at';
+    let r = await fetch(
+      SUPABASE_URL + '/rest/v1/iptv_bridges?select=' + selectBase + ',requires_vpn&order=created_at.desc',
       { headers: h },
     );
-    const rows = await r.json();
+    let rows = await r.json();
+    if (!r.ok) {
+      r = await fetch(
+        SUPABASE_URL + '/rest/v1/iptv_bridges?select=' + selectBase + '&order=created_at.desc',
+        { headers: h },
+      );
+      rows = await r.json();
+    }
     if (!r.ok) {
       res.status(502).json({ error: 'Rode sql/iptv_bridges.sql e sql/iptv_bridges_token.sql', detail: rows });
       return;
     }
+    try { applyVpnToRows(rows, await loadVpnIndex(serviceKey)); } catch (_) {}
     res.status(200).json({ bridges: rows, publicBase: PUBLIC_BASE });
     return;
   }
@@ -356,26 +366,36 @@ module.exports = async function handler(req, res) {
       vod_cats: Array.isArray(body.vod_cats) ? body.vod_cats : [],
       series_cats: Array.isArray(body.series_cats) ? body.series_cats : [],
       is_active: body.is_active !== false,
+      requires_vpn: !!body.requires_vpn,
       updated_at: new Date().toISOString(),
     };
     if (body.id && !pass) delete payload.xtream_pass;
     if (!body.id) payload.access_token = newToken();
+    async function writeBridge(method, url, bodyJson) {
+      let r = await fetch(url, { method, headers: { ...h, Prefer: 'return=representation' }, body: JSON.stringify(bodyJson) });
+      let j = await r.json();
+      if (!r.ok && bodyJson && Object.prototype.hasOwnProperty.call(bodyJson, 'requires_vpn')) {
+        const msg = JSON.stringify(j);
+        if (/requires_vpn/i.test(msg)) {
+          const retry = Object.assign({}, bodyJson);
+          delete retry.requires_vpn;
+          r = await fetch(url, { method, headers: { ...h, Prefer: 'return=representation' }, body: JSON.stringify(retry) });
+          j = await r.json();
+        }
+      }
+      return { r, j };
+    }
     let row;
     if (body.id) {
-      const r = await fetch(
+      const { r, j } = await writeBridge(
+        'PATCH',
         SUPABASE_URL + '/rest/v1/iptv_bridges?id=eq.' + encodeURIComponent(body.id),
-        { method: 'PATCH', headers: { ...h, Prefer: 'return=representation' }, body: JSON.stringify(payload) },
+        payload,
       );
-      const j = await r.json();
       if (!r.ok) { res.status(502).json({ error: 'Erro ao salvar', detail: j }); return; }
       row = Array.isArray(j) ? j[0] : j;
     } else {
-      const r = await fetch(SUPABASE_URL + '/rest/v1/iptv_bridges', {
-        method: 'POST',
-        headers: { ...h, Prefer: 'return=representation' },
-        body: JSON.stringify(payload),
-      });
-      const j = await r.json();
+      const { r, j } = await writeBridge( 'POST', SUPABASE_URL + '/rest/v1/iptv_bridges', payload );
       if (!r.ok) { res.status(502).json({ error: 'Erro ao criar. Rode o SQL das pontes + token', detail: j }); return; }
       row = Array.isArray(j) ? j[0] : j;
     }
@@ -415,6 +435,9 @@ module.exports = async function handler(req, res) {
         row.addon_id = addon.id;
       }
     }
+    try {
+      persistVpnFlag({ type: 'bridge', id: row && row.id, name: name, value: !!payload.requires_vpn });
+    } catch (_) {}
     res.status(200).json({ ok: true, bridge: row, manifest_url: manifestUrl });
     return;
   }

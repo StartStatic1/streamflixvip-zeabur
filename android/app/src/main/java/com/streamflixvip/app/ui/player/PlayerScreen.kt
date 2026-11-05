@@ -509,6 +509,7 @@ private fun NativePlayer(
     var activeUrl by remember { mutableStateOf(url) }
     var alternateSources by remember { mutableStateOf(emptyList<String>()) }
     var alternateLabels by remember { mutableStateOf(mapOf<String, String>()) }
+    var alternateVpn by remember { mutableStateOf(mapOf<String, Boolean>()) }
     var alternateIndex by remember { mutableStateOf(0) }
     var currentSeason by remember { mutableStateOf(season) }
     var currentEpisode by remember { mutableStateOf(episode) }
@@ -724,17 +725,18 @@ private fun NativePlayer(
             } else {
                 NetworkModule.mediaSourcesApi.getMovieSources(tmdbId, mediaType)
             }
-            val labeled = mutableListOf<Pair<String, String>>()
+            val labeled = mutableListOf<Triple<String, String, Boolean>>()
             for (src in resp.sources.filter { it.isDirectPlayable }) {
                 val nome = src.displayName.ifBlank { "Servidor" }
                 for (u in src.candidatePlaybackUrls(BuildConfig.API_BASE_URL, NetworkModule.ZEABUR_BASE_URL)) {
                     if (u.isNotBlank() && u != activeUrl && labeled.none { it.first == u }) {
-                        labeled += u to nome
+                        labeled += Triple(u, nome, src.needsVpn)
                     }
                 }
             }
             alternateSources = labeled.map { it.first }
             alternateLabels = labeled.associate { it.first to it.second }
+            alternateVpn = labeled.associate { it.first to it.third }
             alternateIndex = 0
         } catch (_: Exception) {
             alternateSources = emptyList()
@@ -783,6 +785,9 @@ private fun NativePlayer(
                 if (nome.isNullOrBlank()) "Trocando de servidor..." else "Trocando para $nome...",
                 Toast.LENGTH_SHORT,
             ).show()
+            if (alternateVpn[next] == true) {
+                Toast.makeText(context, "Esta fonte pode exigir VPN para abrir.", Toast.LENGTH_SHORT).show()
+            }
             reloadWithUrl(next)
             return@LaunchedEffect
         }
@@ -833,6 +838,7 @@ private fun NativePlayer(
                 triedUrls.clear()
                 alternateSources = emptyList()
                 alternateLabels = emptyMap()
+                alternateVpn = emptyMap()
                 retryAttempt = 0
                 reloadWithUrl(playUrl, resetPosition = true)
                 played = true

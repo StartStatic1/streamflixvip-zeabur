@@ -1224,6 +1224,10 @@
         </div>
         <label style="margin-top:14px">Prioridade (menor = primeiro)</label>
         <input type="number" id="liveTvPriorityInput" value="10"/>
+        <label style="margin-top:14px;display:flex;align-items:center;gap:8px">
+          <input type="checkbox" id="liveTvVpnInput"/> Requer VPN para assistir
+        </label>
+        <p style="color:var(--muted);font-size:0.78rem;margin:6px 0 0">O app avisa o cliente com um selo VPN. O vídeo não passa pelo proxy.</p>
         <button class="btn-primary" style="margin-top:16px" id="saveLiveTvBtn" onclick="saveLiveTvSource()">Salvar fonte de TV</button>
       </div>
       <div class="card" style="margin-top:24px">
@@ -3441,12 +3445,13 @@
       wrap.innerHTML = '<p style="color:var(--muted);padding:20px;text-align:center">Nenhuma fonte de TV. Cadastre acima.</p>';
       return;
     }
-    wrap.innerHTML = `<table><thead><tr><th>Nome</th><th>Host</th><th>User</th><th>Pri</th><th>Status</th><th></th></tr></thead><tbody>
+    wrap.innerHTML = `<table><thead><tr><th>Nome</th><th>Host</th><th>User</th><th>Pri</th><th>VPN</th><th>Status</th><th></th></tr></thead><tbody>
       ${_allLiveTvSources.map(s => `<tr>
         <td>${escapeHtml(s.name)}</td>
         <td style="font-size:0.75rem;color:var(--muted)">${escapeHtml(s.xtream_host||'')}</td>
         <td style="font-size:0.75rem;color:var(--muted)">${escapeHtml(s.xtream_user||'')}</td>
         <td>${s.priority??'—'}</td>
+        <td>${s.requires_vpn ? '<span class="pill" style="background:#f5c518;color:#1a1200;font-weight:700">VPN</span>' : '—'}</td>
         <td><span class="pill ${s.is_active?'active':'inactive'}">${s.is_active?'Ativa':'Pausada'}</span></td>
         <td style="white-space:nowrap">
           <button class="btn-secondary" style="width:auto;padding:6px 10px;font-size:0.75rem" onclick="editLiveTvSource('${s.id}')">✏️</button>
@@ -3461,6 +3466,7 @@
     const xtreamUser = document.getElementById('liveTvUserInput').value.trim();
     const xtreamPass = document.getElementById('liveTvPassInput').value.trim();
     const priority = parseInt(document.getElementById('liveTvPriorityInput').value, 10) || 10;
+    const requiresVpn = document.getElementById('liveTvVpnInput').checked;
     const btn = document.getElementById('saveLiveTvBtn');
     const editingId = btn.dataset.editingId || '';
     if (!name || !xtreamHost || !xtreamUser) { showToast('Preencha nome, host e usuário.'); return; }
@@ -3469,17 +3475,18 @@
     btn.disabled = true; btn.textContent = 'Salvando...';
     let result;
     if (editingId) {
-      const payload = { sourceId: editingId, name, xtreamHost, xtreamUser, priority };
+      const payload = { sourceId: editingId, name, xtreamHost, xtreamUser, priority, requires_vpn: requiresVpn };
       if (xtreamPass) payload.xtreamPass = xtreamPass;
       result = await api('update-live-tv-source', payload);
     } else {
-      result = await api('create-live-tv-source', { name, xtreamHost, xtreamUser, xtreamPass, priority });
+      result = await api('create-live-tv-source', { name, xtreamHost, xtreamUser, xtreamPass, priority, requires_vpn: requiresVpn });
     }
     btn.disabled = false; btn.textContent = 'Salvar fonte de TV'; delete btn.dataset.editingId;
     if (result.error) { showToast('❌ ' + (result.error.message || result.error)); return; }
     showToast(editingId ? '✅ Atualizado!' : '✅ Fonte de TV salva!');
     ['liveTvNameInput','liveTvHostInput','liveTvUserInput','liveTvPassInput'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('liveTvPriorityInput').value = '10';
+    document.getElementById('liveTvVpnInput').checked = false;
     loadLiveTvSources();
   }
   function editLiveTvSource(id) {
@@ -3490,6 +3497,7 @@
     document.getElementById('liveTvPassInput').value = '';
     document.getElementById('liveTvPassInput').placeholder = 'em branco = manter senha';
     document.getElementById('liveTvPriorityInput').value = s.priority ?? 10;
+    document.getElementById('liveTvVpnInput').checked = !!s.requires_vpn;
     const btn = document.getElementById('saveLiveTvBtn');
     btn.dataset.editingId = id; btn.textContent = 'Salvar alterações';
     showToast('✏️ Editando — senha só se for trocar');

@@ -68,7 +68,9 @@
         <label class="chip"><input type="checkbox" id="tLive"/> Live TV</label>
         <label class="chip"><input type="checkbox" id="tMov" checked/> Filmes</label>
         <label class="chip"><input type="checkbox" id="tSer" checked/> Series</label>
+        <label class="chip"><input type="checkbox" id="tVpn"/> Requer VPN para assistir</label>
       </div>
+      <p class="hint">Marque “Requer VPN” se o play no aparelho do cliente costuma falhar sem VPN (ex.: Kasshub). O app mostra um aviso — o vídeo não passa pelo proxy.</p>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-sec" style="flex:1" onclick="probe()">Listar pastas</button>
         <button class="btn-gold" style="flex:1" onclick="save()" id="btnSave">Salvar e gerar</button>
@@ -380,6 +382,7 @@ function cancelEdit() {
   document.getElementById('tLive').checked = false;
   document.getElementById('tMov').checked = true;
   document.getElementById('tSer').checked = true;
+  document.getElementById('tVpn').checked = false;
   document.getElementById('probeBox').style.display = 'none';
   toast('Edição cancelada');
 }
@@ -398,6 +401,7 @@ async function editB(id) {
   document.getElementById('tLive').checked = !!b.use_live;
   document.getElementById('tMov').checked = !!b.use_movies;
   document.getElementById('tSer').checked = !!b.use_series;
+  document.getElementById('tVpn').checked = !!b.requires_vpn;
   window.scrollTo({ top: 0, behavior: 'smooth' });
   toast('Carregando pastas…');
   const d = await api('probe', {
@@ -426,6 +430,7 @@ async function save() {
     use_live: document.getElementById('tLive').checked,
     use_movies: document.getElementById('tMov').checked,
     use_series: document.getElementById('tSer').checked,
+    requires_vpn: document.getElementById('tVpn').checked,
     live_cats: selected('live'),
     vod_cats: selected('mov'),
     series_cats: selected('ser'),
@@ -469,6 +474,7 @@ async function loadList() {
     const name = esc(b.name || '');
     return '<div class="item"><b>' + name + '</b> '
       + (b.is_active ? '<span style="color:var(--green)">ativa</span>' : '<span style="color:var(--muted)">off</span>')
+      + (b.requires_vpn ? ' <span style="color:#1a1200;background:var(--gold);border-radius:999px;padding:1px 8px;font-size:.7rem;font-weight:700">VPN</span>' : '')
       + ' <span class="meta">' + locked + '</span>'
       + '<div class="meta">' + esc(b.xtream_host || '') + '</div>'
       + '<div class="meta">TV ' + (b.use_live ? (b.live_cats||[]).length : 0)

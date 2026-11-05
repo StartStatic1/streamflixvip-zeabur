@@ -55,6 +55,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.layout.heightIn
@@ -101,6 +102,11 @@ fun DetailScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
+    val playContext = LocalContext.current
+    fun launchSource(source: com.streamflixvip.app.network.VipSource, season: Int, episode: Int, title: String, posterPath: String?) {
+        warnIfSourceNeedsVpn(playContext, source)
+        onPlaySource(source, season, episode, title, posterPath)
+    }
     var showTicketPay by remember { mutableStateOf(false) }
     if (showTicketPay && !userId.isNullOrBlank()) {
         PixPaymentSheet(
@@ -152,7 +158,7 @@ fun DetailScreen(
             autoResumedContinue = true
             val ep = initialEpisode.coerceAtLeast(1)
             viewModel.loadEpisodeSources(initialSeason, ep, forceAutoPlay = true) { src ->
-                onPlaySource(src, initialSeason, ep, title, posterPath)
+                launchSource(src, initialSeason, ep, title, posterPath)
             }
             return@LaunchedEffect
         }
@@ -161,7 +167,7 @@ fun DetailScreen(
             if (s.isLoadingMovieSources) return@LaunchedEffect
             val src = s.movieSources.firstOrNull() ?: return@LaunchedEffect
             autoResumedContinue = true
-            onPlaySource(src, 0, 0, title, posterPath)
+            launchSource(src, 0, 0, title, posterPath)
         }
     }
 
@@ -269,7 +275,7 @@ fun DetailScreen(
             source = pending.source,
             onDismiss = { pendingWatch = null },
             onPlayInternal = { source ->
-                onPlaySource(source, pending.season, pending.episode, title, posterPath)
+                launchSource(source, pending.season, pending.episode, title, posterPath)
             },
         )
     }
@@ -2659,7 +2665,18 @@ private fun ServerInfoCard(source: VipSource, locked: Boolean, onClick: () -> Un
             .clickable(onClick = onClick)
             .padding(14.dp),
     ) {
-        Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(head, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f, fill = false), maxLines = 1)
+            if (source.needsVpn) {
+                Text(
+                    "VPN",
+                    color = Color(0xFF1A1200),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(start = 8.dp).clip(RoundedCornerShape(50)).background(Color(0xFFF5C518)).padding(horizontal = 8.dp, vertical = 2.dp),
+                )
+            }
+        }
         if (!movieName.isNullOrBlank()) {
             Text("🎬 $movieName", color = Color(0xFFDDDDDD), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp), maxLines = 1)
         }

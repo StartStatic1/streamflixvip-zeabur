@@ -12,7 +12,10 @@ data class LiveStreamOption(
     val quality: String? = null,
     /** true = versão legendada */
     val leg: Boolean? = null,
-)
+    val requiresVpn: Boolean? = null,
+) {
+    val needsVpn: Boolean get() = requiresVpn == true
+}
 
 @JsonClass(generateAdapter = true)
 data class LiveChannel(

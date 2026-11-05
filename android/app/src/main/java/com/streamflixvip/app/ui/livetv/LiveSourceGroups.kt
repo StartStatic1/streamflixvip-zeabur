@@ -14,6 +14,7 @@ internal data class LiveSourceGroup(
     val quality: String,
     val leg: Boolean,
     val host: String,
+    val requiresVpn: Boolean = false,
 ) {
     val firstIndex: Int get() = indices.first()
 }
@@ -43,7 +44,7 @@ internal fun groupLiveSources(streams: List<LiveStreamOption>): List<LiveSourceG
         val host = liveShortHost(s.url)
         val key = "${label.lowercase()}|$q|$leg|$host"
         map.getOrPut(key) { mutableListOf() }.add(i)
-        if (key !in meta) meta[key] = LiveSourceGroup(listOf(i), label, q, leg, host)
+        if (key !in meta) meta[key] = LiveSourceGroup(listOf(i), label, q, leg, host, s.needsVpn)
     }
     return map.map { (k, idx) -> meta.getValue(k).copy(indices = idx) }
         .sortedWith(compareBy<LiveSourceGroup> { ORDER.indexOf(it.quality).let { r -> if (r < 0) 3 else r } }.thenBy { it.firstIndex })

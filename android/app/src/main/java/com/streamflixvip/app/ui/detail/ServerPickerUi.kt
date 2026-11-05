@@ -56,6 +56,15 @@ private val PlayAccents = listOf(
     Color(0xFF34D399),
 )
 
+
+internal const val VPN_PLAY_HINT = "Esta fonte pode exigir VPN para abrir."
+
+internal fun warnIfSourceNeedsVpn(context: android.content.Context, source: VipSource?) {
+    if (source?.needsVpn == true) {
+        android.widget.Toast.makeText(context, VPN_PLAY_HINT, android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+
 internal fun isAddonSourceLabel(label: String?): Boolean {
     val l = label.orEmpty()
     val host = l.split("·", "•", "|").firstOrNull()?.trim().orEmpty()
@@ -272,15 +281,25 @@ private fun chipList(
     audio: String?,
     origin: String?,
     size: String?,
+    needsVpn: Boolean = false,
 ): List<ChipSpec> {
-    if (isLockedForFree) {
-        return listOf(ChipSpec("VIP", GoldVip, GoldVip.copy(alpha = 0.18f)))
-    }
     val out = mutableListOf<ChipSpec>()
+    if (isLockedForFree) {
+        out += ChipSpec("VIP", GoldVip, GoldVip.copy(alpha = 0.18f))
+    }
+    if (needsVpn) {
+        out += ChipSpec("VPN", Color(0xFF1A1200), Color(0xFFF5C518))
+    }
+    if (isLockedForFree && !needsVpn) {
+        return out
+    }
+    if (isLockedForFree && needsVpn) {
+        return out
+    }
     fun add(text: String?, fg: Color, bg: Color) {
         val t = text?.takeIf { it.isNotBlank() } ?: return
         if (out.any { it.text.equals(t, ignoreCase = true) }) return
-        if (out.size >= 3) return
+        if (out.size >= 4) return
         out += ChipSpec(t, fg, bg)
     }
     when (quality) {
@@ -316,7 +335,7 @@ fun ServerSourceCard(
     val size = sizeFromSource(source)
     val title = hostTitleFromLabel(source.source_label)
     val accent = PlayAccents[index.coerceAtLeast(0) % PlayAccents.size]
-    val chips = chipList(isLockedForFree, quality, audio, origin, size)
+    val chips = chipList(isLockedForFree, quality, audio, origin, size, source.needsVpn)
     val highlight = isRecommended && !isLockedForFree
     val number = (index + 1).toString().padStart(2, '0')
     val hasChips = chips.isNotEmpty()
