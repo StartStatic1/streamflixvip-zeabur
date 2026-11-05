@@ -89,21 +89,27 @@
       </div>
       <div id="phoneBox" style="display:none;margin-top:14px;padding:12px;border:1px dashed var(--border);border-radius:12px">
         <b style="color:var(--gold)">Painel bloqueou o IP do servidor</b>
-        <p class="hint" style="margin-top:8px">Hetzner e Cloudflare são datacenter. No celular o IP é residencial. Use o atalho abaixo (vale pra Draxix e futuros bloqueios).</p>
-        <ol class="hint" style="margin:8px 0 10px 18px;line-height:1.5">
-          <li>Toque em <b>Abrir no celular</b> (abre o painel Xtream — a tela com JSON de login é normal)</li>
-          <li>Toque em <b>Copiar atalho</b> e salve nos favoritos do navegador</li>
-          <li>Com a página do painel Xtream ainda aberta, execute o favorito — deve aparecer alerta "OK pastas…"</li>
-          <li>Volte aqui — as pastas carregam sozinhas. <b>Não cole</b> o JSON da tela do painel (isso é só login, sem pastas)</li>
+        <p class="hint" style="margin-top:8px">O painel não aceita o servidor, mas aceita o celular. Faça pelo celular:</p>
+        <ol class="hint" style="margin:8px 0 10px 18px;line-height:1.6">
+          <li>Toque em <b>Abrir lista de pastas</b></li>
+          <li>Na página que abrir: <b>toque na tela e segure → Selecionar tudo → Copiar</b></li>
+          <li>Volte aqui, cole no campo abaixo e toque <b>Usar JSON colado</b></li>
+          <li>Se as pastas vierem vazias, faça o mesmo com <b>Abrir lista de canais</b></li>
         </ol>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn-sec" style="flex:1" onclick="phoneOpen()">Abrir no celular</button>
-          <button class="btn-gold" style="flex:1" onclick="phoneCopyBm()">Copiar atalho</button>
+          <button class="btn-gold" style="flex:1" onclick="phoneOpenAction('get_live_categories')">Abrir lista de pastas</button>
+          <button class="btn-sec" style="flex:1" onclick="phoneOpenAction('get_live_streams')">Abrir lista de canais</button>
         </div>
+        <textarea id="phonePaste" rows="4" style="margin-top:10px" placeholder="Cole aqui o que copiou da página"></textarea>
+        <button class="btn-gold" style="width:100%" onclick="phoneApplyPaste()">Usar JSON colado</button>
         <p class="hint" id="phoneStatus" style="margin-top:10px"></p>
-        <label class="fld">Só se o automático falhar: cole a resposta do atalho (com "live"/"ok"), nunca o JSON da tela</label>
-        <textarea id="phonePaste" rows="4" placeholder='{"ok":true,"live":[...]}'></textarea>
-        <button class="btn-sec" style="width:100%" onclick="phoneApplyPaste()">Usar JSON colado</button>
+        <details style="margin-top:10px"><summary class="hint">Avançado (opcional): atalho nos favoritos</summary>
+          <p class="hint">Abra o painel, salve o atalho como favorito e execute-o com a página do painel aberta.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-sec" style="flex:1" onclick="phoneOpen()">Abrir painel</button>
+            <button class="btn-sec" style="flex:1" onclick="phoneCopyBm()">Copiar atalho</button>
+          </div>
+        </details>
       </div>
     </div>
     <div class="panel">
@@ -265,7 +271,7 @@ function phoneStartPoll() {
     }
     if (d.pending) {
       document.getElementById('phoneStatus').textContent =
-        'Aguardando atalho no celular… (' + (d.expires_in_sec || '?') + 's) — não cole o JSON da tela do painel';
+        'Aguardando… copie a página de Abrir lista de pastas e cole aqui (' + (d.expires_in_sec || '?') + 's)';
       return;
     }
     if (d.ok || d.live || d.movies || d.series) {
@@ -286,7 +292,7 @@ async function phonePrepare() {
   _phone = d;
   document.getElementById('phoneBox').style.display = 'block';
   document.getElementById('phoneStatus').textContent =
-    'Atalho válido por 15 min. Abra o painel, rode o favorito, volte — pastas entram sozinhas.';
+    'Toque em Abrir lista de pastas, copie a página inteira e cole aqui (válido por 15 min).';
   phoneStartPoll();
 }
 function phoneOpen() {
@@ -303,25 +309,61 @@ async function phoneCopyBm() {
     prompt('Copie o atalho:', _phone.bookmarklet);
   }
 }
-function phoneApplyPaste() {
-  const raw = document.getElementById('phonePaste').value.trim();
-  if (!raw) { toast('Cole o JSON'); return; }
-  try {
-    let d = JSON.parse(raw);
-    if (d.error) { toast(d.error); return; }
-    if (looksLikeLoginJson(d)) {
-      toast('Isso é só o login do painel. Rode o atalho na página do Xtream — não cole o JSON da tela.');
-      return;
-    }
-    d = normalizePhoneResult(d);
-    if ((!d.live || !d.live.length) && (!d.movies || !d.movies.length) && (!d.series || !d.series.length)) {
-      toast('JSON sem pastas. Precisa da resposta do atalho (com live/ok), não do player_api.');
-      return;
-    }
-    applyProbeResult(d);
-  } catch (e) {
-    toast('JSON inválido');
+function phoneOpenAction(action) {
+  const go = function () {
+    if (!_phone || !_phone.open_url) { toast('Preencha host, usuário e senha'); return; }
+    window.open(_phone.open_url + '&action=' + action, '_blank');
+    toast('Segure na tela → Selecionar tudo → Copiar. Depois volte e cole aqui.');
+  };
+  if (!_phone || !_phone.open_url) { phonePrepare().then(go); return; }
+  go();
+}
+let _pasteAcc = { live: [], streams: [], movies: [], series: [] };
+function slimStreams(arr) {
+  return arr.map(function (x) {
+    return { stream_id: x.stream_id, name: x.name, category_id: x.category_id, stream_icon: x.stream_icon, epg_channel_id: x.epg_channel_id, num: x.num };
+  });
+}
+async function phoneApplyPaste() {
+  let raw = document.getElementById('phonePaste').value.trim();
+  if (!raw) { toast('Cole o que copiou da página'); return; }
+  const i = raw.search(/[\[{]/); if (i > 0) raw = raw.slice(i);
+  let d;
+  try { d = JSON.parse(raw); } catch (e) {
+    toast('Não deu pra ler. Copie a página inteira (Selecionar tudo) e cole de novo.'); return;
   }
+  if (d && d.error) { toast(d.error); return; }
+  if (Array.isArray(d)) {
+    if (!d.length) { toast('Lista vazia. Tente Abrir lista de canais.'); return; }
+    if (d[0] && d[0].stream_id != null) _pasteAcc.streams = slimStreams(d);
+    else if (d[0] && d[0].category_id != null) _pasteAcc.live = d;
+    else { toast('Formato desconhecido'); return; }
+  } else if (looksLikeLoginJson(d) || (d && d.user_info && !d.live)) {
+    toast('Isso é o login. Toque em Abrir lista de pastas e copie aquela página.'); return;
+  } else if (d && typeof d === 'object') {
+    if (Array.isArray(d.live)) _pasteAcc.live = d.live;
+    if (Array.isArray(d.streams)) _pasteAcc.streams = slimStreams(d.streams);
+    if (Array.isArray(d.movies)) _pasteAcc.movies = d.movies;
+    if (Array.isArray(d.series)) _pasteAcc.series = d.series;
+  }
+  if (!_pasteAcc.live.length && !_pasteAcc.streams.length && !_pasteAcc.movies.length && !_pasteAcc.series.length) {
+    toast('Sem pastas. Toque em Abrir lista de pastas e copie aquela página.'); return;
+  }
+  if (!_phone || !_phone.token) await phonePrepare();
+  if (!_phone || !_phone.token) return;
+  const r = await fetch('/api/admin-bridge', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'phone_probe_submit', token: _phone.token, live: _pasteAcc.live, streams: _pasteAcc.streams,
+      movies: _pasteAcc.movies, series: _pasteAcc.series, host: '' }) });
+  let res; try { res = await r.json(); } catch (_) { res = { error: 'Falha ao enviar (' + r.status + ')' }; }
+  if (res.error) { toast(res.error); return; }
+  document.getElementById('phonePaste').value = '';
+  if (!res.live || !res.live.length) {
+    document.getElementById('phoneStatus').textContent = 'Pastas vieram vazias — agora toque em Abrir lista de canais e cole aquela página.';
+    return;
+  }
+  _pasteAcc = { live: [], streams: [], movies: [], series: [] };
+  applyProbeResult(normalizePhoneResult(res));
+  toast('OK: ' + res.live.length + ' pastas de TV' + (res.streams_cached ? ' · ' + res.streams_cached + ' canais' : ''));
 }
 function idsOf(arr) {
   return (arr || []).map((c) => String(c.id || c));

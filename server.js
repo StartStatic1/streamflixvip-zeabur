@@ -61,6 +61,7 @@ console.log(
     : 'SOFT (so loga)',
 );
 
+app.use('/api/admin-bridge', express.json({ limit: '20mb' }));
 app.use(express.json({ limit: '2mb' }));
 
 const activeAds = require('./api/active-ads.js');
