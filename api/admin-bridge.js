@@ -44,7 +44,41 @@ function cats(raw) {
   return (Array.isArray(raw) ? raw : []).map((c) => ({
     id: String(c.category_id),
     name: String(c.category_name || 'Outros'),
-  }));
+  })).filter((c) => c.id && c.id !== 'undefined');
+}
+
+/** Pastas a partir dos streams quando get_*_categories veio vazio. */
+function deriveCatsFromStreams(streams) {
+  const map = new Map();
+  for (const s of Array.isArray(streams) ? streams : []) {
+    const id = String(s.category_id != null ? s.category_id : '').trim();
+    if (!id) continue;
+    if (!map.has(id)) {
+      map.set(id, {
+        id,
+        name: String(s.category_name || ('Categoria ' + id)),
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
+function looksLikeServerInfoOnly(obj) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+  const hasPastas = (Array.isArray(obj.live) && obj.live.length)
+    || (Array.isArray(obj.movies) && obj.movies.length)
+    || (Array.isArray(obj.series) && obj.series.length)
+    || (Array.isArray(obj.streams) && obj.streams.length)
+    || obj.ok === true;
+  if (hasPastas) return false;
+  return !!(
+    obj.process === true
+    || obj.server_protocol
+    || obj.timezone
+    || obj.timestamp_now
+    || (obj.url && (obj.port != null || obj.https_port != null))
+    || (obj.server_info && !obj.user_info && !obj.live)
+  );
 }
 
 async function requireAdmin(req, serviceKey) {
@@ -103,33 +137,46 @@ module.exports = async function handler(req, res) {
       res.status(400).json({ error: 'Atalho expirado — gere de novo no Bridge' });
       return;
     }
-    phoneProbeTokens.delete(token);
-    const live = cats(body.live);
-    const movies = cats(body.movies);
-    const series = cats(body.series);
+    const streams = Array.isArray(body.streams) ? body.streams : [];
+    let live = cats(body.live);
+    let movies = cats(body.movies);
+    let series = cats(body.series);
+    if (!live.length && streams.length) {
+      live = deriveCatsFromStreams(streams);
+    }
+    const reportedHost = normHost(body.host) || row.host;
+    const serverInfo =
+      (body.info && body.info.server_info) ||
+      (body.info && body.info.url ? body.info : {}) ||
+      {};
     try {
       const fs = require('fs');
       const path = require('path');
       const dir = process.env.XTREAM_CLIENT_CACHE_DIR || '/root/streamflix-data/xtream-client-cache';
       fs.mkdirSync(dir, { recursive: true });
-      const key = Buffer.from(row.host + '|' + row.user).toString('hex').slice(0, 40);
-      const streams = Array.isArray(body.streams) ? body.streams : [];
+      const key = Buffer.from(reportedHost + '|' + row.user).toString('hex').slice(0, 40);
       fs.writeFileSync(
         path.join(dir, key + '.json'),
-        JSON.stringify({ at: Date.now(), host: row.host, user: row.user, live_cats: live, streams }),
+        JSON.stringify({ at: Date.now(), host: reportedHost, user: row.user, live_cats: live, streams }),
       );
     } catch (_) {}
-    res.status(200).json({
+    const result = {
       ok: true,
-      server: (body.info && body.info.server_info) || {},
+      server: serverInfo,
       live,
       movies,
       series,
-      streams_cached: Array.isArray(body.streams) ? body.streams.length : 0,
-      host: row.host,
+      streams_cached: streams.length,
+      derived_live: !cats(body.live).length && live.length > 0,
+      host: reportedHost,
       user: row.user,
       pass: row.pass,
-    });
+    };
+    // Mantém resultado pra Bridge fazer poll (não some ao submit)
+    row.done = true;
+    row.result = result;
+    row.host = reportedHost;
+    res.status(200).json(result);
     return;
   }
 
@@ -219,13 +266,14 @@ module.exports = async function handler(req, res) {
       'const base=location.origin;' +
       'const q=(a)=>base+"/player_api.php?username="+encodeURIComponent(user)+"&password="+encodeURIComponent(pass)+(a?"&action="+a:"");' +
       'const j=async(a)=>{const r=await fetch(q(a));const t=await r.text();try{return JSON.parse(t)}catch(e){throw new Error("sem JSON "+r.status)}};' +
+      'if(/streamflixvip\.online/i.test(location.host)){alert("Abra primeiro a página do painel Xtream (Abrir no celular) e rode o atalho LÁ — não neste Bridge");return;}' +
       'const info=await j("");' +
       'const live=await j("get_live_categories").catch(()=>[]);' +
       'const movies=await j("get_vod_categories").catch(()=>[]);' +
       'const series=await j("get_series_categories").catch(()=>[]);' +
       'const streams=await j("get_live_streams").catch(()=>[]);' +
       'const r=await fetch(U,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"phone_probe_submit",token:T,info,live,movies,series,streams,host:base})});' +
-      'const d=await r.json();alert(d.error||("OK pastas TV="+(d.live||[]).length+" · streams="+(d.streams_cached||0)));' +
+      'const d=await r.json();alert(d.error||("OK pastas TV="+(d.live||[]).length+" · streams="+(d.streams_cached||0)+" — volte ao Bridge"));' +
       '}catch(e){alert("Falha: "+(e&&e.message||e));}})());';
     res.status(200).json({
       ok: true,
@@ -234,8 +282,30 @@ module.exports = async function handler(req, res) {
       bookmarklet: bm,
       expires_in_sec: 900,
       hint:
-        '1) Abra o link no celular. 2) Nos favoritos, cole o atalho. 3) Com a página do painel Xtream aberta, execute o atalho.',
+        '1) Abrir no celular. 2) Copiar atalho nos favoritos. 3) Com a página do painel Xtream aberta, execute o favorito. NÃO cole o JSON da tela do player_api — o atalho envia sozinho.',
     });
+    return;
+  }
+
+  if (action === 'phone_probe_status') {
+    const token = String(body.token || '').trim();
+    const row = phoneProbeTokens.get(token);
+    if (!row || row.exp < Date.now()) {
+      phoneProbeTokens.delete(token);
+      res.status(400).json({ error: 'Atalho expirado — gere de novo no Bridge', expired: true });
+      return;
+    }
+    if (row.adminId && gate.userId && row.adminId !== gate.userId) {
+      res.status(403).json({ error: 'Acesso negado' });
+      return;
+    }
+    if (!row.done || !row.result) {
+      res.status(200).json({ pending: true, expires_in_sec: Math.max(0, Math.floor((row.exp - Date.now()) / 1000)) });
+      return;
+    }
+    const result = row.result;
+    phoneProbeTokens.delete(token);
+    res.status(200).json(result);
     return;
   }
 
@@ -425,6 +495,6 @@ module.exports = async function handler(req, res) {
 
   res.status(400).json({
     error: 'action invalida',
-    allowed: ['list', 'probe', 'phone_probe_start', 'phone_probe_submit', 'save', 'rename', 'toggle', 'delete', 'rotate-token'],
+    allowed: ['list', 'probe', 'phone_probe_start', 'phone_probe_submit', 'phone_probe_status', 'save', 'rename', 'toggle', 'delete', 'rotate-token'],
   });
 };

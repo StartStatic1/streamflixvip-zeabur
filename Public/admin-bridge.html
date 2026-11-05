@@ -91,17 +91,17 @@
         <b style="color:var(--gold)">Painel bloqueou o IP do servidor</b>
         <p class="hint" style="margin-top:8px">Hetzner e Cloudflare são datacenter. No celular o IP é residencial. Use o atalho abaixo (vale pra Draxix e futuros bloqueios).</p>
         <ol class="hint" style="margin:8px 0 10px 18px;line-height:1.5">
-          <li>Toque em <b>Abrir no celular</b></li>
-          <li>Toque em <b>Copiar atalho</b> e salve nos favoritos</li>
-          <li>Com a página do painel Xtream aberta, execute o favorito</li>
-          <li>Volte aqui — as pastas carregam sozinhas (ou toque em Colar resultado)</li>
+          <li>Toque em <b>Abrir no celular</b> (abre o painel Xtream — a tela com JSON de login é normal)</li>
+          <li>Toque em <b>Copiar atalho</b> e salve nos favoritos do navegador</li>
+          <li>Com a página do painel Xtream ainda aberta, execute o favorito — deve aparecer alerta "OK pastas…"</li>
+          <li>Volte aqui — as pastas carregam sozinhas. <b>Não cole</b> o JSON da tela do painel (isso é só login, sem pastas)</li>
         </ol>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-sec" style="flex:1" onclick="phoneOpen()">Abrir no celular</button>
           <button class="btn-gold" style="flex:1" onclick="phoneCopyBm()">Copiar atalho</button>
         </div>
         <p class="hint" id="phoneStatus" style="margin-top:10px"></p>
-        <label class="fld">Ou cole o JSON devolvido pelo atalho / player_api</label>
+        <label class="fld">Só se o automático falhar: cole a resposta do atalho (com "live"/"ok"), nunca o JSON da tela</label>
         <textarea id="phonePaste" rows="4" placeholder='{"ok":true,"live":[...]}'></textarea>
         <button class="btn-sec" style="width:100%" onclick="phoneApplyPaste()">Usar JSON colado</button>
       </div>
@@ -181,13 +181,49 @@ function togAll(prefix, on) {
   document.querySelectorAll('.c-' + prefix).forEach((i) => { i.checked = on; });
 }
 let _phone = null;
+let _phonePollTimer = null;
+function deriveCatsFromStreamsClient(streams) {
+  const map = {};
+  (streams || []).forEach(function (s) {
+    const id = String(s.category_id != null ? s.category_id : '').trim();
+    if (!id || map[id]) return;
+    map[id] = { id: id, name: String(s.category_name || ('Categoria ' + id)) };
+  });
+  return Object.keys(map).map(function (k) { return map[k]; });
+}
+function looksLikeLoginJson(d) {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return false;
+  const hasPastas = (Array.isArray(d.live) && d.live.length)
+    || (Array.isArray(d.movies) && d.movies.length)
+    || (Array.isArray(d.series) && d.series.length)
+    || (Array.isArray(d.streams) && d.streams.length)
+    || d.ok === true;
+  if (hasPastas) return false;
+  return !!(d.process === true || d.server_protocol || d.timezone || d.timestamp_now
+    || (d.url && (d.port != null || d.https_port != null))
+    || (d.server_info && !d.live));
+}
+function normalizePhoneResult(d) {
+  if (!d || typeof d !== 'object') return d;
+  // Resposta completa do player_api login: {user_info, server_info}
+  if (d.server_info && !d.live && !d.movies && !d.ok) return d;
+  if ((!d.live || !d.live.length) && Array.isArray(d.streams) && d.streams.length) {
+    d.live = deriveCatsFromStreamsClient(d.streams);
+  }
+  return d;
+}
 function applyProbeResult(d) {
+  if (_phonePollTimer) { clearInterval(_phonePollTimer); _phonePollTimer = null; }
   document.getElementById('phoneBox').style.display = 'none';
   document.getElementById('probeBox').style.display = 'block';
   renderCats('liveCats', d.live, 'live');
   renderCats('movCats', d.movies, 'mov');
   renderCats('serCats', d.series, 'ser');
-  toast('Pastas ok · ' + ((d.live||[]).length + (d.movies||[]).length + (d.series||[]).length));
+  if (d.host) document.getElementById('bHost').value = d.host;
+  if (d.user) document.getElementById('bUser').value = d.user;
+  if (d.pass) document.getElementById('bPass').value = d.pass;
+  const n = ((d.live||[]).length + (d.movies||[]).length + (d.series||[]).length);
+  toast((d.derived_live ? 'Pastas geradas dos canais · ' : 'Pastas ok · ') + n);
 }
 async function probe() {
   toast('Lendo servidor…');
@@ -208,7 +244,39 @@ async function probe() {
   }
   applyProbeResult(d);
 }
+function phoneStartPoll() {
+  if (_phonePollTimer) clearInterval(_phonePollTimer);
+  if (!_phone || !_phone.token) return;
+  let tries = 0;
+  _phonePollTimer = setInterval(async function () {
+    tries += 1;
+    if (tries > 90) {
+      clearInterval(_phonePollTimer);
+      _phonePollTimer = null;
+      document.getElementById('phoneStatus').textContent = 'Tempo esgotado — rode o atalho de novo ou gere outro.';
+      return;
+    }
+    const d = await api('phone_probe_status', { token: _phone.token });
+    if (d.expired || (d.error && !d.pending)) {
+      clearInterval(_phonePollTimer);
+      _phonePollTimer = null;
+      document.getElementById('phoneStatus').textContent = d.error || 'Atalho expirado';
+      return;
+    }
+    if (d.pending) {
+      document.getElementById('phoneStatus').textContent =
+        'Aguardando atalho no celular… (' + (d.expires_in_sec || '?') + 's) — não cole o JSON da tela do painel';
+      return;
+    }
+    if (d.ok || d.live || d.movies || d.series) {
+      clearInterval(_phonePollTimer);
+      _phonePollTimer = null;
+      applyProbeResult(normalizePhoneResult(d));
+    }
+  }, 2000);
+}
 async function phonePrepare() {
+  if (_phonePollTimer) { clearInterval(_phonePollTimer); _phonePollTimer = null; }
   const d = await api('phone_probe_start', {
     host: document.getElementById('bHost').value,
     user: document.getElementById('bUser').value,
@@ -217,17 +285,20 @@ async function phonePrepare() {
   if (d.error) { toast(d.error); return; }
   _phone = d;
   document.getElementById('phoneBox').style.display = 'block';
-  document.getElementById('phoneStatus').textContent = 'Atalho válido por 15 min · streams serão cacheados no servidor';
+  document.getElementById('phoneStatus').textContent =
+    'Atalho válido por 15 min. Abra o painel, rode o favorito, volte — pastas entram sozinhas.';
+  phoneStartPoll();
 }
 function phoneOpen() {
   if (!_phone || !_phone.open_url) { phonePrepare(); return; }
   window.open(_phone.open_url, '_blank');
+  toast('Na tela do painel: rode o favorito. Não copie o JSON da tela.');
 }
 async function phoneCopyBm() {
   if (!_phone || !_phone.bookmarklet) await phonePrepare();
   try {
     await navigator.clipboard.writeText(_phone.bookmarklet);
-    toast('Atalho copiado — cole nos favoritos');
+    toast('Atalho copiado — cole nos favoritos e execute no painel Xtream');
   } catch (_) {
     prompt('Copie o atalho:', _phone.bookmarklet);
   }
@@ -236,16 +307,18 @@ function phoneApplyPaste() {
   const raw = document.getElementById('phonePaste').value.trim();
   if (!raw) { toast('Cole o JSON'); return; }
   try {
-    const d = JSON.parse(raw);
+    let d = JSON.parse(raw);
     if (d.error) { toast(d.error); return; }
-    if (!d.live && !d.movies && !d.series) { toast('JSON sem pastas'); return; }
-    applyProbeResult(d);
-    if (_phone && _phone.open_url) {
-      // preenche host se veio do submit
-      if (d.host) document.getElementById('bHost').value = d.host;
-      if (d.user) document.getElementById('bUser').value = d.user;
-      if (d.pass) document.getElementById('bPass').value = d.pass;
+    if (looksLikeLoginJson(d)) {
+      toast('Isso é só o login do painel. Rode o atalho na página do Xtream — não cole o JSON da tela.');
+      return;
     }
+    d = normalizePhoneResult(d);
+    if ((!d.live || !d.live.length) && (!d.movies || !d.movies.length) && (!d.series || !d.series.length)) {
+      toast('JSON sem pastas. Precisa da resposta do atalho (com live/ok), não do player_api.');
+      return;
+    }
+    applyProbeResult(d);
   } catch (e) {
     toast('JSON inválido');
   }
