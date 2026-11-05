@@ -715,7 +715,9 @@ async function probeSources(results, now = Date.now()) {
     })
     .map(async (r) => {
       const picks = pickProbeUrls(r.streams);
-      const oks = await Promise.all(picks.map(async (u) => (await probeStreamUrl(u)) || probeStreamUrl(u)));
+      const oks = [];
+      // um por vez: painel com limite de conexoes recusa testes em paralelo
+      for (const u of picks) oks.push((await probeStreamUrl(u)) || (await probeStreamUrl(u)));
       const ok = oks.filter(Boolean).length;
       playbackHealth.set(r.entryKey, { ok, total: picks.length, at: Date.now(), name: r.sourceName });
     });
