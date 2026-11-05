@@ -18,6 +18,9 @@
 
 const { enforceVipOrReject } = require('../lib/vip-gate');
 const liveCategories = require('../lib/live-categories');
+const { xtreamFetch: xtreamFetchSmart } = require('../lib/xtream-fetch');
+const fs = require('fs');
+const path = require('path');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const MAX_SOURCES = 8;
@@ -55,29 +58,45 @@ async function sbSelect(serviceKey, table, query) {
   return r.json();
 }
 
-async function xtreamFetch(baseUrl, username, password, action, params = {}) {
-  const url = new URL(`${String(baseUrl).replace(/\/+$/, '')}/player_api.php`);
-  url.searchParams.set('username', username);
-  url.searchParams.set('password', password);
-  if (action) url.searchParams.set('action', action);
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
-  });
+function clientCachePath(baseUrl, username) {
+  const dir = process.env.XTREAM_CLIENT_CACHE_DIR || '/root/streamflix-data/xtream-client-cache';
+  const key = Buffer.from(String(baseUrl).replace(/\/+$/, '') + '|' + String(username)).toString('hex').slice(0, 40);
+  return path.join(dir, key + '.json');
+}
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 14000);
+function readClientCache(baseUrl, username) {
   try {
-    const res = await fetch(url.toString(), {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'IPTVSmarters/1.0 (Linux; Android)',
-        Accept: 'application/json, */*',
-      },
-    });
-    if (!res.ok) throw new Error(`Xtream ${action}: HTTP ${res.status}`);
-    return res.json();
-  } finally {
-    clearTimeout(timeoutId);
+    const raw = fs.readFileSync(clientCachePath(baseUrl, username), 'utf8');
+    const j = JSON.parse(raw);
+    if (!j || !j.at) return null;
+    // 7 dias
+    if (Date.now() - Number(j.at) > 7 * 24 * 60 * 60 * 1000) return null;
+    return j;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function xtreamFetch(baseUrl, username, password, action, params = {}) {
+  try {
+    return await xtreamFetchSmart(baseUrl, username, password, action || '', params, { timeoutMs: 14000 });
+  } catch (e) {
+    if (e && (e.ip_blocked || e.code === 'IP_BLOCKED' || e.status === 403)) {
+      const cached = readClientCache(baseUrl, username);
+      if (cached) {
+        if (action === 'get_live_streams' && Array.isArray(cached.streams) && cached.streams.length) {
+          return cached.streams;
+        }
+        if (action === 'get_live_categories' && Array.isArray(cached.live_cats) && cached.live_cats.length) {
+          return cached.live_cats.map((c) => ({
+            category_id: c.id,
+            category_name: c.name,
+          }));
+        }
+      }
+    }
+    if (e && e.status) throw new Error(`Xtream ${action}: HTTP ${e.status}`);
+    throw e;
   }
 }
 

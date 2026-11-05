@@ -4,13 +4,15 @@ const SUPABASE_URL =
   process.env.SUPABASE_URL || 'https://gkujbjpvphuvrejpvvtz.supabase.co';
 const PUBLIC_BASE = (process.env.PUBLIC_BASE_URL || 'https://www.streamflixvip.online').replace(/\/+$/, '');
 
-const XTREAM_UAS = [
-  'okhttp/4.12.0',
-  'Dalvik/2.1.0 (Linux; U; Android 13; SM-S911B Build/TP1A.220624.014)',
-  'VLC/3.0.20 LibVLC/3.0.20',
-  'IPTVSmarters/1.0',
-  'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/122.0.0.0 Mobile Safari/537.36',
-];
+const {
+  xtreamFetch,
+  normHost: normHostLib,
+  relayConfigured,
+  proxyConfigured,
+} = require('../lib/xtream-fetch');
+
+/** tokens curtos para ingest pelo celular quando VPS+CF levam 403 */
+const phoneProbeTokens = new Map();
 
 function newToken() {
   return crypto.randomBytes(24).toString('hex');
@@ -31,61 +33,11 @@ function svc(serviceKey) {
 }
 
 function normHost(h) {
-  let u = String(h || '').trim();
-  if (!u) return '';
-  if (!/^https?:\/\//i.test(u)) u = 'http://' + u;
-  return u.replace(/\/+$/, '');
-}
-
-async function xtreamOnce(host, user, pass, action, ua) {
-  const url = new URL(normHost(host) + '/player_api.php');
-  url.searchParams.set('username', user);
-  url.searchParams.set('password', pass);
-  if (action) url.searchParams.set('action', action);
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 20000);
-  try {
-    const r = await fetch(url.toString(), {
-      signal: ac.signal,
-      redirect: 'follow',
-      headers: {
-        'User-Agent': ua,
-        Accept: 'application/json,text/plain,*/*',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-      },
-    });
-    const text = await r.text();
-    if (!r.ok) {
-      const err = new Error('Xtream HTTP ' + r.status);
-      err.status = r.status;
-      throw err;
-    }
-    try {
-      return JSON.parse(text);
-    } catch (_) {
-      throw new Error('Xtream respondeu sem JSON');
-    }
-  } finally {
-    clearTimeout(t);
-  }
+  return normHostLib(h);
 }
 
 async function xtream(host, user, pass, action) {
-  let last = null;
-  for (const ua of XTREAM_UAS) {
-    try {
-      return await xtreamOnce(host, user, pass, action, ua);
-    } catch (e) {
-      last = e;
-      if (e && e.status && e.status !== 403 && e.status !== 401 && e.status !== 406) break;
-    }
-  }
-  if (last && last.status === 403) {
-    throw new Error(
-      'Xtream HTTP 403 — o painel bloqueou o IP do VPS. No celular passa; Hetzner é datacenter e muitos Xtream barram. Peça liberação do IP 65.21.48.50 ou use outro host.',
-    );
-  }
-  throw last || new Error('Falha ao ler o servidor');
+  return xtreamFetch(host, user, pass, action || '', {}, { timeoutMs: 20000 });
 }
 
 function cats(raw) {
@@ -136,15 +88,53 @@ module.exports = async function handler(req, res) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) { res.status(500).json({ error: 'Sem SERVICE_ROLE' }); return; }
 
-  const gate = await requireAdmin(req, serviceKey);
-  if (gate.error) { res.status(gate.status).json({ error: gate.error }); return; }
-
   let body = req.body;
   if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch (_) { body = {}; }
   }
   const action = body && body.action;
   const h = svc(serviceKey);
+
+  // Ingest do bookmarklet no celular: autentica só pelo token de uso único
+  if (action === 'phone_probe_submit') {
+    const token = String(body.token || '').trim();
+    const row = phoneProbeTokens.get(token);
+    if (!row || row.exp < Date.now()) {
+      res.status(400).json({ error: 'Atalho expirado — gere de novo no Bridge' });
+      return;
+    }
+    phoneProbeTokens.delete(token);
+    const live = cats(body.live);
+    const movies = cats(body.movies);
+    const series = cats(body.series);
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const dir = process.env.XTREAM_CLIENT_CACHE_DIR || '/root/streamflix-data/xtream-client-cache';
+      fs.mkdirSync(dir, { recursive: true });
+      const key = Buffer.from(row.host + '|' + row.user).toString('hex').slice(0, 40);
+      const streams = Array.isArray(body.streams) ? body.streams : [];
+      fs.writeFileSync(
+        path.join(dir, key + '.json'),
+        JSON.stringify({ at: Date.now(), host: row.host, user: row.user, live_cats: live, streams }),
+      );
+    } catch (_) {}
+    res.status(200).json({
+      ok: true,
+      server: (body.info && body.info.server_info) || {},
+      live,
+      movies,
+      series,
+      streams_cached: Array.isArray(body.streams) ? body.streams.length : 0,
+      host: row.host,
+      user: row.user,
+      pass: row.pass,
+    });
+    return;
+  }
+
+  const gate = await requireAdmin(req, serviceKey);
+  if (gate.error) { res.status(gate.status).json({ error: gate.error }); return; }
 
   if (action === 'list') {
     const r = await fetch(
@@ -188,8 +178,64 @@ module.exports = async function handler(req, res) {
         series: cats(series),
       });
     } catch (e) {
-      res.status(400).json({ error: e.message || 'Falha ao ler o servidor' });
+      const payload = {
+        error: e.message || 'Falha ao ler o servidor',
+        ip_blocked: !!(e && (e.ip_blocked || e.code === 'IP_BLOCKED')),
+        relay: relayConfigured(),
+        proxy: proxyConfigured(),
+      };
+      res.status(400).json(payload);
     }
+    return;
+  }
+
+  if (action === 'phone_probe_start') {
+    const host = normHost(body.host || body.xtream_host);
+    const user = String(body.user || body.xtream_user || '').trim();
+    const pass = String(body.pass || body.xtream_pass || '').trim();
+    if (!host || !user || !pass) {
+      res.status(400).json({ error: 'Informe host, usuario e senha' });
+      return;
+    }
+    const token = crypto.randomBytes(16).toString('hex');
+    const exp = Date.now() + 15 * 60 * 1000;
+    phoneProbeTokens.set(token, { host, user, pass, exp, adminId: gate.userId });
+    for (const [k, v] of phoneProbeTokens) {
+      if (v.exp < Date.now()) phoneProbeTokens.delete(k);
+    }
+    const openUrl =
+      host +
+      '/player_api.php?username=' +
+      encodeURIComponent(user) +
+      '&password=' +
+      encodeURIComponent(pass);
+    const submitUrl = PUBLIC_BASE + '/api/admin-bridge';
+    const bm =
+      'javascript:void((async()=>{try{' +
+      'const T=' + JSON.stringify(token) + ';' +
+      'const U=' + JSON.stringify(submitUrl) + ';' +
+      'const user=' + JSON.stringify(user) + ';' +
+      'const pass=' + JSON.stringify(pass) + ';' +
+      'const base=location.origin;' +
+      'const q=(a)=>base+"/player_api.php?username="+encodeURIComponent(user)+"&password="+encodeURIComponent(pass)+(a?"&action="+a:"");' +
+      'const j=async(a)=>{const r=await fetch(q(a));const t=await r.text();try{return JSON.parse(t)}catch(e){throw new Error("sem JSON "+r.status)}};' +
+      'const info=await j("");' +
+      'const live=await j("get_live_categories").catch(()=>[]);' +
+      'const movies=await j("get_vod_categories").catch(()=>[]);' +
+      'const series=await j("get_series_categories").catch(()=>[]);' +
+      'const streams=await j("get_live_streams").catch(()=>[]);' +
+      'const r=await fetch(U,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"phone_probe_submit",token:T,info,live,movies,series,streams,host:base})});' +
+      'const d=await r.json();alert(d.error||("OK pastas TV="+(d.live||[]).length+" · streams="+(d.streams_cached||0)));' +
+      '}catch(e){alert("Falha: "+(e&&e.message||e));}})());';
+    res.status(200).json({
+      ok: true,
+      token,
+      open_url: openUrl,
+      bookmarklet: bm,
+      expires_in_sec: 900,
+      hint:
+        '1) Abra o link no celular. 2) Nos favoritos, cole o atalho. 3) Com a página do painel Xtream aberta, execute o atalho.',
+    });
     return;
   }
 
@@ -379,6 +425,6 @@ module.exports = async function handler(req, res) {
 
   res.status(400).json({
     error: 'action invalida',
-    allowed: ['list', 'probe', 'save', 'rename', 'toggle', 'delete', 'rotate-token'],
+    allowed: ['list', 'probe', 'phone_probe_start', 'phone_probe_submit', 'save', 'rename', 'toggle', 'delete', 'rotate-token'],
   });
 };

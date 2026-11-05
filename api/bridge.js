@@ -7,6 +7,7 @@ const SUPABASE_URL =
 
 const cache = new Map();
 const { setBounded } = require('../lib/bounded-map');
+const { xtreamFetch } = require('../lib/xtream-fetch');
 const PAGE = 80;
 
 function svc(key) {
@@ -42,25 +43,7 @@ function hostOf(b) {
 }
 
 async function xtream(b, action, extra) {
-  const url = new URL(hostOf(b) + '/player_api.php');
-  url.searchParams.set('username', b.xtream_user);
-  url.searchParams.set('password', b.xtream_pass);
-  if (action) url.searchParams.set('action', action);
-  Object.entries(extra || {}).forEach(([k, v]) => {
-    if (v != null) url.searchParams.set(k, String(v));
-  });
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 20000);
-  try {
-    const r = await fetch(url.toString(), {
-      signal: ac.signal,
-      headers: { 'User-Agent': 'IPTVSmarters/1.0', Accept: 'application/json' },
-    });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return await r.json();
-  } finally {
-    clearTimeout(t);
-  }
+  return xtreamFetch(hostOf(b), b.xtream_user, b.xtream_pass, action || '', extra || {}, { timeoutMs: 20000 });
 }
 
 async function loadBridge(id, token, key) {
