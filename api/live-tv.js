@@ -652,7 +652,6 @@ function playbackPenalty(entryKey) {
   const h = entryKey && playbackHealth.get(entryKey);
   if (!h || !h.total) return 0;
   if (h.ok === 0) return 1000;
-  if (h.ok / h.total < 0.5) return 300;
   return 0;
 }
 
@@ -688,6 +687,24 @@ async function probeStreamUrl(url) {
   }
 }
 
+// Amostra canais BR populares (o que o cliente assiste) em vez de posicoes
+// arbitrarias do meio da lista; completa com espalhados se faltar.
+const PROBE_POPULAR = [/globo/i, /\bhbo/i, /sportv/i, /premiere/i, /espn/i, /\bsbt/i, /record/i, /band/i, /telecine/i, /tnt/i];
+function pickProbeUrls(pool) {
+  const picks = [];
+  const used = new Set();
+  for (const re of PROBE_POPULAR) {
+    if (picks.length >= PROBE_SAMPLES) break;
+    const s = pool.find((x) => x && x.url && !used.has(x.url) && re.test(String(x.name || '')) && !/24h|24\/7|radio/i.test(String(x.name || '')));
+    if (s) { used.add(s.url); picks.push(s.url); }
+  }
+  for (let i = 0; picks.length < PROBE_SAMPLES && i < PROBE_SAMPLES * 2 && pool.length; i++) {
+    const s = pool[Math.floor(((i + 0.5) / (PROBE_SAMPLES * 2)) * pool.length)];
+    if (s && s.url && !used.has(s.url)) { used.add(s.url); picks.push(s.url); }
+  }
+  return picks;
+}
+
 async function probeSources(results, now = Date.now()) {
   if (!probeEnabled()) return;
   const jobs = results
@@ -697,12 +714,8 @@ async function probeSources(results, now = Date.now()) {
       return !h || now - h.at > PROBE_TTL_MS;
     })
     .map(async (r) => {
-      const pool = r.streams;
-      const picks = [];
-      for (let i = 0; i < PROBE_SAMPLES && pool.length; i++) {
-        picks.push(pool[Math.floor(((i + 0.5) / PROBE_SAMPLES) * pool.length)].url);
-      }
-      const oks = await Promise.all(picks.map(probeStreamUrl));
+      const picks = pickProbeUrls(r.streams);
+      const oks = await Promise.all(picks.map(async (u) => (await probeStreamUrl(u)) || probeStreamUrl(u)));
       const ok = oks.filter(Boolean).length;
       playbackHealth.set(r.entryKey, { ok, total: picks.length, at: Date.now(), name: r.sourceName });
     });
