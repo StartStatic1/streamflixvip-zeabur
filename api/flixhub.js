@@ -1,1 +1,1 @@
-$(cat /tmp/flixhub.js)
+PLACEHOLDER_WILL_REPLACE
