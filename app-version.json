@@ -1,7 +1,7 @@
 {
-  "versionCode": 170101,
-  "versionName": "17.1.1",
+  "versionCode": 170102,
+  "versionName": "17.1.2",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Area Free some para quem é VIP. Melhorias e correções."
+  "releaseNotes": "Aviso de VPN nas fontes que precisam. Correções."
 }
