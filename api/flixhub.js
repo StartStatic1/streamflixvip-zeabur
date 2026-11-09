@@ -651,10 +651,9 @@ module.exports = async function handler(req, res) {
                 : '🎯 FULL HD 1080p';
               streams.push({
                 name: brand,
+                // Sem título do filme na description: o app já está na ficha do filme,
+                // e misturar nome+[servidor com hífen] quebrava o card (tutor- / ins Server 4).
                 title:
-                  '🎬 ' +
-                  (hit.name || titles[0] || 'Filme') +
-                  '\n' +
                   (server.color || '⚡') +
                   ' ' +
                   label +
@@ -695,9 +694,7 @@ module.exports = async function handler(req, res) {
                 streams.push({
                   name: brand,
                   title:
-                    '📺 ' +
-                    (hit.name || titles[0] || 'Serie') +
-                    ' S' +
+                    '📺 S' +
                     seasonKey +
                     'E' +
                     wantEp +
