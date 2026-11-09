@@ -651,9 +651,13 @@ module.exports = async function handler(req, res) {
                 : '🎯 FULL HD 1080p';
               streams.push({
                 name: brand,
-                // Sem título do filme na description: o app já está na ficha do filme,
-                // e misturar nome+[servidor com hífen] quebrava o card (tutor- / ins Server 4).
+                // 1ª linha = título do VOD (vira a linha 🎬 no app);
+                // 2ª = servidor; 3ª = qualidade. A API monta meta.description
+                // como "titulo + servidorParseavel" pra não misturar com hífen.
                 title:
+                  '🎬 ' +
+                  (hit.name || titles[0] || 'Filme') +
+                  '\n' +
                   (server.color || '⚡') +
                   ' ' +
                   label +
@@ -694,7 +698,9 @@ module.exports = async function handler(req, res) {
                 streams.push({
                   name: brand,
                   title:
-                    '📺 S' +
+                    '📺 ' +
+                    (hit.name || titles[0] || 'Serie') +
+                    ' S' +
                     seasonKey +
                     'E' +
                     wantEp +

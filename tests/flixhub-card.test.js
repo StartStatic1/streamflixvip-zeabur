@@ -5,9 +5,10 @@ const {
   streamToSourceDetailed,
   pickStreamDisplayName,
   hubCardDescription,
+  hubMetaDescription,
 } = require('../lib/stremio-addons');
 
-// Simula o parser do ServerInfoCard (app atual, sem hifen) e o corrigido.
+// Simula o parser do ServerInfoCard no APK atual (sem hifen no prefixo).
 function parseCardLegacy(label, desc) {
   const d = String(desc || '').replace(/\n/g, ' ').replace(/\r/g, ' ');
   const l = String(label || '');
@@ -26,59 +27,63 @@ function parseCardLegacy(label, desc) {
 test('hubCardDescription remove hifen pra parser legado do app', () => {
   assert.strictEqual(hubCardDescription('tutor-ins Server 4'), 'tutorins Server 4');
   assert.strictEqual(hubCardDescription('CineTela Server 2'), 'CineTela Server 2');
-  assert.strictEqual(hubCardDescription('4Lives Server 1'), '4Lives Server 1');
-  assert.strictEqual(hubCardDescription('p2sevdns Server 4'), 'p2sevdns Server 4');
+});
+
+test('hubMetaDescription: titulo + servidor sanitizado', () => {
+  const stream = {
+    name: 'FlixHub',
+    title: '🎬 Batman O Cavaleiro das Trevas [L]\n⚡ tutor-ins Server 4\n🎯 FULL HD 1080p',
+  };
+  assert.strictEqual(
+    hubMetaDescription(stream, 'tutor-ins Server 4'),
+    'Batman O Cavaleiro das Trevas [L] tutorins Server 4',
+  );
 });
 
 test('pickStreamDisplayName pega tutor-ins Server 4 inteiro', () => {
   const stream = {
     name: 'FlixHub',
-    title: '⚡ tutor-ins Server 4\n🎯 FULL HD 1080p',
+    title: '🎬 Batman O Cavaleiro das Trevas [L]\n⚡ tutor-ins Server 4\n🎯 FULL HD 1080p',
   };
   assert.strictEqual(pickStreamDisplayName(stream), 'tutor-ins Server 4');
 });
 
-test('streamToSourceDetailed: FlixHub tutor-ins nao mistura titulo do filme', () => {
+test('card FlixHub: titulo separado + servidor + [L]=Legendado', () => {
   const { source } = streamToSourceDetailed({
     name: 'FlixHub',
-    title: '⚡ tutor-ins Server 4\n🎯 FULL HD 1080p',
+    title: '🎬 Batman O Cavaleiro das Trevas [L]\n⚡ tutor-ins Server 4\n🎯 FULL HD 1080p',
     url: 'http://tutor-ins.online/movie/u/p/1.mp4',
   }, 'FlixHub', 0);
   assert.ok(source);
   assert.match(source.source_label, /tutor-ins Server 4/i);
   assert.strictEqual(source.meta.quality, '1080p');
-  assert.strictEqual(source.meta.description, 'tutorins Server 4');
+  assert.strictEqual(source.meta.audio, 'Legendado');
+  assert.strictEqual(source.meta.description, 'Batman O Cavaleiro das Trevas [L] tutorins Server 4');
   const card = parseCardLegacy(source.source_label, source.meta.description);
   assert.strictEqual(card.head, 'FlixHub');
+  assert.strictEqual(card.movieName, 'Batman O Cavaleiro das Trevas [L]');
   assert.strictEqual(card.serverName, 'tutorins Server 4');
-  assert.strictEqual(card.movieName, null);
 });
 
-test('streamToSourceDetailed: CineTela e 4Lives limpos', () => {
-  for (const name of ['CineTela Server 2', '4Lives Server 1', 'nosworld Server 5']) {
+test('card FlixHub: [D]=Dublado e CineTela/4Lives limpos', () => {
+  const { source: dub } = streamToSourceDetailed({
+    name: 'FlixHub',
+    title: '🎬 Inception [D]\n⚡ CineTela Server 2\n🎯 FULL HD 1080p',
+    url: 'http://example.com/movie/u/p/1.mp4',
+  }, 'FlixHub', 0);
+  assert.strictEqual(dub.meta.audio, 'Dublado');
+  const cardDub = parseCardLegacy(dub.source_label, dub.meta.description);
+  assert.strictEqual(cardDub.movieName, 'Inception [D]');
+  assert.strictEqual(cardDub.serverName, 'CineTela Server 2');
+
+  for (const name of ['4Lives Server 1', 'nosworld Server 5']) {
     const { source } = streamToSourceDetailed({
       name: 'FlixHub',
-      title: '⚡ ' + name + '\n🎯 FULL HD 1080p',
+      title: '🎬 Interstellar (2014)\n⚡ ' + name + '\n🎯 FULL HD 1080p',
       url: 'http://example.com/movie/u/p/1.mp4',
     }, 'FlixHub', 0);
-    assert.ok(source, name);
-    assert.strictEqual(source.meta.description, name);
     const card = parseCardLegacy(source.source_label, source.meta.description);
     assert.strictEqual(card.serverName, name);
-    assert.strictEqual(card.movieName, null);
+    assert.strictEqual(card.movieName, 'Interstellar (2014)');
   }
-});
-
-test('formato antigo com titulo do filme ainda extrai servidor', () => {
-  const stream = {
-    name: 'FlixHub',
-    title: '🎬 Batman O Cavaleiro das Trevas [L]\n⚡ tutor-ins Server 4\n🎯 FULL HD 1080p',
-    url: 'http://tutor-ins.online/movie/u/p/1.mp4',
-  };
-  assert.strictEqual(pickStreamDisplayName(stream), 'tutor-ins Server 4');
-  const { source } = streamToSourceDetailed(stream, 'FlixHub', 0);
-  assert.strictEqual(source.meta.description, 'tutorins Server 4');
-  const card = parseCardLegacy(source.source_label, source.meta.description);
-  assert.strictEqual(card.movieName, null);
-  assert.strictEqual(card.serverName, 'tutorins Server 4');
 });
