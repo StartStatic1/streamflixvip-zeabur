@@ -1,4 +1,10 @@
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /admin.html
+Disallow: /api/
+Disallow: /embed
+Disallow: /api-tester.html
+Disallow: /teste-api-parceiro.html
 
-Sitemap: https://streamflixvip.online/sitemap.xml
+Sitemap: https://www.streamflixvip.online/sitemap.xml
