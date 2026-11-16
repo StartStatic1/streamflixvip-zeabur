@@ -1,7 +1,7 @@
 {
-  "versionCode": 31,
-  "versionName": "4.1.7",
+  "versionCode": 32,
+  "versionName": "4.1.8",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Tela inicial renovada e sessão mais estável."
+  "releaseNotes": "Novo botão Comentários na tela do filme/série com os comentários mais recentes."
 }
