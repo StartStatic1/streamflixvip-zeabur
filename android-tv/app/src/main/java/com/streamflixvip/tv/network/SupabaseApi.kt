@@ -246,6 +246,8 @@ interface CommentsApi {
         @Query("select") select: String = "id,user_display_name,is_vip_author,comment_text,created_at",
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 100,
+        // "is.false" = esconde comentários moderados (coluna is_hidden, migration 2026-10)
+        @Query("is_hidden") hiddenFilter: String? = null,
     ): List<TitleComment>
 
     @retrofit2.http.Headers("Content-Type: application/json", "Prefer: return=minimal")
@@ -260,7 +262,7 @@ interface CommentsApi {
 @JsonClass(generateAdapter = true)
 data class TitleComment(
     val id: Long? = null,
-    val user_display_name: String,
+    val user_display_name: String? = null,
     val is_vip_author: Boolean = false,
     val comment_text: String,
     val created_at: String? = null,

@@ -56,6 +56,7 @@ data class DetailTvUiState(
     val watched: Set<Pair<Int, Int>> = emptySet(),
     val isFavorite: Boolean = false,
     val panel: SourcePanel? = null,
+    val comments: List<com.streamflixvip.tv.network.TitleComment> = emptyList(),
 )
 
 class DetailTvViewModel(
@@ -74,9 +75,23 @@ class DetailTvViewModel(
 
     val isSeries: Boolean get() = mediaType == "tv"
 
+    /** Comentários do título (só leitura na TV). Sem a coluna is_hidden cai na consulta antiga. */
+    private fun loadComments() {
+        viewModelScope.launch {
+            val api = NetworkModule.commentsApi
+            val key = NetworkModule.supabaseAnonKey
+            val list = runCatching {
+                api.getComments(key, "eq.$tmdbId", "eq.$mediaType", limit = 30, hiddenFilter = "is.false")
+            }.recoverCatching { api.getComments(key, "eq.$tmdbId", "eq.$mediaType", limit = 30) }
+                .getOrDefault(emptyList())
+            _uiState.update { it.copy(comments = list.filter { c -> c.comment_text.isNotBlank() }) }
+        }
+    }
+
     fun loadDetails() {
         refreshLibrary()
         if (_uiState.value.details != null) return
+        loadComments()
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             val path = if (isSeries) "/tv/$tmdbId" else "/movie/$tmdbId"

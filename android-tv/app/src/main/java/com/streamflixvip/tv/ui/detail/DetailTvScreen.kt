@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
@@ -125,6 +127,7 @@ fun DetailTvScreen(
     val state by viewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     val isSeries = mediaType == "tv"
+    var showComments by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { viewModel.loadDetails() }
 
@@ -170,6 +173,13 @@ fun DetailTvScreen(
         if (panel != null) {
             delay(80)
             runCatching { panelFirst.requestFocus() }
+        }
+    }
+
+    if (showComments) {
+        CommentsTvDialog(state.comments) {
+            showComments = false
+            focus("comments")
         }
     }
 
@@ -309,6 +319,16 @@ fun DetailTvScreen(
                                         icon = if (state.isFavorite) Icons.Filled.Check else Icons.Filled.Add,
                                     )
                                 }
+                                item {
+                                    FocusTargetBox("comments", focusTarget, focusNonce, { focusTarget = null }) { m ->
+                                        TvButton(
+                                            if (state.comments.isEmpty()) "Comentários" else "Comentários (${state.comments.size})",
+                                            onClick = { showComments = true },
+                                            icon = Icons.Filled.Forum,
+                                            modifier = m,
+                                        )
+                                    }
+                                }
                             }
                         }
                         }
@@ -439,6 +459,78 @@ fun DetailTvScreen(
                 }
             }
         }
+    }
+}
+
+/** Comentários na TV (só leitura): os mais recentes, sem os moderados. Comentar fica no app do celular. */
+@Composable
+private fun CommentsTvDialog(comments: List<com.streamflixvip.tv.network.TitleComment>, onDismiss: () -> Unit) {
+    val p = LocalPalette.current
+    val closeFocus = remember { FocusRequester() }
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth(0.62f)
+                .fillMaxHeight(0.86f)
+                .clip(RoundedCornerShape(20.dp))
+                .background(p.bg)
+                .padding(28.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Comentários", color = p.text, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                TvButton("Fechar", onClick = onDismiss, compact = true, modifier = Modifier.focusRequester(closeFocus))
+            }
+            Spacer(Modifier.height(4.dp))
+            Text("Para comentar, abra este título no app do celular (mesma conta).", color = p.textMuted, fontSize = 12.sp)
+            Spacer(Modifier.height(16.dp))
+            if (comments.isEmpty()) {
+                Text("Ninguém comentou ainda.", color = p.textMuted, fontSize = 15.sp)
+            } else {
+                TvLazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    items(comments.size) { i ->
+                        val c = comments[i]
+                        val raw = c.comment_text.let { t -> if (t.startsWith("👍 ") || t.startsWith("👎 ")) t.drop(2) else t }
+                        val text = if (raw.startsWith("🔒 SPOILER ") || raw.startsWith("SPOILER ")) "🔒 Spoiler escondido" else raw
+                        androidx.tv.material3.Surface(
+                            onClick = {},
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+                            colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
+                                containerColor = p.glass,
+                                focusedContainerColor = p.glass,
+                            ),
+                            border = androidx.tv.material3.ClickableSurfaceDefaults.border(
+                                focusedBorder = androidx.tv.material3.Border(androidx.compose.foundation.BorderStroke(2.dp, p.accent), shape = RoundedCornerShape(12.dp)),
+                            ),
+                            scale = androidx.tv.material3.ClickableSurfaceDefaults.scale(focusedScale = 1.0f),
+                        ) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(c.user_display_name?.takeIf { it.isNotBlank() } ?: "Usuário", color = p.text, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    if (c.is_vip_author) {
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("VIP", color = p.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    c.created_at?.take(10)?.takeIf { it.length == 10 && it[4] == '-' }?.let { d ->
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("${d.substring(8, 10)}/${d.substring(5, 7)}/${d.substring(0, 4)}", color = p.textMuted, fontSize = 11.sp)
+                                    }
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Text(text, color = p.text.copy(alpha = 0.88f), fontSize = 14.sp, lineHeight = 19.sp, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(120)
+        runCatching { closeFocus.requestFocus() }
     }
 }
 

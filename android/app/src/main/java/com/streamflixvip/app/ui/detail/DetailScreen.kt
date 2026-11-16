@@ -28,6 +28,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -407,6 +409,15 @@ private fun DetailContent(
                 onPersonClick = { personId = it },
             )
         }
+        // Comentários em destaque (antes ficavam só num botão no fim da tela)
+        item {
+            CommentsPreviewCard(
+                comments = state.comments,
+                isLoading = state.isLoadingComments && state.comments.isEmpty(),
+                onOpen = onOpenComments,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        }
         val clips = details.videos?.results.orEmpty().filter {
             it.site == "YouTube" && it.type in setOf("Trailer", "Teaser")
         }
@@ -442,9 +453,6 @@ private fun DetailContent(
                 item {
                     MovieRequestCard()
                 }
-            }
-            item {
-                CommentsEntryButton(onClick = onOpenComments, modifier = Modifier.padding(16.dp))
             }
         } else {
             // T1–Tn primeiro; season 0 = Especiais no fim
@@ -530,12 +538,6 @@ private fun DetailContent(
                 }
             }
 
-            // Comentários: mesma posição que o CineVerse usa (logo depois
-            // da lista de episódios) — funciona igual pra filme e série,
-            // então também aparece no bloco de filme, um pouco mais acima.
-            item {
-                CommentsEntryButton(onClick = onOpenComments, modifier = Modifier.padding(16.dp))
-            }
         }
 
         // "Você também pode gostar" — preenche o espaço que sobrava vazio
@@ -933,6 +935,96 @@ private fun CineverseEpisodeRow(
                         lineHeight = 17.sp,
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Texto do comentário sem as marcas de avaliação (👍/👎); spoiler fica escondido na prévia. */
+private fun commentPreviewText(raw: String): String {
+    val body = if (raw.startsWith("👍 ") || raw.startsWith("👎 ")) raw.drop(2) else raw
+    return if (body.startsWith("🔒 SPOILER ") || body.startsWith("SPOILER ")) "🔒 Spoiler escondido — toque para ver" else body
+}
+
+/**
+ * Bloco de comentários direto na tela de detalhes: contagem, os 2 mais recentes e
+ * botões "Ver todos" / "Comentar" (abrem o mesmo modal de antes).
+ */
+@Composable
+private fun CommentsPreviewCard(
+    comments: List<com.streamflixvip.app.network.TitleComment>,
+    isLoading: Boolean,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = com.streamflixvip.app.ui.theme.StreamFlixColors.Accent
+    val roots = comments.filter { it.parent_id == null }.sortedByDescending { it.created_at }
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(com.streamflixvip.app.ui.theme.StreamFlixColors.Glass)
+            .border(1.dp, com.streamflixvip.app.ui.theme.StreamFlixColors.GlassBorder, RoundedCornerShape(16.dp))
+            .clickable(onClick = onOpen)
+            .padding(14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(4.dp).height(18.dp).clip(RoundedCornerShape(2.dp)).background(accent))
+            Spacer(Modifier.width(10.dp))
+            Text("Comentários", fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (comments.isNotEmpty()) {
+                Text(
+                    "${comments.size}",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = com.streamflixvip.app.ui.theme.StreamFlixColors.OnAccent,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(accent).padding(horizontal = 9.dp, vertical = 2.dp),
+                )
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        when {
+            isLoading -> Text("Carregando comentários…", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            roots.isEmpty() -> Text("Ninguém comentou ainda. Seja o primeiro a dizer o que achou!", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else -> roots.take(2).forEachIndexed { i, c ->
+                if (i > 0) Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.Top) {
+                    Box(
+                        Modifier.size(28.dp).clip(CircleShape).background(accent.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(c.displayAuthor.take(1).uppercase(), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = accent)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(c.displayAuthor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            if (c.is_vip_author) {
+                                Spacer(Modifier.width(6.dp))
+                                Text("VIP", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = accent)
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            Text(formatCommentDate(c.created_at), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        }
+                        Text(commentPreviewText(c.comment_text), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 17.sp)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (comments.isNotEmpty()) {
+                OutlinedButton(onClick = onOpen, shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)) {
+                    Text("Ver todos (${comments.size})", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                }
+            }
+            Button(
+                onClick = onOpen,
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = com.streamflixvip.app.ui.theme.StreamFlixColors.OnAccent),
+            ) {
+                Text("💬 Comentar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

@@ -95,7 +95,15 @@ class DetailViewModel(
                     isLoadingMovieSources = mediaType == "movie",
                     vipConfig = null,
                     canPostComments = userId != null && accessToken != null,
+                    isLoadingComments = true,
                 )
+
+                // Prévia de comentários direto na tela (sem precisar abrir a aba)
+                launch {
+                    val comments = try { commentsRepository.getComments(tmdbId, mediaType) } catch (_: Exception) { emptyList() }
+                    val still = _uiState.value as? DetailUiState.Success ?: return@launch
+                    if (still.tmdbId == tmdbId) _uiState.value = still.copy(comments = comments, isLoadingComments = false)
+                }
 
                 launch {
                     val vipConfig = try {
