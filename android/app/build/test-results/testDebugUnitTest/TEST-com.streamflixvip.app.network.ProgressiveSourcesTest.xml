@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.streamflixvip.app.network.ProgressiveSourcesTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-16T04:56:16" hostname="grok-bot-vm-442342530" time="1.559">
-  <properties/>
-  <testcase name="erroNoMeioUsaUltimaLista" classname="com.streamflixvip.app.network.ProgressiveSourcesTest" time="0.543"/>
-  <testcase name="pedeDeNovoAteCompletarENaoPerdeServidores" classname="com.streamflixvip.app.network.ProgressiveSourcesTest" time="1.014"/>
-  <testcase name="servidorAntigoUmPedidoSo" classname="com.streamflixvip.app.network.ProgressiveSourcesTest" time="0.001"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

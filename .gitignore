@@ -1,0 +1,6 @@
+
+# Android (build local)
+**/.gradle/
+**/app/build/
+android/local.properties
+android-tv/local.properties
