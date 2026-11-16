@@ -1,7 +1,7 @@
 {
-  "versionCode": 170103,
-  "versionName": "17.1.3",
+  "versionCode": 170104,
+  "versionName": "17.1.4",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Tela inicial renovada, Perfil mais simples e sessão mais estável."
+  "releaseNotes": "Comentários agora aparecem direto na tela do filme/série: prévia com os mais recentes e botões Ver todos / Comentar."
 }
