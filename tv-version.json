@@ -1,7 +1,7 @@
 {
-  "versionCode": 30,
-  "versionName": "4.1.6",
+  "versionCode": 31,
+  "versionName": "4.1.7",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Aviso de VPN nas fontes que precisam. Correções."
+  "releaseNotes": "Tela inicial renovada e sessão mais estável."
 }
