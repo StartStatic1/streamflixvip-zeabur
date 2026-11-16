@@ -3,6 +3,7 @@ package com.streamflixvip.tv.ui.home
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,6 +36,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -325,47 +327,106 @@ private fun SpotlightInfo(s: Spotlight?, modifier: Modifier) {
         return
     }
     Column(modifier, verticalArrangement = Arrangement.Bottom) {
-        s.label?.let {
-            Text(it, color = p.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(4.dp))
+        s.label?.let { raw ->
+            // "Continuar assistindo · CONTINUAR ASSISTINDO" -> uma vez só
+            val it = raw.split(" · ").map { it.trim() }.filter { it.isNotEmpty() }
+                .distinctBy { it.lowercase() }.joinToString(" · ")
+            Text(
+                it.uppercase(),
+                color = p.accent,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(p.accent.copy(alpha = 0.16f))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            )
+            Spacer(Modifier.height(8.dp))
         }
         Text(
             s.title,
             color = p.text,
-            fontSize = if (s.title.length > 28) 24.sp else 30.sp,
+            fontSize = if (s.title.length > 28) 26.sp else 32.sp,
             fontWeight = FontWeight.ExtraBold,
             maxLines = 1,
-            lineHeight = 34.sp,
+            lineHeight = 36.sp,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.fillMaxWidth(0.58f),
         )
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             s.rating?.let {
-                Icon(Icons.Filled.Star, null, tint = p.star, modifier = Modifier.size(14.dp))
-                Text(it, color = p.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.offset(x = (-6).dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(p.glass)
+                        .padding(horizontal = 7.dp, vertical = 2.dp),
+                ) {
+                    Icon(Icons.Filled.Star, null, tint = p.star, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(it, color = p.text, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
-            s.meta.forEach { Text(it, color = p.textMuted, fontSize = 13.sp) }
+            s.meta.forEachIndexed { i, m ->
+                if (i > 0 || s.rating != null) Text("•", color = p.textMuted, fontSize = 12.sp)
+                Text(m, color = p.textMuted, fontSize = 13.sp)
+            }
         }
         if (s.progress != null && s.progress > 0f) {
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             com.streamflixvip.tv.ui.components.ProgressLine(s.progress, Modifier.width(220.dp), height = 4.dp)
         }
         s.overview?.takeIf { it.isNotBlank() }?.let { full ->
             // corta no fim de uma palavra (nunca "pressã…")
-            val it = if (full.length <= 190) full else full.take(190).substringBeforeLast(' ').trimEnd(',', '.', ';', ':', '-') + "…"
-            Spacer(Modifier.height(6.dp))
+            val it = if (full.length <= 170) full else full.take(170).substringBeforeLast(' ').trimEnd(',', '.', ';', ':', '-') + "…"
+            Spacer(Modifier.height(8.dp))
             Text(
                 it,
                 color = p.text.copy(alpha = 0.78f),
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
-                maxLines = 3,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth(0.52f),
             )
         }
+        // Dica do controle remoto (o que OK / segurar OK fazem neste cartão)
+        val holdHint = when {
+            s.progress != null -> "Remover"
+            s.label?.endsWith("NA MINHA LISTA") == true -> null
+            else -> "Minha lista"
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            RemoteKeyHint("OK")
+            Text(if (s.progress != null) "Continuar" else "Detalhes", color = p.textMuted, fontSize = 11.sp)
+            if (holdHint != null) {
+                Spacer(Modifier.width(8.dp))
+                RemoteKeyHint("Segure OK")
+                Text(holdHint, color = p.textMuted, fontSize = 11.sp)
+            }
+        }
     }
+}
+
+@Composable
+private fun RemoteKeyHint(key: String) {
+    val p = LocalPalette.current
+    Text(
+        key,
+        color = p.text,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(p.glass)
+            .border(1.dp, p.glassBorder, RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
 }
 
 @Composable

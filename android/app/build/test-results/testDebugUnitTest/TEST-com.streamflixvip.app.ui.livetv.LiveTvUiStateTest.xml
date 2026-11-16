@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.streamflixvip.app.ui.livetv.LiveTvUiStateTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-16T04:56:18" hostname="grok-bot-vm-442342530" time="0.008">
+  <properties/>
+  <testcase name="categoriaFiltraEBuscaProcuraEmTodos" classname="com.streamflixvip.app.ui.livetv.LiveTvUiStateTest" time="0.008"/>
+  <testcase name="recentesNaOrdemEContagem" classname="com.streamflixvip.app.ui.livetv.LiveTvUiStateTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

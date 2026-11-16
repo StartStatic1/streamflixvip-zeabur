@@ -52,28 +52,68 @@ object NetworkModule {
         response
     }
 
+    /**
+     * Cliente só para renovar a sessão: sem o interceptor de sessão (que mandaria o token vencido)
+     * e sem authenticator (um 401 na renovação não pode disparar outra renovação em laço).
+     */
+    private val authRefreshClient by lazy {
+        OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+    }
+
+    private val authRefreshApi: SupabaseAuthApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(BuildConfig.SUPABASE_URL + "/")
+            .client(authRefreshClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(SupabaseAuthApi::class.java)
+    }
+
+    /** Uma renovação por vez: vários 401 juntos não gastam o mesmo refresh token em paralelo. */
+    private val refreshLock = Any()
+
     private val tokenAuthenticator = okhttp3.Authenticator { _, response ->
         if (response.request.header("X-Retry-After-Refresh") != null) {
             return@Authenticator null
         }
+        // O OkHttp chama o authenticator na thread da própria requisição. Se alguém fizer uma
+        // chamada síncrona na main thread, não bloqueia a interface esperando a renovação (ANR).
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            return@Authenticator null
+        }
         val store = sessionStore ?: return@Authenticator null
-        val refreshToken = store.refreshToken ?: return@Authenticator null
+        val failedToken = response.request.header("Authorization")?.removePrefix("Bearer ")
 
-        val newSession = try {
-            kotlinx.coroutines.runBlocking {
-                supabaseAuthApi.refreshToken(
-                    apiKey = supabaseAnonKey,
-                    body = RefreshTokenRequest(refreshToken),
-                )
+        val newAccessToken: String = synchronized(refreshLock) {
+            val current = store.accessToken
+            if (!current.isNullOrBlank() && current != failedToken) {
+                // Outra requisição já renovou enquanto esta esperava: só repete com o token novo.
+                current
+            } else {
+                val refreshToken = store.refreshToken ?: return@Authenticator null
+                val newSession = try {
+                    kotlinx.coroutines.runBlocking {
+                        kotlinx.coroutines.withTimeout(20_000) {
+                            authRefreshApi.refreshToken(
+                                apiKey = supabaseAnonKey,
+                                body = RefreshTokenRequest(refreshToken),
+                            )
+                        }
+                    }
+                } catch (_: Exception) {
+                    null
+                } ?: return@Authenticator null
+                store.updateTokens(newSession.access_token, newSession.refresh_token)
+                newSession.access_token
             }
-        } catch (_: Exception) {
-            null
-        } ?: return@Authenticator null
-
-        store.updateTokens(newSession.access_token, newSession.refresh_token)
+        }
 
         response.request.newBuilder()
-            .header("Authorization", "Bearer ${newSession.access_token}")
+            .header("Authorization", "Bearer $newAccessToken")
             .header("X-Retry-After-Refresh", "true")
             .build()
     }

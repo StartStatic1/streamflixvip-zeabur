@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#05050A</color>
+    <string name="app_name">StreamFlixVIP TV</string>
+    <style name="Theme.StreamFlixVIP.TV" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">#0A0A10</item>
+        <item name="android:colorBackground">#0A0A10</item>
+    </style>
+</resources>
