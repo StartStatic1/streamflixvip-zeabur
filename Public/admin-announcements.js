@@ -26,9 +26,10 @@
       const typeLabel = { info: 'Aviso', movie: 'Filme novo', maintenance: 'Manutenção', promo: 'Promoção' };
       wrap.innerHTML = list.map((a) => {
         const when = a.created_at ? new Date(a.created_at).toLocaleString('pt-BR') : '—';
-        const badge = a.active
+        const badge = (a.active
           ? '<span class="pill active">Ativo</span>'
-          : '<span class="pill inactive">Inativo</span>';
+          : '<span class="pill inactive">Inativo</span>') +
+          (a.push ? ' <span class="pill active" title="Também vai como notificação no celular">🔔 Notificação</span>' : '');
         const link = a.link_tmdb_id
           ? '<div style="font-size:0.75rem;color:var(--muted);margin-top:4px">Link: ' +
             (a.link_media_type || '?') + ' #' + a.link_tmdb_id + '</div>'
@@ -78,6 +79,7 @@
         link_tmdb_id: tmdb ? Number(tmdb) : null,
         link_media_type: media || null,
         active: true,
+        push: !!(document.getElementById('annPush') && document.getElementById('annPush').checked),
       });
       if (data && data.error) {
         showToast('Erro: ' + (data.error.message || data.error));
@@ -87,7 +89,10 @@
       document.getElementById('annBody').value = '';
       document.getElementById('annTmdb').value = '';
       document.getElementById('annMedia').value = '';
-      showToast('✅ Aviso publicado');
+      var pushBox = document.getElementById('annPush');
+      var sentPush = pushBox && pushBox.checked;
+      if (pushBox) pushBox.checked = false;
+      showToast(sentPush ? '✅ Aviso publicado e enviado como notificação' : '✅ Aviso publicado');
       loadAnnouncements();
     } catch (e) {
       showToast('Erro: ' + (e.message || e));

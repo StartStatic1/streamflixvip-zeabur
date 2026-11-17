@@ -14,6 +14,8 @@ class StreamFlixApp : Application() {
         runCatching { com.streamflixvip.app.data.DeviceLock.init(this) }
         runCatching { com.streamflixvip.app.ui.theme.AccentStore.init(this) }
         runCatching { AdsHelper.init(this) }
+        runCatching { com.streamflixvip.app.notify.FollowedSeries.init(this) }
+        runCatching { com.streamflixvip.app.notify.Notifier.schedule(this) }
         if (CrashLog.consumeNotice(this)) {
             runCatching {
                 android.widget.Toast.makeText(

@@ -235,15 +235,54 @@ fun ProfileScreen(
 
         SectionTitle("Preferências")
 
+        var canPostNotif by remember { mutableStateOf(com.streamflixvip.app.notify.Notifier.canPost(context)) }
+        val notifPermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+        ) { granted ->
+            canPostNotif = com.streamflixvip.app.notify.Notifier.canPost(context)
+            if (granted && canPostNotif) {
+                com.streamflixvip.app.notify.Notifier.checkNow(context)
+            } else {
+                // negou antes: o Android não pergunta de novo, então abre os ajustes do app
+                runCatching {
+                    context.startActivity(
+                        android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+                android.widget.Toast.makeText(context, "Permita as notificações do StreamFlixVIP nos ajustes do Android", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
         ProfileToggleCard(
             icon = Icons.Filled.Notifications,
             title = "Notificações / Avisos",
-            subtitle = if (notificationsEnabled) "Avisos ativos no Perfil" else "Desativado — avisos ocultos",
+            subtitle = when {
+                !notificationsEnabled -> "Desligado — sem avisos e sem notificações"
+                canPostNotif -> "Episódio novo das suas séries, novidades e avisos no celular"
+                else -> "Avisos só no Perfil — as notificações do celular estão bloqueadas. Desligue e ligue para permitir"
+            },
             iconTint = Color(0xFFFF7043),
             checked = notificationsEnabled,
             onCheckedChange = {
                 notificationsEnabled = it
                 preferencesStore.notificationsEnabled = it
+                com.streamflixvip.app.notify.Notifier.schedule(context)
+                if (it) {
+                    canPostNotif = com.streamflixvip.app.notify.Notifier.canPost(context)
+                    if (!canPostNotif) {
+                        if (android.os.Build.VERSION.SDK_INT >= 33) notifPermLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        else runCatching {
+                            context.startActivity(
+                                android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    } else {
+                        com.streamflixvip.app.notify.Notifier.checkNow(context)
+                    }
+                }
             },
         )
 

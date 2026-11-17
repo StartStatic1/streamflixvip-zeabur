@@ -33,6 +33,7 @@ class FavoritesRepository {
         posterPath: String?,
         originalLanguage: String? = null,
     ): Boolean {
+        if (mediaType == "tv") com.streamflixvip.app.notify.FollowedSeries.setFavorite(tmdbId, title, posterPath, true)
         com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let {
             return com.streamflixvip.app.profiles.ProfileLocalData.addFavorite(it, tmdbId, mediaType, title, posterPath, originalLanguage)
         }
@@ -68,6 +69,7 @@ class FavoritesRepository {
         tmdbId: Int,
         mediaType: String,
     ): Boolean {
+        if (mediaType == "tv") com.streamflixvip.app.notify.FollowedSeries.setFavorite(tmdbId, null, null, false)
         com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let {
             return com.streamflixvip.app.profiles.ProfileLocalData.removeFavorite(it, tmdbId, mediaType)
         }
@@ -93,6 +95,17 @@ class FavoritesRepository {
     }
 
     suspend fun getFavorites(
+        accessToken: String? = null,
+        userId: String? = null,
+    ): List<FavoriteEntry> = getFavoritesRaw(accessToken, userId).also { list ->
+        runCatching {
+            com.streamflixvip.app.notify.FollowedSeries.favorites(
+                list.filter { it.media_type == "tv" }.map { Triple(it.tmdb_id, it.title, it.poster_path) },
+            )
+        }
+    }
+
+    private suspend fun getFavoritesRaw(
         accessToken: String? = null,
         userId: String? = null,
     ): List<FavoriteEntry> {

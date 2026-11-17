@@ -34,6 +34,7 @@ class ProgressRepository {
         durationSeconds: Int,
     ) {
         if (positionSeconds < 10) return
+        if (mediaType == "tv") runCatching { com.streamflixvip.app.notify.FollowedSeries.watched(tmdbId, title, posterPath) }
         com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let { scope ->
             if (durationSeconds > 0 && positionSeconds.toFloat() / durationSeconds >= 0.95f) {
                 com.streamflixvip.app.profiles.ProfileLocalData.removeProgress(scope, tmdbId, mediaType)
@@ -85,6 +86,17 @@ class ProgressRepository {
     }
 
     suspend fun getContinueWatching(
+        accessToken: String? = null,
+        userId: String? = null,
+    ): List<WatchProgressEntry> = getContinueWatchingRaw(accessToken, userId).also { list ->
+        runCatching {
+            list.filter { it.media_type == "tv" }.take(20).forEach {
+                com.streamflixvip.app.notify.FollowedSeries.watched(it.tmdb_id, it.title, it.poster_path)
+            }
+        }
+    }
+
+    private suspend fun getContinueWatchingRaw(
         accessToken: String? = null,
         userId: String? = null,
     ): List<WatchProgressEntry> {

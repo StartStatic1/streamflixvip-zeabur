@@ -103,6 +103,7 @@ const reels = require('./api/reels.js');
 const crashReport = require('./api/crash-report.js');
 const referral = require('./api/referral.js');
 const retroApi = require('./api/retro.js');
+const notifyFeed = require('./api/notify-feed.js');
 
 const wrap = (handler) => (req, res) => {
   Promise.resolve(handler(req, res)).catch((err) => {
@@ -171,6 +172,7 @@ app.all('/api/reels', wrap(reels));
 app.all('/api/crash-report', wrap(crashReport));
 app.all('/api/referral', wrap(referral));
 app.all('/api/retro', wrap(retroApi));
+app.all('/api/notify-feed', wrap(notifyFeed));
 
 app.use(
   express.static(STATIC_DIR, {

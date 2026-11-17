@@ -18,7 +18,13 @@ class PreferencesStore(context: Context) {
         get() = prefs.getBoolean(KEY_NOTIFICATIONS, true)
         set(value) = prefs.edit().putBoolean(KEY_NOTIFICATIONS, value).apply()
 
+    /** Já pedimos a permissão de notificação do Android 13+ (pede só uma vez sozinho). */
+    var notifPermissionAsked: Boolean
+        get() = prefs.getBoolean(KEY_NOTIF_ASKED, false)
+        set(value) = prefs.edit().putBoolean(KEY_NOTIF_ASKED, value).apply()
+
     companion object {
+        private const val KEY_NOTIF_ASKED = "notif_permission_asked"
         private const val KEY_NOTIFICATIONS = "notifications_enabled"
     }
 }

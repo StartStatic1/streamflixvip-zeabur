@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         com.streamflixvip.app.tvpair.TvPair.handleUri(intent.data)
+        com.streamflixvip.app.notify.PendingOpen.handle(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -114,6 +115,7 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         com.streamflixvip.app.tvpair.TvPair.handleUri(intent?.data)
+        com.streamflixvip.app.notify.PendingOpen.handle(intent)
         setContent {
             CompositionLocalProvider(LocalLifecycleOwner provides this) {
                 StreamFlixTheme {
@@ -299,6 +301,36 @@ private fun MainAppScaffold(
         }
     }
     DeviceInUseDialog()
+
+    // Notificações: pede a permissão do Android 13+ uma vez (se a chave do Perfil estiver ligada)
+    val notifCtx = androidx.compose.ui.platform.LocalContext.current
+    val notifPermLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) com.streamflixvip.app.notify.Notifier.checkNow(notifCtx)
+    }
+    LaunchedEffect(Unit) {
+        val prefs = com.streamflixvip.app.data.PreferencesStore(notifCtx)
+        if (prefs.notificationsEnabled && android.os.Build.VERSION.SDK_INT >= 33 && !prefs.notifPermissionAsked &&
+            androidx.core.content.ContextCompat.checkSelfPermission(notifCtx, android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            kotlinx.coroutines.delay(2_500)
+            prefs.notifPermissionAsked = true
+            notifPermLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    // Tocou numa notificação: abre o título (ou o Perfil, para aviso sem título)
+    val pendingOpen by com.streamflixvip.app.notify.PendingOpen.target.collectAsState()
+    LaunchedEffect(pendingOpen) {
+        val t = com.streamflixvip.app.notify.PendingOpen.consume() ?: return@LaunchedEffect
+        runCatching {
+            if (t.profile) navController.navigate("profile") { launchSingleTop = true }
+            else if (t.mediaType == "tv" && t.season > 0 && t.episode > 0)
+                navController.navigate("detail/${t.tmdbId}/tv?season=${t.season}&episode=${t.episode}")
+            else navController.navigate("detail/${t.tmdbId}/${t.mediaType}")
+        }
+    }
 
     if (resumeBusy) {
         androidx.compose.ui.window.Dialog(onDismissRequest = {}) {

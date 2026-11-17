@@ -1271,7 +1271,7 @@ module.exports = async function handler(req, res) {
   // ── Avisos do app (app_announcements) ──
   if (action === 'list-announcements') {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/app_announcements?select=id,type,title,body,active,link_tmdb_id,link_media_type,created_at&order=created_at.desc&limit=100`,
+      `${SUPABASE_URL}/rest/v1/app_announcements?select=id,type,title,body,active,push,link_tmdb_id,link_media_type,created_at&order=created_at.desc&limit=100`,
       { headers: svcHeaders },
     );
     const rows = await r.json();
@@ -1293,6 +1293,7 @@ module.exports = async function handler(req, res) {
       body: bodyText,
       type,
       active: body.active !== false,
+      push: body.push === true,
     };
     if (body.link_tmdb_id != null && body.link_tmdb_id !== '') {
       payload.link_tmdb_id = Number(body.link_tmdb_id);

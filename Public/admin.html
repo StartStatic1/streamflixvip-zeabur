@@ -1090,7 +1090,7 @@
     <section id="tab-announcements" class="tab-panel" style="display:none">
       <div class="card">
         <div class="card-title">🔔 Novo aviso para o app</div>
-        <p style="color:var(--muted);font-size:0.85rem;margin:0 0 14px">Aparece no <strong>Perfil</strong> do app mobile (Notificações/Avisos ligados).</p>
+        <p style="color:var(--muted);font-size:0.85rem;margin:0 0 14px">Aparece no <strong>Perfil</strong> do app do celular (Notificações/Avisos ligados). Marque a caixa abaixo para também mandar como notificação no aparelho. Com TMDB ID + tipo, tocar abre o título.</p>
         <div class="form-row">
           <div class="form-group" style="flex:1">
             <label>Título</label>
@@ -1124,6 +1124,10 @@
             </select>
           </div>
         </div>
+        <label style="display:flex;align-items:center;gap:8px;margin:4px 0 14px;font-size:0.88rem;cursor:pointer">
+          <input id="annPush" type="checkbox" style="width:auto">
+          Também enviar como <strong>notificação no celular</strong> (chega em até ~1 h para quem deixou as notificações ligadas)
+        </label>
         <button class="btn-primary" onclick="createAnnouncement()">Publicar aviso</button>
       </div>
       <div class="card" style="margin-top:16px">

@@ -518,6 +518,9 @@ private fun NativePlayer(
 
     var showNextPrompt by remember { mutableStateOf(false) }
     var nextDismissedFor by remember { mutableStateOf(-1) }
+    // Pular abertura: tempos do episódio atual (TheIntroDB, ou aprendidos da série) e se já pulou
+    var introTimes by remember { mutableStateOf<IntroTimes?>(null) }
+    var introSkippedFor by remember { mutableStateOf(-1) }
 
     // Gestos: esquerda = brilho, direita = volume
     val audioManager = remember {
@@ -1033,7 +1036,9 @@ private fun NativePlayer(
             if (mediaType == "tv" && currentEpisode > 0) {
                 val dur = exoPlayer.duration
                 val pos = exoPlayer.currentPosition
-                if (dur > 0 && (dur - pos) in 1..30_000L && !showNextPrompt && !isLoadingNext &&
+                val credits = introTimes?.creditsStartMs ?: 0L
+                val nearEnd = (dur - pos) in 1..30_000L || (credits > 0 && pos >= credits && dur - pos in 1..(8 * 60_000L))
+                if (dur > 0 && nearEnd && !showNextPrompt && !isLoadingNext &&
                     nextDismissedFor != currentSeason * 10_000 + currentEpisode) {
                     showNextPrompt = true
                 }
@@ -1179,6 +1184,53 @@ private fun NativePlayer(
         }
     }
     LaunchedEffect(currentSeason) { episodeList = emptyList() }
+
+    // tempos da abertura/créditos deste episódio (espera a duração para achar a versão certa)
+    LaunchedEffect(tmdbId, currentSeason, currentEpisode) {
+        introTimes = null
+        if (!isSeries) return@LaunchedEffect
+        var dur = 0L
+        repeat(40) {
+            dur = runCatching { exoPlayer.duration }.getOrDefault(0L).let { if (it > 0) it else 0L }
+            if (dur > 0) return@repeat
+            delay(500)
+        }
+        val fromDb = IntroSkip.fetch(tmdbId, currentSeason, currentEpisode, dur)
+        val learned = IntroSkip.parseLearned(loadSeriesPref(context, tmdbId, "intro"))
+        introTimes = when {
+            fromDb != null && fromDb.introEndMs > 0 -> fromDb
+            learned != null -> learned.copy(creditsStartMs = fromDb?.creditsStartMs ?: 0L)
+            fromDb != null -> fromDb // só créditos
+            else -> null
+        }
+    }
+    val introKey = currentSeason * 10_000 + currentEpisode
+    val introPos = scrubPosition
+    val introWindow: Pair<Long, Long>? = run {
+        if (!isSeries || introSkippedFor == introKey) return@run null
+        val t = introTimes
+        when {
+            t != null && t.introEndMs > 0 -> (t.introStartMs - 2_000).coerceAtLeast(0L) to (t.introEndMs - 3_000)
+            else -> IntroSkip.HEURISTIC_FROM_MS to IntroSkip.HEURISTIC_UNTIL_MS
+        }
+    }
+    val introIsGuess = introTimes?.let { it.introEndMs <= 0 } ?: true
+    val showSkipIntro = introWindow != null && introPos in introWindow.first..introWindow.second &&
+        !inPip && settingsPanel == SettingsPanel.NONE &&
+        (!introIsGuess || controlsVisible || introPos - introWindow.first < 20_000L)
+    fun skipIntro() {
+        val pos = runCatching { exoPlayer.currentPosition }.getOrDefault(0L)
+        val t = introTimes
+        val target = if (t != null && t.introEndMs > 0) t.introEndMs else pos + IntroSkip.HEURISTIC_JUMP_MS
+        runCatching { exoPlayer.seekTo(target) }
+        scrubPosition = target
+        introSkippedFor = introKey
+        // sem dados da base: lembra onde a abertura desta série fica para os próximos episódios
+        if (t == null || t.introEndMs <= 0) {
+            saveSeriesPref(context, tmdbId, "intro", "${(pos - 10_000).coerceAtLeast(0L)},$target")
+        }
+        poke()
+    }
 
     // próximo episódio: contagem regressiva e toca sozinho
     LaunchedEffect(showNextPrompt) {
@@ -1596,7 +1648,15 @@ private fun NativePlayer(
                             duration = scrubDuration,
                             accent = accent,
                             onScrub = { s, t -> isScrubbing = s; scrubTarget = t; poke() },
-                            onSeek = { t -> runCatching { exoPlayer.seekTo(t) }; scrubPosition = t; poke() },
+                            onSeek = { t ->
+                                val from = runCatching { exoPlayer.currentPosition }.getOrDefault(0L)
+                                // pulou a abertura na mão (início do episódio, 40 s a 2,5 min à frente): aprende para a série
+                                if (isSeries && introTimes?.fromDatabase != true && from < 6 * 60_000L && t - from in 40_000L..150_000L) {
+                                    saveSeriesPref(context, tmdbId, "intro", "${(from - 10_000).coerceAtLeast(0L)},$t")
+                                    introSkippedFor = introKey
+                                }
+                                runCatching { exoPlayer.seekTo(t) }; scrubPosition = t; poke()
+                            },
                             onInteract = { poke() },
                             modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
                         )
@@ -1631,6 +1691,18 @@ private fun NativePlayer(
                     }
                 }
             }
+        }
+
+        if (showSkipIntro) {
+            ChromeChip(
+                "Pular abertura",
+                Icons.Filled.SkipNext,
+                { skipIntro() },
+                highlighted = true,
+                accent = accent,
+                modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
+                    .padding(end = 18.dp, bottom = if (controlsVisible) 120.dp else 32.dp),
+            )
         }
 
         if (showNextPrompt && isSeries && !inPip) {
