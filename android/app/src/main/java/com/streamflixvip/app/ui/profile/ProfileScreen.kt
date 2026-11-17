@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
@@ -60,6 +61,7 @@ fun ProfileScreen(
     onAnnouncementClick: ((tmdbId: Int, mediaType: String) -> Unit)? = null,
     onSwitchProfile: (() -> Unit)? = null,
     onRetroClick: (() -> Unit)? = null,
+    onDownloadsClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -149,6 +151,19 @@ fun ProfileScreen(
                 subtitle = "Filmes e séries que você salvou",
                 iconTint = Accent,
                 onClick = onMyListClick,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        if (onDownloadsClick != null) {
+            val dlCount = com.streamflixvip.app.offline.OfflineDownloads.items.collectAsState().value.size
+            ProfileInfoCard(
+                icon = Icons.Filled.Download,
+                title = "Downloads",
+                subtitle = if (dlCount > 0) "$dlCount ${if (dlCount == 1) "título baixado" else "títulos baixados"} para ver sem internet"
+                else "Baixe filmes e episódios para ver sem internet (VIP)",
+                iconTint = Accent,
+                onClick = onDownloadsClick,
             )
             Spacer(modifier = Modifier.height(12.dp))
         }

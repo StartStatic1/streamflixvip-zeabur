@@ -69,6 +69,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -203,6 +205,8 @@ private fun isLikelyDash(url: String): Boolean {
 /** Fonte certa para a URL: HLS, DASH ou arquivo (mp4/mkv/ts). forceHls = 2a tentativa. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun buildPlaybackMediaSource(url: String, forceHls: Boolean = false): MediaSource {
+    // já baixado: toca do aparelho, sem internet
+    com.streamflixvip.app.offline.OfflineDownloads.offlineSourceFor(url)?.let { return it }
     val http = playbackHttpFactory(url)
     return when {
         forceHls || isLikelyHls(url) -> HlsMediaSource.Factory(http).createMediaSource(
@@ -399,9 +403,10 @@ fun PlayerScreen(
         onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
-    var resolvedUrl by remember(sourceUrl) { mutableStateOf<String?>(if (isDirectPlayable) null else sourceUrl) }
+    val downloaded = remember(sourceUrl) { com.streamflixvip.app.offline.OfflineDownloads.completedByUri(sourceUrl) != null }
+    var resolvedUrl by remember(sourceUrl) { mutableStateOf<String?>(if (isDirectPlayable && !downloaded) null else sourceUrl) }
     LaunchedEffect(sourceUrl, isDirectPlayable) {
-        if (isDirectPlayable) {
+        if (isDirectPlayable && !downloaded) {
             val candidates = VipSource(source_url = sourceUrl, source_label = null, priority = null)
                 .candidatePlaybackUrls(BuildConfig.API_BASE_URL, NetworkModule.ZEABUR_BASE_URL)
             resolvedUrl = StreamUrlResolver.resolveFastest(candidates)
@@ -521,6 +526,7 @@ private fun NativePlayer(
     // Pular abertura: tempos do episódio atual (TheIntroDB, ou aprendidos da série) e se já pulou
     var introTimes by remember { mutableStateOf<IntroTimes?>(null) }
     var introSkippedFor by remember { mutableStateOf(-1) }
+    val offlineItems by com.streamflixvip.app.offline.OfflineDownloads.items.collectAsState()
 
     // Gestos: esquerda = brilho, direita = volume
     val audioManager = remember {
@@ -1675,6 +1681,34 @@ private fun NativePlayer(
                             Icons.Filled.Subtitles, { openPanel(SettingsPanel.SUBTITLE) },
                         )
                         if (audioOptions.isNotEmpty()) ChromeChip("Áudio", Icons.Filled.Audiotrack, { openPanel(SettingsPanel.AUDIO) })
+                        if (mediaType == "movie" || isSeries) {
+                            val dlId = com.streamflixvip.app.offline.OfflineDownloads.idFor(tmdbId, if (isSeries) "tv" else "movie", currentSeason, currentEpisode)
+                            val dlItem = offlineItems.firstOrNull { it.id == dlId }
+                            val dlLabel = when {
+                                dlItem == null || dlItem.state == androidx.media3.exoplayer.offline.Download.STATE_FAILED -> "Baixar"
+                                dlItem.isDone -> "Baixado"
+                                else -> "Baixando ${dlItem.percent.toInt()}%"
+                            }
+                            ChromeChip(dlLabel, Icons.Filled.Download, {
+                                when {
+                                    dlItem?.isDone == true -> Toast.makeText(context, "Já está nos seus downloads (Perfil → Downloads)", Toast.LENGTH_SHORT).show()
+                                    !com.streamflixvip.app.data.VipStatusHolder.isVipNow() ->
+                                        Toast.makeText(context, "Baixar para ver sem internet é do VIP", Toast.LENGTH_LONG).show()
+                                    else -> MainScope().launch {
+                                        val msg = com.streamflixvip.app.offline.OfflineDownloads.start(
+                                            context, activeUrl,
+                                            com.streamflixvip.app.offline.OfflineDownloads.Meta(
+                                                tmdbId, if (isSeries) "tv" else "movie",
+                                                if (isSeries) currentSeason else 0, if (isSeries) currentEpisode else 0,
+                                                currentTitle, posterPath, alternateLabels[activeUrl],
+                                            ),
+                                        )
+                                        Toast.makeText(context, msg ?: "Download começou. Acompanhe em Perfil → Downloads", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                                poke()
+                            }, highlighted = dlItem?.isDone == true, accent = accent)
+                        }
                         ChromeChip("Servidor", Icons.Filled.Dns, {
                             MainScope().launch {
                                 if (alternateSources.isEmpty()) loadAlternateSources()

@@ -30,6 +30,7 @@ object VipStatusHolder {
     fun update(isVip: Boolean, expiresAtIso: String? = null) {
         expiresAtMs = parseIso(expiresAtIso) ?: 0L
         rawVip = isVip
+        runCatching { com.streamflixvip.app.offline.OfflineVip.remember(isVip, expiresAtMs) }
         reapply()
     }
 

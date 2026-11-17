@@ -597,7 +597,43 @@ private fun MainAppScaffold(
                         navController.navigate("detail/$tmdbId/$mediaType")
                     },
                     onRetroClick = { navController.navigate("retro") { launchSingleTop = true } },
+                    onDownloadsClick = { navController.navigate("downloads") { launchSingleTop = true } },
                 )
+            }
+
+            composable("downloads") {
+                com.streamflixvip.app.ui.downloads.DownloadsScreen(
+                    onBack = { navController.popBackStack() },
+                    onPlay = { item -> navController.navigate("offlineplayer/" + URLEncoder.encode(item.id, "UTF-8")) },
+                )
+            }
+
+            // Download já baixado: toca do aparelho, sem a espera de anúncio (VIP conferido na tela de Downloads)
+            composable(
+                route = "offlineplayer/{id}",
+                arguments = listOf(navArgument("id") { type = NavType.StringType }),
+            ) { entry ->
+                val id = URLDecoder.decode(entry.arguments?.getString("id") ?: "", "UTF-8")
+                val item = remember(id) { com.streamflixvip.app.offline.OfflineDownloads.find(id) }
+                if (item == null || !item.isDone) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                } else {
+                    val m = item.meta
+                    PlayerScreen(
+                        sourceUrl = item.download.request.uri.toString(),
+                        isDirectPlayable = true,
+                        onBack = { navController.popBackStack() },
+                        userId = userId,
+                        accessToken = accessToken,
+                        tmdbId = m.tmdbId,
+                        mediaType = m.mediaType,
+                        season = m.season,
+                        episode = m.episode,
+                        title = m.title,
+                        posterPath = m.posterPath,
+                        resumeSeconds = 0,
+                    )
+                }
             }
 
             composable("retro") {

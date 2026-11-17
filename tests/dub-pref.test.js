@@ -43,4 +43,5 @@ test('dub-pref: só uma versão = sem alternativo; marca no nome', () => {
   assert.equal(tagName('Filme X [L]', 'leg'), 'Filme X [L]');
   assert.equal(tagName('Filme X', 'dub'), 'Filme X [D]');
   assert.equal(tagName('Filme X', 'unknown'), 'Filme X');
+  assert.equal(tagName('Filme X (L)', 'leg'), 'Filme X (L) [L]');
 });

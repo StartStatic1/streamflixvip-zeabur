@@ -35,6 +35,7 @@ class AuthRepository(private val sessionStore: SessionStore) {
     }
 
     fun signOut() {
+        runCatching { com.streamflixvip.app.offline.OfflineVip.clear() }
         sessionStore.clearSession()
     }
 }
