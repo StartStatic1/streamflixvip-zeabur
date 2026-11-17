@@ -97,7 +97,7 @@ fun renderRetroImage(context: Context, s: RetroStats): Bitmap {
 
     var y = 420f
     c.drawText("Minha", left, y, tp(96f, white)); y += 110f
-    c.drawText("Retrospectiva", left, y, tp(96f, white)); y += 120f
+    c.drawText("Retrospectiva", left, y, tp(96f, white)); y += 140f
     c.drawText(s.year.toString(), left, y, tp(130f, gold)); y += 70f
 
     val lines = retroLines(s)
