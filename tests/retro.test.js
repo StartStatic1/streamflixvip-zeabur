@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { mergeWatch } = require('../lib/retro');
+const { mergeWatch, cleanTitle } = require('../lib/retro');
 
 test('retrospectiva: junta histórico + progresso sem contar duas vezes e respeita o ano', () => {
   const y0 = Date.UTC(2026, 0, 1, 3), y1 = Date.UTC(2027, 0, 1, 3);
@@ -18,4 +18,11 @@ test('retrospectiva: junta histórico + progresso sem contar duas vezes e respei
   assert.equal(movie.seconds, 4000, 'limitado pela duração e sem somar duas vezes');
   assert.ok(out.find((x) => x.tmdbId === 2 && x.episode === 2));
   assert.ok(!out.find((x) => x.tmdbId === 2 && x.episode === 1), 'fora do ano');
+});
+
+test('retrospectiva: nome da série sem o episódio grudado', () => {
+  assert.equal(cleanTitle('Reacher — S4E3 — S4E5 — S4E6'), 'Reacher');
+  assert.equal(cleanTitle('Tô de Graça — S8E28'), 'Tô de Graça');
+  assert.equal(cleanTitle("X-Men '97"), "X-Men '97");
+  assert.equal(cleanTitle('86 EIGHTY-SIX'), '86 EIGHTY-SIX');
 });
