@@ -1,7 +1,7 @@
 {
-  "versionCode": 170201,
-  "versionName": "17.2.1",
+  "versionCode": 170300,
+  "versionName": "17.3.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Novo: Não sei o que assistir na Início (escolha o humor e a gente sorteia um título). Botões brancos com texto mais legível."
+  "releaseNotes": "Novo: notificações no celular quando sai episódio novo das séries da sua lista ou que você está assistindo, e avisos de novidades. Novo: botão Pular abertura nos episódios. Permita as notificações quando o app pedir."
 }
