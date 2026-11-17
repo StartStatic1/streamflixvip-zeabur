@@ -30,184 +30,326 @@
       y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
     })(window, document, "clarity", "script", "xjr3uw8ou4");
   </script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"StreamFlix VIP","operatingSystem":"Android","applicationCategory":"EntertainmentApplication","url":"https://www.streamflixvip.online/","offers":{"@type":"Offer","price":"0","priceCurrency":"BRL"}}</script>
   <style>
     :root{
-      --bg:#050505;--bg2:#0d0b0b;--card:#121010;--line:rgba(255,255,255,.08);
-      --text:#f6f2ee;--muted:#a59e98;--red:#e50914;--red2:#ff3b30;--gold:#f5b942;--gold2:#ffd77a;
-      --r:18px;--font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+      --bg:#050404;--bg2:#0b0808;--card:#110d0d;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.14);
+      --text:#f7f3ef;--muted:#a9a19a;--red:#e50914;--red2:#ff2d38;--gold:#f5b942;--gold2:#ffd77a;
+      --r:20px;--font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+      --ease:cubic-bezier(.2,.7,.2,1);
     }
     *{box-sizing:border-box;margin:0;padding:0}
-    html{scroll-behavior:smooth}
+    html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
     body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
     a{color:inherit;text-decoration:none}
     img{display:block;max-width:100%}
-    .wrap{width:min(1180px,92vw);margin:0 auto}
-    /* header */
-    header{position:fixed;inset:0 0 auto 0;z-index:50;transition:background .25s,border-color .25s;border-bottom:1px solid transparent}
-    header.scrolled{background:rgba(5,5,5,.86);backdrop-filter:blur(12px);border-color:var(--line)}
-    .nav{display:flex;align-items:center;justify-content:space-between;height:68px}
-    .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px;letter-spacing:.3px}
-    .brand img{width:38px;height:38px;border-radius:10px}
-    .brand b{color:var(--red)}
-    .nav-links{display:flex;gap:26px;font-size:15px;color:var(--muted)}
-    .nav-links a:hover{color:var(--text)}
-    .nav-cta{padding:10px 18px;border-radius:999px;background:var(--red);font-weight:700;font-size:14px;box-shadow:0 6px 24px rgba(229,9,20,.35)}
-    /* hero */
-    .hero{position:relative;min-height:100vh;display:flex;align-items:center;padding:110px 0 70px;overflow:hidden}
-    .wall{position:absolute;inset:-10% -5%;display:grid;grid-template-columns:repeat(8,1fr);gap:12px;transform:rotate(-8deg) scale(1.15);opacity:.42;z-index:0}
-    .wall div{aspect-ratio:2/3;border-radius:10px;background:linear-gradient(160deg,#2a0b0b,#120707);background-size:cover;background-position:center}
-    .hero::before{content:"";position:absolute;inset:0;z-index:1;background:radial-gradient(ellipse at 30% 45%,rgba(5,5,5,.55) 0,rgba(5,5,5,.92) 55%,#050505 85%),linear-gradient(180deg,rgba(5,5,5,.2),#050505 96%)}
-    .hero-in{position:relative;z-index:2;display:grid;grid-template-columns:1.15fr .85fr;gap:48px;align-items:center}
-    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid rgba(245,185,66,.35);border-radius:999px;color:var(--gold2);font-size:13px;font-weight:600;background:rgba(245,185,66,.06)}
-    .eyebrow i{width:8px;height:8px;border-radius:50%;background:var(--red2);box-shadow:0 0 10px var(--red2)}
-    h1{font-size:clamp(38px,5.6vw,68px);line-height:1.04;font-weight:850;letter-spacing:-1.5px;margin:18px 0 16px}
-    h1 em{font-style:normal;background:linear-gradient(90deg,var(--red2),var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent}
-    .lead{font-size:clamp(16px,1.6vw,19px);color:#d6cfc9;max-width:560px}
-    .ctas{display:flex;flex-wrap:wrap;gap:14px;margin-top:30px}
-    .btn{display:inline-flex;align-items:center;gap:12px;padding:16px 24px;border-radius:14px;font-weight:750;font-size:16px;transition:transform .15s,box-shadow .2s}
-    .btn:hover{transform:translateY(-2px)}
-    .btn svg{width:22px;height:22px;flex:none}
-    .btn small{display:block;font-weight:500;font-size:12px;opacity:.8}
-    .btn-red{background:linear-gradient(180deg,#ff1f2b,#c40711);box-shadow:0 10px 34px rgba(229,9,20,.45)}
-    .btn-gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#1b1206;box-shadow:0 10px 30px rgba(245,185,66,.25)}
+    button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+    :focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:8px}
+    .wrap{width:min(1200px,92vw);margin:0 auto}
+    header{position:fixed;inset:0 0 auto 0;z-index:60;transition:background .3s,border-color .3s,transform .35s var(--ease);border-bottom:1px solid transparent}
+    header.scrolled{background:rgba(6,5,5,.78);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);border-color:var(--line)}
+    header.hide{transform:translateY(-100%)}
+    .nav{display:flex;align-items:center;justify-content:space-between;height:70px;gap:18px}
+    .brand{display:flex;align-items:center;gap:10px;font-weight:850;font-size:20px;letter-spacing:-.4px}
+    .brand img{width:36px;height:36px;border-radius:10px}
+    .brand b{color:var(--red2)}
+    .brand sup{font-size:10px;letter-spacing:1.5px;color:var(--gold);font-weight:800;margin-left:2px}
+    .nav-links{display:flex;gap:28px;font-size:15px;color:var(--muted)}
+    .nav-links a{position:relative;transition:color .2s}
+    .nav-links a::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:2px;background:var(--red);transform:scaleX(0);transition:transform .25s var(--ease)}
+    .nav-links a:hover{color:var(--text)}.nav-links a:hover::after{transform:scaleX(1)}
+    .nav-cta{padding:10px 20px;border-radius:999px;background:var(--red);font-weight:750;font-size:14px;box-shadow:0 6px 24px rgba(229,9,20,.4);transition:transform .2s,box-shadow .2s}
+    .nav-cta:hover{transform:translateY(-1px);box-shadow:0 10px 30px rgba(229,9,20,.55)}
+    .refbar{position:fixed;left:50%;bottom:18px;transform:translate(-50%,160%);z-index:70;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:min(640px,94vw);padding:12px 14px 12px 18px;border-radius:18px;background:rgba(20,14,10,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(245,185,66,.45);box-shadow:0 20px 60px rgba(0,0,0,.6),0 0 40px rgba(245,185,66,.12);font-size:14px;transition:transform .5s var(--ease)}
+    .refbar.on{transform:translate(-50%,0)}
+    .refbar b.rc{font-size:17px;letter-spacing:2px;color:var(--gold2);font-variant-numeric:tabular-nums}
+    .refbar small{display:block;color:var(--muted);font-size:12px}
+    .refbar .copy{padding:8px 14px;border-radius:10px;background:var(--gold);color:#1b1206;font-weight:800;font-size:13px}
+    .refbar .x{width:30px;height:30px;border-radius:8px;color:var(--muted);font-size:18px}
+    .refhero{display:none;margin-top:18px;padding:10px 14px;border-radius:12px;border:1px dashed rgba(245,185,66,.5);background:rgba(245,185,66,.06);font-size:14px;color:#eadfce;max-width:520px}
+    .refhero.on{display:block}
+    .refhero b{color:var(--gold2);letter-spacing:1.5px}
+    .hero{position:relative;min-height:100svh;display:flex;align-items:center;padding:120px 0 90px;overflow:hidden;isolation:isolate}
+    .wall{position:absolute;inset:-20% -10%;display:flex;gap:14px;justify-content:center;transform:perspective(1400px) rotateX(18deg) rotateZ(-10deg) scale(1.15);opacity:.5;z-index:-2;will-change:transform}
+    .col{flex:0 0 clamp(96px,10vw,150px);display:flex;flex-direction:column;gap:14px;animation:up 60s linear infinite}
+    .col:nth-child(even){animation-name:down;animation-duration:70s}
+    .col:nth-child(3n){animation-duration:80s}
+    .col i{display:block;aspect-ratio:2/3;border-radius:12px;background:linear-gradient(160deg,#2a0b0b,#120707);overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+    .col img{width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .8s}
+    .col img.ok{opacity:1}
+    @keyframes up{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+    @keyframes down{from{transform:translateY(-50%)}to{transform:translateY(0)}}
+    .hero::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(ellipse 70% 60% at 28% 50%,rgba(5,4,4,.5) 0,rgba(5,4,4,.9) 60%,#050404 90%),linear-gradient(180deg,rgba(5,4,4,.65) 0,rgba(5,4,4,.1) 30%,#050404 97%)}
+    .hero::after{content:"";position:absolute;width:900px;height:900px;left:-300px;top:-300px;z-index:-1;background:radial-gradient(circle,rgba(229,9,20,.22),transparent 60%);animation:glow 9s ease-in-out infinite alternate}
+    @keyframes glow{to{transform:translate(220px,160px) scale(1.15)}}
+    .hero-in{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border:1px solid rgba(245,185,66,.35);border-radius:999px;color:var(--gold2);font-size:13px;font-weight:650;background:rgba(245,185,66,.07)}
+    .eyebrow i{width:8px;height:8px;border-radius:50%;background:var(--red2);box-shadow:0 0 0 0 rgba(255,45,56,.7);animation:ping 2s infinite}
+    @keyframes ping{70%{box-shadow:0 0 0 10px rgba(255,45,56,0)}100%{box-shadow:0 0 0 0 rgba(255,45,56,0)}}
+    h1{font-size:clamp(40px,6.2vw,80px);line-height:1.0;font-weight:900;letter-spacing:-.045em;margin:20px 0 18px}
+    h1 em,.grad{font-style:normal;background:linear-gradient(92deg,var(--red2) 10%,#ff6a3d 45%,var(--gold) 90%);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .hin{animation:hin 1s var(--ease) both}
+    @keyframes hin{from{transform:translateY(28px)}}
+    .lead{font-size:clamp(16px,1.6vw,19px);color:#d8d0ca;max-width:560px}
+    .ctas{display:flex;flex-wrap:wrap;gap:14px;margin-top:32px}
+    .btn{position:relative;display:inline-flex;align-items:center;gap:12px;padding:16px 24px;border-radius:16px;font-weight:800;font-size:16px;line-height:1.2;transition:transform .2s var(--ease),box-shadow .25s;overflow:hidden}
+    .btn::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);transform:translateX(-120%);transition:transform .7s var(--ease)}
+    .btn:hover{transform:translateY(-3px)}.btn:hover::after{transform:translateX(120%)}
+    .btn svg{width:24px;height:24px;flex:none}
+    .btn small{display:block;font-weight:500;font-size:12px;opacity:.82;margin-top:2px}
+    .btn-red{background:linear-gradient(180deg,#ff1f2b,#c40711);box-shadow:0 12px 40px rgba(229,9,20,.45),inset 0 1px 0 rgba(255,255,255,.25)}
+    .btn-gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#1b1206;box-shadow:0 12px 34px rgba(245,185,66,.28),inset 0 1px 0 rgba(255,255,255,.5)}
     .codes{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
-    .code{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:rgba(18,16,16,.8)}
-    .code span{font-size:12px;color:var(--muted);line-height:1.2}
+    .code{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:14px;background:rgba(16,12,12,.85)}
+    .code span{font-size:12px;color:var(--muted);line-height:1.25}
     .code b{font-size:22px;letter-spacing:2px;color:var(--gold2);font-variant-numeric:tabular-nums}
-    .hero-art{position:relative;display:flex;justify-content:center}
-    .hero-art img{width:min(400px,80%);height:auto;aspect-ratio:1/1;object-fit:contain;border-radius:22%;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 30px 80px rgba(229,9,20,.35),0 0 120px rgba(229,9,20,.25);animation:float 6s ease-in-out infinite}
-    @keyframes float{50%{transform:translateY(-10px)}}
-    @media (prefers-reduced-motion:reduce){.hero-art img{animation:none}}
-    /* sections */
-    section{padding:90px 0}
-    .kicker{color:var(--red2);font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase}
-    h2{font-size:clamp(28px,3.4vw,42px);line-height:1.12;letter-spacing:-.8px;margin:10px 0 14px}
-    .sub{color:var(--muted);max-width:640px}
-    .grid{display:grid;gap:18px}
-    .g4{grid-template-columns:repeat(4,1fr)}
-    .card{background:linear-gradient(180deg,#141111,#0d0b0b);border:1px solid var(--line);border-radius:var(--r);padding:26px;transition:border-color .2s,transform .2s}
-    .card:hover{border-color:rgba(229,9,20,.45);transform:translateY(-3px)}
-    .ico{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:rgba(229,9,20,.12);border:1px solid rgba(229,9,20,.3);margin-bottom:16px}
-    .ico svg{width:24px;height:24px;stroke:var(--red2);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-    .card h3{font-size:19px;margin-bottom:6px}
+    .hero-art{position:relative;display:flex;justify-content:center;perspective:1200px}
+    .hero-phone{width:min(300px,70vw);transform:rotateY(-14deg) rotateX(6deg) rotateZ(2deg);transition:transform .3s;animation:float 7s ease-in-out infinite}
+    .hero-phone .phone{width:100%;height:auto;aspect-ratio:9/19}
+    .hero-phone img{width:100%;height:100%;object-fit:cover;object-position:top}
+    .hero-badge{position:absolute;padding:10px 14px;border-radius:14px;background:rgba(18,13,13,.9);border:1px solid var(--line2);font-size:13px;font-weight:700;box-shadow:0 20px 40px rgba(0,0,0,.5);display:flex;gap:8px;align-items:center;animation:float 6s ease-in-out infinite}
+    .hero-badge small{display:block;font-weight:500;color:var(--muted);font-size:11px}
+    .hb1{left:0;top:18%;animation-delay:-2s}.hb2{right:0;bottom:16%;animation-delay:-4s}
+    @keyframes float{50%{translate:0 -12px}}
+    .scroll-hint{position:absolute;left:50%;bottom:22px;translate:-50% 0;width:26px;height:42px;border:2px solid rgba(255,255,255,.28);border-radius:14px}
+    .scroll-hint::after{content:"";position:absolute;left:50%;top:8px;width:4px;height:8px;margin-left:-2px;border-radius:2px;background:#fff;animation:wheel 1.8s infinite}
+    @keyframes wheel{to{transform:translateY(14px);opacity:0}}
+    .ticker{border-block:1px solid var(--line);background:#080606;overflow:hidden;padding:16px 0}
+    .ticker-in{display:flex;gap:44px;width:max-content;animation:tick 38s linear infinite;font-weight:800;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:#cfc6bf;white-space:nowrap}
+    .ticker-in span::before{content:"✦";color:var(--red2);margin-right:44px}
+    @keyframes tick{to{transform:translateX(-50%)}}
+    section{padding:110px 0;position:relative}
+    .kicker{display:inline-flex;gap:10px;align-items:center;color:var(--gold);font-weight:800;font-size:12.5px;letter-spacing:.22em;text-transform:uppercase}
+    .kicker::before{content:"";width:26px;height:2px;background:linear-gradient(90deg,var(--red),var(--gold))}
+    h2{font-size:clamp(30px,4vw,52px);line-height:1.05;letter-spacing:-.035em;font-weight:880;margin:14px 0 16px}
+    .sub{color:var(--muted);max-width:640px;font-size:17px}
+    .center{text-align:center}.center .sub{margin:0 auto}
+    .bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px;margin-top:44px}
+    .card{position:relative;background:linear-gradient(180deg,#141010,#0c0909);border:1px solid var(--line);border-radius:var(--r);padding:28px;overflow:hidden;transition:border-color .3s,transform .3s var(--ease)}
+    .card::before{content:"";position:absolute;inset:0;background:radial-gradient(400px circle at var(--mx,50%) var(--my,0%),rgba(229,9,20,.14),transparent 45%);opacity:0;transition:opacity .3s;pointer-events:none}
+    .card:hover{border-color:rgba(229,9,20,.4);transform:translateY(-4px)}
+    .card:hover::before{opacity:1}
+    .card h3{font-size:20px;letter-spacing:-.02em;margin-bottom:6px}
     .card p{color:var(--muted);font-size:15px}
-    .devices .card{text-align:center}
-    .devices .ico{margin:0 auto 14px;background:rgba(245,185,66,.1);border-color:rgba(245,185,66,.3)}
-    .devices .ico svg{stroke:var(--gold)}
-    /* install */
-    .install{background:linear-gradient(180deg,#050505,#0e0808 50%,#050505)}
-    .tabs{display:inline-flex;gap:6px;padding:6px;border:1px solid var(--line);border-radius:999px;background:#0e0c0c;margin:22px 0 26px}
-    .tabs button{border:0;background:none;color:var(--muted);font:600 15px var(--font);padding:10px 20px;border-radius:999px;cursor:pointer}
-    .tabs button[aria-selected=true]{background:var(--red);color:#fff}
-    .steps{counter-reset:s;display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
-    .step{position:relative;padding:24px 22px 22px;border:1px solid var(--line);border-radius:var(--r);background:#100d0d}
-    .step::before{counter-increment:s;content:counter(s);position:absolute;top:-14px;left:20px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;background:var(--gold);color:#1b1206}
-    .step h4{font-size:16px;margin:6px 0 6px}
-    .step p{font-size:14px;color:var(--muted)}
-    .step b{color:var(--gold2)}
-    .panel[hidden]{display:none}
-    .note{margin-top:18px;font-size:14px;color:var(--muted)}
-    /* community */
-    .comm{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:28px}
-    .comm a{display:flex;align-items:center;gap:14px;padding:22px;border-radius:var(--r);border:1px solid var(--line);background:#100d0d;transition:border-color .2s}
-    .comm a:hover{border-color:rgba(245,185,66,.5)}
-    .comm .dot{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;flex:none}
-    .comm4{grid-template-columns:repeat(2,minmax(0,1fr));max-width:860px}
-    .soc{display:flex;gap:10px}.soc a{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:#1a1414;border:1px solid var(--line)}.soc svg{width:18px;height:18px;fill:#fff}
+    .b3{grid-column:span 3}.b2{grid-column:span 2}
+    .ico{width:50px;height:50px;border-radius:14px;display:grid;place-items:center;background:rgba(229,9,20,.12);border:1px solid rgba(229,9,20,.3);margin-bottom:18px}
+    .ico svg{width:24px;height:24px;stroke:var(--red2);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .ico.g{background:rgba(245,185,66,.1);border-color:rgba(245,185,66,.32)}.ico.g svg{stroke:var(--gold)}
+    .devs{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+    .devs span{padding:8px 12px;border-radius:999px;border:1px solid var(--line2);font-size:13px;color:#ddd5ce;background:rgba(255,255,255,.02)}
+    .mini-row{display:flex;gap:8px;margin-top:20px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,#000 70%,transparent);mask-image:linear-gradient(90deg,#000 70%,transparent)}
+    .mini-row i{flex:0 0 68px;aspect-ratio:2/3;border-radius:8px;background:#1b1212 center/cover}
+    .show{background:radial-gradient(ellipse 60% 50% at 30% 40%,rgba(229,9,20,.10),transparent 70%),radial-gradient(ellipse 50% 40% at 80% 80%,rgba(245,185,66,.06),transparent 70%)}
+    .show-grid{display:grid;grid-template-columns:420px 1fr;gap:70px;margin-top:50px;align-items:start}
+    .stage{position:sticky;top:100px;display:flex;justify-content:center}
+    .stage::before{content:"";position:absolute;width:380px;height:380px;top:20%;border-radius:50%;background:radial-gradient(circle,rgba(229,9,20,.35),transparent 65%);z-index:-1}
+    .phone{position:relative;width:310px;height:640px;background:#000;border-radius:48px;padding:10px;box-shadow:0 0 0 2px #2b2b2b,0 0 0 4px #0d0d0d,0 40px 100px rgba(0,0,0,.7),0 0 80px rgba(229,9,20,.12)}
+    .phone-screen{position:relative;height:100%;border-radius:38px;overflow:hidden;background:#070c12;font-size:12px}
+    .island{position:absolute;top:10px;left:50%;width:90px;height:24px;margin-left:-45px;background:#000;border-radius:20px;z-index:9}
+    .status{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;padding:14px 26px 0;font-weight:700;font-size:12px;z-index:8}
+    .scr{position:absolute;inset:0;padding:50px 14px 14px;opacity:0;transform:translateY(16px) scale(.98);transition:opacity .5s var(--ease),transform .6s var(--ease);pointer-events:none}
+    .scr.on{opacity:1;transform:none}
+    .scr h5{font-size:18px;font-weight:800;letter-spacing:-.02em;margin:8px 2px 12px;display:flex;align-items:center;gap:8px}
+    .pc{background:#141b25;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px 12px}
+    .bar{height:3px;border-radius:9px;background:rgba(255,255,255,.12);overflow:hidden}.bar i{display:block;height:100%;background:var(--red);border-radius:9px}
+    .muted{color:#8b949e}
+    .row{display:flex;gap:10px;align-items:center}
+    .thumb{width:46px;height:62px;border-radius:7px;flex:none;background:#222 center/cover}
+    .chip{display:inline-block;padding:5px 10px;border-radius:99px;background:#1b2330;font-weight:700;font-size:11px}
+    .chip.on{background:var(--red)}
+    .lock{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0,#3a0a10,#0b0606 70%)}
+    .clock{position:relative;text-align:center;margin-top:28px;font-size:58px;font-weight:300;letter-spacing:-2px}
+    .date{position:relative;text-align:center;color:#ddd;font-size:13px;margin-top:-4px}
+    .notif{position:relative;margin:10px 4px 0;padding:10px 12px;border-radius:18px;background:rgba(40,36,36,.85);display:flex;gap:10px;opacity:0;transform:translateY(-14px)}
+    .scr.on .notif{animation:drop .6s var(--ease) forwards}
+    .scr.on .notif:nth-child(2){animation-delay:.6s}.scr.on .notif:nth-child(3){animation-delay:1.2s}
+    @keyframes drop{to{opacity:1;transform:none}}
+    .notif img{width:32px;height:32px;border-radius:8px;flex:none}
+    .notif b{font-size:12px}.notif p{font-size:11.5px;color:#d6d6d6;line-height:1.3}
+    .player{position:absolute;inset:0;background:#000 center/cover;display:flex;flex-direction:column;justify-content:flex-end}
+    .player::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.4),transparent 30%,rgba(0,0,0,.85))}
+    .pbody{position:relative;padding:0 16px 26px}
+    .skip{position:absolute;right:16px;bottom:96px;z-index:2;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,.95);color:#111;font-weight:800;font-size:12.5px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+    .scr.on .skip{animation:pulse 1.6s ease-in-out infinite}
+    @keyframes pulse{50%{box-shadow:0 0 0 6px rgba(255,255,255,.18),0 8px 24px rgba(0,0,0,.5)}}
+    .ptime{display:flex;justify-content:space-between;font-size:10.5px;color:#ddd;margin-top:6px}
+    .pbar{height:4px;border-radius:4px;background:rgba(255,255,255,.25);position:relative}
+    .pbar i{position:absolute;left:0;top:0;bottom:0;width:6%;background:var(--red);border-radius:4px}
+    .scr.on .pbar i{animation:prog 6s linear infinite}
+    @keyframes prog{to{width:22%}}
+    .pbar u{position:absolute;left:4%;width:14%;top:-2px;bottom:-2px;background:rgba(245,185,66,.55);border-radius:4px;text-decoration:none}
+    .ring{width:30px;height:30px;flex:none}
+    .ring circle{fill:none;stroke-width:3}
+    .ring .bg{stroke:rgba(255,255,255,.12)}.ring .fg{stroke:var(--red);stroke-linecap:round;stroke-dasharray:75.4;stroke-dashoffset:75.4;transform:rotate(-90deg);transform-origin:center}
+    .scr.on .ring .fg{animation:fill 4s var(--ease) infinite}
+    @keyframes fill{70%,100%{stroke-dashoffset:0}}
+    .dlbtns{display:flex;gap:8px;margin-top:10px}
+    .dlbtns span{flex:1;text-align:center;padding:10px;border-radius:10px;font-weight:800;font-size:12px}
+    .offline{margin-top:12px;padding:8px 10px;border-radius:10px;background:#3a2c06;color:#ffd77a;font-weight:700;font-size:11px}
+    .tabs-s{display:flex;gap:6px;margin-bottom:10px}
+    .cont{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:10px;background:var(--red);font-weight:800;font-size:12px;margin-bottom:10px}
+    .ep{display:flex;gap:10px;padding:8px;margin-bottom:8px;border-radius:12px;background:#141b25;border:1px solid rgba(255,255,255,.07)}
+    .ep .im{position:relative;width:96px;height:56px;border-radius:8px;flex:none;background:#222 center/cover;overflow:hidden}
+    .ep .im .bar{position:absolute;left:0;right:0;bottom:0;border-radius:0}
+    .ep b{font-size:12px;display:block}.ep span{font-size:10.5px;color:#9aa3ad;line-height:1.3;display:block}
+    .ep .ok{position:absolute;top:4px;right:4px;width:16px;height:16px;border-radius:50%;background:#1fa855;display:grid;place-items:center;font-size:10px;font-weight:900;color:#fff}
+    .scr.on .ep{animation:slide .5s var(--ease) both}.scr.on .ep:nth-of-type(2){animation-delay:.1s}.scr.on .ep:nth-of-type(3){animation-delay:.2s}.scr.on .ep:nth-of-type(4){animation-delay:.3s}
+    @keyframes slide{from{opacity:0;transform:translateX(20px)}}
+    .srv{display:flex;justify-content:space-between;align-items:center;padding:12px;border-radius:12px;background:#141b25;border:1px solid rgba(255,255,255,.07);margin-bottom:8px;font-weight:700}
+    .srv.first{border-color:var(--red);background:linear-gradient(90deg,rgba(229,9,20,.22),#141b25)}
+    .tag{padding:3px 8px;border-radius:6px;font-size:10px;font-weight:800}
+    .tag.d{background:#1f6f3a}.tag.l{background:#33415a}
+    .moods{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:12px}
+    .moods span{padding:10px 4px;border-radius:12px;background:#141b25;text-align:center;font-size:11px;font-weight:700}
+    .moods span em{display:block;font-style:normal;font-size:20px}
+    .moods span.sel{background:var(--red);box-shadow:0 6px 18px rgba(229,9,20,.4)}
+    .pick{display:flex;gap:12px;padding:10px;border-radius:14px;background:#141b25;border:1px solid rgba(245,185,66,.35)}
+    .pick .thumb{width:70px;height:104px}
+    .scr.on .pick .thumb{animation:flip 1.2s var(--ease)}
+    @keyframes flip{0%{transform:rotateY(90deg);filter:blur(4px)}60%{transform:rotateY(-10deg);filter:none}}
+    .btnmini{display:inline-block;margin-top:8px;padding:7px 12px;border-radius:8px;background:#fff;color:#111;font-weight:800;font-size:11px}
+    .refcard{padding:18px;border-radius:18px;text-align:center;background:linear-gradient(160deg,#3b0a0e,#1a0a06 60%,#2b1d05);border:1px solid rgba(245,185,66,.35)}
+    .refcard .big{font-size:30px;font-weight:900;letter-spacing:4px;color:var(--gold2);margin:8px 0}
+    .gift{font-size:42px;display:block}
+    .scr.on .gift{animation:bounce 1.4s var(--ease) infinite}
+    @keyframes bounce{50%{transform:translateY(-6px) rotate(-6deg)}}
+    .retro{position:absolute;inset:0;padding:56px 18px 18px;background:linear-gradient(165deg,#e50914 0%,#7a0710 40%,#2a0606 70%,#3a2a05 100%)}
+    .retro h6{font-size:30px;line-height:1;font-weight:900;letter-spacing:-.04em;margin:6px 0 14px}
+    .rposters{display:flex;gap:8px;margin:12px 0}
+    .rposters i{flex:1;aspect-ratio:2/3;border-radius:8px;background:#000 center/cover;box-shadow:0 10px 24px rgba(0,0,0,.5)}
+    .scr.on .rposters i{animation:pop .6s var(--ease) both}.scr.on .rposters i:nth-child(2){animation-delay:.12s}.scr.on .rposters i:nth-child(3){animation-delay:.24s}
+    @keyframes pop{from{opacity:0;transform:scale(.7) translateY(20px)}}
+    .rstat{padding:10px 12px;border-radius:12px;background:rgba(0,0,0,.35);margin-top:8px;font-weight:700}
+    .rstat small{display:block;color:#f3d6c0;font-weight:500;font-size:10.5px}
+    .feats{display:flex;flex-direction:column;gap:12px}
+    .feat{display:flex;gap:16px;align-items:flex-start;padding:22px;border-radius:18px;border:1px solid transparent;cursor:pointer;transition:background .35s,border-color .35s,opacity .35s;opacity:.55;text-align:left;width:100%}
+    .feat:hover{opacity:.85}
+    .feat.on{opacity:1;background:linear-gradient(90deg,rgba(229,9,20,.10),rgba(255,255,255,.02));border-color:rgba(229,9,20,.35)}
+    .feat .ico{margin:0;flex:none}
+    .feat h3{font-size:20px;letter-spacing:-.02em;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .feat p{color:var(--muted);font-size:15px;margin-top:4px}
+    .feat p b{color:#eee}
+    .pill{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px;background:var(--gold);color:#1b1206}
+    .feat .prog{height:2px;border-radius:2px;background:rgba(255,255,255,.08);margin-top:12px;overflow:hidden;display:none}
+    .feat.on .prog{display:block}.feat .prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--red),var(--gold))}
+    .feat.on.auto .prog i{animation:pbar 5s linear forwards}
+    @keyframes pbar{to{width:100%}}
+    .shots{-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent);display:flex;gap:18px;overflow-x:auto;scroll-snap-type:x mandatory;padding:40px 0 20px;scrollbar-width:none}
+    .shots::-webkit-scrollbar{display:none}
+    .shots figure{flex:0 0 auto;scroll-snap-align:center;text-align:center}
+    .shots img{height:clamp(380px,52vw,520px);width:auto;border-radius:24px;border:1px solid var(--line2);box-shadow:0 30px 70px rgba(0,0,0,.6);transition:transform .4s var(--ease)}
+    .shots img:hover{transform:translateY(-6px) scale(1.015)}
+    .shots .wide img{height:clamp(200px,26vw,300px)}
+    .shots .wide{align-self:center}
+    figcaption{margin-top:12px;color:var(--muted);font-size:14px;font-weight:600}
+    .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:50px}
+    .plan{text-align:left;padding:30px 24px 26px;display:flex;flex-direction:column}
+    .plan h3{font-size:16px;color:#d8d0ca;font-weight:700}
+    .plan .pr{font-size:44px;font-weight:900;margin:12px 0 2px;letter-spacing:-.04em;line-height:1}
+    .plan .pr small{font-size:17px;font-weight:700;color:var(--muted);margin-right:4px}
+    .plan .per{color:var(--muted);font-size:13.5px}
+    .plan ul{list-style:none;margin:20px 0 0;display:grid;gap:9px;font-size:14px;color:#ddd5ce}
+    .plan li::before{content:"✓";color:var(--red2);font-weight:900;margin-right:8px}
+    .plan .bd{position:absolute;top:16px;right:16px;background:var(--red);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:99px;letter-spacing:.04em}
+    .plan.hi{border-color:rgba(229,9,20,.7);background:linear-gradient(180deg,#220b0d,#0e0909);box-shadow:0 30px 70px rgba(229,9,20,.18)}
+    .plan.au{border-color:rgba(245,185,66,.55);background:linear-gradient(180deg,#221909,#0e0b07)}
+    .plan.au .bd{background:var(--gold);color:#1a1205}
+    .plan.au .pr{color:var(--gold2)}
+    .ticket{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-top:16px;padding:22px 26px;border-radius:var(--r);border:1px dashed rgba(245,185,66,.45);background:repeating-linear-gradient(135deg,rgba(245,185,66,.04) 0 12px,transparent 12px 24px);text-align:left}
+    .ticket b{font-size:18px}.ticket p{color:var(--muted);font-size:14.5px}
+    .ticket .pr{font-size:32px;font-weight:900;color:var(--gold2);letter-spacing:-.03em}
+    .perks{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:28px}
+    .perks span{padding:8px 14px;border-radius:99px;border:1px solid var(--line2);font-size:13.5px;color:#ddd5ce}
+    .install{background:linear-gradient(180deg,transparent,#0a0707 20%,#0a0707 80%,transparent)}
+    .seg{display:inline-flex;padding:5px;border-radius:14px;border:1px solid var(--line2);background:#0f0b0b;margin:34px 0 30px;position:relative}
+    .seg button{position:relative;z-index:1;padding:11px 22px;border-radius:10px;font-weight:750;font-size:15px;color:var(--muted);transition:color .25s}
+    .seg button[aria-selected=true]{color:#fff}
+    .seg .knob{position:absolute;top:5px;bottom:5px;left:5px;border-radius:10px;background:var(--red);box-shadow:0 6px 20px rgba(229,9,20,.4);transition:transform .35s var(--ease),width .35s var(--ease)}
+    .inst{display:grid;grid-template-columns:330px 1fr;gap:28px;align-items:start}
+    .bigcode{padding:28px;border-radius:var(--r);text-align:center;background:linear-gradient(160deg,#1f1608,#0e0a07);border:1px solid rgba(245,185,66,.4)}
+    .bigcode .lbl{font-size:13px;color:var(--muted);font-weight:600}
+    .bigcode .num{display:flex;justify-content:center;gap:6px;margin:14px 0 18px}
+    .bigcode .num b{width:34px;height:46px;border-radius:9px;display:grid;place-items:center;background:#0b0806;border:1px solid rgba(245,185,66,.35);font-size:24px;color:var(--gold2);font-variant-numeric:tabular-nums;box-shadow:inset 0 -3px 0 rgba(245,185,66,.18)}
+    .copybtn{padding:10px 16px;border-radius:10px;border:1px solid rgba(245,185,66,.5);color:var(--gold2);font-weight:750;font-size:14px;transition:background .2s}
+    .copybtn:hover{background:rgba(245,185,66,.1)}
+    .qr{margin:22px auto 0;background:#fff;color:#111;border-radius:16px;padding:12px 12px 8px;width:170px}
+    .qr img{width:146px;height:146px;image-rendering:pixelated;margin:0 auto}
+    .qr span{display:block;font-size:12px;color:#444;font-weight:600;margin-top:4px}
+    .steps{display:grid;gap:14px;counter-reset:s}
+    .step{position:relative;display:flex;gap:18px;padding:22px 24px;border-radius:18px;border:1px solid var(--line);background:#0f0b0b}
+    .step::before{counter-increment:s;content:counter(s);flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-weight:900;background:linear-gradient(180deg,var(--gold2),var(--gold));color:#1b1206}
+    .step h4{font-size:17px;margin-bottom:4px}.step p{font-size:14.5px;color:var(--muted)}.step b{color:var(--gold2)}
+    .note{margin-top:22px;color:var(--muted);font-size:14px}
+    .comm{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
+    .comm a{display:flex;align-items:center;gap:14px;padding:22px;border-radius:var(--r);border:1px solid var(--line);background:#0f0b0b;transition:border-color .25s,transform .25s var(--ease)}
+    .comm a:hover{border-color:rgba(245,185,66,.5);transform:translateY(-3px)}
+    .comm .dot{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;flex:none}
     .comm .dot svg{width:24px;height:24px;fill:#fff}
-    .comm strong{display:block}
-    .comm span{color:var(--muted);font-size:14px}
-    /* final cta */
-    .final{text-align:center;padding:80px 0;border-top:1px solid var(--line);background:radial-gradient(ellipse at 50% 0,rgba(229,9,20,.18),transparent 60%)}
+    .comm strong{display:block}.comm span{color:var(--muted);font-size:14px}
+    .faq{max-width:820px;margin:40px auto 0}
+    .faq details{border-bottom:1px solid var(--line)}
+    .faq summary{cursor:pointer;padding:22px 4px;font-weight:700;font-size:17px;list-style:none;display:flex;justify-content:space-between;gap:16px;align-items:center}
+    .faq summary::-webkit-details-marker{display:none}
+    .faq summary::after{content:"";flex:none;width:28px;height:28px;border-radius:50%;border:1px solid var(--line2);background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff2d38' stroke-width='2.5' stroke-linecap='round'%3E%3Cpath d='M12 6v12M6 12h12'/%3E%3C/svg%3E") center/14px no-repeat;transition:transform .3s var(--ease)}
+    .faq details[open] summary::after{transform:rotate(45deg)}
+    .faq p{padding:0 4px 22px;color:var(--muted)}
+    .faq p b{color:#ddd}
+    .faq details[open] p{animation:fadeIn .4s var(--ease)}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(-6px)}}
+    .final{text-align:center;overflow:hidden;isolation:isolate}
+    .final::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(ellipse 50% 60% at 50% 100%,rgba(229,9,20,.28),transparent 70%)}
     .final .ctas{justify-content:center}
-    /* faq */
-    details{border:1px solid var(--line);border-radius:14px;background:#0f0c0c;margin-top:12px}
-    summary{cursor:pointer;padding:18px 20px;font-weight:650;list-style:none;display:flex;justify-content:space-between}
-    summary::after{content:"+";color:var(--red2);font-weight:800}
-    details[open] summary::after{content:"–"}
-    details p{padding:0 20px 18px;color:var(--muted)}
-    footer{border-top:1px solid var(--line);padding:34px 0 46px;color:var(--muted);font-size:14px}
-    .foot{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:center}
+    .final h2{font-size:clamp(36px,6vw,72px)}
+    footer{border-top:1px solid var(--line);padding:40px 0 50px;color:var(--muted);font-size:14px}
+    .foot{display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:center}
     .foot nav{display:flex;flex-wrap:wrap;gap:18px}
     .foot nav a:hover{color:var(--text)}
-    @media (max-width:980px){
-      .hero-in{grid-template-columns:1fr;text-align:left}
-      .hero-art{order:-1}.hero-art img{width:min(260px,70vw);height:auto;aspect-ratio:1/1;object-fit:contain;border-radius:22%}
-      .g4,.steps{grid-template-columns:repeat(2,1fr)}
-      .comm,.comm4{grid-template-columns:1fr}
-      .wall{grid-template-columns:repeat(5,1fr)}
+    .soc{display:flex;gap:10px}.soc a{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:#161111;border:1px solid var(--line);transition:border-color .2s}.soc a:hover{border-color:var(--gold)}.soc svg{width:18px;height:18px;fill:#fff}
+    .js .rv{opacity:0;transform:translateY(34px);transition:opacity .9s var(--ease),transform .9s var(--ease);transition-delay:var(--d,0s)}
+    .js .rv.in{opacity:1;transform:none}
+    @media(max-width:1080px){
       .nav-links{display:none}
+      .hero-in{grid-template-columns:1fr}
+      .hero-art{display:none}
+      .show-grid{grid-template-columns:1fr;gap:30px}
+      .stage{position:relative;top:0}
+      .plans{grid-template-columns:repeat(2,1fr)}
+      .inst{grid-template-columns:1fr}
+      .bento{grid-template-columns:repeat(2,1fr)}.b2,.b3{grid-column:span 1}
+      .bento .wide2{grid-column:span 2}
     }
-    @media (max-width:560px){
-      .g4,.steps{grid-template-columns:1fr}
-      .btn{width:100%;justify-content:center}
-      .code{flex:1 1 100%;justify-content:space-between}
-      section{padding:64px 0}
-      .hero{padding-top:96px}
-      .wall{grid-template-columns:repeat(4,1fr)}
-      .tabs{display:flex;width:100%}.tabs button{flex:1;padding:10px 8px}
+    @media(max-width:640px){
+      section{padding:80px 0}
+      .hero{padding-top:100px}
+      .btn{width:100%}
+      .bento{grid-template-columns:1fr}.bento .wide2{grid-column:span 1}
+      .plans{grid-template-columns:1fr}
+      .comm{grid-template-columns:1fr}
+      .phone{width:280px;height:580px}
+      .feats{flex-direction:row;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;padding-bottom:6px;scrollbar-width:none}
+      .feats::-webkit-scrollbar{display:none}
+      .feat{flex:0 0 84%;scroll-snap-align:center;padding:16px;border-color:var(--line)}
+      .scroll-hint{display:none}
+      .wall{opacity:.75}
+      .hero::before{background:linear-gradient(180deg,rgba(5,4,4,.55) 0,rgba(5,4,4,.82) 45%,#050404 96%)}
+      .refbar{bottom:10px}
+      .seg button{padding:10px 14px;font-size:14px}
     }
-
-    .show{display:grid;grid-template-columns:1.6fr 1fr;gap:34px;align-items:end;margin-top:38px}
-    .tvf{background:#000;border:10px solid #1b1818;border-bottom-width:14px;border-radius:14px;box-shadow:0 30px 80px rgba(229,9,20,.18);aspect-ratio:16/9;overflow:hidden;position:relative}
-    .tvf .scr,.phf .scr{position:absolute;inset:0;background:radial-gradient(120% 80% at 20% 0,rgba(229,9,20,.28),transparent 60%),#070606}
-    .tvf .bn{position:absolute;left:5%;top:7%;width:28%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:8px;box-shadow:0 0 0 2px rgba(255,215,122,.5)}
-    .tvf .ttl{position:absolute;left:5%;top:49%;font-weight:800;font-size:clamp(11px,1.2vw,16px)}
-    .row{position:absolute;left:5%;right:0;display:flex;gap:1.4%}
-    .row div{flex:0 0 13%;aspect-ratio:2/3;border-radius:6px;background:#1c1717 center/cover}
-    .row div:first-child{outline:3px solid #fff;transform:scale(1.06)}
-    .tvstand{width:28%;height:12px;margin:0 auto;background:#1b1818;border-radius:0 0 8px 8px}
-    .phf{width:min(100%,250px);margin:0 auto;aspect-ratio:9/19.5;background:#000;border:9px solid #1b1818;border-radius:36px;position:relative;overflow:hidden;box-shadow:0 30px 80px rgba(229,9,20,.18)}
-    .phf .top{position:absolute;top:5%;left:8%;right:8%;display:flex;align-items:center;gap:8px;font-weight:800;font-size:13px}
-    .phf .top img{width:28px;height:28px;border-radius:7px}
-    .phf .feat{position:absolute;top:13%;left:8%;right:8%;aspect-ratio:2/3;border-radius:12px;background:#1c1717 center/cover}
-    .phf .row{top:auto;bottom:6%;left:8%}
-    .phf .row div{flex-basis:30%}
-    .phf .row div:first-child{outline:0;transform:none}
-    .cap{color:var(--muted);font-size:13px;text-align:center;margin-top:12px}
-    .plans{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:34px}
-    .plan{position:relative;text-align:center;padding:30px 20px}
-    .plan .pr{font-size:34px;font-weight:900;margin:8px 0 2px;letter-spacing:-1px}
-    .plan .pr small{font-size:16px;font-weight:700;color:var(--muted)}
-    .plan.hi{border-color:var(--red);box-shadow:0 0 0 1px var(--red),0 20px 50px rgba(229,9,20,.25)}
-    .plan .bd{position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;font-size:12px;font-weight:800;padding:4px 12px;border-radius:99px;white-space:nowrap}
-    .plan.au .bd{background:var(--gold);color:#1a1205}
-    .perks{display:flex;flex-wrap:wrap;gap:10px 22px;justify-content:center;margin-top:24px;color:#d6cfc9;font-size:15px}
-    .perks span:before{content:"✓ ";color:var(--gold);font-weight:900}
-    .fs{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:34px;counter-reset:f}
-    .fs .card{padding:0;overflow:hidden}
-    .fs .il{aspect-ratio:16/10;background:radial-gradient(90% 90% at 50% 0,rgba(229,9,20,.25),#0b0909);display:grid;place-items:center;border-bottom:1px solid var(--line);position:relative}
-    .fs .il:before{counter-increment:f;content:counter(f);position:absolute;top:10px;left:10px;width:28px;height:28px;border-radius:50%;background:var(--red);font-weight:900;display:grid;place-items:center;font-size:14px}
-    .fs .il svg{width:44%;height:auto;fill:none;stroke:#f6f2ee;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}
-    .fs .tx{padding:18px 20px 22px}
-    .fs .tx h3{font-size:17px;margin-bottom:6px}
-    .fs .tx p{color:var(--muted);font-size:14.5px}
-    .keys{display:flex;gap:5px;justify-content:center}
-    .keys b{background:#1d1919;border:1px solid rgba(255,215,122,.45);color:var(--gold2);border-radius:6px;padding:6px 7px;font-size:clamp(14px,1.6vw,20px);font-family:ui-monospace,monospace}
-    .qrs{display:flex;gap:22px;justify-content:center;flex-wrap:wrap;margin-top:28px}
-    .qr{background:#fff;color:#111;border-radius:16px;padding:14px 14px 10px;text-align:center;width:180px}
-    .qr img{width:152px;height:152px;display:block;image-rendering:pixelated}
-    .qr b{display:block;font-size:14px;margin-top:6px}
-    .qr span{font-size:12px;color:#555}
-    @media(max-width:980px){.show{grid-template-columns:1fr}.plans,.fs{grid-template-columns:repeat(2,1fr)}}
-    @media(max-width:560px){.plans,.fs{grid-template-columns:1fr}.qr{width:150px}.qr img{width:122px;height:122px}}
-    .shots{display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:34px;align-items:start}
-    .shots figure,.shot-wide{margin:0;text-align:center}
-    .shots img{width:100%;height:auto;border-radius:22px;border:6px solid #1b1818;box-shadow:0 20px 50px rgba(229,9,20,.15)}
-    .shot-wide{margin-top:26px}
-    .shot-wide img{width:100%;max-width:980px;height:auto;margin:0 auto;border-radius:18px;border:6px solid #1b1818;box-shadow:0 20px 50px rgba(229,9,20,.15)}
-    figcaption{color:var(--muted);font-size:13px;margin-top:10px}
-    @media(max-width:980px){.shots{grid-template-columns:repeat(2,1fr)}}
+    @media (prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+      .js .rv{opacity:1;transform:none}
+      .notif{opacity:1;transform:none}
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="wrap nav">
-      <a class="brand" href="/"><img src="/img/logo-256.webp?v=5" alt="" width="38" height="38" />Stream<b>Flix</b></a>
-      <nav class="nav-links">
-        <a href="#recursos">Recursos</a><a href="#aparelhos">Aparelhos</a><a href="#instalar">Como instalar</a><a href="#vip">Planos VIP</a><a href="#comunidade">Suporte</a>
+      <a class="brand" href="/"><img src="/img/logo-256.webp?v=5" alt="" width="36" height="36" /><span>Stream<b>Flix</b><sup>VIP</sup></span></a>
+      <nav class="nav-links" aria-label="Seções">
+        <a href="#recursos">Recursos</a><a href="#novidades">Novidades</a><a href="#vip">Planos VIP</a><a href="#instalar">Como instalar</a><a href="#faq">Dúvidas</a>
       </nav>
-      <a class="nav-cta" href="#baixar">Baixar</a>
+      <a class="nav-cta" href="#baixar">Baixar grátis</a>
     </div>
   </header>
 
@@ -216,162 +358,250 @@
       <div class="wall" id="wall" aria-hidden="true"></div>
       <div class="wrap hero-in">
         <div>
-          <span class="eyebrow"><i></i>Nova versão · visual renovado</span>
-          <h1>Filmes, séries e <em>TV ao vivo</em> no celular e na sua TV.</h1>
-          <p class="lead">Perfis para toda a família, um player novinho e centenas de canais com a melhor qualidade disponível. Tudo em um app leve, feito para celular, Android TV, Fire TV e TV Box.</p>
-          <div class="ctas">
+          <span class="eyebrow rv"><i></i>Celular 17.5 · notificações, download offline e mais</span>
+          <h1 class="hin">Filmes, séries e <em>TV ao vivo</em> no celular e na sua TV.</h1>
+          <p class="lead hin" style="animation-delay:.08s">Perfis para toda a família, player novo, download para assistir sem internet e centenas de canais. Tudo em um app leve para celular, Android TV, Fire TV e TV Box.</p>
+          <div class="ctas rv" style="--d:.24s">
             <a class="btn btn-red" href="/downloads/app-latest.apk" download>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M12 7v7m-3-3 3 3 3-3"/></svg>
-              <span>Baixar para Celular<small>Android · APK</small></span>
+              <span>Baixar para celular<small>Android · APK</small></span>
             </a>
             <a class="btn btn-gold" href="/downloads/tv-latest.apk" download>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 8v5m-3-2 3 3 3-3"/></svg>
               <span>Baixar para TV<small>Android TV · Fire TV · TV Box</small></span>
             </a>
           </div>
-          <div class="codes" aria-label="Códigos do app Downloader">
+          <div class="codes rv" style="--d:.32s" aria-label="Códigos do app Downloader">
             <div class="code"><span>Código Downloader<br>Celular</span><b>6085325</b></div>
             <div class="code"><span>Código Downloader<br>TV / Firestick</span><b>3422972</b></div>
           </div>
+          <div class="refhero" id="refHero" role="status"></div>
         </div>
-        <div class="hero-art"><img src="/img/logo-256.webp?v=5" srcset="/img/logo-256.webp?v=5 256w, /icons/icon-512x512.png?v=5 512w" sizes="(max-width:980px) 160px, 400px" alt="Ícone StreamFlix" width="400" height="400" /></div>
+        <div class="hero-art rv" style="--d:.2s" aria-hidden="true">
+          <div class="hero-phone" id="heroPhone"><div class="phone"><div class="phone-screen"><img src="/img/app/app-explorar.webp" alt="" width="540" height="1150" fetchpriority="high" /></div></div></div>
+          <div class="hero-badge hb1">🔔<span>Episódio novo<small>da série que você segue</small></span></div>
+          <div class="hero-badge hb2">⬇️<span>Baixado ✓<small>assista sem internet</small></span></div>
+        </div>
       </div>
+      <div class="scroll-hint" aria-hidden="true"></div>
     </section>
+
+    <div class="ticker" aria-hidden="true"><div class="ticker-in" id="ticker"><span>Filmes</span><span>Séries</span><span>Animes</span><span>TV ao vivo</span><span>Dublado primeiro</span><span>Download offline</span><span>Perfis</span><span>Pular abertura</span><span>Android TV</span><span>Fire TV</span><span>TV Box</span></div></div>
 
     <section id="recursos">
       <div class="wrap">
-        <div class="kicker">Recursos</div>
-        <h2>Tudo novo, do jeito que você assiste.</h2>
-        <p class="sub">Redesenhamos o app inteiro para ficar mais bonito, mais rápido e mais fácil — no toque ou no controle remoto.</p>
-        <div class="grid g4" style="margin-top:34px">
-          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 2 5.3 4.9"/></svg></div><h3>Perfis</h3><p>"Quem está assistindo?" com avatares, perfil infantil e PIN. Cada um com sua lista.</p></div>
-          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="m10 8 5 3-5 3z"/><path d="M5 21h14"/></svg></div><h3>Player novo</h3><p>Linha do tempo precisa, legendas, áudio, servidores, toque duplo ±10s e timer para dormir.</p></div>
-          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="m8 2 4 4 4-4"/></svg></div><h3>TV ao vivo</h3><p>Canais com programação, qualidades SD/HD/FHD/4K juntas e troca de fonte em um toque.</p></div>
-          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.5 7.2L3 21l1.8-6.5A8 8 0 1 1 21 12z"/></svg></div><h3>Comentários</h3><p>Opine, responda e veja o que a comunidade achou — com aviso de spoiler.</p></div>
+        <div class="kicker rv">Recursos</div>
+        <h2 class="rv">Tudo o que você precisa<br>para <span class="grad">maratonar</span>.</h2>
+        <p class="sub rv">Um app redesenhado para ser bonito, rápido e fácil, no toque ou no controle remoto.</p>
+        <div class="bento">
+          <div class="card b3 wide2 rv"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><circle cx="17.5" cy="9" r="2.5"/><path d="M16 14.6c2.6.2 4.6 2 5.3 4.9"/></svg></div><h3>Perfis para a família</h3><p>"Quem está assistindo?" com avatares, perfil infantil e PIN. Cada um com sua lista e seu progresso.</p><div class="mini-row" id="miniRow"></div></div>
+          <div class="card b3 rv" style="--d:.08s"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="m10 8 5 3-5 3z"/><path d="M5 21h14"/></svg></div><h3>Player novo</h3><p>Linha do tempo precisa, legendas, áudio, troca de servidor, toque duplo ±10s e timer para dormir.</p></div>
+          <div class="card b2 rv"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="m8 2 4 4 4-4"/></svg></div><h3>TV ao vivo</h3><p>Canais com programação e qualidades SD, HD, FHD e 4K juntas.</p></div>
+          <div class="card b2 rv" style="--d:.08s"><div class="ico"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.5 7.2L3 21l1.8-6.5A8 8 0 1 1 21 12z"/></svg></div><h3>Comentários</h3><p>Opine, responda e veja o que a comunidade achou, com aviso de spoiler.</p></div>
+          <div class="card b2 wide2 rv" style="--d:.16s"><div class="ico g"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="14" height="10" rx="2"/><rect x="17" y="8" width="5" height="12" rx="1.5"/><path d="M6 18h6"/></svg></div><h3>Celular e TV</h3><p>Um app para o celular e outro feito sob medida para o controle remoto.</p><div class="devs"><span>Android 7+</span><span>Android / Google TV</span><span>Fire TV</span><span>TV Box</span></div></div>
         </div>
       </div>
     </section>
-
-    <section id="aparelhos" class="devices">
+    <section id="novidades" class="show">
       <div class="wrap">
-        <div class="kicker">Aparelhos</div>
-        <h2>Funciona onde você estiver.</h2>
-        <p class="sub">Um app para o celular e outro feito sob medida para o controle remoto da TV.</p>
-        <div class="grid g4" style="margin-top:34px">
-          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></div><h3>Celular</h3><p>Android 7 ou superior.</p></div>
-          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/></svg></div><h3>Android TV</h3><p>Smart TVs com Android/Google TV.</p></div>
-          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="20" rx="3"/><circle cx="12" cy="7" r="1.2"/><path d="M11 12h2m-2 3h2"/></svg></div><h3>Fire TV / Firestick</h3><p>Instale pelo app Downloader.</p></div>
-          <div class="card"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="9" rx="2"/><path d="M7 12.5h.01M17 12.5h-4"/></svg></div><h3>TV Box</h3><p>Aparelhos Android, inclusive os mais antigos.</p></div>
+        <div class="kicker rv">Novidades da versão 17.5</div>
+        <h2 class="rv">Seu cinema, agora<br><span class="grad">ainda mais esperto</span>.</h2>
+        <p class="sub rv">Toque em cada recurso para ver como ele funciona no app.</p>
+        <div class="show-grid">
+          <div class="stage rv">
+            <div class="phone" aria-hidden="true"><div class="phone-screen">
+              <div class="island"></div>
+              <div class="status"><span>9:41</span><span>5G ▮</span></div>
+
+              <div class="scr on">
+                <div class="lock"></div>
+                <div class="clock">9:41</div><div class="date">terça-feira, 17 de novembro</div>
+                <div style="margin-top:22px">
+                  <div class="notif"><img src="/icons/icon-48x48.png" alt="" width="32" height="32" loading="lazy" /><div><b>StreamFlix · agora</b><p>Episódio novo disponível na série que você está acompanhando.</p></div></div>
+                  <div class="notif"><img src="/icons/icon-48x48.png" alt="" width="32" height="32" loading="lazy" /><div><b>StreamFlix · 5 min</b><p>🎁 Indique um amigo e ganhe +7 dias de VIP.</p></div></div>
+                  <div class="notif"><img src="/icons/icon-48x48.png" alt="" width="32" height="32" loading="lazy" /><div><b>StreamFlix · 1 h</b><p>Lançamentos da semana chegaram. Confira!</p></div></div>
+                </div>
+              </div>
+
+              <div class="scr">
+                <div class="player" data-poster="b0">
+                  <div class="skip">Pular abertura ⏭</div>
+                  <div class="pbody">
+                    <div style="font-weight:800;font-size:14px">T1:E2</div>
+                    <div style="font-size:11px;margin-bottom:10px;color:#ccc">Abertura detectada</div>
+                    <div class="pbar"><u></u><i></i></div>
+                    <div class="ptime"><span>01:12</span><span>47:30</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="scr">
+                <h5>‹ Downloads</h5>
+                <div class="pc" style="margin-bottom:10px"><div class="muted" style="font-size:10px;font-weight:600;margin-bottom:6px">Espaço no aparelho</div><div class="bar" style="margin-bottom:6px"><i style="width:8%"></i></div><div style="font-size:10.5px;font-weight:600">Downloads: 1,2 GB · Livre: 22,2 GB</div></div>
+                <div class="pc row" style="margin-bottom:8px"><div class="thumb" data-poster="p2"></div><div style="flex:1"><b style="font-size:12px">Disponível offline</b><div class="muted" style="font-size:10.5px;margin:3px 0 6px">Concluído · 842 MB</div><div class="bar"><i style="width:100%"></i></div></div><span style="color:#1fa855;font-weight:900">✓</span></div>
+                <div class="pc row"><div class="thumb" data-poster="p3"></div><div style="flex:1"><b style="font-size:12px">Baixando agora</b><div class="muted" style="font-size:10.5px;margin-top:3px">até 720p</div></div><svg class="ring" viewBox="0 0 30 30"><circle class="bg" cx="15" cy="15" r="12"/><circle class="fg" cx="15" cy="15" r="12"/></svg></div>
+                <div class="dlbtns"><span style="background:#fff;color:#111">▶ Assistir</span><span style="background:#1b2330">⬇ Baixar</span></div>
+                <div class="offline">Sem internet · Ver downloads</div>
+              </div>
+
+              <div class="scr">
+                <h5>‹ Episódios</h5>
+                <div class="tabs-s"><span class="chip on">T1</span><span class="chip">T2</span><span class="chip">T3</span><span class="chip">T4</span><span class="chip" style="margin-left:auto">Do 1º</span></div>
+                <div class="cont"><span>▶ Continuar T1:E3</span><span style="font-weight:600;font-size:10.5px">23 min restantes</span></div>
+                <div class="ep"><div class="im" data-poster="b1"><span class="ok">✓</span></div><div><b>1. O começo</b><span>Uma nova jornada começa.</span><span>48 min</span></div></div>
+                <div class="ep"><div class="im" data-poster="b2"><span class="ok">✓</span></div><div><b>2. A virada</b><span>O rumo da história muda.</span><span>51 min</span></div></div>
+                <div class="ep"><div class="im" data-poster="b3"><div class="bar"><i style="width:55%"></i></div></div><div><b>3. Reencontro</b><span>O passado volta.</span><span>47 min</span></div></div>
+                <div class="ep"><div class="im" data-poster="b4"></div><div><b>4. Sem volta</b><span>Tudo está em jogo.</span><span>50 min</span></div></div>
+              </div>
+
+              <div class="scr">
+                <h5>‹ Servidores</h5>
+                <div class="srv first"><span>Servidor 1</span><span class="tag d">DUBLADO</span></div>
+                <div class="srv"><span>Servidor 2</span><span class="tag l">LEGENDADO</span></div>
+                <div class="srv"><span>Servidor 3</span><span class="tag d">DUBLADO</span></div>
+                <div class="pc" style="margin-top:12px;font-size:11.5px;line-height:1.4">🇧🇷 Quando o título tem as duas versões, o <b>dublado vem primeiro</b>. O legendado continua a um toque.</div>
+              </div>
+
+              <div class="scr">
+                <h5>🎲 Não sei o que assistir</h5>
+                <div class="moods"><span><em>😂</em>Rir</span><span><em>😱</em>Terror</span><span class="sel"><em>💥</em>Ação</span><span><em>🥹</em>Chorar</span><span><em>🕵️</em>Suspense</span><span><em>❤️</em>Romance</span></div>
+                <div class="pick"><div class="thumb" data-poster="p5"></div><div><b style="font-size:13px" id="pickTitle">Sugestão para você</b><div class="muted" style="font-size:10.5px;margin-top:3px">Escolhido pelo seu humor</div><span class="btnmini">▶ Assistir</span> <span class="btnmini" style="background:#1b2330;color:#fff">↻ Outro</span></div></div>
+              </div>
+
+              <div class="scr">
+                <h5>‹ Indique e ganhe</h5>
+                <div class="refcard"><span class="gift">🎁</span><div style="font-size:12px;color:#f0dcc0">Seu código</div><div class="big">STRM26</div><div style="font-size:11.5px;color:#e8d8c8">Quando um amigo fizer a <b>primeira compra VIP</b> com seu código, você ganha</div><div style="font-size:22px;font-weight:900;color:#ffd77a;margin-top:6px">+7 dias de VIP</div></div>
+                <div class="dlbtns"><span style="background:#1fa855">Compartilhar</span><span style="background:#1b2330">Copiar link</span></div>
+              </div>
+
+              <div class="scr">
+                <div class="retro">
+                  <div style="font-size:11px;letter-spacing:.2em;font-weight:800;color:#ffd77a">RETROSPECTIVA</div>
+                  <h6>Seu 2026 no StreamFlix</h6>
+                  <div style="font-size:11.5px;color:#f3d6c0">Os títulos que você mais assistiu</div>
+                  <div class="rposters"><i data-poster="p6"></i><i data-poster="p7"></i><i data-poster="p8"></i></div>
+                  <div class="rstat"><small>Seu gênero do ano</small>Calculado pelo que você viu</div>
+                  <div class="rstat"><small>Seu ano em horas</small>Somado mês a mês</div>
+                </div>
+              </div>
+            </div></div>
+          </div>
+
+          <div class="feats" id="feats" role="tablist" aria-label="Novidades">
+            <button class="feat on" role="tab"><span class="ico"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span><span><h3>Notificações de verdade</h3><p>Episódio novo das séries que você acompanha, promoções e avisos direto na barra do celular.</p><span class="prog"><i></i></span></span></button>
+            <button class="feat" role="tab"><span class="ico"><svg viewBox="0 0 24 24"><path d="m5 4 10 8-10 8z"/><path d="M19 5v14"/></svg></span><span><h3>Pular abertura</h3><p>Vá direto para a história. Nos créditos aparece <b>Próximo episódio</b> para seguir a maratona.</p><span class="prog"><i></i></span></span></button>
+            <button class="feat" role="tab"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5"/><path d="M5 21h14"/></svg></span><span><h3>Download offline <span class="pill">VIP</span></h3><p>Toque em <b>Baixar</b> ao lado do Assistir e veja em Perfil › Downloads, até 720p, mesmo sem internet.</p><span class="prog"><i></i></span></span></button>
+            <button class="feat" role="tab"><span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg></span><span><h3>Nova aba de episódios</h3><p>Temporadas em abas, episódios em cartões com foto, sinopse, progresso, ✓ de assistido e atalho <b>Continuar</b>.</p><span class="prog"><i></i></span></span></button>
+            <button class="feat" role="tab"><span class="ico"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg></span><span><h3>Dublado primeiro</h3><p>Quando o título tem versão dublada e legendada, o dublado vem na frente.</p><span class="prog"><i></i></span></span></button>
+            <button class="feat" role="tab"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></span><span><h3>Não sei o que assistir</h3><p>Escolha um humor e o app indica um título na hora.</p><span class="prog"><i></i></span></span></button>
+            <button class="feat" role="tab"><span class="ico g"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="1.5"/><path d="M12 8v13M3 12h18M12 8S10 3 7.5 4.5 9 8 12 8zm0 0s2-5 4.5-3.5S15 8 12 8z"/></svg></span><span><h3>Indique e ganhe</h3><p>Quando um amigo fizer a primeira compra VIP com seu código, você ganha <b>+7 dias de VIP</b>.</p><span class="prog"><i></i></span></span></button>
+            <button class="feat" role="tab"><span class="ico g"><svg viewBox="0 0 24 24"><path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/></svg></span><span><h3>Retrospectiva 2026</h3><p>Relembre o que você mais assistiu no ano, pronto para compartilhar.</p><span class="prog"><i></i></span></span></button>
+          </div>
         </div>
       </div>
     </section>
-
-
     <section id="telas">
       <div class="wrap">
-        <div class="kicker">Telas do app</div>
-        <h2>Veja como ficou.</h2>
-        <p class="sub">Capturas reais do app: catálogo, detalhes, perfis e TV ao vivo.</p>
-        <div class="shots">
-          <figure><img src="/img/app/app-explorar.webp" alt="Tela Explorar do app" width="540" height="1150" loading="lazy"/><figcaption>Explorar</figcaption></figure>
-          <figure><img src="/img/app/app-detalhes.webp" alt="Tela de detalhes de uma série" width="540" height="1150" loading="lazy"/><figcaption>Detalhes</figcaption></figure>
-          <figure><img src="/img/app/app-perfis.webp" alt="Tela Quem está assistindo" width="540" height="1150" loading="lazy"/><figcaption>Perfis</figcaption></figure>
-          <figure><img src="/img/app/app-perfil.webp" alt="Tela do perfil com VIP e Conectar TV" width="540" height="748" loading="lazy"/><figcaption>Perfil e VIP</figcaption></figure>
-        </div>
-        <figure class="shot-wide"><img src="/img/app/app-aovivo.webp" alt="Player de TV ao vivo" width="1200" height="540" loading="lazy"/><figcaption>TV ao vivo com troca de qualidade e fonte</figcaption></figure>
-      </div>
-    </section>
-
-    <section id="instalar" class="install">
-      <div class="wrap">
-        <div class="kicker">Como instalar</div>
-        <h2>Pronto em menos de 2 minutos.</h2>
-        <div class="tabs" role="tablist">
-          <button role="tab" aria-selected="true" aria-controls="p-cel" id="t-cel">Celular</button>
-          <button role="tab" aria-selected="false" aria-controls="p-tv" id="t-tv">TV / Firestick</button>
-        </div>
-        <div class="panel" id="p-cel" role="tabpanel">
-          <div class="steps">
-            <div class="step"><h4>Baixe o APK</h4><p>Toque em <b>Baixar para Celular</b> no topo desta página.</p></div>
-            <div class="step"><h4>Permita a instalação</h4><p>Se o Android pedir, ative <b>Permitir desta fonte</b> para o navegador.</p></div>
-            <div class="step"><h4>Instale e abra</h4><p>Abra o arquivo baixado, toque em <b>Instalar</b> e depois em <b>Abrir</b>.</p></div>
-            <div class="step"><h4>Entre na conta</h4><p>Crie sua conta ou entre com o código que chega no seu e-mail.</p></div>
-          </div>
-        </div>
-        <div class="panel" id="p-tv" role="tabpanel" hidden>
-          <div class="steps">
-            <div class="step"><h4>Instale o Downloader</h4><p>Na loja da TV/Fire TV, procure <b>Downloader</b> (ícone laranja) e instale.</p></div>
-            <div class="step"><h4>Libere apps desconhecidos</h4><p>Em Configurações › Minha Fire TV › Opções do desenvolvedor, permita o <b>Downloader</b>.</p></div>
-            <div class="step"><h4>Digite o código</h4><p>No Downloader, digite <b>3422972</b> e confirme. O download começa sozinho.</p></div>
-            <div class="step"><h4>Ative sem digitar</h4><p>Abra o app e leia o <b>QR code</b> com o celular logado — ou use seu código VIP.</p></div>
-          </div>
-        </div>
-        <p class="note">Prefere o navegador? No celular, o código do Downloader é <b style="color:var(--gold2)">6085325</b>. Em TV Box antigo, se o download pelo site falhar, peça o link no grupo de suporte.</p>
-      </div>
-    </section>
-
-
-    <section id="firestick">
-      <div class="wrap">
-        <div class="kicker">Guia Fire TV / Firestick</div>
-        <h2>Instale no Firestick em 4 passos.</h2>
-        <p class="sub">Só com o controle remoto. Leva uns 3 minutos.</p>
-        <div class="fs">
-          <div class="card"><div class="il"><svg viewBox="0 0 64 40"><rect x="6" y="4" width="52" height="30" rx="3"/><circle cx="26" cy="19" r="6"/><path d="m30.5 23.5 5 5"/><path d="M24 37h16"/></svg></div><div class="tx"><h3>Baixe o Downloader</h3><p>Na tela inicial, abra a <b>Lupa (Buscar)</b>, digite <b>Downloader</b> e instale o app gratuito.</p></div></div>
-          <div class="card"><div class="il"><svg viewBox="0 0 64 40"><circle cx="32" cy="18" r="9"/><circle cx="32" cy="18" r="3.5"/><path d="M32 5v4m0 18v4M19 18h4m18 0h4M23 9l3 3m12 12 3 3m0-18-3 3M26 24l-3 3"/></svg></div><div class="tx"><h3>Permita apps desconhecidos</h3><p><b>Configurações › Minha Fire TV › Opções do desenvolvedor › Instalar apps desconhecidos</b> e ative o <b>Downloader</b>. Se o menu não aparecer, toque 7× em <b>Sobre › nome do aparelho</b>.</p></div></div>
-          <div class="card"><div class="il"><div class="keys"><b>3</b><b>4</b><b>2</b><b>2</b><b>9</b><b>7</b><b>2</b></div></div><div class="tx"><h3>Digite o código 3422972</h3><p>Abra o Downloader, selecione o campo de endereço, digite <b>3422972</b> e aperte <b>Go</b>. O download começa sozinho.</p></div></div>
-          <div class="card"><div class="il"><svg viewBox="0 0 64 40"><rect x="6" y="4" width="52" height="30" rx="3"/><path d="m27 13 10 6-10 6z"/><path d="M24 37h16"/></svg></div><div class="tx"><h3>Instale e abra</h3><p>Escolha <b>Instalar</b> e depois <b>Abrir</b>. Para entrar, leia o <b>QR code</b> da TV com o celular logado.</p></div></div>
+        <div class="kicker rv">Telas do app</div>
+        <h2 class="rv">Veja como ficou.</h2>
+        <p class="sub rv">Capturas reais do app: catálogo, detalhes, perfis e TV ao vivo. Arraste para o lado.</p>
+        <div class="shots rv">
+          <figure><img src="/img/app/app-explorar.webp" alt="Tela Explorar do app" width="540" height="1150" loading="lazy" decoding="async"/><figcaption>Explorar</figcaption></figure>
+          <figure><img src="/img/app/app-detalhes.webp" alt="Tela de detalhes de uma série" width="540" height="1150" loading="lazy" decoding="async"/><figcaption>Detalhes</figcaption></figure>
+          <figure><img src="/img/app/app-perfis.webp" alt="Tela Quem está assistindo" width="540" height="1150" loading="lazy" decoding="async"/><figcaption>Perfis</figcaption></figure>
+          <figure><img src="/img/app/app-perfil.webp" alt="Tela do perfil com VIP e Conectar TV" width="540" height="747" loading="lazy" decoding="async"/><figcaption>Perfil e VIP</figcaption></figure>
+          <figure class="wide"><img src="/img/app/app-aovivo.webp" alt="Player de TV ao vivo" width="1200" height="540" loading="lazy" decoding="async"/><figcaption>TV ao vivo com troca de qualidade e fonte</figcaption></figure>
         </div>
       </div>
     </section>
 
     <section id="vip">
-      <div class="wrap" style="text-align:center">
-        <div class="kicker">Planos VIP</div>
-        <h2>Assista sem anúncios e com lançamentos antes.</h2>
-        <p class="sub" style="margin:0 auto">Pagamento único por Pix, sem renovação automática. Assine pelo app em <b>Perfil › Seja VIP</b>.</p>
+      <div class="wrap center">
+        <div class="kicker rv">Planos VIP</div>
+        <h2 class="rv">Sem anúncios. Com <span class="grad">lançamentos antes</span>.</h2>
+        <p class="sub rv">Pagamento único por Pix, sem renovação automática. Assine pelo app em <b>Perfil › Seja VIP</b>.</p>
         <div class="plans">
-          <div class="card plan"><h3>1 mês</h3><div class="pr"><small>R$</small> 9,90</div><p>30 dias de VIP</p></div>
-          <div class="card plan hi"><span class="bd">Popular</span><h3>3 meses</h3><div class="pr"><small>R$</small> 24,90</div><p>90 dias de VIP</p></div>
-          <div class="card plan"><span class="bd">Mais tempo</span><h3>6 meses</h3><div class="pr"><small>R$</small> 49,90</div><p>180 dias de VIP</p></div>
-          <div class="card plan au"><span class="bd">Melhor valor</span><h3>Anual</h3><div class="pr"><small>R$</small> 89,90</div><p>12 meses de VIP</p></div>
+          <div class="card plan rv"><h3>1 mês</h3><div class="pr"><small>R$</small>9,90</div><div class="per">30 dias de VIP</div><ul><li>Sem anúncios</li><li>Download offline</li><li>Celular e TV</li></ul></div>
+          <div class="card plan hi rv" style="--d:.08s"><span class="bd">Popular</span><h3>3 meses</h3><div class="pr"><small>R$</small>24,90</div><div class="per">90 dias de VIP</div><ul><li>Sem anúncios</li><li>Download offline</li><li>Celular e TV</li></ul></div>
+          <div class="card plan rv" style="--d:.16s"><span class="bd">Mais tempo</span><h3>6 meses</h3><div class="pr"><small>R$</small>49,90</div><div class="per">180 dias de VIP</div><ul><li>Sem anúncios</li><li>Download offline</li><li>Celular e TV</li></ul></div>
+          <div class="card plan au rv" style="--d:.24s"><span class="bd">Melhor valor</span><h3>Anual</h3><div class="pr"><small>R$</small>89,90</div><div class="per">12 meses de VIP</div><ul><li>Sem anúncios</li><li>Download offline</li><li>Celular e TV</li></ul></div>
         </div>
-        <div class="perks"><span>Sem anúncios</span><span>Lançamentos antecipados</span><span>Celular e TV</span><span>Pix na hora</span></div>
-        <p style="margin-top:26px"><a class="btn btn-red" href="/downloads/app-latest.apk" download><span>Assine pelo app<small>Baixe e toque em Seja VIP</small></span></a></p>
+        <div class="ticket rv"><div><b>🎟️ Ingresso 24h</b><p>Quer ver só um título? Libere aquele filme ou série por 24 horas, direto na tela do título.</p></div><div class="pr">R$ 2,50</div></div>
+        <div class="perks rv"><span>🚫 Sem anúncios</span><span>🚀 Lançamentos antecipados</span><span>📺 Celular e TV</span><span>⚡ Pix na hora</span></div>
+        <p style="margin-top:30px" class="rv"><a class="btn btn-red" href="/downloads/app-latest.apk" download><span>Assine pelo app<small>Baixe e toque em Seja VIP</small></span></a></p>
+      </div>
+    </section>
+
+    <section id="instalar" class="install">
+      <div class="wrap">
+        <div class="kicker rv">Como instalar</div>
+        <h2 class="rv">Pronto em menos de 2 minutos.</h2>
+        <div class="seg rv" role="tablist" id="seg">
+          <span class="knob" id="knob"></span>
+          <button role="tab" aria-selected="true" aria-controls="p-cel" id="t-cel">📱 Celular</button>
+          <button role="tab" aria-selected="false" aria-controls="p-tv" id="t-tv">📺 TV / Firestick</button>
+        </div>
+        <div class="panel" id="p-cel" role="tabpanel">
+          <div class="inst">
+            <div class="bigcode"><div class="lbl">Código Downloader · Celular</div><div class="num" aria-label="6085325"><b>6</b><b>0</b><b>8</b><b>5</b><b>3</b><b>2</b><b>5</b></div><button class="copybtn" data-copy="6085325">Copiar código</button><div class="qr"><img src="/img/qr/qr-celular.png" alt="QR code para baixar o app de celular" width="146" height="146" loading="lazy"/><span>Aponte a câmera</span></div></div>
+            <div class="steps">
+              <div class="step"><div><h4>Baixe o APK</h4><p>Toque em <b>Baixar para celular</b> no topo desta página ou leia o QR code.</p></div></div>
+              <div class="step"><div><h4>Permita a instalação</h4><p>Se o Android pedir, ative <b>Permitir desta fonte</b> para o navegador.</p></div></div>
+              <div class="step"><div><h4>Instale e abra</h4><p>Abra o arquivo baixado, toque em <b>Instalar</b> e depois em <b>Abrir</b>.</p></div></div>
+              <div class="step"><div><h4>Entre na conta</h4><p>Crie sua conta ou entre com o código que chega no seu e-mail. Recebeu um código de indicação? Use em <b>Perfil › Indique e ganhe</b>.</p></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel" id="p-tv" role="tabpanel" hidden>
+          <div class="inst">
+            <div class="bigcode"><div class="lbl">Código Downloader · TV / Firestick</div><div class="num" aria-label="3422972"><b>3</b><b>4</b><b>2</b><b>2</b><b>9</b><b>7</b><b>2</b></div><button class="copybtn" data-copy="3422972">Copiar código</button><div class="qr"><img src="/img/qr/qr-tv.png" alt="QR code para baixar o app de TV" width="146" height="146" loading="lazy"/><span>Abra no celular ou TV</span></div></div>
+            <div class="steps">
+              <div class="step"><div><h4>Instale o Downloader</h4><p>Na tela inicial, abra a <b>Lupa (Buscar)</b>, digite <b>Downloader</b> (ícone laranja) e instale o app gratuito.</p></div></div>
+              <div class="step"><div><h4>Permita apps desconhecidos</h4><p><b>Configurações › Minha Fire TV › Opções do desenvolvedor › Instalar apps desconhecidos</b> e ative o <b>Downloader</b>. Se o menu não aparecer, toque 7× em <b>Sobre › nome do aparelho</b>.</p></div></div>
+              <div class="step"><div><h4>Digite o código 3422972</h4><p>Abra o Downloader, selecione o campo de endereço, digite <b>3422972</b> e aperte <b>Go</b>. O download começa sozinho.</p></div></div>
+              <div class="step"><div><h4>Instale e ative sem digitar</h4><p>Escolha <b>Instalar</b> e depois <b>Abrir</b>. Para entrar, leia o <b>QR code</b> da TV com o celular logado, ou use seu código VIP.</p></div></div>
+            </div>
+          </div>
+        </div>
+        <p class="note">Em TV Box antigo, se o download pelo site falhar, peça o link no grupo de suporte.</p>
       </div>
     </section>
 
     <section id="comunidade">
       <div class="wrap">
-        <div class="kicker">Suporte e comunidade</div>
-        <h2>Estamos por perto.</h2>
-        <p class="sub">Novidades, pedidos de filmes e ajuda rápida nos nossos canais oficiais.</p>
-        <div class="comm comm4">
-          <a href="https://chat.whatsapp.com/HwROmfEeCgk3IqDfeB5iEm" target="_blank" rel="noopener"><span class="dot" style="background:#1fa855"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg></span><span><strong>WhatsApp oficial</strong><span>Suporte e avisos</span></span></a>
-          <a href="https://t.me/+jPjv75TOACplMmYx" target="_blank" rel="noopener"><span class="dot" style="background:#229ed9"><svg viewBox="0 0 24 24"><path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.3-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.2 13 1.4 11.5c-1-.3-1-1 .2-1.5L20.6 2.8c.9-.3 1.6.2 1.3 1.5z"/></svg></span><span><strong>Comunidade no Telegram</strong><span>Novidades e lançamentos postados automaticamente</span></span></a>
-          <a href="https://www.instagram.com/streamflixvip" target="_blank" rel="noopener"><span class="dot" style="background:linear-gradient(45deg,#f9a825,#e1306c,#833ab4)"><svg viewBox="0 0 24 24"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4zM17.3 5.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zM12 2c-2.7 0-3 0-4.1.1C4.3 2.2 2.2 4.3 2.1 7.9 2 9 2 9.3 2 12s0 3 .1 4.1c.1 3.6 2.2 5.7 5.8 5.8 1.1.1 1.4.1 4.1.1s3 0 4.1-.1c3.6-.1 5.7-2.2 5.8-5.8.1-1.1.1-1.4.1-4.1s0-3-.1-4.1c-.1-3.6-2.2-5.7-5.8-5.8C15 2 14.7 2 12 2zm0 1.8c2.7 0 3 0 4 .1 2.7.1 4 1.4 4.1 4.1.1 1 .1 1.3.1 4s0 3-.1 4c-.1 2.7-1.4 4-4.1 4.1-1 .1-1.3.1-4 .1s-3 0-4-.1c-2.7-.1-4-1.4-4.1-4.1-.1-1-.1-1.3-.1-4s0-3 .1-4C3.9 5.3 5.2 4 7.9 3.9c1-.1 1.4-.1 4.1-.1z"/></svg></span><span><strong>Instagram</strong><span>@streamflixvip</span></span></a>
-          <a href="https://k.kwai.com/u/@StreamFlixVIP/WCCbpP4K" target="_blank" rel="noopener"><span class="dot" style="background:#ff7a00"><svg viewBox="0 0 24 24"><path d="M4 5h4v6.2L13.6 5H19l-6.6 7L19 19h-5.4L8 12.9V19H4z"/></svg></span><span><strong>Kwai</strong><span>@StreamFlixVIP</span></span></a>
+        <div class="kicker rv">Suporte e comunidade</div>
+        <h2 class="rv">Estamos por perto.</h2>
+        <p class="sub rv">Novidades, pedidos de filmes e ajuda rápida nos nossos canais oficiais.</p>
+        <div class="comm">
+          <a class="rv" href="https://chat.whatsapp.com/HwROmfEeCgk3IqDfeB5iEm" target="_blank" rel="noopener"><span class="dot" style="background:#1fa855"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg></span><span><strong>WhatsApp oficial</strong><span>Suporte e avisos</span></span></a>
+          <a class="rv" style="--d:.08s" href="https://www.instagram.com/streamflixvip" target="_blank" rel="noopener"><span class="dot" style="background:linear-gradient(45deg,#f9a825,#e1306c,#833ab4)"><svg viewBox="0 0 24 24"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4zM17.3 5.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zM12 2c-2.7 0-3 0-4.1.1C4.3 2.2 2.2 4.3 2.1 7.9 2 9 2 9.3 2 12s0 3 .1 4.1c.1 3.6 2.2 5.7 5.8 5.8 1.1.1 1.4.1 4.1.1s3 0 4.1-.1c3.6-.1 5.7-2.2 5.8-5.8.1-1.1.1-1.4.1-4.1s0-3-.1-4.1c-.1-3.6-2.2-5.7-5.8-5.8C15 2 14.7 2 12 2zm0 1.8c2.7 0 3 0 4 .1 2.7.1 4 1.4 4.1 4.1.1 1 .1 1.3.1 4s0 3-.1 4c-.1 2.7-1.4 4-4.1 4.1-1 .1-1.3.1-4 .1s-3 0-4-.1c-2.7-.1-4-1.4-4.1-4.1-.1-1-.1-1.3-.1-4s0-3 .1-4C3.9 5.3 5.2 4 7.9 3.9c1-.1 1.4-.1 4.1-.1z"/></svg></span><span><strong>Instagram</strong><span>@streamflixvip</span></span></a>
+          <a class="rv" style="--d:.16s" href="https://k.kwai.com/u/@StreamFlixVIP/WCCbpP4K" target="_blank" rel="noopener"><span class="dot" style="background:#ff7a00"><svg viewBox="0 0 24 24"><path d="M4 5h4v6.2L13.6 5H19l-6.6 7L19 19h-5.4L8 12.9V19H4z"/></svg></span><span><strong>Kwai</strong><span>@StreamFlixVIP</span></span></a>
         </div>
-        <div style="margin-top:48px;max-width:820px">
-          <details><summary>O app é gratuito?</summary><p>Sim, você pode baixar e usar. O VIP é opcional e libera benefícios descritos dentro do aplicativo.</p></details>
-          <details><summary>Como ativo o app da TV?</summary><p>Abra o app na TV e leia o QR code com o celular onde você já está logado (Perfil › Conectar TV), ou digite seu código VIP.</p></details>
-          <details><summary>Onde baixo a versão mais nova?</summary><p>Aqui no site, pelos botões de download, ou pelo aviso de atualização dentro do próprio app.</p></details>
-          <details><summary>Como falo com o suporte?</summary><p>Pelo WhatsApp oficial — link logo acima. Novidades também na Comunidade do Telegram, no Instagram e no Kwai.</p></details>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <div class="center"><div class="kicker rv">Dúvidas</div><h2 class="rv">Perguntas frequentes</h2></div>
+        <div class="faq">
+          <details class="rv"><summary>O app é gratuito?</summary><p>Sim, você pode baixar e usar. O VIP é opcional e libera benefícios descritos dentro do aplicativo, como assistir sem anúncios e baixar para ver offline.</p></details>
+          <details class="rv"><summary>Como funciona o download offline?</summary><p>É exclusivo VIP: toque em <b>Baixar</b> na tela do filme ou do episódio. O vídeo fica salvo dentro do app, em até 720p. Sem internet, abra o app em <b>Perfil › Downloads</b>. Alguns servidores não permitem baixar; nesse caso, o app avisa.</p></details>
+          <details class="rv"><summary>Como ativo o app da TV?</summary><p>Abra o app na TV e leia o QR code com o celular onde você já está logado (Perfil › Conectar TV), ou digite seu código VIP.</p></details>
+          <details class="rv"><summary>Como funciona o Indique e ganhe?</summary><p>Em <b>Perfil › Indique e ganhe</b> você encontra seu código. Quando um amigo com conta nova usar o código e fizer a primeira compra VIP, você ganha <b>+7 dias de VIP</b>.</p></details>
+          <details class="rv"><summary>Como pago o VIP?</summary><p>Pelo app, em <b>Perfil › Seja VIP</b>, com Pix. É pagamento único, sem renovação automática.</p></details>
+          <details class="rv"><summary>Onde baixo a versão mais nova?</summary><p>Aqui no site, pelos botões de download, ou pelo aviso de atualização dentro do próprio app.</p></details>
+          <details class="rv"><summary>Como falo com o suporte?</summary><p>Pelo WhatsApp oficial, no link logo acima. Novidades também no Instagram e no Kwai.</p></details>
         </div>
       </div>
     </section>
 
     <section class="final">
       <div class="wrap">
-        <h2>Comece a assistir agora.</h2>
-        <p class="sub" style="margin:0 auto">Escolha seu aparelho e instale em poucos toques.</p>
-        <div class="ctas">
-          <a class="btn btn-red" href="/downloads/app-latest.apk" download><span>Baixar para Celular<small>Código Downloader 6085325</small></span></a>
+        <h2 class="rv">Comece a assistir <span class="grad">agora</span>.</h2>
+        <p class="sub rv" style="margin:0 auto">Escolha seu aparelho e instale em poucos toques.</p>
+        <div class="ctas rv">
+          <a class="btn btn-red" href="/downloads/app-latest.apk" download><span>Baixar para celular<small>Código Downloader 6085325</small></span></a>
           <a class="btn btn-gold" href="/downloads/tv-latest.apk" download><span>Baixar para TV<small>Código Downloader 3422972</small></span></a>
-        <div class="qrs">
-            <div class="qr"><img src="/img/qr/qr-celular.png" alt="QR code para baixar o app de celular" width="152" height="152" loading="lazy"/><b>Celular</b><span>Aponte a câmera</span></div>
-            <div class="qr"><img src="/img/qr/qr-tv.png" alt="QR code para baixar o app de TV" width="152" height="152" loading="lazy"/><b>TV / Firestick</b><span>Abra no celular ou TV</span></div>
-          </div>
         </div>
       </div>
     </section>
@@ -379,8 +609,8 @@
 
   <footer>
     <div class="wrap foot">
-      <a class="brand" href="/"><img src="/img/logo-256.webp?v=5" alt="" width="30" height="30" style="width:30px;height:30px" />Stream<b>Flix</b> <span style="font-weight:400;color:var(--muted);font-size:14px;margin-left:8px">© 2026</span></a>
-      <nav class="soc" aria-label="Redes sociais"><a href="https://chat.whatsapp.com/HwROmfEeCgk3IqDfeB5iEm" target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg></a><a href="https://t.me/+jPjv75TOACplMmYx" target="_blank" rel="noopener" aria-label="Comunidade no Telegram"><svg viewBox="0 0 24 24"><path d="M21.9 4.3 18.7 19.4c-.2 1-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.3-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.2 13 1.4 11.5c-1-.3-1-1 .2-1.5L20.6 2.8c.9-.3 1.6.2 1.3 1.5z"/></svg></a><a href="https://www.instagram.com/streamflixvip" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4zM17.3 5.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zM12 2c-2.7 0-3 0-4.1.1C4.3 2.2 2.2 4.3 2.1 7.9 2 9 2 9.3 2 12s0 3 .1 4.1c.1 3.6 2.2 5.7 5.8 5.8 1.1.1 1.4.1 4.1.1s3 0 4.1-.1c3.6-.1 5.7-2.2 5.8-5.8.1-1.1.1-1.4.1-4.1s0-3-.1-4.1c-.1-3.6-2.2-5.7-5.8-5.8C15 2 14.7 2 12 2zm0 1.8c2.7 0 3 0 4 .1 2.7.1 4 1.4 4.1 4.1.1 1 .1 1.3.1 4s0 3-.1 4c-.1 2.7-1.4 4-4.1 4.1-1 .1-1.3.1-4 .1s-3 0-4-.1c-2.7-.1-4-1.4-4.1-4.1-.1-1-.1-1.3-.1-4s0-3 .1-4C3.9 5.3 5.2 4 7.9 3.9c1-.1 1.4-.1 4.1-.1z"/></svg></a><a href="https://k.kwai.com/u/@StreamFlixVIP/WCCbpP4K" target="_blank" rel="noopener" aria-label="Kwai"><svg viewBox="0 0 24 24"><path d="M4 5h4v6.2L13.6 5H19l-6.6 7L19 19h-5.4L8 12.9V19H4z"/></svg></a></nav>
+      <a class="brand" href="/"><img src="/img/logo-256.webp?v=5" alt="" width="30" height="30" style="width:30px;height:30px" loading="lazy" /><span>Stream<b>Flix</b></span><span style="font-weight:400;color:var(--muted);font-size:14px;margin-left:8px">© 2026</span></a>
+      <nav class="soc" aria-label="Redes sociais"><a href="https://chat.whatsapp.com/HwROmfEeCgk3IqDfeB5iEm" target="_blank" rel="noopener" aria-label="WhatsApp"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1.1c.2-.3.4-.2.6-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.3z"/></svg></a><a href="https://www.instagram.com/streamflixvip" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24"><path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 8.2a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4zM17.3 5.5a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4zM12 2c-2.7 0-3 0-4.1.1C4.3 2.2 2.2 4.3 2.1 7.9 2 9 2 9.3 2 12s0 3 .1 4.1c.1 3.6 2.2 5.7 5.8 5.8 1.1.1 1.4.1 4.1.1s3 0 4.1-.1c3.6-.1 5.7-2.2 5.8-5.8.1-1.1.1-1.4.1-4.1s0-3-.1-4.1c-.1-3.6-2.2-5.7-5.8-5.8C15 2 14.7 2 12 2zm0 1.8c2.7 0 3 0 4 .1 2.7.1 4 1.4 4.1 4.1.1 1 .1 1.3.1 4s0 3-.1 4c-.1 2.7-1.4 4-4.1 4.1-1 .1-1.3.1-4 .1s-3 0-4-.1c-2.7-.1-4-1.4-4.1-4.1-.1-1-.1-1.3-.1-4s0-3 .1-4C3.9 5.3 5.2 4 7.9 3.9c1-.1 1.4-.1 4.1-.1z"/></svg></a><a href="https://k.kwai.com/u/@StreamFlixVIP/WCCbpP4K" target="_blank" rel="noopener" aria-label="Kwai"><svg viewBox="0 0 24 24"><path d="M4 5h4v6.2L13.6 5H19l-6.6 7L19 19h-5.4L8 12.9V19H4z"/></svg></a></nav>
       <nav>
         <a href="/termos.html">Termos</a>
         <a href="/privacidade.html">Privacidade</a>
@@ -390,26 +620,89 @@
     </div>
   </footer>
 
+  <div class="refbar" id="refBar" role="status" aria-live="polite" hidden></div>
   <script>
-    (function(){
-      var h=document.querySelector("header");
-      addEventListener("scroll",function(){h.classList.toggle("scrolled",scrollY>8)},{passive:true});
-      // abas do guia
-      var tabs=[["t-cel","p-cel"],["t-tv","p-tv"]];
-      tabs.forEach(function(t){document.getElementById(t[0]).addEventListener("click",function(){
-        tabs.forEach(function(o){var on=o===t;document.getElementById(o[0]).setAttribute("aria-selected",on);document.getElementById(o[1]).hidden=!on;});
-      });});
-      // mural de pôsteres (em alta) — se falhar, fica o fundo em gradiente
-      var wall=document.getElementById("wall"),n=innerWidth<560?28:innerWidth<980?35:48;
-      for(var i=0;i<n;i++)wall.appendChild(document.createElement("div"));
-      function load(p){return fetch("/api/tmdb?path="+encodeURIComponent(p)).then(function(r){return r.ok?r.json():{results:[]}}).catch(function(){return{results:[]}})}
-      Promise.all([load("/trending/movie/week"),load("/trending/tv/week")]).then(function(a){
-        var posters=[];(a[0].results||[]).concat(a[1].results||[]).forEach(function(x){if(x.poster_path)posters.push(x.poster_path)});
-        if(!posters.length)return;
-        [].forEach.call(wall.children,function(d,i){d.style.backgroundImage="url(https://image.tmdb.org/t/p/w185"+posters[i%posters.length]+")"});
-        var mk=function(id,n,o){var r=document.getElementById(id);if(!r)return;for(var i=0;i<n;i++){var d=document.createElement("div");d.style.backgroundImage="url(https://image.tmdb.org/t/p/w185"+posters[(i+o)%posters.length]+")";r.appendChild(d)}};mk("rowTv",7,3);mk("rowPh",3,9);var f=document.getElementById("featPh");if(f)f.style.backgroundImage="url(https://image.tmdb.org/t/p/w342"+posters[1]+")";
-      });
-    })();
+  (function(){
+    var d=document,RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+    d.documentElement.classList.add("js");
+    function $(s,c){return(c||d).querySelector(s)}
+    function $$(s,c){return[].slice.call((c||d).querySelectorAll(s))}
+
+    /* cabeçalho: fundo ao rolar; some ao descer e volta ao subir */
+    var h=$("header"),lastY=0;
+    addEventListener("scroll",function(){var y=scrollY;h.classList.toggle("scrolled",y>8);if(y>500&&y>lastY+4)h.classList.add("hide");else if(y<lastY-4||y<500)h.classList.remove("hide");lastY=y},{passive:true});
+
+    /* animação ao rolar */
+    if("IntersectionObserver" in window&&!RM){
+      var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target)}})},{rootMargin:"0px 0px -8% 0px",threshold:.08});
+      $$(".rv").forEach(function(el){io.observe(el)});
+    } else $$(".rv").forEach(function(el){el.classList.add("in")});
+
+    /* brilho que segue o mouse nos cartões */
+    $$(".card").forEach(function(c){c.addEventListener("pointermove",function(e){var r=c.getBoundingClientRect();c.style.setProperty("--mx",(e.clientX-r.left)+"px");c.style.setProperty("--my",(e.clientY-r.top)+"px")})});
+
+    /* faixa contínua */
+    var tk=$("#ticker");tk.innerHTML+=tk.innerHTML;
+
+    /* ?ref=CODIGO: mostra o código de indicação para usar no app (Perfil › Indique e ganhe) */
+    try{
+      var code=String(new URLSearchParams(location.search).get("ref")||"").toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12);
+      if(code.length>=4){try{localStorage.setItem("sf_ref",code)}catch(_){}}
+      else{try{code=localStorage.getItem("sf_ref")||""}catch(_){code=""}}
+      if(code){
+        var rh=$("#refHero");rh.innerHTML="🎁 Você foi indicado! Código de indicação: <b></b><br><small style='color:#b9ab98'>Instale o app, crie sua conta e use o código em Perfil › Indique e ganhe.</small>";$("b",rh).textContent=code;rh.classList.add("on");
+        var bar=$("#refBar");bar.hidden=false;
+        bar.innerHTML="<span>🎁</span><span>Código de indicação: <b class='rc'></b><small>Use no app em Perfil › Indique e ganhe</small></span><button class='copy'>Copiar</button><button class='x' aria-label='Fechar'>×</button>";
+        $(".rc",bar).textContent=code;$(".copy",bar).setAttribute("data-copy",code);
+        var closed=false,heroEnd=function(){return $(".hero").offsetHeight*.75};
+        addEventListener("scroll",function(){if(!closed)bar.classList.toggle("on",scrollY>heroEnd())},{passive:true});
+        $(".x",bar).addEventListener("click",function(){closed=true;bar.classList.remove("on")});
+      }
+    }catch(_){}
+
+    /* copiar códigos */
+    d.addEventListener("click",function(e){var b=e.target.closest("[data-copy]");if(!b)return;var t=b.getAttribute("data-copy"),old=b.textContent;
+      function done(){b.textContent="Copiado ✓";setTimeout(function(){b.textContent=old},1600)}
+      function fallback(){var i=d.createElement("input");i.value=t;d.body.appendChild(i);i.select();try{d.execCommand("copy")}catch(_){}i.remove();done()}
+      if(navigator.clipboard)navigator.clipboard.writeText(t).then(done,fallback);else fallback()});
+
+    /* abas de instalação com indicador deslizante */
+    var tabs=[["t-cel","p-cel"],["t-tv","p-tv"]],knob=$("#knob");
+    function knobTo(btn){knob.style.width=btn.offsetWidth+"px";knob.style.transform="translateX("+(btn.offsetLeft-5)+"px)"}
+    tabs.forEach(function(t){d.getElementById(t[0]).addEventListener("click",function(){
+      var me=this;tabs.forEach(function(o){var on=o===t;d.getElementById(o[0]).setAttribute("aria-selected",on);d.getElementById(o[1]).hidden=!on});knobTo(me);
+    })});
+    knobTo(d.getElementById("t-cel"));addEventListener("resize",function(){knobTo($('#seg [aria-selected="true"]'))});
+
+    /* vitrine das novidades: o celular troca de tela */
+    var feats=$$(".feat"),scrs=$$(".scr"),cur=0,timer=null,userTook=false,visible=false;
+    function show(i,auto){cur=i;
+      feats.forEach(function(f,k){f.classList.toggle("on",k===i);f.classList.toggle("auto",!!auto&&!RM);f.setAttribute("aria-selected",k===i)});
+      scrs.forEach(function(s,k){s.classList.toggle("on",k===i)});
+      var box=feats[i].parentNode;if(box.scrollWidth>box.clientWidth+4){box.scrollTo({left:feats[i].offsetLeft-box.offsetLeft-16,behavior:RM?"auto":"smooth"})}}
+    function loop(){clearTimeout(timer);if(userTook||RM||!visible)return;timer=setTimeout(function(){show((cur+1)%feats.length,true);loop()},5000)}
+    feats.forEach(function(f,i){f.addEventListener("click",function(){userTook=true;clearTimeout(timer);show(i,false)})});
+    if("IntersectionObserver" in window){new IntersectionObserver(function(es){visible=es[0].isIntersecting;if(visible&&!userTook){show(cur,true);loop()}else clearTimeout(timer)},{threshold:.3}).observe($(".show-grid"))}
+
+    /* inclinação 3D do celular do topo acompanhando o mouse */
+    var hp=$("#heroPhone");
+    if(hp&&!RM&&matchMedia("(pointer:fine)").matches){addEventListener("pointermove",function(e){var x=e.clientX/innerWidth-.5,y=e.clientY/innerHeight-.5;hp.style.transform="rotateY("+(-14+x*14)+"deg) rotateX("+(6-y*10)+"deg) rotateZ(2deg)"},{passive:true})}
+
+    /* mural de pôsteres em alta + parallax; se a API falhar, fica o gradiente */
+    var wall=$("#wall"),cols=innerWidth<560?4:innerWidth<1000?7:10,per=innerWidth<560?5:7;
+    for(var c=0;c<cols;c++){var col=d.createElement("div");col.className="col";for(var k=0;k<per*2;k++)col.appendChild(d.createElement("i"));wall.appendChild(col)}
+    if(!RM){addEventListener("scroll",function(){var y=scrollY;if(y<innerHeight*1.3)wall.style.translate="0 "+(y*.3)+"px"},{passive:true})}
+    function load(p){return fetch("/api/tmdb?path="+encodeURIComponent(p)).then(function(r){return r.ok?r.json():{results:[]}}).catch(function(){return{results:[]}})}
+    function posters(){Promise.all([load("/trending/movie/week"),load("/trending/tv/week")]).then(function(a){
+      var all=(a[0].results||[]).concat(a[1].results||[]).filter(function(x){return x.poster_path}),posters=all.map(function(x){return x.poster_path}),backs=all.filter(function(x){return x.backdrop_path}).map(function(x){return x.backdrop_path});
+      if(!posters.length)return;
+      $$(".col",wall).forEach(function(col,ci){$$("i",col).forEach(function(cell,k){var img=new Image();img.alt="";img.decoding="async";img.width=185;img.height=278;img.onload=function(){img.classList.add("ok")};img.src="https://image.tmdb.org/t/p/w185"+posters[(ci*per+(k%per))%posters.length];cell.appendChild(img)})});
+      var mr=$("#miniRow");for(var i=0;i<8;i++){var e=d.createElement("i");e.style.backgroundImage="url(https://image.tmdb.org/t/p/w154"+posters[(i+11)%posters.length]+")";mr.appendChild(e)}
+      $$("[data-poster]").forEach(function(el){var key=el.getAttribute("data-poster"),n=+key.slice(1),src=key[0]==="b"&&backs.length?"https://image.tmdb.org/t/p/w500"+backs[(n+2)%backs.length]:"https://image.tmdb.org/t/p/w185"+posters[(n+3)%posters.length];el.style.backgroundImage="url("+src+")"});
+      var pick=all[8%all.length];if(pick)$("#pickTitle").textContent=pick.title||pick.name||"Sugestão para você";
+    })}
+    if(d.readyState==="complete")setTimeout(posters,50);else addEventListener("load",function(){(window.requestIdleCallback||setTimeout)(posters,{timeout:1200})});
+  })();
   </script>
 </body>
 </html>
