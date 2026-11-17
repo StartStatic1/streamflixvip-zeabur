@@ -60,6 +60,27 @@ enum class Mood(val emoji: String, val label: String, val movieGenres: String?, 
 /** Gêneros que nunca entram no perfil infantil. */
 private const val KIDS_BLOCKED = "27,53,80,10752,10749,18"
 
+/** Humor adulto nunca sorteia desenho/família/infantil (só "Pra família"). */
+private const val ADULT_BLOCKED_MOVIE = "16,10751"
+private const val ADULT_BLOCKED_TV = "16,10751,10762"
+
+/**
+ * Filtro estrito por humor (além de [Mood.movieGenres]/[Mood.tvGenres]):
+ * gêneros excluídos e, na série, palavras-chave da TMDB (série não tem gênero Terror).
+ */
+private data class MoodRule(val movieWithout: String = "", val tvWithout: String = "", val tvKeywords: String? = null, val tvMaxPage: Int = 8)
+
+private fun ruleFor(m: Mood): MoodRule = when (m) {
+    // Terror/Suspense: sem ação, aventura, comédia, musical; série = palavra-chave "horror" da TMDB
+    Mood.SUSPENSE -> MoodRule(movieWithout = "28,12,35,10402,10770,36,10752,10749,99", tvWithout = "10759,35,10764,99,10767", tvKeywords = "315058", tvMaxPage = 4)
+    Mood.RIR -> MoodRule(movieWithout = "27", tvWithout = "")
+    Mood.ROMANCE -> MoodRule(movieWithout = "27")
+    Mood.DRAMA -> MoodRule(movieWithout = "35", tvWithout = "35,10764")
+    else -> MoodRule()
+}
+
+private fun ids(csv: String): Set<Int> = csv.split(',', '|').mapNotNull { it.trim().toIntOrNull() }.toSet()
+
 data class MoodPick(val item: TmdbItem, val mediaType: String)
 
 /** Sorteia um título que o app consegue tocar agora, de preferência um que o perfil ainda não viu. */
@@ -125,12 +146,37 @@ object MoodRepository {
                 // infantil: o gênero do humor E família/infantil ao mesmo tempo (vírgula = todos)
                 "with_genres" to if (kids && real != Mood.FAMILIA) "$genres,${if (type == "movie") "10751" else "10762"}" else genres,
             )
+            val rule = ruleFor(real)
+            var blocked = emptySet<Int>()
             if (kids) {
                 params["without_genres"] = KIDS_BLOCKED
                 if (real == Mood.FAMILIA) params["with_genres"] = kidsGenres
+                blocked = ids(KIDS_BLOCKED)
+            } else if (real != Mood.FAMILIA) {
+                val without = listOf(if (type == "movie") ADULT_BLOCKED_MOVIE else ADULT_BLOCKED_TV, if (type == "movie") rule.movieWithout else rule.tvWithout)
+                    .filter { it.isNotBlank() }.joinToString(",")
+                params["without_genres"] = without
+                blocked = ids(without)
+                if (type == "tv" && rule.tvKeywords != null) {
+                    params.remove("with_genres")
+                    params["with_keywords"] = rule.tvKeywords
+                    params["page"] = (1..rule.tvMaxPage).random().toString()
+                }
             }
-            val res = runCatching { tmdb.discover("/discover/$type", params).results.orEmpty() }.getOrDefault(emptyList())
+            // Terror/Suspense em filme: 60% só Terror, 40% Thriller (os dois juntos puxava muito thriller)
+            if (!kids && real == Mood.SUSPENSE && type == "movie") params["with_genres"] = if (Math.random() < 0.6) "27" else "53"
+            val wanted = if (params.containsKey("with_genres")) ids(params["with_genres"].orEmpty()) else emptySet()
+            var res = runCatching { tmdb.discover("/discover/$type", params).results.orEmpty() }.getOrDefault(emptyList())
+            if (res.isEmpty() && params["page"] != "1") {
+                params["page"] = "1"
+                res = runCatching { tmdb.discover("/discover/$type", params).results.orEmpty() }.getOrDefault(emptyList())
+            }
             res.filter { !it.poster_path.isNullOrBlank() && !it.overview.isNullOrBlank() }
+                .filter { r ->
+                    // confere de novo os gêneros de cada título (se a TMDB devolver)
+                    val g = r.genre_ids ?: return@filter true
+                    g.none { it in blocked } && (wanted.isEmpty() || kids || g.any { it in wanted })
+                }
                 .forEach { out += MoodPick(it.copy(media_type = type), type) }
         }
         return out
@@ -165,6 +211,10 @@ object MoodRepository {
             }.getOrNull() ?: return@mapNotNull null
             if (kids && (genres.any { it in blocked } || (10751 !in genres && 16 !in genres))) return@mapNotNull null
             if (wanted != null && genres.none { it in wanted }) return@mapNotNull null
+            if (!kids && real != Mood.FAMILIA) {
+                val adultBlocked = ids(ADULT_BLOCKED_MOVIE) + (real?.let { ids(ruleFor(it).movieWithout) } ?: emptySet())
+                if (genres.any { it in adultBlocked }) return@mapNotNull null
+            }
             MoodPick(f.copy(media_type = "movie", overview = f.overview?.takeIf { it.isNotBlank() } ?: overview), "movie")
         }
     }

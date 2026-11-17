@@ -128,6 +128,7 @@ data class TmdbItem(
     val media_type: String? = null,
     val popularity: Double? = null,
     val original_language: String? = null,
+    val genre_ids: List<Int>? = null,
 ) {
     val displayTitle: String get() = title ?: name ?: "Sem título"
     val resolvedMediaType: String get() = media_type ?: if (title != null) "movie" else "tv"
