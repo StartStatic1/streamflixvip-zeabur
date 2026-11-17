@@ -20,6 +20,13 @@ interface TmdbApi {
 
     @GET("api/tmdb")
     suspend fun requestSeasonDetail(@Query("path") path: String): TmdbSeasonDetail
+
+    /** /discover com filtros livres (sort_by, vote_count.gte, without_genres...) — usado pelo "Não sei o que assistir". */
+    @GET("api/tmdb")
+    suspend fun discover(
+        @Query("path") path: String,
+        @retrofit2.http.QueryMap params: Map<String, String>,
+    ): TmdbResponse
 }
 
 @JsonClass(generateAdapter = true)

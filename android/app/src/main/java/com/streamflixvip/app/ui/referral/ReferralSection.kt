@@ -114,11 +114,11 @@ fun ReferralSection() {
                     onClick = { shareReferral(context, i) },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color(0xFF1A1204)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.Black),
                 ) {
-                    Icon(Icons.Filled.Share, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Share, null, modifier = Modifier.size(18.dp), tint = Color.Black)
                     Spacer(Modifier.width(8.dp))
-                    Text("Compartilhar convite", fontWeight = FontWeight.Bold)
+                    Text("Compartilhar convite", fontWeight = FontWeight.Bold, color = Color.Black)
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -167,7 +167,7 @@ fun ReferralSection() {
                             },
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f), contentColor = Color.White),
-                        ) { Text(if (applying) "..." else "Usar") }
+                        ) { Text(if (applying) "..." else "Usar", color = Color.White, fontWeight = FontWeight.Bold) }
                     }
                     applyMsg?.let { (ok, msg) ->
                         Spacer(Modifier.height(6.dp))

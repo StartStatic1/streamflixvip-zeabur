@@ -55,6 +55,13 @@ fun HomeScreen(
     onRetroClick: (() -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
+    var showMoodPicker by remember { mutableStateOf(false) }
+    if (showMoodPicker) {
+        com.streamflixvip.app.ui.mood.MoodPickerSheet(
+            onDismiss = { showMoodPicker = false },
+            onWatch = { id, type -> showMoodPicker = false; onItemClick(id, type) },
+        )
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -120,6 +127,11 @@ fun HomeScreen(
                 // Atalhos rápidos (Filmes / Séries / Animes / Doramas): usam o mesmo "Ver mais" das fileiras
                 item {
                     QuickCategoryChips(links = QUICK_LINKS, onClick = onSeeAllClick)
+                }
+                // "Não sei o que assistir": sorteio por humor
+                item {
+                    Spacer(Modifier.height(10.dp))
+                    com.streamflixvip.app.ui.mood.MoodEntryCard(onClick = { showMoodPicker = true }, modifier = Modifier.padding(horizontal = 16.dp))
                 }
                 itemsIndexed(visibleRows) { index, row ->
                     Spacer(Modifier.height(18.dp))

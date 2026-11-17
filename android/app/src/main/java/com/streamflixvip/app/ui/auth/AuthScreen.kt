@@ -195,7 +195,7 @@ private fun PrimaryButton(text: String, loading: Boolean, onClick: () -> Unit) {
         colors = ButtonDefaults.buttonColors(containerColor = accent.accent, contentColor = accent.onAccent),
     ) {
         if (loading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = accent.onAccent)
-        else Text(text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        else Text(text, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = accent.onAccent)
     }
 }
 

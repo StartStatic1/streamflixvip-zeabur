@@ -102,8 +102,8 @@ fun RetroScreen(onBack: () -> Unit) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Não foi possível carregar a retrospectiva agora.", color = Color.White, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(12.dp))
-                    Button(onClick = { reload++ }, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color(0xFF1A1204))) {
-                        Text("Tentar de novo", fontWeight = FontWeight.Bold)
+                    Button(onClick = { reload++ }, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.Black)) {
+                        Text("Tentar de novo", fontWeight = FontWeight.Bold, color = Color.Black)
                     }
                 }
             }
@@ -132,11 +132,11 @@ fun RetroScreen(onBack: () -> Unit) {
                     onClick = { shareRetroImage(context, u.image, s.year) },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                     shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color(0xFF1A1204)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Color.Black),
                 ) {
-                    Icon(Icons.Filled.Share, null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Filled.Share, null, modifier = Modifier.size(18.dp), tint = Color.Black)
                     Spacer(Modifier.width(8.dp))
-                    Text("Compartilhar nos Stories / Status", fontWeight = FontWeight.Bold)
+                    Text("Compartilhar nos Stories / Status", fontWeight = FontWeight.Bold, color = Color.Black)
                 }
                 Spacer(Modifier.height(18.dp))
                 if (s.topTitles.isNotEmpty()) Section("Mais assistidos") {
