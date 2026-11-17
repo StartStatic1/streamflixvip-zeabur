@@ -403,13 +403,15 @@ fun PlayerScreen(
         onDispose { activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
+    // (antes vinha do scripts/patch_torbox_direct_play.py no build; agora fica no código)
     val downloaded = remember(sourceUrl) { com.streamflixvip.app.offline.OfflineDownloads.completedByUri(sourceUrl) != null }
-    var resolvedUrl by remember(sourceUrl) { mutableStateOf<String?>(if (isDirectPlayable && !downloaded) null else sourceUrl) }
-    LaunchedEffect(sourceUrl, isDirectPlayable) {
-        if (isDirectPlayable && !downloaded) {
+    val playNative = downloaded || isDirectPlayable || com.streamflixvip.app.network.urlLooksDirectPlayable(sourceUrl)
+    var resolvedUrl by remember(sourceUrl) { mutableStateOf<String?>(if (playNative && !downloaded) null else sourceUrl) }
+    LaunchedEffect(sourceUrl, playNative) {
+        if (playNative && !downloaded) {
             val candidates = VipSource(source_url = sourceUrl, source_label = null, priority = null)
                 .candidatePlaybackUrls(BuildConfig.API_BASE_URL, NetworkModule.ZEABUR_BASE_URL)
-            resolvedUrl = StreamUrlResolver.resolveFastest(candidates)
+            resolvedUrl = StreamUrlResolver.resolveFastest(candidates).ifBlank { sourceUrl }
         }
     }
 
@@ -421,7 +423,7 @@ fun PlayerScreen(
         return
     }
 
-    if (isDirectPlayable) {
+    if (playNative) {
         NativePlayer(
             url = currentResolvedUrl,
             userId = userId,
