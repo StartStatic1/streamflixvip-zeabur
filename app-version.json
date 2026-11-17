@@ -1,7 +1,7 @@
 {
-  "versionCode": 170501,
-  "versionName": "17.5.1",
+  "versionCode": 170502,
+  "versionName": "17.5.2",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Correção: o botão Baixar do player agora mostra o progresso ao vivo e Baixado ✓. Novo: baixe direto da tela do filme (ao lado do Assistir) e de cada episódio — o app escolhe sozinho um servidor que dá para baixar, dublado primeiro. Sem internet, o app mostra um aviso com atalho para os seus downloads."
+  "releaseNotes": "Não sei o que assistir mais certeiro: Terror/Suspense agora traz só terror e suspense de verdade (sem ação, super-herói ou desenho), e os humores adultos não sorteiam mais animação infantil."
 }
