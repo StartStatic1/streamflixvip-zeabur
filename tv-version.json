@@ -1,7 +1,7 @@
 {
-  "versionCode": 33,
-  "versionName": "4.2.0",
+  "versionCode": 34,
+  "versionName": "4.2.1",
   "apkUrl": "https://streamflixvip.online/downloads/tv-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Novo: seu código de convite do Indique e ganhe aparece em Ajustes. Compartilhe pelo app do celular e ganhe 7 dias de VIP."
+  "releaseNotes": "Corrige o fechamento do app ao segurar OK para tirar um título da Minha lista."
 }

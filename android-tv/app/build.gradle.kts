@@ -15,8 +15,8 @@ android {
         applicationId = "com.streamflixvip.tv"
         minSdk = 24
         targetSdk = 34
-        versionCode = 33
-        versionName = "4.2.0"
+        versionCode = 34
+        versionName = "4.2.1"
 
         buildConfigField("String", "API_BASE_URL", "\"https://www.streamflixvip.online/\"")
         buildConfigField("String", "SUPABASE_URL", "\"https://gkujbjpvphuvrejpvvtz.supabase.co\"")
