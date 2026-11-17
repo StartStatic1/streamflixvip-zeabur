@@ -227,8 +227,39 @@ private fun EmailStep(state: AuthUiState, viewModel: AuthViewModel) {
         ),
         shape = RoundedCornerShape(14.dp),
     )
+    Spacer(Modifier.height(10.dp))
+    // Indique e ganhe: código de convite opcional (guardado até a conta existir)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var showRef by remember { mutableStateOf(com.streamflixvip.app.data.ReferralRepository.pending(ctx) != null) }
+    var refCode by remember { mutableStateOf(com.streamflixvip.app.data.ReferralRepository.pending(ctx) ?: "") }
+    if (!showRef) {
+        TextButton(onClick = { showRef = true }) {
+            Text("Tem um código de convite?", color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp)
+        }
+    } else {
+        OutlinedTextField(
+            value = refCode,
+            onValueChange = { v -> refCode = v.uppercase().filter { it.isLetterOrDigit() }.take(12) },
+            placeholder = { Text("Código de convite (opcional)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = accent.accent,
+                unfocusedBorderColor = Color.White.copy(alpha = 0.18f),
+                cursorColor = accent.accent,
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedContainerColor = Color.White.copy(alpha = 0.04f),
+                unfocusedContainerColor = Color.White.copy(alpha = 0.04f),
+            ),
+            shape = RoundedCornerShape(14.dp),
+        )
+    }
     Spacer(Modifier.height(16.dp))
-    PrimaryButton("Enviar código", state.isLoading) { viewModel.sendCode() }
+    PrimaryButton("Enviar código", state.isLoading) {
+        com.streamflixvip.app.data.ReferralRepository.savePending(ctx, if (showRef) refCode else "")
+        viewModel.sendCode()
+    }
 }
 
 @Composable

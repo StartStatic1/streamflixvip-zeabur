@@ -59,6 +59,7 @@ fun ProfileScreen(
     onMyListClick: (() -> Unit)? = null,
     onAnnouncementClick: ((tmdbId: Int, mediaType: String) -> Unit)? = null,
     onSwitchProfile: (() -> Unit)? = null,
+    onRetroClick: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -159,6 +160,18 @@ fun ProfileScreen(
             iconTint = Accent,
             onClick = { com.streamflixvip.app.tvpair.TvPair.pending.value = "" },
         )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Retrospectiva: números da conta (perfil principal)
+        val activeForRetro by com.streamflixvip.app.profiles.ProfileStore.active.collectAsState()
+        val isMainProfile = remember(activeForRetro) { com.streamflixvip.app.profiles.ProfileLocalData.localScope() == null }
+        if (userId != null && onRetroClick != null && isMainProfile) {
+            com.streamflixvip.app.ui.retro.RetroEntryCard(onClick = onRetroClick)
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+        if (userId != null) {
+            com.streamflixvip.app.ui.referral.ReferralSection()
+        }
         Spacer(modifier = Modifier.height(24.dp))
 
         if (notificationsEnabled && announcements.isNotEmpty()) {

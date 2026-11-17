@@ -52,6 +52,7 @@ fun HomeScreen(
     onContinueWatchingClick: (WatchProgressEntry) -> Unit,
     onContinueWatchingDismiss: (WatchProgressEntry) -> Unit = {},
     onSeeAllClick: (HomeRowExploreLink) -> Unit,
+    onRetroClick: (() -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -107,6 +108,15 @@ fun HomeScreen(
                 }
                 // Area Free so para quem nao e VIP — decidido aqui (reage quando o status VIP chega)
                 val visibleRows = if (homeVip) s.rows.filterNot { it.title == "Area Free" } else s.rows
+                // Dezembro/janeiro: destaque da Retrospectiva (só na conta principal)
+                if (onRetroClick != null && com.streamflixvip.app.ui.retro.isRetroSeason() &&
+                    com.streamflixvip.app.profiles.ProfileLocalData.localScope() == null
+                ) {
+                    item {
+                        Spacer(Modifier.height(12.dp))
+                        com.streamflixvip.app.ui.retro.RetroEntryCard(onClick = onRetroClick, modifier = Modifier.padding(horizontal = 16.dp))
+                    }
+                }
                 // Atalhos rápidos (Filmes / Séries / Animes / Doramas): usam o mesmo "Ver mais" das fileiras
                 item {
                     QuickCategoryChips(links = QUICK_LINKS, onClick = onSeeAllClick)

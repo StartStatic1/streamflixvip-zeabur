@@ -193,6 +193,8 @@ async function handleWebhook(req, res) {
 
     sales.record({ ...baseSale, email: currentStatus?.email || null, status: 'aprovado', expiresAt: newExpiry.toISOString() });
     try { require('../lib/vip-status-cache').invalidate(userId); } catch (_) {}
+    // Indique e ganhe: 1ª compra VIP paga da conta indicada dá dias para quem indicou
+    require('../lib/referrals').onVipPaidSafe({ userId, saleId });
     console.log(`VIP ativado automaticamente para o usuário ${userId} via PIX.`);
     res.status(200).send('OK');
   } catch (err) {

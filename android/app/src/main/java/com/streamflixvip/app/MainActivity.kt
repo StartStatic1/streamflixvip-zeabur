@@ -277,6 +277,18 @@ private fun MainAppScaffold(
     val resumeCtx = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.runtime.LaunchedEffect(Unit) { ResumePlaybackCache.init(resumeCtx) }
 
+    val referralCtx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(userId) {
+        // Código de convite digitado no login: usa assim que a conta existe (1x)
+        if (userId != null) {
+            val pendingRef = com.streamflixvip.app.data.ReferralRepository.pending(referralCtx)
+            if (!pendingRef.isNullOrBlank()) {
+                val (ok, msg) = com.streamflixvip.app.data.ReferralRepository.apply(pendingRef)
+                if (ok || !msg.startsWith("Sem conexão")) com.streamflixvip.app.data.ReferralRepository.clearPending(referralCtx)
+                android.widget.Toast.makeText(referralCtx, msg, android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     LaunchedEffect(userId) {
         if (userId != null) {
             val status = VipRepository().getStatus(userId)
@@ -336,6 +348,7 @@ private fun MainAppScaffold(
                 )
                 HomeScreen(
                     viewModel = viewModel,
+                    onRetroClick = if (userId != null) ({ navController.navigate("retro") { launchSingleTop = true } }) else null,
                     onItemClick = { tmdbId, mediaType -> navController.navigate("detail/$tmdbId/$mediaType") },
                     onContinueWatchingDismiss = { entry -> viewModel.dismissContinueWatching(entry) },
                     onContinueWatchingClick = { entry ->
@@ -551,7 +564,12 @@ private fun MainAppScaffold(
                     onAnnouncementClick = { tmdbId, mediaType ->
                         navController.navigate("detail/$tmdbId/$mediaType")
                     },
+                    onRetroClick = { navController.navigate("retro") { launchSingleTop = true } },
                 )
+            }
+
+            composable("retro") {
+                com.streamflixvip.app.ui.retro.RetroScreen(onBack = { navController.popBackStack() })
             }
 
             composable(

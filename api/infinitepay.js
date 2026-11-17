@@ -274,6 +274,8 @@ async function handleWebhook(req, res) {
         status: 'aprovado', expiresAt: newExpiry.toISOString(), receiptUrl: body.receipt_url || null });
     } catch (e) { console.warn('[infinitepay] sales log', e.message); }
     try { vipMem.invalidate(userId); } catch (_) {}
+    // Indique e ganhe: 1ª compra VIP paga da conta indicada dá dias para quem indicou
+    require('../lib/referrals').onVipPaidSafe({ userId, saleId });
     console.log(`[infinitepay] VIP ok user=${userId} method=${methodLabel} until=${newExpiry.toISOString()}`);
     return res.status(200).json({ success: true, message: null });
   } catch (e) {

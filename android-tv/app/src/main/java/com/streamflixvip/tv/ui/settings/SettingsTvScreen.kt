@@ -235,6 +235,29 @@ fun SettingsTvScreen(
                 Text("ID do aparelho: ${activationManager.deviceId.take(12)}…", color = p.textMuted, fontSize = 12.sp)
             }
         }
+        // Indique e ganhe: código da conta dona desta TV (somente leitura; compartilhar é pelo celular)
+        item {
+            var referral by remember { mutableStateOf<com.streamflixvip.tv.data.ReferralTvClient.Info?>(null) }
+            LaunchedEffect(activationManager.deviceId) {
+                referral = com.streamflixvip.tv.data.ReferralTvClient.load(activationManager.deviceId)
+            }
+            val r = referral
+            if (r?.code != null) {
+                Column(
+                    Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(14.dp))
+                        .background(p.surface).padding(18.dp),
+                ) {
+                    Text("Indique e ganhe", color = p.accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Seu código de convite: ${r.code}", color = p.text, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Seu amigo usa o código no app do celular e, quando assinar o VIP, você ganha ${r.rewardDays} dias. Para compartilhar, abra Perfil › Indique e ganhe no celular.",
+                        color = p.textMuted, fontSize = 12.sp,
+                    )
+                }
+            }
+        }
         item {
             PanelItem(
                 title = if (confirm == "progress") "Confirmar: apagar histórico?" else "Limpar Continuar assistindo",
