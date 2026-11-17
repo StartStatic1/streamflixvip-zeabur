@@ -152,7 +152,19 @@ object OfflineDownloads {
             }
         }
         _items.value = out.sortedByDescending { it.download.startTimeMs }
+        // O DownloadManager só avisa quando muda o estado, não o progresso:
+        // enquanto houver download ativo, relê a cada 1 s (player e tela de Downloads)
+        val active = out.any {
+            it.state == Download.STATE_DOWNLOADING || it.state == Download.STATE_QUEUED || it.state == Download.STATE_RESTARTING
+        }
+        if (active && !tickScheduled) {
+            tickScheduled = true
+            mainHandler.postDelayed({ tickScheduled = false; refresh() }, 1_000)
+        }
     }
+
+    @Volatile private var tickScheduled = false
+    private val mainHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
     fun init(context: Context) { runCatching { manager(context) } }
 

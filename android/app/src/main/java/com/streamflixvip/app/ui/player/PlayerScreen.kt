@@ -1688,7 +1688,8 @@ private fun NativePlayer(
                             val dlItem = offlineItems.firstOrNull { it.id == dlId }
                             val dlLabel = when {
                                 dlItem == null || dlItem.state == androidx.media3.exoplayer.offline.Download.STATE_FAILED -> "Baixar"
-                                dlItem.isDone -> "Baixado"
+                                dlItem.isDone -> "Baixado ✓"
+                                dlItem.percent <= 0f && dlItem.bytes > 0 -> "Baixando ${dlItem.bytes / (1024 * 1024)} MB"
                                 else -> "Baixando ${dlItem.percent.toInt()}%"
                             }
                             ChromeChip(dlLabel, Icons.Filled.Download, {

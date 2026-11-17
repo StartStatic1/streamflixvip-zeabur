@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -249,6 +250,9 @@ internal fun EpisodeCard(
     isAvailable: Boolean,
     onToggleExpand: () -> Unit,
     onPlay: () -> Unit,
+    download: com.streamflixvip.app.offline.OfflineDownloads.Item? = null,
+    downloadBusy: Boolean = false,
+    onDownload: (() -> Unit)? = null,
 ) {
     val accent = StreamFlixColors.Accent
     val dim = !isAvailable
@@ -337,6 +341,13 @@ internal fun EpisodeCard(
                 if (dim) {
                     Text("Em breve", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.tertiary)
                 }
+                if (download != null || downloadBusy) {
+                    Text(downloadLabel(download, downloadBusy), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = accent)
+                }
+            }
+            if (onDownload != null && !dim) {
+                Spacer(Modifier.width(6.dp))
+                DownloadIndicator(download, downloadBusy, 36.dp, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), onDownload)
             }
         }
         if (!episode.overview.isNullOrBlank()) {
@@ -352,4 +363,47 @@ internal fun EpisodeCard(
             )
         }
     }
+}
+
+/** Botão redondo de download: ícone → anel com % → ✓ (lê o mesmo progresso da tela Downloads). */
+@Composable
+internal fun DownloadIndicator(
+    item: com.streamflixvip.app.offline.OfflineDownloads.Item?,
+    busy: Boolean,
+    size: androidx.compose.ui.unit.Dp,
+    background: Color,
+    onClick: () -> Unit,
+) {
+    val accent = StreamFlixColors.Accent
+    val failed = item?.state == androidx.media3.exoplayer.offline.Download.STATE_FAILED
+    val done = item?.isDone == true
+    val active = item != null && !done && !failed
+    Box(
+        modifier = Modifier.size(size).clip(CircleShape).background(background).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            done -> Icon(Icons.Filled.Check, contentDescription = "Baixado", tint = accent, modifier = Modifier.size(size * 0.45f))
+            active -> {
+                val pct = item!!.percent
+                if (pct > 0f) {
+                    CircularProgressIndicator(progress = { (pct / 100f).coerceIn(0f, 1f) }, modifier = Modifier.size(size * 0.8f), strokeWidth = 2.dp, color = accent)
+                    Text("${pct.toInt()}", fontSize = (size.value * 0.24f).sp, fontWeight = FontWeight.Bold, color = Color.White)
+                } else {
+                    CircularProgressIndicator(modifier = Modifier.size(size * 0.6f), strokeWidth = 2.dp, color = accent)
+                }
+            }
+            busy -> CircularProgressIndicator(modifier = Modifier.size(size * 0.5f), strokeWidth = 2.dp, color = Color.White)
+            else -> Icon(Icons.Filled.Download, contentDescription = "Baixar para ver sem internet", tint = Color.White, modifier = Modifier.size(size * 0.45f))
+        }
+    }
+}
+
+/** Texto curto do estado do download (para o rótulo embaixo do botão). */
+internal fun downloadLabel(item: com.streamflixvip.app.offline.OfflineDownloads.Item?, busy: Boolean): String = when {
+    item?.isDone == true -> "Baixado ✓"
+    item != null && item.state != androidx.media3.exoplayer.offline.Download.STATE_FAILED ->
+        if (item.percent > 0f) "Baixando ${item.percent.toInt()}%" else if (item.bytes > 0) "Baixando ${item.bytes / (1024 * 1024)} MB" else "Na fila…"
+    busy -> "Procurando…"
+    else -> "Baixar"
 }

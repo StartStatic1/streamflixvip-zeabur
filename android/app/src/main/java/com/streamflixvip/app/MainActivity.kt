@@ -19,6 +19,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScaffoldDefaults
@@ -349,10 +354,29 @@ private fun MainAppScaffold(
         }
     }
 
+    // Sem internet: aviso com atalho para os downloads; se abriu o app já sem
+    // internet e tem algo baixado, vai direto para Perfil → Downloads.
+    val online by com.streamflixvip.app.offline.NetState.online.collectAsState()
+    val offlineItemsAll by com.streamflixvip.app.offline.OfflineDownloads.items.collectAsState()
+    var offlineAutoOpened by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(800)
+        if (!offlineAutoOpened && !com.streamflixvip.app.offline.NetState.online.value &&
+            com.streamflixvip.app.offline.OfflineDownloads.items.value.any { it.isDone }
+        ) {
+            offlineAutoOpened = true
+            runCatching { navController.navigate("downloads") { launchSingleTop = true } }
+        }
+    }
+    val showOfflineBanner = !online && currentRoute != null &&
+        currentRoute != "downloads" && !currentRoute.startsWith("player") && !currentRoute.startsWith("offlineplayer") &&
+        !currentRoute.startsWith("liveplayer") && !currentRoute.startsWith("reelplayer")
+
     val detailEdge = currentRoute?.startsWith("detail") == true
     Scaffold(
         contentWindowInsets = if (detailEdge) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets,
         topBar = {
+          Column {
             if (showTopBar) {
                 com.streamflixvip.app.ui.nav.AppTopBar(
                     onSearchClick = {
@@ -364,6 +388,14 @@ private fun MainAppScaffold(
                     onProfileClick = onSwitchProfile,
                 )
             }
+            if (showOfflineBanner) {
+                OfflineBanner(
+                    hasDownloads = offlineItemsAll.any { it.isDone },
+                    needsStatusBarPadding = !showTopBar,
+                    onOpen = { navController.navigate("downloads") { launchSingleTop = true } },
+                )
+            }
+          }
         },
         bottomBar = {
             if (showBottomBar) StreamFlixBottomBar(navController)
@@ -810,4 +842,27 @@ private fun DeviceInUseDialog() {
             androidx.compose.material3.TextButton(onClick = { dismissedFor = i }) { Text(if (i.limitReached) "OK" else "Agora não") }
         },
     )
+}
+
+
+/** Faixa "Sem internet" com atalho para os downloads (que tocam offline). */
+@Composable
+private fun OfflineBanner(hasDownloads: Boolean, needsStatusBarPadding: Boolean, onOpen: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF2A1F00))
+            .then(if (needsStatusBarPadding) Modifier.statusBarsPadding() else Modifier)
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (hasDownloads) "Sem internet · seus downloads funcionam offline" else "Sem internet · conecte para assistir",
+            color = Color(0xFFFFD27A),
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f),
+        )
+        Text("Ver downloads", color = Color.White, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+    }
 }

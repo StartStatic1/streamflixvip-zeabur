@@ -327,6 +327,44 @@ private fun DetailContent(
     val seriesProgress = rememberSeriesProgress(state.tmdbId, state.mediaType == "tv")
     var episodesNewestFirst by rememberSaveable(details.id) { mutableStateOf(false) }
 
+    // Baixar daqui da tela (filme ao lado do Assistir, e cada episódio): escolhe
+    // sozinho o primeiro servidor que dá para baixar, dublado primeiro.
+    val offlineItems by com.streamflixvip.app.offline.OfflineDownloads.items.collectAsState()
+    val dlBusy = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    val dlScope = androidx.compose.runtime.rememberCoroutineScope()
+    val dlMediaType = if (state.mediaType == "tv") "tv" else "movie"
+    fun dlId(season: Int, episode: Int) = com.streamflixvip.app.offline.OfflineDownloads.idFor(state.tmdbId, dlMediaType, season, episode)
+    fun dlToast(msg: String) = android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+    fun requestDownload(season: Int, episode: Int) {
+        val id = dlId(season, episode)
+        val existing = offlineItems.firstOrNull { it.id == id }
+        if (existing?.isDone == true) { dlToast("Já está nos seus downloads (Perfil → Downloads)"); return }
+        if (existing != null && existing.state != androidx.media3.exoplayer.offline.Download.STATE_FAILED) {
+            dlToast("Baixando… acompanhe em Perfil → Downloads"); return
+        }
+        if (!com.streamflixvip.app.data.VipStatusHolder.isVipNow()) { dlToast("Baixar para ver sem internet é do VIP"); return }
+        if (dlBusy[id] == true) return
+        dlBusy[id] = true
+        val movieSourcesNow = state.movieSources
+        dlScope.launch {
+            try {
+                val repo = com.streamflixvip.app.data.CatalogRepository()
+                val sources = if (dlMediaType == "movie") {
+                    movieSourcesNow.ifEmpty { runCatching { repo.getSourcesForMovie(state.tmdbId) }.getOrDefault(emptyList()) }
+                } else {
+                    runCatching { repo.getSourcesForEpisode(state.tmdbId, season, episode) }.getOrDefault(emptyList())
+                }
+                val r = com.streamflixvip.app.offline.OfflineAutoDownload.startBest(
+                    context, sources,
+                    com.streamflixvip.app.offline.OfflineDownloads.Meta(state.tmdbId, dlMediaType, season, episode, title, posterPath, null),
+                )
+                dlToast(r.message)
+            } finally {
+                dlBusy.remove(id)
+            }
+        }
+    }
+
     // Botão fixo "Assistir Agora" no header: só existe pra FILME. Série
     // não tem esse botão — o padrão de referência (CineVerse) não usa
     // botão fixo pra série, só a lista de temporadas/episódios logo
@@ -368,6 +406,18 @@ private fun DetailContent(
                 showWatchNowButton = heroWatchEnabled,
                 showServersLoading = heroServersLoading,
                 onWatchNowClick = onWatchMovieNow,
+                downloadSlot = if (isVip && state.mediaType == "movie" && !state.movieIsLocked(isVip) && !skipHeroLoading) {
+                    {
+                        val id = dlId(0, 0)
+                        DownloadIndicator(
+                            item = offlineItems.firstOrNull { it.id == id },
+                            busy = dlBusy[id] == true,
+                            size = 48.dp,
+                            background = Color(0xFF2A2A2A),
+                            onClick = { requestDownload(0, 0) },
+                        )
+                    }
+                } else null,
                 onBack = onBack,
                 trailerKey = state.trailerKey,
                 logoUrl = details.bestLogoUrl(),
@@ -558,6 +608,9 @@ private fun DetailContent(
                                 if (state.episodeIsLocked(ep.episode_number, isVip)) onUpgradeClick()
                                 else onSelectEpisode(seasonNum, ep.episode_number, title, posterPath)
                             },
+                            download = offlineItems.firstOrNull { it.id == dlId(seasonNum, ep.episode_number) },
+                            downloadBusy = dlBusy[dlId(seasonNum, ep.episode_number)] == true,
+                            onDownload = if (isVip) ({ requestDownload(seasonNum, ep.episode_number) }) else null,
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -1563,6 +1616,7 @@ private fun DetailHeader(
     logoUrl: String? = null,
     onTrailerClick: () -> Unit,
     onShare: () -> Unit,
+    downloadSlot: (@Composable () -> Unit)? = null,
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -1757,6 +1811,7 @@ private fun DetailHeader(
                         }
                     }
                 }
+                downloadSlot?.invoke()
                 SideActions(isFavorite = isFavorite, onToggleFavorite = onToggleFavorite)
                 }
             }
