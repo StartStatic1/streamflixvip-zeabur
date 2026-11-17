@@ -681,8 +681,9 @@ private fun MainAppScaffold(
                         )
                         val encodedTitle = URLEncoder.encode(title, "UTF-8")
                         val encodedPoster = URLEncoder.encode(posterPath ?: "none", "UTF-8")
+                        val resumeAt = com.streamflixvip.app.data.PendingResume.take(tmdbId, season, episode) ?: resumeSeconds
                         navController.navigate(
-                            "player/$encodedUrl/${source.isDirectPlayable}/$tmdbId/$mediaType/$season/$episode/$encodedTitle/$encodedPoster/$resumeSeconds",
+                            "player/$encodedUrl/${source.isDirectPlayable}/$tmdbId/$mediaType/$season/$episode/$encodedTitle/$encodedPoster/$resumeAt",
                         )
                     },
                     onBack = { navController.popBackStack() },

@@ -324,6 +324,8 @@ private fun DetailContent(
     val posterUrl = posterPath?.let { TmdbImages.poster(it, "w500") }
     val isVip by com.streamflixvip.app.data.VipStatusHolder.isVip.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val seriesProgress = rememberSeriesProgress(state.tmdbId, state.mediaType == "tv")
+    var episodesNewestFirst by rememberSaveable(details.id) { mutableStateOf(false) }
 
     // Botão fixo "Assistir Agora" no header: só existe pra FILME. Série
     // não tem esse botão — o padrão de referência (CineVerse) não usa
@@ -480,20 +482,45 @@ private fun DetailContent(
                 }
             }
 
-            // Dropdown "Temporada N ▾" no lugar da lista solta de
-            // "Temporada 1 / Temporada 2 / Temporada 3..." empilhada —
-            // igual à referência do CineVerse: 1 seletor compacto que abre
-            // um menu flutuante com as opções, com a atual marcada. Só
-            // aparece se a série realmente tem mais de uma temporada
-            // (com 1 temporada só, o seletor seria clique morto).
-            item {
-                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    SeasonPickerHeader(
-                        currentSeason = currentSeason,
-                        allSeasons = seasons,
-                        showPicker = state.showSeasonPicker,
-                        onToggle = onToggleSeasonPicker,
-                        onPickSeason = onPickSeason,
+            // Abas roláveis de temporada (com a contagem de episódios) no lugar
+            // do dropdown — série longa (12+ temporadas) fica a um toque.
+            if (seasons.size > 1) {
+                item {
+                    Box(Modifier.padding(vertical = 4.dp)) {
+                        SeasonChipsRow(seasons = seasons, currentSeason = state.expandedSeason, onPick = onPickSeason)
+                    }
+                }
+            } else if (currentSeason != null) {
+                item {
+                    Text(
+                        seasonDisplayName(currentSeason),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                    )
+                }
+            }
+
+            // Atalho "Continuar T1:E3" — último episódio em andamento desta série.
+            seriesProgress.latest?.let { last ->
+                item {
+                    val epName = if (last.season == state.expandedSeason) {
+                        state.episodesOfExpandedSeason.firstOrNull { it.episode_number == last.episode }?.name?.takeIf { it.isNotBlank() }
+                    } else null
+                    ContinueEpisodeCard(
+                        entry = last,
+                        episodeName = epName,
+                        onClick = {
+                            if (state.episodeIsLocked(last.episode, isVip)) {
+                                onUpgradeClick()
+                            } else {
+                                if (last.season != state.expandedSeason) onPickSeason(last.season)
+                                com.streamflixvip.app.data.PendingResume.set(state.tmdbId, last.season, last.episode, last.position_seconds)
+                                onSelectEpisode(last.season, last.episode, title, posterPath)
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                     )
                 }
             }
@@ -505,17 +532,32 @@ private fun DetailContent(
                     }
                 }
             } else if (state.episodesOfExpandedSeason.isNotEmpty()) {
-                items(state.episodesOfExpandedSeason) { ep ->
+                val seasonNum = state.expandedSeason ?: 1
+                val eps = if (episodesNewestFirst) state.episodesOfExpandedSeason.reversed() else state.episodesOfExpandedSeason
+                item {
+                    EpisodeListHeader(
+                        count = eps.size,
+                        watchedCount = eps.count { seriesProgress.isWatched(seasonNum, it.episode_number) },
+                        newestFirst = episodesNewestFirst,
+                        onToggleSort = { episodesNewestFirst = !episodesNewestFirst },
+                    )
+                }
+                items(eps, key = { "ep-$seasonNum-${it.episode_number}" }) { ep ->
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        CineverseEpisodeRow(
+                        EpisodeCard(
                             episode = ep,
+                            progress = seriesProgress.fraction(seasonNum, ep.episode_number),
+                            watched = seriesProgress.isWatched(seasonNum, ep.episode_number),
                             isExpanded = state.expandedEpisodeNumber == ep.episode_number,
                             isSelected = state.selectedSeason == state.expandedSeason && state.selectedEpisode == ep.episode_number,
                             isLoading = state.isLoadingEpisodeSources && state.selectedSeason == state.expandedSeason && state.selectedEpisode == ep.episode_number,
                             isLocked = state.episodeIsLocked(ep.episode_number, isVip),
                             isAvailable = state.episodesWithSources?.contains(ep.episode_number) != false,
                             onToggleExpand = { onToggleEpisodeExpanded(ep.episode_number) },
-                            onPlay = { val hasSource = state.episodesWithSources?.contains(ep.episode_number) != false; when { state.episodeIsLocked(ep.episode_number, isVip) -> onUpgradeClick(); !hasSource -> onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath); else -> onSelectEpisode(state.expandedSeason ?: 1, ep.episode_number, title, posterPath) } },
+                            onPlay = {
+                                if (state.episodeIsLocked(ep.episode_number, isVip)) onUpgradeClick()
+                                else onSelectEpisode(seasonNum, ep.episode_number, title, posterPath)
+                            },
                         )
                     }
                     Spacer(Modifier.height(8.dp))

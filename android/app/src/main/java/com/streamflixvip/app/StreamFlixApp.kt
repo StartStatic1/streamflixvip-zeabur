@@ -17,6 +17,7 @@ class StreamFlixApp : Application() {
         runCatching { com.streamflixvip.app.notify.FollowedSeries.init(this) }
         runCatching { com.streamflixvip.app.notify.Notifier.schedule(this) }
         runCatching { com.streamflixvip.app.offline.OfflineVip.init(this) }
+        runCatching { com.streamflixvip.app.data.WatchedEpisodes.init(this) }
         runCatching { com.streamflixvip.app.offline.OfflineDownloads.init(this) }
         if (CrashLog.consumeNotice(this)) {
             runCatching {

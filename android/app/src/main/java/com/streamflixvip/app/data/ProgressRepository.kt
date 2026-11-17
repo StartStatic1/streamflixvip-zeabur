@@ -35,6 +35,9 @@ class ProgressRepository {
     ) {
         if (positionSeconds < 10) return
         if (mediaType == "tv") runCatching { com.streamflixvip.app.notify.FollowedSeries.watched(tmdbId, title, posterPath) }
+        if (mediaType == "tv" && durationSeconds > 0 && positionSeconds.toFloat() / durationSeconds >= 0.9f) {
+            runCatching { WatchedEpisodes.mark(tmdbId, season, episode) }
+        }
         com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let { scope ->
             if (durationSeconds > 0 && positionSeconds.toFloat() / durationSeconds >= 0.95f) {
                 com.streamflixvip.app.profiles.ProfileLocalData.removeProgress(scope, tmdbId, mediaType)
@@ -83,6 +86,22 @@ class ProgressRepository {
         if (once(token)) return
         val refreshed = AuthTokenHelper.forceRefresh() ?: return
         once(refreshed)
+    }
+
+    /** Progresso de todos os episódios desta série (mais recente primeiro). */
+    suspend fun getTitleProgress(tmdbId: Int, mediaType: String = "tv"): List<WatchProgressEntry> {
+        com.streamflixvip.app.profiles.ProfileLocalData.localScope()?.let { scope ->
+            return com.streamflixvip.app.profiles.ProfileLocalData.progress(scope).filter { it.tmdb_id == tmdbId && it.media_type == mediaType }
+        }
+        val uid = uidOrNull(null) ?: return emptyList()
+        suspend fun once(t: String): List<WatchProgressEntry>? = try {
+            api.getProgressForTitle(anonKey, "Bearer $t", PostgrestFilter.eq(uid), PostgrestFilter.eq(tmdbId))
+                .filter { it.media_type == mediaType }
+        } catch (_: Exception) { null }
+        val token = tokenOrNull(null) ?: return emptyList()
+        once(token)?.let { return it }
+        val refreshed = AuthTokenHelper.forceRefresh() ?: return emptyList()
+        return once(refreshed) ?: emptyList()
     }
 
     suspend fun getContinueWatching(

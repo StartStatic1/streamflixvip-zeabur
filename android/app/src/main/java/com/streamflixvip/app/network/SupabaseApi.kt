@@ -176,6 +176,16 @@ interface WatchProgressApi {
     )
 
     @GET("rest/v1/watch_progress")
+    suspend fun getProgressForTitle(
+        @Header("apikey") apiKey: String,
+        @Header("Authorization") bearerToken: String,
+        @Query("user_id") userIdFilter: String,
+        @Query("tmdb_id") tmdbIdFilter: String,
+        @Query("order") order: String = "updated_at.desc",
+        @Query("limit") limit: Int = 200,
+    ): List<WatchProgressEntry>
+
+    @GET("rest/v1/watch_progress")
     suspend fun getContinueWatching(
         @Header("apikey") apiKey: String,
         @Header("Authorization") bearerToken: String,
