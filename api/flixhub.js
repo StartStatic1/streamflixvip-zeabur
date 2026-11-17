@@ -5,6 +5,7 @@ const SUPABASE_URL =
 
 const cache = new Map();
 const { setBounded } = require('../lib/bounded-map');
+const { buildSiblingIndex, preferDubbed, tagName } = require('../lib/dub-pref');
 
 function svc(key) {
   return { apikey: key, Authorization: 'Bearer ' + key };
@@ -228,11 +229,24 @@ function cachedList(k, loader) {
   return refreshList(k, loader);
 }
 
+// nomes das pastas (para saber qual é "Legendados"); falha = sem nomes
+async function categoryNames(server, action) {
+  const raw = await xtream(server, action).catch(() => []);
+  const m = new Map();
+  for (const c of Array.isArray(raw) ? raw : []) {
+    if (c && c.category_id != null) m.set(String(c.category_id), String(c.category_name || ''));
+  }
+  return m;
+}
+
 async function loadVodPack(server) {
-  const raw = await xtream(server, 'get_vod_streams');
+  const [raw, cats] = await Promise.all([
+    xtream(server, 'get_vod_streams'),
+    categoryNames(server, 'get_vod_categories'),
+  ]);
   let rows = Array.isArray(raw) ? raw : [];
   rows = filterByCats(rows, server.vod_category_ids);
-  return { at: Date.now(), rows, byNorm: buildIndex(rows) };
+  return { at: Date.now(), rows, byNorm: buildIndex(rows), sib: buildSiblingIndex(rows, norm), cats };
 }
 
 async function vodList(server, strict) {
@@ -253,10 +267,13 @@ async function seriesList(server) {
   const catKey = (server.series_category_ids || []).slice().sort().join(',');
   const k = 'fh:ser:' + hostOf(server) + ':' + server.user + ':' + catKey;
   return cachedList(k, async () => {
-    const raw = await xtream(server, 'get_series');
+    const [raw, cats] = await Promise.all([
+      xtream(server, 'get_series'),
+      categoryNames(server, 'get_series_categories'),
+    ]);
     let rows = Array.isArray(raw) ? raw : [];
     rows = filterByCats(rows, server.series_category_ids);
-    return { at: Date.now(), rows, byNorm: buildIndex(rows) };
+    return { at: Date.now(), rows, byNorm: buildIndex(rows), sib: buildSiblingIndex(rows, norm), cats };
   });
 }
 
@@ -642,7 +659,11 @@ module.exports = async function handler(req, res) {
             (async () => {
           if (streamReq.type === 'movie' && server.use_movies !== false) {
             const packV = await vodList(server);
-            let hit = pick(packV, titles, year); if (hit && !(await exactIsSafe(hit.name || hit.title || '', 'movie', year))) hit = null;
+            let found = pick(packV, titles, year); if (found && !(await exactIsSafe(found.name || found.title || '', 'movie', year))) found = null;
+            // mesmo filme em pasta dublada e legendada: dublado primeiro, legendado como alternativo
+            const pd = preferDubbed(found, packV && packV.sib, norm, packV && packV.cats, (it) => isLowQuality(it.name || ''));
+            const versions = [pd.primary && { hit: pd.primary, audio: pd.primaryAudio, extra: 0 }, pd.alt && { hit: pd.alt, audio: pd.altAudio, extra: 0.5 }].filter(Boolean);
+            for (const { hit, audio, extra } of versions) {
             if (hit && hit.stream_id) {
               const ext = (hit.container_extension || 'mp4').replace(/^\./, '');
               const label = server.name || brand;
@@ -656,7 +677,7 @@ module.exports = async function handler(req, res) {
                 // como "titulo + servidorParseavel" pra não misturar com hífen.
                 title:
                   '🎬 ' +
-                  (hit.name || titles[0] || 'Filme') +
+                  tagName(hit.name || titles[0] || 'Filme', audio) +
                   '\n' +
                   (server.color || '⚡') +
                   ' ' +
@@ -673,14 +694,18 @@ module.exports = async function handler(req, res) {
                   hit.stream_id +
                   '.' +
                   ext,
-                behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
-                _priority: Number(server.priority) || 0,
+                behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) + (extra ? '-leg' : '') },
+                _priority: (Number(server.priority) || 0) + extra,
               });
+            }
             }
           }
           if (streamReq.type === 'series' && server.use_series !== false) {
             const packS = await seriesList(server);
-            let hit = pick(packS, titles, year); if (hit && !(await exactIsSafe(hit.name || hit.title || '', 'tv', year))) hit = null;
+            let found = pick(packS, titles, year); if (found && !(await exactIsSafe(found.name || found.title || '', 'tv', year))) found = null;
+            const pd = preferDubbed(found, packS && packS.sib, norm, packS && packS.cats);
+            const versions = [pd.primary && { hit: pd.primary, audio: pd.primaryAudio, extra: 0 }, pd.alt && { hit: pd.alt, audio: pd.altAudio, extra: 0.5 }].filter(Boolean);
+            await Promise.all(versions.map(async ({ hit, audio, extra }) => {
             if (hit && (hit.series_id || hit.stream_id)) {
               const sid = hit.series_id || hit.stream_id;
               const info = await seriesInfo(server, sid).catch(() => null);
@@ -699,7 +724,7 @@ module.exports = async function handler(req, res) {
                   name: brand,
                   title:
                     '📺 ' +
-                    (hit.name || titles[0] || 'Serie') +
+                    tagName(hit.name || titles[0] || 'Serie', audio) +
                     ' S' +
                     seasonKey +
                     'E' +
@@ -719,11 +744,12 @@ module.exports = async function handler(req, res) {
                     eid +
                     '.' +
                     ext,
-                  behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) },
-                  _priority: Number(server.priority) || 0,
+                  behaviorHints: { bingeGroup: 'flixhub-' + (server.id || label) + (extra ? '-leg' : '') },
+                  _priority: (Number(server.priority) || 0) + extra,
                 });
               }
             }
+            }));
           }
             })(),
             serverTimeout,

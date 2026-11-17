@@ -8,6 +8,20 @@ const SUPABASE_URL =
 const cache = new Map();
 const { setBounded } = require('../lib/bounded-map');
 const { xtreamFetch } = require('../lib/xtream-fetch');
+const { buildSiblingIndex, preferDubbed, tagName } = require('../lib/dub-pref');
+
+// índice "mesmo título" por lista (refeito só quando a lista do cache muda)
+const sibIndexes = new WeakMap();
+function sibIndex(rows) {
+  let idx = sibIndexes.get(rows);
+  if (!idx) { idx = buildSiblingIndex(rows, norm); sibIndexes.set(rows, idx); }
+  return idx;
+}
+function catNameMap(arr) {
+  const m = new Map();
+  for (const c of Array.isArray(arr) ? arr : []) if (c && typeof c === 'object' && c.id != null) m.set(String(c.id), String(c.name || ''));
+  return m;
+}
 const PAGE = 80;
 
 function svc(key) {
@@ -662,12 +676,15 @@ module.exports = async function handler(req, res) {
         hit = list.find((x) => String(x.stream_id) === String(streamReq.xtreamId));
       }
       if (!hit && titles.length) { hit = pick(list, titles, year); if (hit && !(await exactIsSafe(hit.name || hit.title || '', kind, year))) hit = null; }
-      if (hit && hit.stream_id) {
-        const ext = (hit.container_extension || 'mp4').replace(/^\./, '');
+      // mesmo filme na pasta dublada e na legendada: dublado primeiro, legendado como 2ª opção
+      const pd = streamReq.xtreamId ? { primary: hit, primaryAudio: null, alt: null } : preferDubbed(hit, sibIndex(list), norm, catNameMap(b.vod_cats));
+      for (const [it, audio] of [[pd.primary, pd.primaryAudio], [pd.alt, pd.altAudio]]) {
+        if (!it || !it.stream_id) continue;
+        const ext = (it.container_extension || 'mp4').replace(/^\./, '');
         streams.push({
           name: b.name,
-          title: hit.name || titles[0] || 'Filme',
-          url: hostOf(b) + '/movie/' + b.xtream_user + '/' + b.xtream_pass + '/' + hit.stream_id + '.' + ext,
+          title: tagName(it.name || titles[0] || 'Filme', audio),
+          url: hostOf(b) + '/movie/' + b.xtream_user + '/' + b.xtream_pass + '/' + it.stream_id + '.' + ext,
         });
       }
     }
@@ -679,6 +696,9 @@ module.exports = async function handler(req, res) {
         hit = list.find((x) => String(x.series_id || x.stream_id) === String(streamReq.xtreamId));
       }
       if (!hit && titles.length) { hit = pick(list, titles, year); if (hit && !(await exactIsSafe(hit.name || hit.title || '', kind, year))) hit = null; }
+      const pd = streamReq.xtreamId ? { primary: hit, primaryAudio: null, alt: null } : preferDubbed(hit, sibIndex(list), norm, catNameMap(b.series_cats));
+      const found = [];
+      await Promise.all([[pd.primary, pd.primaryAudio, 0], [pd.alt, pd.altAudio, 1]].map(async ([hit, audio, order]) => {
       if (hit && (hit.series_id || hit.stream_id)) {
         const sid = hit.series_id || hit.stream_id;
         const info = await xtream(b, 'get_series_info', { series_id: sid }).catch(() => null);
@@ -692,13 +712,15 @@ module.exports = async function handler(req, res) {
         if (ep && (ep.id || ep.stream_id)) {
           const eid = ep.id || ep.stream_id;
           const ext = (ep.container_extension || 'mp4').replace(/^\./, '');
-          streams.push({
+          found.push({ order, stream: {
             name: b.name,
-            title: (hit.name || titles[0] || 'Serie') + ' S' + seasonKey + 'E' + wantEp,
+            title: tagName(hit.name || titles[0] || 'Serie', audio) + ' S' + seasonKey + 'E' + wantEp,
             url: hostOf(b) + '/series/' + b.xtream_user + '/' + b.xtream_pass + '/' + eid + '.' + ext,
-          });
+          } });
         }
       }
+      }));
+      found.sort((x, y) => x.order - y.order).forEach((f) => streams.push(f.stream));
     }
 
     res.status(200).json({ streams });
