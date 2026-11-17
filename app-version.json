@@ -1,7 +1,7 @@
 {
-  "versionCode": 170300,
-  "versionName": "17.3.0",
+  "versionCode": 170400,
+  "versionName": "17.4.0",
   "apkUrl": "https://streamflixvip.online/downloads/app-latest.apk",
   "forceUpdate": true,
-  "releaseNotes": "Novo: notificações no celular quando sai episódio novo das séries da sua lista ou que você está assistindo, e avisos de novidades. Novo: botão Pular abertura nos episódios. Permita as notificações quando o app pedir."
+  "releaseNotes": "Novo: baixe filmes e episódios para ver sem internet (VIP). Toque em Baixar no player e veja tudo em Perfil → Downloads. Quando o título tem versão dublada e legendada, o dublado vem primeiro e o legendado fica como outro servidor."
 }
