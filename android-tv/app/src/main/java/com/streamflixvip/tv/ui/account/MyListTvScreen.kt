@@ -107,10 +107,18 @@ fun MyListTvScreen(
                             modifier = Modifier.fillMaxWidth().let { if (index == 0) it.focusRequester(firstFocus) else it },
                             badge = if (fav.mediaType == "tv") "SÉRIE" else null,
                             onLongClick = {
+                                // Grava na hora, mas só tira o cartão da grade no próximo
+                                // ciclo da fila. Se o item em foco some no meio do key-up
+                                // (dispatchKeyEventPreIme), o Compose no Fire TV lança
+                                // IllegalStateException: "Dispatching intercepted soft
+                                // keyboard event while focus system is invalidated."
                                 libraryStore.removeFavorite(fav.tmdbId, fav.mediaType)
-                                favorites = libraryStore.getFavorites()
-                                toaster.show("“${fav.title}” saiu da Minha lista")
-                                if (favorites.isNotEmpty()) focusSignal.request()
+                                val title = fav.title
+                                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                    favorites = libraryStore.getFavorites()
+                                    toaster.show("“$title” saiu da Minha lista")
+                                    if (favorites.isNotEmpty()) focusSignal.request()
+                                }
                             },
                             onClick = { onItemClick(fav.tmdbId, fav.mediaType) },
                         )

@@ -2,7 +2,7 @@ package com.streamflixvip.tv
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
+import androidx.compose.ui.platform.ComposeView
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -59,31 +59,54 @@ private data class LiveSession(
     val epgNext: Map<String, String>,
 )
 
+private fun swallowFocusIse(where: String, block: () -> Boolean): Boolean =
+    try {
+        block()
+    } catch (e: IllegalStateException) {
+        val msg = e.message.orEmpty()
+        if (msg.contains("isAttached") || msg.contains("focus", ignoreCase = true) ||
+            e.stackTrace.any { it.className.contains("androidx.compose.ui.focus") }
+        ) {
+            runCatching { com.streamflixvip.tv.util.CrashLog.action("foco ignorado ($where): ${msg.take(80)}") }
+            true
+        } else throw e
+    }
+
+/**
+ * ComposeView é final, então embrulhamos num FrameLayout. O crash de foco
+ * no Fire TV (AFTSSS) sai em AndroidComposeView.dispatchKeyEventPreIme, que
+ * a Activity não recebe — a rede de segurança tem que estar neste ancestral.
+ */
+private class SafeComposeHost(context: android.content.Context) : android.widget.FrameLayout(context) {
+    val composeView = ComposeView(context).also {
+        addView(it, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+
+    override fun dispatchKeyEventPreIme(event: android.view.KeyEvent): Boolean =
+        swallowFocusIse("preIme") { super.dispatchKeyEventPreIme(event) }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
+        swallowFocusIse("key") { super.dispatchKeyEvent(event) }
+}
+
 class MainTvActivity : ComponentActivity() {
 
     /**
      * Rede de segurança do D-pad: no Fire TV (AFTSSS) a busca de foco do Compose às vezes
      * mede um cartão que acabou de sair da tela e lança
      * "LayoutCoordinate operations are only valid when isAttached is true", fechando o app.
-     * Aqui engolimos só esse erro de foco: a tecla é ignorada e o app continua aberto.
+     * Também cobre "focus system is invalidated" no caminho de [dispatchKeyEvent].
+     * A etapa PreIme (o fechamento ao tirar um item da Minha lista) é tratada no [SafeComposeHost].
      */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean =
-        try {
-            super.dispatchKeyEvent(event)
-        } catch (e: IllegalStateException) {
-            val msg = e.message.orEmpty()
-            if (msg.contains("isAttached") || msg.contains("focus", ignoreCase = true) ||
-                e.stackTrace.any { it.className.contains("androidx.compose.ui.focus") }
-            ) {
-                runCatching { com.streamflixvip.tv.util.CrashLog.action("foco ignorado: ${msg.take(80)}") }
-                true
-            } else throw e
-        }
+        swallowFocusIse("activity") { super.dispatchKeyEvent(event) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent {
+        val host = SafeComposeHost(this)
+        setContentView(host)
+        host.composeView.setContent {
             StreamFlixTvTheme {
                 val toaster = remember { Toaster() }
                 CompositionLocalProvider(LocalToaster provides toaster) {
